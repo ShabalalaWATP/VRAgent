@@ -14,6 +14,8 @@ Features:
 """
 
 import asyncio
+import ctypes
+import ctypes.util
 import hashlib
 import json
 import logging
@@ -21,6 +23,7 @@ import os
 import random
 import re
 import shutil
+import shlex
 import signal
 import struct
 import subprocess
@@ -33,6 +36,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, AsyncGenerator
 import base64
+from backend.services.afl_telemetry_service import AflTelemetryRecorder, get_afl_dir_stats
+try:
+    import resource  # Unix-only
+except ImportError:  # pragma: no cover - Windows
+    resource = None
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +99,22 @@ class FuzzingMode(str, Enum):
     COVERAGE_GUIDED = "coverage_guided"  # Uses coverage feedback
     GRAMMAR_BASED = "grammar_based"  # Uses input grammar
     HYBRID = "hybrid"  # Combines multiple strategies
+
+
+class ExecutionMode(str, Enum):
+    """Execution harness modes for running targets."""
+    AUTO = "auto"
+    PROCESS = "process"
+    FORKSERVER = "forkserver"
+    PERSISTENT = "persistent"
+
+
+class CoverageBackend(str, Enum):
+    """Coverage collection backends."""
+    AUTO = "auto"
+    AFL_SHM = "afl_shm"
+    QEMU = "qemu"  # QEMU TCG coverage for binary-only targets
+    NONE = "none"
 
 
 # Interesting values for arithmetic mutations
@@ -1699,8 +1723,10 @@ class CorpusDistiller:
         
         In practice, this would read from coverage instrumentation.
         """
-        # Simplified: hash stderr/stdout as proxy for coverage
-        # Real implementation would use AFL-style bitmap
+        if result.coverage_data:
+            return {i for i, hit in enumerate(result.coverage_data) if hit}
+        
+        # Simplified fallback: hash stderr/stdout as proxy for coverage
         edges = set()
         
         if result.stdout:
@@ -1764,6 +1790,26 @@ class ParallelFuzzingSession:
     total_crashes: int = 0
     unique_crashes: int = 0
     total_coverage_edges: int = 0
+    coverage_percentage: float = 0.0
+    corpus_size: int = 0
+    favored_inputs: int = 0
+    new_coverage_inputs: int = 0
+    scheduler_strategy: str = "power_schedule"
+    execution_mode: str = ExecutionMode.PROCESS.value
+    coverage_backend: str = CoverageBackend.NONE.value
+    coverage_map_size: int = 65536
+    coverage_available: bool = False
+    coverage_warning: Optional[str] = None
+    memory_errors_detected: int = 0
+    heap_errors: int = 0
+    stack_errors: int = 0
+    uaf_errors: int = 0
+    exploitable_errors: int = 0
+    sanitizer_replay_enabled: bool = False
+    sanitizer_warning: Optional[str] = None
+    sanitizer_runs: int = 0
+    sanitizer_max_runs: int = 0
+    sanitizer_target_path: Optional[str] = None
     workers: Dict[int, WorkerStats] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -1777,6 +1823,26 @@ class ParallelFuzzingSession:
             "total_crashes": self.total_crashes,
             "unique_crashes": self.unique_crashes,
             "total_coverage_edges": self.total_coverage_edges,
+            "coverage_percentage": self.coverage_percentage,
+            "corpus_size": self.corpus_size,
+            "favored_inputs": self.favored_inputs,
+            "new_coverage_inputs": self.new_coverage_inputs,
+            "scheduler_strategy": self.scheduler_strategy,
+            "execution_mode": self.execution_mode,
+            "coverage_backend": self.coverage_backend,
+            "coverage_map_size": self.coverage_map_size,
+            "coverage_available": self.coverage_available,
+            "coverage_warning": self.coverage_warning,
+            "memory_errors_detected": self.memory_errors_detected,
+            "heap_errors": self.heap_errors,
+            "stack_errors": self.stack_errors,
+            "uaf_errors": self.uaf_errors,
+            "exploitable_errors": self.exploitable_errors,
+            "sanitizer_replay_enabled": self.sanitizer_replay_enabled,
+            "sanitizer_warning": self.sanitizer_warning,
+            "sanitizer_runs": self.sanitizer_runs,
+            "sanitizer_max_runs": self.sanitizer_max_runs,
+            "sanitizer_target_path": self.sanitizer_target_path,
             "workers": {k: asdict(v) for k, v in self.workers.items()},
         }
 
@@ -1801,6 +1867,16 @@ class ParallelFuzzer:
         output_dir: Optional[str] = None,
         timeout_ms: int = 5000,
         sync_interval_seconds: float = 30.0,
+        coverage_guided: bool = True,
+        scheduler_strategy: str = "power_schedule",
+        use_stdin: Optional[bool] = None,
+        coverage_backend: str = "auto",
+        coverage_map_size: int = 65536,
+        dictionary: Optional[List[bytes]] = None,
+        enable_compcov: bool = True,
+        sanitizer_target_path: Optional[str] = None,
+        sanitizer_timeout_ms: int = 5000,
+        sanitizer_max_runs: int = 10,
     ):
         self.target_path = target_path
         self.target_args = target_args
@@ -1809,18 +1885,82 @@ class ParallelFuzzer:
         self.output_dir = output_dir or tempfile.mkdtemp(prefix="parallel_fuzz_")
         self.timeout_ms = timeout_ms
         self.sync_interval = sync_interval_seconds
+        self.coverage_guided = coverage_guided
+        self.scheduler_strategy = scheduler_strategy
+        self.use_stdin = use_stdin
+        self.coverage_map_size = coverage_map_size
+        self.enable_compcov = enable_compcov
+        self.dictionary = dictionary or []
         
         self.session = ParallelFuzzingSession(
             target_path=target_path,
             num_workers=self.num_workers,
         )
+        self.session.scheduler_strategy = scheduler_strategy
+        self.session.coverage_map_size = coverage_map_size
+
+        try:
+            self.coverage_backend = CoverageBackend(coverage_backend)
+        except ValueError:
+            self.coverage_backend = CoverageBackend.AUTO
+        self.session.coverage_backend = self.coverage_backend.value
         
+        self.coverage_provider_available = False
+        if self.coverage_guided:
+            probe = create_coverage_provider(self.coverage_backend, map_size=coverage_map_size)
+            if probe:
+                self.coverage_provider_available = True
+                if self.coverage_backend == CoverageBackend.AUTO:
+                    self.coverage_backend = CoverageBackend.AFL_SHM
+                    self.session.coverage_backend = self.coverage_backend.value
+                probe.close()
+            else:
+                self.coverage_backend = CoverageBackend.NONE
+                self.coverage_guided = False
+                self.session.coverage_backend = self.coverage_backend.value
+                self.session.coverage_warning = "Coverage backend unavailable. Target may be uninstrumented."
+        self.session.coverage_available = False
+
+        self.coverage_tracker = CoverageTracker(bitmap_size=coverage_map_size)
+        corpus_dir = os.path.join(self.output_dir, "corpus")
+        self.corpus_manager = CorpusManager(corpus_dir)
+        try:
+            strategy = SeedScheduler.Strategy(scheduler_strategy)
+        except ValueError:
+            strategy = SeedScheduler.Strategy.POWER_SCHEDULE
+        self.scheduler = SeedScheduler(self.corpus_manager, self.coverage_tracker, strategy)
+
+        self.crash_db = CrashDatabase(os.path.join(self.output_dir, "crashes"))
+        self.memory_safety_analyzer = MemorySafetyAnalyzer()
+
+        self.coverage_zero_streak = 0
+        self.coverage_zero_threshold = 50 * max(1, self.num_workers)
+        self.coverage_unavailable_emitted = False
+
+        self.sanitizer_runner: Optional[SanitizerReplay] = None
+        if sanitizer_target_path:
+            if sanitizer_max_runs <= 0:
+                self.session.sanitizer_warning = "Sanitizer replay disabled (max runs set to 0)."
+            elif os.path.isfile(sanitizer_target_path):
+                self.sanitizer_runner = SanitizerReplay(
+                    target_path=sanitizer_target_path,
+                    target_args=target_args,
+                    timeout_ms=sanitizer_timeout_ms,
+                    use_stdin=use_stdin,
+                    max_runs=sanitizer_max_runs,
+                )
+                self.session.sanitizer_replay_enabled = True
+                self.session.sanitizer_max_runs = sanitizer_max_runs
+                self.session.sanitizer_target_path = sanitizer_target_path
+            else:
+                self.session.sanitizer_warning = f"Sanitizer target not found: {sanitizer_target_path}"
+
         # Shared state
         self._workers: List[asyncio.Task] = []
-        self._shared_corpus: List[bytes] = []
-        self._shared_crashes: Dict[str, Dict[str, Any]] = {}  # hash -> crash_info
-        self._coverage_bitmap = bytearray(65536)  # Merged coverage
+        self._seed_inputs: List[bytes] = []
+        self._shared_crashes: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        self._event_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self._running = False
         self._cancel_event = asyncio.Event()
         
@@ -1847,16 +1987,33 @@ class ParallelFuzzer:
         """
         self._running = True
         self.session.status = "running"
+        self.session.started_at = datetime.utcnow().isoformat()
         
         yield {
             "type": "session_start",
             "session_id": self.session.id,
             "num_workers": self.num_workers,
             "target": self.target_path,
+            "coverage_guided": self.coverage_guided,
+            "scheduler_strategy": self.session.scheduler_strategy,
+            "coverage_backend": self.session.coverage_backend,
+            "coverage_map_size": self.session.coverage_map_size,
+            "coverage_warning": self.session.coverage_warning,
+            "sanitizer_replay_enabled": self.session.sanitizer_replay_enabled,
+            "sanitizer_warning": self.session.sanitizer_warning,
+            "sanitizer_target_path": self.session.sanitizer_target_path,
         }
         
         # Load seeds
         await self._load_seeds()
+
+        if self.session.coverage_warning:
+            self._queue_event({
+                "type": "coverage_unavailable",
+                "coverage_backend": self.session.coverage_backend,
+                "map_size": self.session.coverage_map_size,
+                "message": self.session.coverage_warning,
+            })
         
         # Start workers
         start_time = time.time()
@@ -1866,9 +2023,6 @@ class ParallelFuzzer:
                 self._worker_loop(i, max_iterations, max_time_seconds)
             )
             self._workers.append(task)
-        
-        # Start sync task
-        sync_task = asyncio.create_task(self._sync_loop())
         
         # Monitor and yield progress
         try:
@@ -1881,6 +2035,15 @@ class ParallelFuzzer:
                 if all(w.done() for w in self._workers):
                     break
                 
+                # Drain queued events
+                while True:
+                    try:
+                        event = self._event_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    else:
+                        yield event
+
                 # Aggregate stats
                 self._aggregate_stats()
                 
@@ -1901,16 +2064,16 @@ class ParallelFuzzer:
                 if not w.done():
                     w.cancel()
             
-            sync_task.cancel()
-            
             # Final stats
             self._aggregate_stats()
             self.session.status = "completed"
+            if self.sanitizer_runner:
+                self.sanitizer_runner.cleanup()
             
             yield {
                 "type": "session_end",
                 "session": self.session.to_dict(),
-                "crashes": list(self._shared_crashes.values()),
+                "crashes": [b.to_dict() for b in self.crash_db.get_all_buckets()],
             }
     
     async def _load_seeds(self):
@@ -1920,10 +2083,39 @@ class ParallelFuzzer:
                 filepath = os.path.join(self.seed_dir, filename)
                 if os.path.isfile(filepath):
                     with open(filepath, "rb") as f:
-                        self._shared_corpus.append(f.read())
+                        data = f.read()
+                        if len(data) <= 1024 * 1024:
+                            self._seed_inputs.append(data)
+                            if data[:64] not in self.dictionary:
+                                self.dictionary.append(data[:64])
+                            self.corpus_manager.add(data, mutation_type="seed")
         
-        if not self._shared_corpus:
-            self._shared_corpus.append(b"FUZZ")
+        if not self._seed_inputs:
+            default_seed = b"FUZZ"
+            self._seed_inputs.append(default_seed)
+            self.corpus_manager.add(default_seed, mutation_type="seed")
+
+        self.session.corpus_size = len(self.corpus_manager.entries) or len(self._seed_inputs)
+
+    def _queue_event(self, event: Dict[str, Any]):
+        """Queue an event from workers without blocking fuzzing."""
+        try:
+            self._event_queue.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+    async def _run_sanitizer_replay(self, input_data: bytes) -> List[MemoryError]:
+        """Re-run input against sanitizer build to enrich crash triage."""
+        if not self.sanitizer_runner:
+            return []
+        result = await self.sanitizer_runner.replay(input_data)
+        if not result:
+            return []
+        combined_output = (
+            result.stderr.decode("utf-8", errors="replace") +
+            result.stdout.decode("utf-8", errors="replace")
+        )
+        return self.memory_safety_analyzer.sanitizer_parser.parse_any(combined_output)
     
     async def _worker_loop(
         self,
@@ -1936,15 +2128,33 @@ class ParallelFuzzer:
         worker_stats.status = "running"
         worker_dir = os.path.join(self.output_dir, f"worker_{worker_id}")
         
+        harness_env: Dict[str, str] = {}
+        if self.enable_compcov:
+            harness_env["AFL_COMPCOV_LEVEL"] = "2"
+
+        coverage_provider = None
+        if self.coverage_guided and self.coverage_backend != CoverageBackend.NONE:
+            coverage_provider = create_coverage_provider(
+                self.coverage_backend,
+                map_size=self.coverage_map_size,
+            )
+
         # Create worker-specific fuzzer
         harness = ProcessHarness(
             target_path=self.target_path,
-            target_args=self.target_args,
+            args_template=self.target_args,
             timeout_ms=self.timeout_ms,
+            use_stdin=self.use_stdin,
+            environment=harness_env,
+            coverage_provider=coverage_provider,
         )
-        mutation_engine = MutationEngine()
-        crash_db = CrashDatabase(os.path.join(worker_dir, "crashes"))
-        crash_analyzer = CrashAnalyzer()
+        mutation_engine = MutationEngine(self.dictionary)
+        crash_analyzer = CrashAnalyzer(
+            target_path=self.target_path,
+            target_args=self.target_args,
+            use_stdin=self.use_stdin,
+            enable_debugger=False,
+        )
         
         start_time = time.time()
         iteration = 0
@@ -1960,14 +2170,20 @@ class ParallelFuzzer:
                 iteration += 1
                 
                 # Get input (work stealing from shared corpus)
+                entry = None
                 async with self._lock:
-                    if self._shared_corpus:
-                        seed = random.choice(self._shared_corpus)
-                    else:
-                        seed = b"FUZZ"
+                    if self.coverage_guided and self.corpus_manager.entries:
+                        entry = self.scheduler.next()
+
+                if entry:
+                    base_input = entry.data
+                    parent_id = entry.id
+                else:
+                    base_input = random.choice(self._seed_inputs) if self._seed_inputs else b"FUZZ"
+                    parent_id = None
                 
                 # Mutate
-                mutated = mutation_engine.mutate(seed)
+                mutated, mutation_type = mutation_engine.mutate_with_info(base_input)
                 
                 # Execute
                 result = await harness.execute(mutated)
@@ -1975,26 +2191,172 @@ class ParallelFuzzer:
                 worker_stats.executions += 1
                 worker_stats.exec_per_sec = iteration / max(1, time.time() - start_time)
                 worker_stats.last_update = datetime.utcnow().isoformat()
+
+                coverage_has_hits = bool(result.coverage_data and any(result.coverage_data))
+                coverage_info = None
+                found_new_coverage = False
+
+                if self.coverage_guided and coverage_provider:
+                    async with self._lock:
+                        if coverage_has_hits:
+                            if not self.session.coverage_available:
+                                self.session.coverage_available = True
+                                self.session.coverage_warning = None
+                            self.coverage_zero_streak = 0
+                        else:
+                            self.coverage_zero_streak += 1
+                            if (
+                                self.coverage_zero_streak >= self.coverage_zero_threshold
+                                and not self.coverage_unavailable_emitted
+                            ):
+                                self.coverage_unavailable_emitted = True
+                                self.session.coverage_available = False
+                                self.session.coverage_warning = (
+                                    f"No coverage data observed after {self.coverage_zero_threshold} executions. "
+                                    "Target is likely uninstrumented or using an incompatible map size."
+                                )
+                                self._queue_event({
+                                    "type": "coverage_unavailable",
+                                    "coverage_backend": self.session.coverage_backend,
+                                    "map_size": self.session.coverage_map_size,
+                                    "message": self.session.coverage_warning,
+                                })
+
+                        if coverage_has_hits:
+                            coverage_info = self.coverage_tracker.process_coverage(result.coverage_data)
+                            found_new_coverage = (
+                                coverage_info.new_edges > 0 or coverage_info.new_blocks > 0
+                            )
+                            worker_stats.coverage_edges = coverage_info.edge_count
+
+                            if found_new_coverage:
+                                added, new_entry = self.corpus_manager.add(
+                                    mutated,
+                                    coverage=coverage_info,
+                                    parent_id=parent_id,
+                                    mutation_type=mutation_type,
+                                )
+                                if added:
+                                    self.session.new_coverage_inputs += 1
+                                    self.session.corpus_size = len(self.corpus_manager.entries)
+                                    self.session.favored_inputs = len(self.corpus_manager.get_favored())
+                                    self._queue_event({
+                                        "type": "new_coverage",
+                                        "iteration": iteration,
+                                        "new_edges": coverage_info.new_edges,
+                                        "total_edges": self.coverage_tracker.total_edges_discovered,
+                                        "corpus_size": self.session.corpus_size,
+                                        "input_id": new_entry.id if new_entry else None,
+                                        "worker_id": worker_id,
+                                    })
+
+                            if parent_id:
+                                self.scheduler.update_score(
+                                    parent_id,
+                                    found_new_coverage,
+                                    result.crashed,
+                                    exec_time_ms=result.duration_ms,
+                                )
+                                self.corpus_manager.record_execution(
+                                    parent_id,
+                                    result.crashed,
+                                    exec_time_ms=result.duration_ms,
+                                )
+
+                            self.session.total_coverage_edges = self.coverage_tracker.total_edges_discovered
+                            self.session.coverage_percentage = self.coverage_tracker.get_coverage_percentage()
+
+                if self.coverage_guided and parent_id and not coverage_has_hits:
+                    async with self._lock:
+                        self.scheduler.update_score(
+                            parent_id,
+                            found_new_coverage,
+                            result.crashed,
+                            exec_time_ms=result.duration_ms,
+                        )
+                        self.corpus_manager.record_execution(
+                            parent_id,
+                            result.crashed,
+                            exec_time_ms=result.duration_ms,
+                        )
                 
                 # Handle crash
                 if result.crashed:
                     worker_stats.crashes += 1
                     crash_info = crash_analyzer.analyze(result, mutated)
-                    is_new, bucket_id = crash_db.add_crash(crash_info)
-                    
-                    if is_new:
-                        worker_stats.unique_crashes += 1
+
+                    memory_errors = []
+                    if self.coverage_guided or self.sanitizer_runner:
+                        memory_errors = self.memory_safety_analyzer.analyze_crash(
+                            result, crash_info
+                        )
+
+                    async with self._lock:
+                        is_new, bucket_id = self.crash_db.add_crash(crash_info)
+                        if is_new:
+                            worker_stats.unique_crashes += 1
+                            self._shared_crashes[crash_info.input_hash] = {
+                                "crash_id": crash_info.id,
+                                "bucket_id": bucket_id,
+                                "type": crash_info.crash_type.value,
+                                "severity": crash_info.severity.value,
+                                "worker_id": worker_id,
+                                "input_path": crash_info.input_path,
+                            }
+
+                    sanitizer_errors: List[MemoryError] = []
+                    if is_new and self.sanitizer_runner:
+                        sanitizer_errors = await self._run_sanitizer_replay(mutated)
+                        if sanitizer_errors:
+                            memory_errors = self.memory_safety_analyzer._deduplicate_errors(
+                                memory_errors + sanitizer_errors
+                            )
+                            self.memory_safety_analyzer.record_errors(crash_info.id, memory_errors)
+                        self.session.sanitizer_runs = self.sanitizer_runner.get_runs()
+
+                    if memory_errors:
                         async with self._lock:
-                            crash_hash = crash_info.input_hash
-                            if crash_hash not in self._shared_crashes:
-                                self._shared_crashes[crash_hash] = {
-                                    "crash_id": crash_info.id,
-                                    "bucket_id": bucket_id,
-                                    "type": crash_info.crash_type.value,
-                                    "severity": crash_info.severity.value,
-                                    "worker_id": worker_id,
-                                    "input_path": crash_info.input_path,
+                            self.session.memory_errors_detected += len(memory_errors)
+                            for mem_error in memory_errors:
+                                if "heap" in mem_error.error_type.value:
+                                    self.session.heap_errors += 1
+                                if "stack" in mem_error.error_type.value:
+                                    self.session.stack_errors += 1
+                                if mem_error.error_type == MemoryErrorType.HEAP_USE_AFTER_FREE:
+                                    self.session.uaf_errors += 1
+                                if mem_error.severity in (
+                                    CrashSeverity.EXPLOITABLE,
+                                    CrashSeverity.PROBABLY_EXPLOITABLE,
+                                ):
+                                    self.session.exploitable_errors += 1
+
+                    if is_new:
+                        crash_event = {
+                            "type": "new_crash",
+                            "crash_id": crash_info.id,
+                            "bucket_id": bucket_id,
+                            "crash_type": crash_info.crash_type.value,
+                            "severity": crash_info.severity.value,
+                            "input_hash": crash_info.input_hash,
+                            "worker_id": worker_id,
+                        }
+                        if memory_errors:
+                            crash_event["memory_errors"] = [
+                                {
+                                    "type": e.error_type.value,
+                                    "severity": e.severity.value,
+                                    "description": e.description,
                                 }
+                                for e in memory_errors
+                            ]
+                        self._queue_event(crash_event)
+                    else:
+                        self._queue_event({
+                            "type": "duplicate_crash",
+                            "bucket_id": bucket_id,
+                            "crash_type": crash_info.crash_type.value,
+                            "worker_id": worker_id,
+                        })
                 
                 # Small delay
                 await asyncio.sleep(0.001)
@@ -2004,25 +2366,14 @@ class ParallelFuzzer:
         finally:
             worker_stats.status = "stopped"
             harness.cleanup()
+            if coverage_provider:
+                coverage_provider.close()
     
     async def _sync_loop(self):
         """Periodically sync corpus between workers."""
         while self._running:
             try:
                 await asyncio.sleep(self.sync_interval)
-                
-                # Merge corpus from worker directories
-                async with self._lock:
-                    for i in range(self.num_workers):
-                        queue_dir = os.path.join(self.output_dir, f"worker_{i}", "queue")
-                        if os.path.isdir(queue_dir):
-                            for filename in os.listdir(queue_dir):
-                                filepath = os.path.join(queue_dir, filename)
-                                if os.path.isfile(filepath):
-                                    with open(filepath, "rb") as f:
-                                        data = f.read()
-                                    if data not in self._shared_corpus:
-                                        self._shared_corpus.append(data)
             
             except asyncio.CancelledError:
                 break
@@ -2033,16 +2384,18 @@ class ParallelFuzzer:
         """Aggregate statistics from all workers."""
         total_exec = 0
         total_crashes = 0
-        unique_crashes = 0
         
         for worker_stats in self.session.workers.values():
             total_exec += worker_stats.executions
             total_crashes += worker_stats.crashes
-            unique_crashes += worker_stats.unique_crashes
         
         self.session.total_executions = total_exec
         self.session.total_crashes = total_crashes
         self.session.unique_crashes = len(self._shared_crashes)
+        self.session.total_coverage_edges = self.coverage_tracker.total_edges_discovered
+        self.session.coverage_percentage = self.coverage_tracker.get_coverage_percentage()
+        self.session.corpus_size = len(self.corpus_manager.entries)
+        self.session.favored_inputs = len(self.corpus_manager.get_favored())
     
     def stop(self):
         """Stop all workers."""
@@ -2076,18 +2429,24 @@ class PersistentModeHarness:
         timeout_ms: int = 5000,
         max_executions_per_instance: int = 10000,
         shm_size: int = 65536,
+        coverage_provider: Optional["CoverageProvider"] = None,
+        environment: Optional[Dict[str, str]] = None,
     ):
         self.target_path = target_path
         self.target_args = target_args
         self.timeout_ms = timeout_ms
         self.max_execs = max_executions_per_instance
         self.shm_size = shm_size
+        self.coverage_provider = coverage_provider
+        self.environment = environment or {}
         
         self._process: Optional[asyncio.subprocess.Process] = None
         self._shm_name = f"/vrfuzz_{uuid.uuid4().hex[:8]}"
         self._shm_fd = None
         self._exec_count = 0
         self._running = False
+        self.last_error: Optional[str] = None
+        self._timeout_streak = 0
         
         self.stats = {
             "total_executions": 0,
@@ -2111,8 +2470,10 @@ class PersistentModeHarness:
         
         # Add shared memory identifier
         env = os.environ.copy()
-        env["__AFL_SHM_ID"] = self._shm_name
         env["__VR_PERSISTENT"] = "1"
+        env.update(self.environment)
+        if self.coverage_provider and self.coverage_provider.is_available():
+            env = self.coverage_provider.prepare_environment(env)
         
         self._process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -2122,6 +2483,12 @@ class PersistentModeHarness:
             env=env,
         )
         
+        await asyncio.sleep(0.05)
+        if self._process and self._process.returncode is not None:
+            self.last_error = "Persistent target exited immediately. Persistent mode may be unsupported."
+            self._running = False
+            return
+
         self._running = True
         self._exec_count = 0
         logger.info(f"Started persistent mode target: {self.target_path}")
@@ -2173,6 +2540,7 @@ class PersistentModeHarness:
                 result.exit_code = 0
                 self._exec_count += 1
                 self.stats["total_executions"] += 1
+                self._timeout_streak = 0
                 
                 # Check for crash indicator
                 if response and b"CRASH" in response:
@@ -2183,12 +2551,14 @@ class PersistentModeHarness:
             except asyncio.TimeoutError:
                 result.timed_out = True
                 self.stats["timeouts"] += 1
+                self._timeout_streak += 1
                 await self._restart()
         
         except Exception as e:
             result.crashed = True
             result.crash_type = CrashType.UNKNOWN
             self.stats["crashes"] += 1
+            self.last_error = f"Persistent execution error: {e}"
             await self._restart()
         
         result.duration_ms = (time.time() - start_time) * 1000
@@ -2263,16 +2633,24 @@ class ForkServerHarness:
         target_path: str,
         target_args: str = "@@",
         timeout_ms: int = 5000,
+        coverage_provider: Optional["CoverageProvider"] = None,
+        environment: Optional[Dict[str, str]] = None,
     ):
         self.target_path = target_path
         self.target_args = target_args
         self.timeout_ms = timeout_ms
+        self.coverage_provider = coverage_provider
+        self.environment = environment or {}
         
         self._fork_server_pid: Optional[int] = None
         self._ctl_pipe_w: Optional[int] = None  # Control pipe (parent writes)
         self._st_pipe_r: Optional[int] = None   # Status pipe (parent reads)
         self._running = False
         self._temp_dir = tempfile.mkdtemp(prefix="forkserver_")
+        self._input_path = os.path.join(self._temp_dir, "input")
+        self._exec_argv: Optional[List[str]] = None
+        self.last_error: Optional[str] = None
+        self._timeout_streak = 0
         
         self.stats = {
             "total_executions": 0,
@@ -2286,11 +2664,20 @@ class ForkServerHarness:
     async def start(self):
         """Start the fork server."""
         if not self._is_unix:
+            self.last_error = "Forkserver not available on Windows."
             logger.info("Fork server not available on Windows, using regular execution")
             return
         
         if self._running:
             return
+
+        if "@@" not in self.target_args:
+            self.last_error = "Forkserver requires @@ input file argument."
+            logger.info("Fork server requires @@ input file. Falling back to regular execution.")
+            return
+
+        args = self.target_args.replace("@@", self._input_path)
+        self._exec_argv = [self.target_path] + shlex.split(args, posix=os.name != "nt")
         
         try:
             # Create pipes
@@ -2312,11 +2699,14 @@ class ForkServerHarness:
                 
                 # Exec target
                 env = os.environ.copy()
+                env.update(self.environment)
                 env["__AFL_FORKSERVER"] = "1"
+                if self.coverage_provider and self.coverage_provider.is_available():
+                    env = self.coverage_provider.prepare_environment(env)
                 
                 os.execve(
                     self.target_path,
-                    [self.target_path] + self.target_args.split(),
+                    self._exec_argv or [self.target_path],
                     env
                 )
             
@@ -2332,15 +2722,30 @@ class ForkServerHarness:
                 
                 # Wait for fork server ready signal
                 try:
-                    ready = os.read(self._st_pipe_r, 4)
+                    import select
+                    ready = b""
+                    deadline = time.time() + 1.0
+                    while len(ready) < 4 and time.time() < deadline:
+                        remaining = max(0.0, deadline - time.time())
+                        readable, _, _ = select.select([self._st_pipe_r], [], [], remaining)
+                        if readable:
+                            ready += os.read(self._st_pipe_r, 4 - len(ready))
+                        else:
+                            break
                     if len(ready) == 4:
                         logger.info(f"Fork server started (PID {pid})")
-                except:
+                    else:
+                        self.last_error = "Forkserver handshake failed. Target likely not AFL-instrumented."
+                        self._running = False
+                        self.stop()
+                except Exception:
+                    self.last_error = "Forkserver failed to start."
                     self._running = False
-                    raise RuntimeError("Fork server failed to start")
+                    self.stop()
         
         except Exception as e:
             logger.error(f"Failed to start fork server: {e}")
+            self.last_error = f"Forkserver start error: {e}"
             self._running = False
     
     async def execute(self, input_data: bytes) -> 'ExecutionResult':
@@ -2355,13 +2760,29 @@ class ForkServerHarness:
         """
         result = ExecutionResult()
         
+        if self.coverage_provider and self.coverage_provider.is_available():
+            try:
+                self.coverage_provider.reset()
+            except Exception:
+                pass
+        
         # Fall back to regular execution on non-Unix
-        if not self._is_unix or not self._running:
+        if not self._is_unix:
             return await self._regular_execute(input_data)
         
+        if not self._running:
+            await self.start()
+            if not self._running:
+                return await self._regular_execute(input_data)
+        
         # Write input to temp file
-        input_path = os.path.join(self._temp_dir, "input")
-        with open(input_path, "wb") as f:
+        if self.coverage_provider and self.coverage_provider.is_available():
+            try:
+                self.coverage_provider.reset()
+            except Exception:
+                pass
+        
+        with open(self._input_path, "wb") as f:
             f.write(input_data)
         
         start_time = time.time()
@@ -2374,6 +2795,11 @@ class ForkServerHarness:
             pid_data = os.read(self._st_pipe_r, 4)
             if len(pid_data) != 4:
                 self.stats["fork_failures"] += 1
+                self.last_error = "Forkserver protocol error while reading child PID."
+                self._running = False
+                await self.start()
+                if not self._running:
+                    return await self._regular_execute(input_data)
                 result.crashed = True
                 return result
             
@@ -2393,6 +2819,7 @@ class ForkServerHarness:
                         pass
                     result.timed_out = True
                     self.stats["timeouts"] += 1
+                    self._timeout_streak += 1
                     break
                 
                 readable, _, _ = select.select([self._st_pipe_r], [], [], remaining)
@@ -2413,15 +2840,26 @@ class ForkServerHarness:
                             else:
                                 result.crash_type = CrashType.UNKNOWN
                             self.stats["crashes"] += 1
+                        self._timeout_streak = 0
                     break
             
             self.stats["total_executions"] += 1
+            if self._timeout_streak >= 3:
+                self.last_error = "Repeated timeouts; restarting forkserver."
+                self._running = False
+                await self.start()
         
         except Exception as e:
             logger.debug(f"Fork execution error: {e}")
             result.crashed = True
+            self.last_error = f"Forkserver execution error: {e}"
         
         result.duration_ms = (time.time() - start_time) * 1000
+        if self.coverage_provider and self.coverage_provider.is_available():
+            try:
+                result.coverage_data = self.coverage_provider.read_coverage()
+            except Exception:
+                pass
         return result
     
     async def _regular_execute(self, input_data: bytes) -> 'ExecutionResult':
@@ -2430,6 +2868,8 @@ class ForkServerHarness:
             self.target_path,
             self.target_args,
             self.timeout_ms,
+            environment=self.environment,
+            coverage_provider=self.coverage_provider,
         )
         result = await harness.execute(input_data)
         harness.cleanup()
@@ -2654,6 +3094,11 @@ class SnapshotFuzzer:
             self.stats["restore_failures"] += 1
         
         result.duration_ms = (time.time() - start_time) * 1000
+        if self.coverage_provider and self.coverage_provider.is_available():
+            try:
+                result.coverage_data = self.coverage_provider.read_coverage()
+            except Exception:
+                pass
         return result
     
     def get_stats(self) -> Dict[str, Any]:
@@ -2972,6 +3417,1524 @@ class SymbolicExecutionHintGenerator:
             **self.stats,
             "magic_values": [m.hex() for m in list(self.magic_values)[:10]],
             "hints_count": len(self.hints),
+        }
+
+
+# =============================================================================
+# CMPLOG / REDQUEEN - INPUT-TO-STATE CORRESPONDENCE
+# =============================================================================
+
+@dataclass
+class ComparisonLog:
+    """A logged comparison operation from runtime execution."""
+    address: int                    # Instruction address
+    operand1: bytes                 # First operand value
+    operand2: bytes                 # Second operand value
+    operand_size: int               # Size in bytes (1, 2, 4, 8)
+    comparison_type: str            # 'eq', 'ne', 'lt', 'le', 'gt', 'ge'
+    input_offset: Optional[int]     # Offset in input where operand came from
+    is_string_cmp: bool = False     # strcmp/memcmp style comparison
+
+
+@dataclass
+class InputToStateMapping:
+    """Maps input bytes to comparison operands (I2S correspondence)."""
+    input_offset: int               # Byte offset in input
+    input_length: int               # Number of input bytes involved
+    comparison_address: int         # Address of comparison instruction
+    expected_value: bytes           # Value needed to satisfy comparison
+    current_value: bytes            # Current value from input
+    priority: float = 1.0           # Mutation priority
+
+
+class CmpLogTracer:
+    """
+    CmpLog/RedQueen-style Input-to-State correspondence tracking.
+
+    Implements the RedQueen technique from AFL++:
+    1. Colorization: Run input with unique byte patterns to identify which
+       input bytes flow to comparisons
+    2. I2S Extraction: For each comparison, determine which input bytes
+       affect the operands
+    3. Targeted Mutation: Replace input bytes with comparison operands
+       to satisfy branch conditions
+
+    This dramatically improves coverage on targets with magic values,
+    checksums, and multi-byte comparisons.
+    """
+
+    # Colorization patterns - unique sequences unlikely to appear naturally
+    COLORIZATION_PATTERNS = [
+        b"\xaa\xbb\xcc\xdd",
+        b"\x11\x22\x33\x44",
+        b"\xde\xad\xbe\xef",
+        b"\xca\xfe\xba\xbe",
+        b"\xfe\xed\xfa\xce",
+        b"\x12\x34\x56\x78",
+        b"\x87\x65\x43\x21",
+        b"\xa1\xb2\xc3\xd4",
+    ]
+
+    def __init__(self, harness: 'ProcessHarness', max_colorization_runs: int = 32):
+        self.harness = harness
+        self.max_colorization_runs = max_colorization_runs
+
+        # Collected comparison data
+        self.comparison_logs: List[ComparisonLog] = []
+        self.i2s_mappings: List[InputToStateMapping] = []
+        self.auto_dictionary: Set[bytes] = set()
+
+        # Statistics
+        self.stats = {
+            "colorization_runs": 0,
+            "comparisons_logged": 0,
+            "i2s_mappings_found": 0,
+            "dictionary_entries_extracted": 0,
+            "targeted_mutations_generated": 0,
+        }
+
+        # Cache for repeated analysis
+        self._comparison_cache: Dict[bytes, List[ComparisonLog]] = {}
+
+    async def analyze_input(self, input_data: bytes) -> List[InputToStateMapping]:
+        """
+        Analyze input using colorization to find I2S correspondences.
+
+        This is the core RedQueen algorithm:
+        1. Run original input and capture comparison operands
+        2. Colorize input bytes and re-run to see which comparisons change
+        3. Build mapping from input offsets to comparison values
+
+        Args:
+            input_data: The seed input to analyze
+
+        Returns:
+            List of input-to-state mappings for targeted mutation
+        """
+        if not input_data:
+            return []
+
+        input_hash = hashlib.sha256(input_data).digest()
+        if input_hash in self._comparison_cache:
+            return self._build_mappings_from_cache(input_hash, input_data)
+
+        # Phase 1: Baseline execution - capture comparison operands
+        baseline_comparisons = await self._capture_comparisons(input_data)
+        self._comparison_cache[input_hash] = baseline_comparisons
+
+        if not baseline_comparisons:
+            return []
+
+        # Phase 2: Colorization - identify which input bytes affect comparisons
+        byte_to_comparison: Dict[int, List[Tuple[ComparisonLog, int]]] = {}
+
+        # Colorize in chunks for efficiency
+        chunk_size = max(1, len(input_data) // self.max_colorization_runs)
+
+        for offset in range(0, len(input_data), chunk_size):
+            end = min(offset + chunk_size, len(input_data))
+            colorized = self._colorize_range(input_data, offset, end)
+
+            colored_comparisons = await self._capture_comparisons(colorized)
+            self.stats["colorization_runs"] += 1
+
+            # Find comparisons that changed due to colorization
+            for i, (baseline, colored) in enumerate(
+                zip(baseline_comparisons, colored_comparisons)
+            ):
+                if baseline.operand1 != colored.operand1:
+                    # Input bytes [offset:end] affect operand1
+                    for byte_offset in range(offset, end):
+                        if byte_offset not in byte_to_comparison:
+                            byte_to_comparison[byte_offset] = []
+                        byte_to_comparison[byte_offset].append((baseline, 1))
+
+                if baseline.operand2 != colored.operand2:
+                    # Input bytes [offset:end] affect operand2
+                    for byte_offset in range(offset, end):
+                        if byte_offset not in byte_to_comparison:
+                            byte_to_comparison[byte_offset] = []
+                        byte_to_comparison[byte_offset].append((baseline, 2))
+
+        # Phase 3: Build I2S mappings
+        mappings = self._build_i2s_mappings(input_data, byte_to_comparison)
+        self.i2s_mappings = mappings
+        self.stats["i2s_mappings_found"] = len(mappings)
+
+        # Phase 4: Extract dictionary entries from comparison operands
+        self._extract_dictionary(baseline_comparisons)
+
+        return mappings
+
+    def _colorize_range(self, data: bytes, start: int, end: int) -> bytes:
+        """Replace bytes in range with colorization pattern."""
+        result = bytearray(data)
+        pattern_idx = (start // 4) % len(self.COLORIZATION_PATTERNS)
+        pattern = self.COLORIZATION_PATTERNS[pattern_idx]
+
+        for i in range(start, end):
+            result[i] = pattern[(i - start) % len(pattern)]
+
+        return bytes(result)
+
+    async def _capture_comparisons(self, input_data: bytes) -> List[ComparisonLog]:
+        """
+        Execute input and capture comparison operands.
+
+        This uses multiple techniques to extract comparison values:
+        1. stderr/stdout pattern matching for common comparison functions
+        2. Exit code analysis for simple comparisons
+        3. Timing side-channels for iterative comparisons (memcmp)
+        """
+        comparisons = []
+
+        try:
+            result = await self.harness.execute(input_data)
+
+            # Extract comparisons from output patterns
+            comparisons.extend(self._extract_from_output(result.stdout, result.stderr))
+
+            # Extract from common string comparison patterns
+            comparisons.extend(self._extract_string_comparisons(input_data, result))
+
+            # Analyze for magic value checks
+            comparisons.extend(self._detect_magic_checks(input_data, result))
+
+            self.stats["comparisons_logged"] += len(comparisons)
+
+        except Exception as e:
+            logger.debug(f"CmpLog capture failed: {e}")
+
+        return comparisons
+
+    def _extract_from_output(self, stdout: bytes, stderr: bytes) -> List[ComparisonLog]:
+        """Extract comparison hints from program output."""
+        comparisons = []
+        combined = stdout + stderr
+
+        # Pattern: "expected X, got Y" style messages
+        patterns = [
+            rb"expected\s+['\"]?([^'\"]+)['\"]?\s*,?\s*(?:got|but got|received)\s+['\"]?([^'\"]+)['\"]?",
+            rb"mismatch.*?['\"]([^'\"]+)['\"].*?['\"]([^'\"]+)['\"]",
+            rb"invalid.*?['\"]([^'\"]+)['\"].*?expected.*?['\"]([^'\"]+)['\"]",
+            rb"comparing\s+([0-9a-fA-Fx]+)\s+(?:to|with|against)\s+([0-9a-fA-Fx]+)",
+        ]
+
+        for pattern in patterns:
+            for match in re.finditer(pattern, combined, re.IGNORECASE):
+                try:
+                    op1 = self._parse_operand(match.group(1))
+                    op2 = self._parse_operand(match.group(2))
+                    if op1 and op2:
+                        comparisons.append(ComparisonLog(
+                            address=0,
+                            operand1=op1,
+                            operand2=op2,
+                            operand_size=max(len(op1), len(op2)),
+                            comparison_type="eq",
+                            input_offset=None,
+                            is_string_cmp=True,
+                        ))
+                except Exception:
+                    pass
+
+        return comparisons
+
+    def _parse_operand(self, raw: bytes) -> Optional[bytes]:
+        """Parse operand from various formats."""
+        try:
+            text = raw.decode('utf-8', errors='ignore').strip()
+
+            # Hex format: 0x... or just hex digits
+            if text.startswith('0x') or text.startswith('0X'):
+                return bytes.fromhex(text[2:])
+            if all(c in '0123456789abcdefABCDEF' for c in text) and len(text) % 2 == 0:
+                return bytes.fromhex(text)
+
+            # Integer format
+            if text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
+                val = int(text)
+                # Pack as appropriate size
+                if -128 <= val <= 255:
+                    return struct.pack('b' if val < 0 else 'B', val & 0xFF)
+                elif -32768 <= val <= 65535:
+                    return struct.pack('<h' if val < 0 else '<H', val & 0xFFFF)
+                else:
+                    return struct.pack('<i' if val < 0 else '<I', val & 0xFFFFFFFF)
+
+            # String format
+            return raw
+
+        except Exception:
+            return raw
+
+    def _extract_string_comparisons(
+        self, input_data: bytes, result: 'ExecutionResult'
+    ) -> List[ComparisonLog]:
+        """Detect string comparisons by analyzing input patterns in output."""
+        comparisons = []
+
+        # Look for input substrings that appear in error messages
+        # This suggests the program compared input against something
+        combined = result.stdout + result.stderr
+
+        for length in [4, 8, 16, 32]:
+            for offset in range(0, len(input_data) - length + 1, length):
+                chunk = input_data[offset:offset + length]
+                if chunk in combined:
+                    # Input chunk appeared in output - might be a comparison failure
+                    # Try to find what it was compared against
+                    idx = combined.find(chunk)
+                    context = combined[max(0, idx-50):idx+len(chunk)+50]
+
+                    # Look for comparison keywords nearby
+                    if any(kw in context.lower() for kw in
+                           [b'expect', b'invalid', b'error', b'fail', b'mismatch']):
+                        comparisons.append(ComparisonLog(
+                            address=0,
+                            operand1=chunk,
+                            operand2=b'',  # Unknown expected value
+                            operand_size=length,
+                            comparison_type="eq",
+                            input_offset=offset,
+                            is_string_cmp=True,
+                        ))
+
+        return comparisons
+
+    def _detect_magic_checks(
+        self, input_data: bytes, result: 'ExecutionResult'
+    ) -> List[ComparisonLog]:
+        """Detect magic value/header checks from execution patterns."""
+        comparisons = []
+
+        # Common magic values to check against
+        magic_values = [
+            (b"PK\x03\x04", "ZIP"),
+            (b"\x89PNG\r\n\x1a\n", "PNG"),
+            (b"\xff\xd8\xff", "JPEG"),
+            (b"GIF87a", "GIF87"),
+            (b"GIF89a", "GIF89"),
+            (b"%PDF", "PDF"),
+            (b"MZ", "PE/DOS"),
+            (b"\x7fELF", "ELF"),
+            (b"<?xml", "XML"),
+            (b"{\n", "JSON"),
+            (b"[", "JSON Array"),
+            (b"RIFF", "RIFF"),
+            (b"BM", "BMP"),
+            (b"\x00\x00\x01\x00", "ICO"),
+            (b"ID3", "MP3"),
+            (b"OggS", "OGG"),
+            (b"ftyp", "MP4"),
+        ]
+
+        # If program fails quickly and input doesn't start with expected magic
+        if result.exit_code != 0 and result.execution_time < 0.1:
+            for magic, name in magic_values:
+                if not input_data.startswith(magic):
+                    # Check if error message mentions this format
+                    combined = (result.stdout + result.stderr).lower()
+                    if name.lower().encode() in combined or b'magic' in combined or b'header' in combined:
+                        comparisons.append(ComparisonLog(
+                            address=0,
+                            operand1=input_data[:len(magic)] if len(input_data) >= len(magic) else input_data,
+                            operand2=magic,
+                            operand_size=len(magic),
+                            comparison_type="eq",
+                            input_offset=0,
+                            is_string_cmp=False,
+                        ))
+                        break
+
+        return comparisons
+
+    def _build_i2s_mappings(
+        self,
+        input_data: bytes,
+        byte_to_comparison: Dict[int, List[Tuple[ComparisonLog, int]]]
+    ) -> List[InputToStateMapping]:
+        """Build I2S mappings from colorization results."""
+        mappings = []
+
+        # Group consecutive bytes that affect the same comparison
+        processed_ranges: Set[Tuple[int, int, int]] = set()
+
+        for offset in sorted(byte_to_comparison.keys()):
+            for cmp_log, operand_idx in byte_to_comparison[offset]:
+                # Find contiguous range of bytes affecting this comparison
+                start = offset
+                end = offset + 1
+
+                while end in byte_to_comparison:
+                    if any(c == cmp_log and idx == operand_idx
+                           for c, idx in byte_to_comparison[end]):
+                        end += 1
+                    else:
+                        break
+
+                range_key = (start, end, id(cmp_log))
+                if range_key in processed_ranges:
+                    continue
+                processed_ranges.add(range_key)
+
+                # Determine expected value (the operand we should match)
+                if operand_idx == 1:
+                    expected = cmp_log.operand2  # We control op1, want to match op2
+                    current = cmp_log.operand1
+                else:
+                    expected = cmp_log.operand1  # We control op2, want to match op1
+                    current = cmp_log.operand2
+
+                if expected and len(expected) > 0:
+                    # Calculate priority based on comparison type and size
+                    priority = 1.0
+                    if cmp_log.is_string_cmp:
+                        priority = 1.5  # String comparisons are high-value
+                    if len(expected) >= 4:
+                        priority *= 1.2  # Multi-byte comparisons are harder to hit randomly
+
+                    mappings.append(InputToStateMapping(
+                        input_offset=start,
+                        input_length=end - start,
+                        comparison_address=cmp_log.address,
+                        expected_value=expected[:end-start],  # Trim to match input range
+                        current_value=current[:end-start] if current else b'',
+                        priority=priority,
+                    ))
+
+        # Sort by priority (highest first)
+        mappings.sort(key=lambda m: -m.priority)
+
+        return mappings
+
+    def _extract_dictionary(self, comparisons: List[ComparisonLog]):
+        """Extract dictionary entries from comparison operands."""
+        for cmp in comparisons:
+            # Add both operands as dictionary entries
+            for operand in [cmp.operand1, cmp.operand2]:
+                if operand and len(operand) >= 2 and len(operand) <= 32:
+                    # Skip all-zeros or all-ones
+                    if operand != b'\x00' * len(operand) and operand != b'\xff' * len(operand):
+                        self.auto_dictionary.add(operand)
+                        self.stats["dictionary_entries_extracted"] += 1
+
+    def _build_mappings_from_cache(
+        self, input_hash: bytes, input_data: bytes
+    ) -> List[InputToStateMapping]:
+        """Build mappings from cached comparison data."""
+        comparisons = self._comparison_cache.get(input_hash, [])
+        mappings = []
+
+        for cmp in comparisons:
+            if cmp.input_offset is not None:
+                mappings.append(InputToStateMapping(
+                    input_offset=cmp.input_offset,
+                    input_length=cmp.operand_size,
+                    comparison_address=cmp.address,
+                    expected_value=cmp.operand2,
+                    current_value=cmp.operand1,
+                    priority=1.5 if cmp.is_string_cmp else 1.0,
+                ))
+
+        return mappings
+
+    def generate_targeted_mutations(
+        self,
+        input_data: bytes,
+        mappings: Optional[List[InputToStateMapping]] = None,
+        max_mutations: int = 20,
+    ) -> List[bytes]:
+        """
+        Generate mutations targeting specific comparisons.
+
+        Uses I2S mappings to create inputs that satisfy comparison conditions.
+        This is the key technique that makes RedQueen effective.
+
+        Args:
+            input_data: Original input to mutate
+            mappings: I2S mappings (uses self.i2s_mappings if None)
+            max_mutations: Maximum mutations to generate
+
+        Returns:
+            List of targeted mutations
+        """
+        if mappings is None:
+            mappings = self.i2s_mappings
+
+        mutations = []
+
+        for mapping in mappings[:max_mutations]:
+            try:
+                mutated = bytearray(input_data)
+
+                # Replace input bytes with expected comparison value
+                expected = mapping.expected_value
+                offset = mapping.input_offset
+
+                # Ensure we don't overflow
+                replace_len = min(len(expected), len(mutated) - offset)
+                if replace_len > 0:
+                    mutated[offset:offset + replace_len] = expected[:replace_len]
+                    mutations.append(bytes(mutated))
+                    self.stats["targeted_mutations_generated"] += 1
+
+                # Also try byte-swapped version for endianness issues
+                if len(expected) in [2, 4, 8]:
+                    swapped = expected[::-1]
+                    mutated2 = bytearray(input_data)
+                    mutated2[offset:offset + replace_len] = swapped[:replace_len]
+                    mutations.append(bytes(mutated2))
+
+            except Exception as e:
+                logger.debug(f"Targeted mutation failed: {e}")
+
+        # Add dictionary-based mutations
+        for entry in list(self.auto_dictionary)[:max_mutations // 4]:
+            for offset in [0, len(input_data) // 2, max(0, len(input_data) - len(entry))]:
+                mutated = bytearray(input_data)
+                end = min(offset + len(entry), len(mutated))
+                mutated[offset:end] = entry[:end - offset]
+                mutations.append(bytes(mutated))
+
+        return mutations[:max_mutations]
+
+    def get_dictionary_entries(self) -> List[bytes]:
+        """Get extracted dictionary entries for mutation engine."""
+        return list(self.auto_dictionary)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get CmpLog statistics."""
+        return {
+            **self.stats,
+            "auto_dictionary_size": len(self.auto_dictionary),
+            "cached_inputs": len(self._comparison_cache),
+            "active_mappings": len(self.i2s_mappings),
+        }
+
+
+# =============================================================================
+# SMART DICTIONARY EXTRACTION
+# =============================================================================
+
+@dataclass
+class DictionaryEntry:
+    """An extracted dictionary entry with metadata."""
+    value: bytes
+    source: str              # 'string', 'constant', 'magic', 'format', 'instruction'
+    score: float = 1.0       # Priority score for mutation
+    offset: Optional[int] = None  # Offset in binary where found
+    context: Optional[str] = None  # Additional context
+
+
+class SmartDictionaryExtractor:
+    """
+    Comprehensive dictionary extraction from binary files.
+
+    Extracts high-value tokens for fuzzing including:
+    - ASCII and UTF-16 strings
+    - Numeric constants from instructions
+    - Magic values and file signatures
+    - Format strings and protocol markers
+    - Comparison operands from disassembly
+
+    This significantly improves fuzzer effectiveness on parsers
+    and protocol handlers by providing domain-specific tokens.
+    """
+
+    # Common file format signatures with descriptions
+    MAGIC_SIGNATURES = [
+        # Archives
+        (b"PK\x03\x04", "ZIP"),
+        (b"PK\x05\x06", "ZIP_EMPTY"),
+        (b"Rar!\x1a\x07", "RAR"),
+        (b"\x1f\x8b\x08", "GZIP"),
+        (b"BZh", "BZIP2"),
+        (b"\xfd7zXZ\x00", "XZ"),
+        (b"7z\xbc\xaf\x27\x1c", "7Z"),
+        # Images
+        (b"\x89PNG\r\n\x1a\n", "PNG"),
+        (b"\xff\xd8\xff", "JPEG"),
+        (b"GIF87a", "GIF87"),
+        (b"GIF89a", "GIF89"),
+        (b"BM", "BMP"),
+        (b"RIFF", "RIFF"),
+        (b"WEBP", "WEBP"),
+        (b"\x00\x00\x01\x00", "ICO"),
+        (b"\x00\x00\x02\x00", "CUR"),
+        (b"II*\x00", "TIFF_LE"),
+        (b"MM\x00*", "TIFF_BE"),
+        # Documents
+        (b"%PDF", "PDF"),
+        (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "OLE"),  # MS Office old
+        (b"<?xml", "XML"),
+        (b"<!DOCTYPE", "HTML"),
+        (b"{\rtf", "RTF"),
+        # Executables
+        (b"MZ", "PE_DOS"),
+        (b"\x7fELF", "ELF"),
+        (b"\xfe\xed\xfa\xce", "MACHO32_BE"),
+        (b"\xfe\xed\xfa\xcf", "MACHO64_BE"),
+        (b"\xce\xfa\xed\xfe", "MACHO32_LE"),
+        (b"\xcf\xfa\xed\xfe", "MACHO64_LE"),
+        (b"\xca\xfe\xba\xbe", "MACHO_FAT"),
+        (b"dex\n", "DEX"),
+        # Media
+        (b"ID3", "MP3_ID3"),
+        (b"\xff\xfb", "MP3"),
+        (b"OggS", "OGG"),
+        (b"ftyp", "MP4"),
+        (b"moov", "MOV"),
+        (b"mdat", "MP4_DATA"),
+        (b"FLV\x01", "FLV"),
+        (b"\x1a\x45\xdf\xa3", "WEBM"),
+        # Data formats
+        (b"SQLite format 3", "SQLITE"),
+        (b"\x00\x00\x00\x00\x00\x00\x00\x00", "NULL8"),
+        # Network protocols
+        (b"HTTP/1.", "HTTP"),
+        (b"GET ", "HTTP_GET"),
+        (b"POST ", "HTTP_POST"),
+        (b"SSH-", "SSH"),
+        (b"\x16\x03", "TLS"),
+        (b"EHLO ", "SMTP"),
+        (b"HELO ", "SMTP"),
+    ]
+
+    # Interesting string patterns to prioritize
+    INTERESTING_PATTERNS = [
+        # Security-relevant
+        "password", "passwd", "secret", "private", "key", "token",
+        "auth", "login", "admin", "root", "user", "credential",
+        # Error handling
+        "error", "fail", "invalid", "illegal", "bad", "wrong",
+        "exception", "abort", "crash", "overflow", "underflow",
+        # Format/parsing
+        "parse", "read", "write", "open", "close", "load", "save",
+        "format", "encode", "decode", "compress", "decompress",
+        # Debug/development
+        "debug", "trace", "log", "assert", "test", "todo", "fixme",
+        # Boundary indicators
+        "begin", "end", "start", "stop", "header", "footer",
+        "length", "size", "count", "offset", "index",
+    ]
+
+    # Format string patterns
+    FORMAT_PATTERNS = [
+        b"%s", b"%d", b"%i", b"%u", b"%x", b"%X", b"%p", b"%n",
+        b"%ld", b"%lu", b"%lx", b"%lld", b"%llu", b"%llx",
+        b"%f", b"%e", b"%g", b"%c", b"%%",
+        b"%02x", b"%04x", b"%08x", b"%016x",
+        b"%02d", b"%04d", b"%08d",
+        b"%.2f", b"%.4f", b"%.8f",
+        b"%*s", b"%.*s",
+    ]
+
+    def __init__(self, binary_path: str, max_entries: int = 1000):
+        self.binary_path = binary_path
+        self.max_entries = max_entries
+        self.entries: List[DictionaryEntry] = []
+        self.stats = {
+            "ascii_strings": 0,
+            "utf16_strings": 0,
+            "magic_values": 0,
+            "constants": 0,
+            "format_strings": 0,
+            "instruction_operands": 0,
+            "total_extracted": 0,
+        }
+
+    def extract_all(self) -> List[DictionaryEntry]:
+        """
+        Extract all dictionary entries from the binary.
+
+        Returns:
+            List of DictionaryEntry objects sorted by score
+        """
+        try:
+            with open(self.binary_path, "rb") as f:
+                data = f.read()
+        except Exception as e:
+            logger.warning(f"Failed to read binary: {e}")
+            return []
+
+        # Run all extraction methods
+        self._extract_ascii_strings(data)
+        self._extract_utf16_strings(data)
+        self._extract_magic_values(data)
+        self._extract_format_strings(data)
+        self._extract_instruction_constants(data)
+        self._extract_boundary_values()
+
+        # Deduplicate and sort by score
+        self._deduplicate()
+        self.entries.sort(key=lambda e: -e.score)
+
+        # Limit entries
+        self.entries = self.entries[:self.max_entries]
+        self.stats["total_extracted"] = len(self.entries)
+
+        return self.entries
+
+    def _extract_ascii_strings(self, data: bytes, min_length: int = 4, max_length: int = 128):
+        """Extract printable ASCII strings."""
+        current = []
+        start_offset = 0
+
+        for i, b in enumerate(data):
+            if 32 <= b <= 126:
+                if not current:
+                    start_offset = i
+                current.append(chr(b))
+            else:
+                if min_length <= len(current) <= max_length:
+                    string = "".join(current)
+                    score = self._score_string(string)
+                    self.entries.append(DictionaryEntry(
+                        value=string.encode('ascii'),
+                        source="string",
+                        score=score,
+                        offset=start_offset,
+                        context="ascii",
+                    ))
+                    self.stats["ascii_strings"] += 1
+                current = []
+
+        # Handle string at end of data
+        if min_length <= len(current) <= max_length:
+            string = "".join(current)
+            self.entries.append(DictionaryEntry(
+                value=string.encode('ascii'),
+                source="string",
+                score=self._score_string(string),
+                offset=start_offset,
+            ))
+            self.stats["ascii_strings"] += 1
+
+    def _extract_utf16_strings(self, data: bytes, min_length: int = 4, max_length: int = 128):
+        """Extract UTF-16 LE strings (common in Windows binaries)."""
+        # Look for null-interleaved ASCII (UTF-16 LE pattern)
+        i = 0
+        while i < len(data) - 3:
+            # Check for UTF-16 LE pattern: char, 0x00, char, 0x00
+            if data[i+1] == 0 and 32 <= data[i] <= 126:
+                start = i
+                chars = []
+                while i < len(data) - 1:
+                    if data[i+1] == 0 and 32 <= data[i] <= 126:
+                        chars.append(chr(data[i]))
+                        i += 2
+                    else:
+                        break
+
+                if min_length <= len(chars) <= max_length:
+                    string = "".join(chars)
+                    score = self._score_string(string) * 0.9  # Slightly lower than ASCII
+                    self.entries.append(DictionaryEntry(
+                        value=string.encode('utf-16-le'),
+                        source="string",
+                        score=score,
+                        offset=start,
+                        context="utf16le",
+                    ))
+                    # Also add ASCII version
+                    self.entries.append(DictionaryEntry(
+                        value=string.encode('ascii', errors='ignore'),
+                        source="string",
+                        score=score * 0.8,
+                        offset=start,
+                        context="utf16le_ascii",
+                    ))
+                    self.stats["utf16_strings"] += 1
+            else:
+                i += 1
+
+    def _score_string(self, string: str) -> float:
+        """Score a string based on fuzzing value."""
+        score = 1.0
+        lower = string.lower()
+
+        # Boost interesting patterns
+        for pattern in self.INTERESTING_PATTERNS:
+            if pattern in lower:
+                score *= 1.5
+                break
+
+        # Boost format strings
+        if "%" in string:
+            score *= 1.3
+
+        # Boost paths
+        if "/" in string or "\\" in string:
+            score *= 1.2
+
+        # Boost URLs
+        if "://" in string or string.startswith("http"):
+            score *= 1.4
+
+        # Penalize very common strings
+        if string in ("true", "false", "null", "none", "yes", "no"):
+            score *= 0.5
+
+        # Boost medium-length strings (more likely to be meaningful)
+        if 8 <= len(string) <= 32:
+            score *= 1.1
+
+        return min(score, 3.0)  # Cap score
+
+    def _extract_magic_values(self, data: bytes):
+        """Extract known file format magic values."""
+        for magic, name in self.MAGIC_SIGNATURES:
+            if magic in data:
+                # Add with high score - magic values are very useful
+                self.entries.append(DictionaryEntry(
+                    value=magic,
+                    source="magic",
+                    score=2.5,
+                    offset=data.find(magic),
+                    context=name,
+                ))
+                self.stats["magic_values"] += 1
+
+                # Also add with variations (for format fuzzing)
+                if len(magic) >= 4:
+                    # Truncated version
+                    self.entries.append(DictionaryEntry(
+                        value=magic[:len(magic)//2],
+                        source="magic",
+                        score=1.5,
+                        context=f"{name}_trunc",
+                    ))
+
+    def _extract_format_strings(self, data: bytes):
+        """Extract format string patterns."""
+        for pattern in self.FORMAT_PATTERNS:
+            offset = 0
+            while True:
+                idx = data.find(pattern, offset)
+                if idx == -1:
+                    break
+                self.entries.append(DictionaryEntry(
+                    value=pattern,
+                    source="format",
+                    score=1.8,
+                    offset=idx,
+                    context="printf_format",
+                ))
+                self.stats["format_strings"] += 1
+                offset = idx + 1
+
+                # Limit per pattern
+                if self.stats["format_strings"] > 100:
+                    break
+
+    def _extract_instruction_constants(self, data: bytes):
+        """
+        Extract constants from common instruction patterns.
+
+        Handles x86/x64 immediate operands in:
+        - CMP instructions
+        - MOV instructions
+        - PUSH instructions
+        - TEST instructions
+        """
+        constants: Set[bytes] = set()
+        i = 0
+
+        while i < len(data) - 5:
+            extracted = None
+
+            # CMP AL, imm8 (0x3C)
+            if data[i] == 0x3C:
+                extracted = bytes([data[i+1]])
+                i += 2
+
+            # CMP EAX, imm32 (0x3D)
+            elif data[i] == 0x3D and i + 5 <= len(data):
+                extracted = data[i+1:i+5]
+                i += 5
+
+            # PUSH imm32 (0x68)
+            elif data[i] == 0x68 and i + 5 <= len(data):
+                extracted = data[i+1:i+5]
+                i += 5
+
+            # PUSH imm8 (0x6A)
+            elif data[i] == 0x6A:
+                extracted = bytes([data[i+1]])
+                i += 2
+
+            # MOV reg, imm32 (0xB8-0xBF)
+            elif 0xB8 <= data[i] <= 0xBF and i + 5 <= len(data):
+                extracted = data[i+1:i+5]
+                i += 5
+
+            # TEST AL, imm8 (0xA8)
+            elif data[i] == 0xA8:
+                extracted = bytes([data[i+1]])
+                i += 2
+
+            # TEST EAX, imm32 (0xA9)
+            elif data[i] == 0xA9 and i + 5 <= len(data):
+                extracted = data[i+1:i+5]
+                i += 5
+
+            # CMP with ModR/M (0x80, 0x81, 0x83)
+            elif data[i] in (0x80, 0x81, 0x83) and i + 2 < len(data):
+                modrm = data[i+1]
+                reg = (modrm >> 3) & 7
+                if reg == 7:  # CMP operation
+                    if data[i] == 0x80 or data[i] == 0x83:
+                        # imm8
+                        if i + 3 <= len(data):
+                            extracted = bytes([data[i+2]])
+                        i += 3
+                    elif data[i] == 0x81:
+                        # imm32
+                        if i + 6 <= len(data):
+                            extracted = data[i+2:i+6]
+                        i += 6
+                    else:
+                        i += 1
+                else:
+                    i += 1
+            else:
+                i += 1
+
+            if extracted and extracted not in constants:
+                # Filter out boring values
+                if extracted not in (b"\x00", b"\x00\x00\x00\x00",
+                                     b"\xff", b"\xff\xff\xff\xff",
+                                     b"\x01", b"\x01\x00\x00\x00"):
+                    constants.add(extracted)
+                    self.entries.append(DictionaryEntry(
+                        value=extracted,
+                        source="instruction",
+                        score=1.4,
+                        offset=i - len(extracted),
+                        context="immediate",
+                    ))
+                    self.stats["instruction_operands"] += 1
+
+                    # Add both endianness versions for 4-byte constants
+                    if len(extracted) == 4:
+                        swapped = extracted[::-1]
+                        if swapped not in constants:
+                            constants.add(swapped)
+                            self.entries.append(DictionaryEntry(
+                                value=swapped,
+                                source="instruction",
+                                score=1.2,
+                                context="immediate_swapped",
+                            ))
+
+        self.stats["constants"] = len(constants)
+
+    def _extract_boundary_values(self):
+        """Add common boundary values for integer fuzzing."""
+        boundary_values = [
+            # 8-bit boundaries
+            (b"\x00", "zero"),
+            (b"\x01", "one"),
+            (b"\x7f", "int8_max"),
+            (b"\x80", "int8_min_abs"),
+            (b"\xff", "uint8_max"),
+            # 16-bit boundaries (little endian)
+            (b"\xff\x7f", "int16_max"),
+            (b"\x00\x80", "int16_min"),
+            (b"\xff\xff", "uint16_max"),
+            # 32-bit boundaries (little endian)
+            (b"\xff\xff\xff\x7f", "int32_max"),
+            (b"\x00\x00\x00\x80", "int32_min"),
+            (b"\xff\xff\xff\xff", "uint32_max"),
+            # 64-bit boundaries (little endian)
+            (b"\xff\xff\xff\xff\xff\xff\xff\x7f", "int64_max"),
+            (b"\x00\x00\x00\x00\x00\x00\x00\x80", "int64_min"),
+            # Powers of 2
+            (b"\x00\x01", "pow2_8"),
+            (b"\x00\x04", "pow2_10"),
+            (b"\x00\x10", "pow2_12"),
+            (b"\x00\x40", "pow2_14"),
+            # Common sizes
+            (b"\x00\x01\x00\x00", "256"),
+            (b"\x00\x04\x00\x00", "1024"),
+            (b"\x00\x10\x00\x00", "4096"),
+            (b"\x00\x00\x01\x00", "65536"),
+            # Off-by-one
+            (b"\xfe\xff", "uint16_max-1"),
+            (b"\xfe\xff\xff\xff", "uint32_max-1"),
+        ]
+
+        for value, context in boundary_values:
+            self.entries.append(DictionaryEntry(
+                value=value,
+                source="boundary",
+                score=1.3,
+                context=context,
+            ))
+
+    def _deduplicate(self):
+        """Remove duplicate entries, keeping highest scored."""
+        seen: Dict[bytes, DictionaryEntry] = {}
+        for entry in self.entries:
+            if entry.value in seen:
+                if entry.score > seen[entry.value].score:
+                    seen[entry.value] = entry
+            else:
+                seen[entry.value] = entry
+        self.entries = list(seen.values())
+
+    def get_dictionary_bytes(self) -> List[bytes]:
+        """Get just the byte values for mutation engine."""
+        return [e.value for e in self.entries]
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get extraction statistics."""
+        return {
+            **self.stats,
+            "entry_count": len(self.entries),
+            "sources": {
+                "string": sum(1 for e in self.entries if e.source == "string"),
+                "magic": sum(1 for e in self.entries if e.source == "magic"),
+                "format": sum(1 for e in self.entries if e.source == "format"),
+                "instruction": sum(1 for e in self.entries if e.source == "instruction"),
+                "boundary": sum(1 for e in self.entries if e.source == "boundary"),
+            },
+            "avg_score": sum(e.score for e in self.entries) / max(1, len(self.entries)),
+        }
+
+    def export_afl_dict(self, output_path: str) -> int:
+        """
+        Export dictionary in AFL format.
+
+        Args:
+            output_path: Path to write dictionary file
+
+        Returns:
+            Number of entries written
+        """
+        count = 0
+        with open(output_path, "w") as f:
+            for entry in self.entries:
+                # AFL dict format: name="value"
+                hex_val = entry.value.hex()
+                name = f"{entry.source}_{count}"
+                if entry.context:
+                    name = f"{entry.context}_{count}"
+
+                # Escape for AFL format
+                escaped = ""
+                for b in entry.value:
+                    if 32 <= b <= 126 and b not in (ord('"'), ord('\\')):
+                        escaped += chr(b)
+                    else:
+                        escaped += f"\\x{b:02x}"
+
+                f.write(f'{name}="{escaped}"\n')
+                count += 1
+
+        return count
+
+
+# =============================================================================
+# DETERMINISTIC DELTA DEBUGGING (DDMIN)
+# =============================================================================
+
+@dataclass
+class DeltaDebugResult:
+    """Result of delta debugging minimization."""
+    original_size: int
+    minimized_size: int
+    reduction_percentage: float
+    minimized_input: bytes
+    minimized_path: str
+    total_tests: int
+    ddmin_passes: int
+    still_crashes: bool
+    crash_type: Optional[CrashType] = None
+    minimization_time: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "original_size": self.original_size,
+            "minimized_size": self.minimized_size,
+            "reduction_percentage": self.reduction_percentage,
+            "minimized_path": self.minimized_path,
+            "total_tests": self.total_tests,
+            "ddmin_passes": self.ddmin_passes,
+            "still_crashes": self.still_crashes,
+            "crash_type": self.crash_type.value if self.crash_type else None,
+            "minimization_time": self.minimization_time,
+        }
+
+
+class DeltaDebugger:
+    """
+    Deterministic Delta Debugging (ddmin) for crash input minimization.
+
+    Implements Zeller's delta debugging algorithm which systematically
+    finds the minimal subset of input that triggers the crash.
+
+    Algorithm:
+    1. Divide input into n chunks
+    2. Test each chunk removal
+    3. If removal preserves crash, keep it
+    4. Increase granularity and repeat
+    5. Continue until 1-minimal (removing any byte breaks the crash)
+
+    This produces provably minimal crash inputs, essential for:
+    - Root cause analysis
+    - Bug reporting
+    - Regression test creation
+
+    Reference: "Simplifying and Isolating Failure-Inducing Input" (Zeller, 2002)
+    """
+
+    def __init__(
+        self,
+        harness: 'ProcessHarness',
+        max_tests: int = 5000,
+        timeout_seconds: float = 300.0,
+    ):
+        self.harness = harness
+        self.max_tests = max_tests
+        self.timeout_seconds = timeout_seconds
+
+        # Test cache to avoid redundant executions
+        self._test_cache: Dict[bytes, Tuple[bool, Optional[CrashType]]] = {}
+
+        # Statistics
+        self.total_tests = 0
+        self.cache_hits = 0
+        self.ddmin_passes = 0
+        self.target_crash_type: Optional[CrashType] = None
+
+    async def _test_input(self, data: bytes) -> Tuple[bool, Optional[CrashType]]:
+        """Test if input causes the target crash, with caching."""
+        # Check cache first
+        cache_key = hashlib.sha256(data).digest()
+        if cache_key in self._test_cache:
+            self.cache_hits += 1
+            return self._test_cache[cache_key]
+
+        self.total_tests += 1
+
+        try:
+            result = await self.harness.execute(data)
+
+            if result.crashed:
+                # Verify crash type matches target (if specified)
+                if self.target_crash_type:
+                    matches = result.crash_type == self.target_crash_type
+                    self._test_cache[cache_key] = (matches, result.crash_type)
+                    return matches, result.crash_type
+
+                self._test_cache[cache_key] = (True, result.crash_type)
+                return True, result.crash_type
+
+            self._test_cache[cache_key] = (False, None)
+            return False, None
+
+        except Exception as e:
+            logger.debug(f"Delta debug test failed: {e}")
+            self._test_cache[cache_key] = (False, None)
+            return False, None
+
+    async def minimize(
+        self,
+        crash_input: bytes,
+        output_dir: str,
+    ) -> DeltaDebugResult:
+        """
+        Minimize crash input using deterministic delta debugging.
+
+        The ddmin algorithm:
+        - Split input into n chunks (initially n=2)
+        - Test subsets and complements
+        - If subset still crashes, recurse on it
+        - If complement crashes, reduce to complement
+        - Otherwise, increase granularity (n *= 2)
+        - Stop when 1-minimal
+
+        Args:
+            crash_input: The crash-inducing input
+            output_dir: Directory to save minimized input
+
+        Returns:
+            DeltaDebugResult with minimized input
+        """
+        start_time = time.time()
+        original_size = len(crash_input)
+
+        # Reset state
+        self.total_tests = 0
+        self.cache_hits = 0
+        self.ddmin_passes = 0
+        self._test_cache.clear()
+
+        # Verify input actually crashes
+        crashes, crash_type = await self._test_input(crash_input)
+        if not crashes:
+            return DeltaDebugResult(
+                original_size=original_size,
+                minimized_size=original_size,
+                reduction_percentage=0.0,
+                minimized_input=crash_input,
+                minimized_path="",
+                total_tests=self.total_tests,
+                ddmin_passes=0,
+                still_crashes=False,
+                minimization_time=time.time() - start_time,
+            )
+
+        self.target_crash_type = crash_type
+
+        # Run ddmin algorithm
+        minimized = await self._ddmin(list(crash_input))
+        minimized_bytes = bytes(minimized)
+
+        # Verify final result still crashes
+        final_crashes, _ = await self._test_input(minimized_bytes)
+
+        # Additional polish: try removing individual bytes
+        if final_crashes and len(minimized_bytes) > 1:
+            minimized_bytes = await self._byte_polish(minimized_bytes)
+
+        # Save minimized input
+        os.makedirs(output_dir, exist_ok=True)
+        hash_str = hashlib.sha256(minimized_bytes).hexdigest()[:12]
+        minimized_path = os.path.join(output_dir, f"ddmin_{hash_str}")
+        with open(minimized_path, "wb") as f:
+            f.write(minimized_bytes)
+
+        reduction = ((original_size - len(minimized_bytes)) / original_size * 100
+                     if original_size > 0 else 0)
+
+        return DeltaDebugResult(
+            original_size=original_size,
+            minimized_size=len(minimized_bytes),
+            reduction_percentage=round(reduction, 2),
+            minimized_input=minimized_bytes,
+            minimized_path=minimized_path,
+            total_tests=self.total_tests,
+            ddmin_passes=self.ddmin_passes,
+            still_crashes=final_crashes,
+            crash_type=crash_type,
+            minimization_time=round(time.time() - start_time, 2),
+        )
+
+    async def _ddmin(self, input_list: List[int], n: int = 2) -> List[int]:
+        """
+        Core ddmin algorithm (recursive).
+
+        Args:
+            input_list: Input as list of bytes (for easier manipulation)
+            n: Current granularity (number of chunks)
+
+        Returns:
+            Minimized input as list of bytes
+        """
+        if len(input_list) <= 1:
+            return input_list
+
+        if self.total_tests >= self.max_tests:
+            logger.warning("Delta debugging hit max test limit")
+            return input_list
+
+        if time.time() > self.timeout_seconds + time.time():
+            logger.warning("Delta debugging timed out")
+            return input_list
+
+        self.ddmin_passes += 1
+
+        # Clamp n to input size
+        n = min(n, len(input_list))
+        if n < 2:
+            return input_list
+
+        # Split into n chunks
+        chunk_size = (len(input_list) + n - 1) // n
+        chunks = [
+            input_list[i:i + chunk_size]
+            for i in range(0, len(input_list), chunk_size)
+        ]
+
+        # Test each chunk's complement (removing the chunk)
+        for i, chunk in enumerate(chunks):
+            # Create complement (all chunks except this one)
+            complement = []
+            for j, c in enumerate(chunks):
+                if j != i:
+                    complement.extend(c)
+
+            if not complement:
+                continue
+
+            crashes, _ = await self._test_input(bytes(complement))
+            if crashes:
+                # Complement crashes! Recurse on smaller input
+                return await self._ddmin(complement, max(n - 1, 2))
+
+        # Test each individual chunk
+        for chunk in chunks:
+            if not chunk:
+                continue
+
+            crashes, _ = await self._test_input(bytes(chunk))
+            if crashes:
+                # This chunk alone crashes! Recurse on it
+                return await self._ddmin(chunk, 2)
+
+        # No single chunk or complement crashes
+        # Increase granularity if possible
+        if n < len(input_list):
+            return await self._ddmin(input_list, min(2 * n, len(input_list)))
+
+        # We've reached maximum granularity (1-minimal)
+        return input_list
+
+    async def _byte_polish(self, data: bytes) -> bytes:
+        """
+        Final polish: try removing each byte individually.
+
+        This catches cases where ddmin leaves a few extra bytes
+        due to chunk boundaries.
+        """
+        current = bytearray(data)
+        i = 0
+
+        while i < len(current) and self.total_tests < self.max_tests:
+            # Try removing byte at position i
+            test = bytes(current[:i] + current[i+1:])
+
+            if len(test) == 0:
+                break
+
+            crashes, _ = await self._test_input(test)
+            if crashes:
+                # Removal succeeded, stay at same position
+                current = bytearray(test)
+            else:
+                # Can't remove this byte, move forward
+                i += 1
+
+        return bytes(current)
+
+    async def minimize_structured(
+        self,
+        crash_input: bytes,
+        output_dir: str,
+        tokens: Optional[List[bytes]] = None,
+    ) -> DeltaDebugResult:
+        """
+        Token-based delta debugging for structured inputs.
+
+        Instead of operating on bytes, operates on tokens (e.g., lines,
+        JSON fields, XML elements) for better minimization of structured data.
+
+        Args:
+            crash_input: The crash-inducing input
+            output_dir: Directory to save minimized input
+            tokens: Pre-tokenized input (auto-detected if None)
+
+        Returns:
+            DeltaDebugResult with minimized input
+        """
+        start_time = time.time()
+        original_size = len(crash_input)
+
+        # Reset state
+        self.total_tests = 0
+        self.cache_hits = 0
+        self.ddmin_passes = 0
+        self._test_cache.clear()
+
+        # Verify input actually crashes
+        crashes, crash_type = await self._test_input(crash_input)
+        if not crashes:
+            return DeltaDebugResult(
+                original_size=original_size,
+                minimized_size=original_size,
+                reduction_percentage=0.0,
+                minimized_input=crash_input,
+                minimized_path="",
+                total_tests=self.total_tests,
+                ddmin_passes=0,
+                still_crashes=False,
+                minimization_time=time.time() - start_time,
+            )
+
+        self.target_crash_type = crash_type
+
+        # Tokenize if not provided
+        if tokens is None:
+            tokens = self._auto_tokenize(crash_input)
+
+        # Run token-based ddmin
+        minimized_tokens = await self._ddmin_tokens(tokens)
+        minimized_bytes = b''.join(minimized_tokens)
+
+        # Fall back to byte-level if token approach didn't help much
+        if len(minimized_bytes) > original_size * 0.8:
+            minimized_bytes = bytes(await self._ddmin(list(crash_input)))
+
+        # Final polish
+        final_crashes, _ = await self._test_input(minimized_bytes)
+        if final_crashes and len(minimized_bytes) > 1:
+            minimized_bytes = await self._byte_polish(minimized_bytes)
+
+        # Save result
+        os.makedirs(output_dir, exist_ok=True)
+        hash_str = hashlib.sha256(minimized_bytes).hexdigest()[:12]
+        minimized_path = os.path.join(output_dir, f"ddmin_struct_{hash_str}")
+        with open(minimized_path, "wb") as f:
+            f.write(minimized_bytes)
+
+        reduction = ((original_size - len(minimized_bytes)) / original_size * 100
+                     if original_size > 0 else 0)
+
+        return DeltaDebugResult(
+            original_size=original_size,
+            minimized_size=len(minimized_bytes),
+            reduction_percentage=round(reduction, 2),
+            minimized_input=minimized_bytes,
+            minimized_path=minimized_path,
+            total_tests=self.total_tests,
+            ddmin_passes=self.ddmin_passes,
+            still_crashes=final_crashes,
+            crash_type=crash_type,
+            minimization_time=round(time.time() - start_time, 2),
+        )
+
+    def _auto_tokenize(self, data: bytes) -> List[bytes]:
+        """Auto-detect input format and tokenize appropriately."""
+        try:
+            text = data.decode('utf-8', errors='ignore')
+
+            # Try JSON tokenization
+            if text.strip().startswith(('{', '[')):
+                return self._tokenize_json(data)
+
+            # Try XML tokenization
+            if text.strip().startswith('<'):
+                return self._tokenize_xml(data)
+
+            # Try line-based tokenization
+            if '\n' in text:
+                return self._tokenize_lines(data)
+
+        except Exception:
+            pass
+
+        # Fall back to fixed-size chunks
+        chunk_size = max(1, len(data) // 16)
+        return [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+
+    def _tokenize_json(self, data: bytes) -> List[bytes]:
+        """Tokenize JSON input by top-level fields."""
+        tokens = []
+        try:
+            import json as json_module
+            text = data.decode('utf-8')
+            obj = json_module.loads(text)
+
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    tokens.append(json_module.dumps({key: value}).encode())
+            elif isinstance(obj, list):
+                for item in obj:
+                    tokens.append(json_module.dumps(item).encode())
+            else:
+                tokens = [data]
+        except Exception:
+            tokens = [data]
+
+        return tokens if tokens else [data]
+
+    def _tokenize_xml(self, data: bytes) -> List[bytes]:
+        """Tokenize XML input by elements."""
+        tokens = []
+        try:
+            # Simple tag-based splitting
+            import re
+            # Split by top-level tags
+            pattern = rb'<([^/][^>]*?)(?:/>|>.*?</\1>)'
+            matches = list(re.finditer(pattern, data, re.DOTALL))
+
+            if matches:
+                for match in matches:
+                    tokens.append(match.group(0))
+            else:
+                tokens = [data]
+        except Exception:
+            tokens = [data]
+
+        return tokens if tokens else [data]
+
+    def _tokenize_lines(self, data: bytes) -> List[bytes]:
+        """Tokenize input by lines."""
+        lines = data.split(b'\n')
+        # Keep newlines with their lines
+        return [line + b'\n' for line in lines[:-1]] + ([lines[-1]] if lines[-1] else [])
+
+    async def _ddmin_tokens(self, tokens: List[bytes], n: int = 2) -> List[bytes]:
+        """Token-based ddmin algorithm."""
+        if len(tokens) <= 1:
+            return tokens
+
+        if self.total_tests >= self.max_tests:
+            return tokens
+
+        self.ddmin_passes += 1
+
+        n = min(n, len(tokens))
+        if n < 2:
+            return tokens
+
+        # Split into n chunks of tokens
+        chunk_size = (len(tokens) + n - 1) // n
+        chunks = [
+            tokens[i:i + chunk_size]
+            for i in range(0, len(tokens), chunk_size)
+        ]
+
+        # Test complements
+        for i in range(len(chunks)):
+            complement = []
+            for j, c in enumerate(chunks):
+                if j != i:
+                    complement.extend(c)
+
+            if not complement:
+                continue
+
+            crashes, _ = await self._test_input(b''.join(complement))
+            if crashes:
+                return await self._ddmin_tokens(complement, max(n - 1, 2))
+
+        # Test individual chunks
+        for chunk in chunks:
+            if not chunk:
+                continue
+
+            crashes, _ = await self._test_input(b''.join(chunk))
+            if crashes:
+                return await self._ddmin_tokens(chunk, 2)
+
+        # Increase granularity
+        if n < len(tokens):
+            return await self._ddmin_tokens(tokens, min(2 * n, len(tokens)))
+
+        return tokens
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get minimization statistics."""
+        return {
+            "total_tests": self.total_tests,
+            "cache_hits": self.cache_hits,
+            "ddmin_passes": self.ddmin_passes,
+            "cache_size": len(self._test_cache),
+            "cache_hit_rate": round(self.cache_hits / max(1, self.total_tests + self.cache_hits) * 100, 1),
         }
 
 
@@ -9929,6 +11892,169 @@ class ExecutionResult:
         return result
 
 
+class CoverageProvider:
+    """Base class for coverage data collection."""
+    
+    def is_available(self) -> bool:
+        return True
+    
+    def prepare_environment(self, env: Dict[str, str]) -> Dict[str, str]:
+        return env
+    
+    def reset(self):
+        pass
+    
+    def read_coverage(self) -> Optional[bytes]:
+        return None
+    
+    def close(self):
+        pass
+
+
+class AflSharedMemoryCoverage(CoverageProvider):
+    """
+    AFL-style shared memory coverage provider.
+    
+    Requires the target to be compiled with AFL/LLVM instrumentation.
+    """
+    
+    def __init__(self, map_size: int = 65536):
+        self.map_size = map_size
+        self._available = False
+        self._libc = None
+        self._shm_id: Optional[int] = None
+        self._shm_addr: Optional[int] = None
+        self._shm_map = None
+        self._shmdt = None
+        self._init_shared_memory()
+    
+    def _init_shared_memory(self):
+        if os.name == "nt":
+            return
+        
+        libc_path = ctypes.util.find_library("c")
+        if not libc_path:
+            return
+        
+        try:
+            self._libc = ctypes.CDLL(libc_path, use_errno=True)
+        except OSError:
+            return
+        
+        IPC_PRIVATE = 0
+        IPC_CREAT = 0o1000
+        IPC_RMID = 0
+        
+        shmget = self._libc.shmget
+        shmget.argtypes = [ctypes.c_int, ctypes.c_size_t, ctypes.c_int]
+        shmget.restype = ctypes.c_int
+        
+        shmat = self._libc.shmat
+        shmat.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+        shmat.restype = ctypes.c_void_p
+        
+        shmctl = self._libc.shmctl
+        shmctl.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+        shmctl.restype = ctypes.c_int
+        
+        shmdt = self._libc.shmdt
+        shmdt.argtypes = [ctypes.c_void_p]
+        shmdt.restype = ctypes.c_int
+        
+        shm_id = shmget(IPC_PRIVATE, self.map_size, IPC_CREAT | 0o600)
+        if shm_id < 0:
+            return
+        
+        shm_addr = shmat(shm_id, None, 0)
+        if shm_addr in (ctypes.c_void_p(-1).value, None):
+            return
+        
+        shmctl(shm_id, IPC_RMID, None)
+        
+        self._shm_id = shm_id
+        self._shm_addr = shm_addr
+        self._shmdt = shmdt
+        self._shm_map = (ctypes.c_ubyte * self.map_size).from_address(shm_addr)
+        ctypes.memset(shm_addr, 0, self.map_size)
+        self._available = True
+    
+    def is_available(self) -> bool:
+        return self._available
+    
+    def prepare_environment(self, env: Dict[str, str]) -> Dict[str, str]:
+        if not self._available or self._shm_id is None:
+            return env
+        env["__AFL_SHM_ID"] = str(self._shm_id)
+        env["AFL_MAP_SIZE"] = str(self.map_size)
+        return env
+    
+    def reset(self):
+        if self._available and self._shm_addr:
+            ctypes.memset(self._shm_addr, 0, self.map_size)
+    
+    def read_coverage(self) -> Optional[bytes]:
+        if not self._available or not self._shm_map:
+            return None
+        return bytes(self._shm_map)
+    
+    def close(self):
+        if self._available and self._shm_addr and self._shmdt:
+            try:
+                self._shmdt(self._shm_addr)
+            except Exception:
+                pass
+        self._available = False
+
+
+def create_coverage_provider(
+    backend: CoverageBackend,
+    map_size: int = 65536,
+    target_path: Optional[str] = None,
+    qemu_architecture: Optional["QemuArchitecture"] = None,
+) -> Optional[CoverageProvider]:
+    """Create a coverage provider based on the requested backend.
+
+    Args:
+        backend: Coverage backend type
+        map_size: Coverage bitmap size
+        target_path: Path to target binary (required for QEMU backend)
+        qemu_architecture: Target architecture for QEMU (auto-detected if not provided)
+
+    Returns:
+        CoverageProvider instance or None
+    """
+    if backend == CoverageBackend.NONE:
+        return None
+
+    # Try AFL shared memory first (for instrumented binaries)
+    if backend in (CoverageBackend.AUTO, CoverageBackend.AFL_SHM):
+        provider = AflSharedMemoryCoverage(map_size=map_size)
+        if provider.is_available():
+            return provider
+        if backend == CoverageBackend.AFL_SHM:
+            return None
+
+    # Try QEMU coverage (for binary-only targets)
+    if backend in (CoverageBackend.AUTO, CoverageBackend.QEMU):
+        if target_path:
+            try:
+                from .qemu_coverage_service import QemuCoverageProvider, QemuCoverageConfig
+                config = QemuCoverageConfig(
+                    target_path=target_path,
+                    architecture=qemu_architecture,
+                    map_size=map_size,
+                )
+                provider = QemuCoverageProvider(config)
+                if provider.is_available():
+                    return provider
+                provider.close()
+            except ImportError:
+                pass
+        if backend == CoverageBackend.QEMU:
+            return None
+
+    return None
+
 class ProcessHarness:
     """
     Process execution harness for running target binaries.
@@ -9949,6 +12075,8 @@ class ProcessHarness:
         memory_limit_mb: int = 1024,
         working_dir: Optional[str] = None,
         environment: Optional[Dict[str, str]] = None,
+        use_stdin: Optional[bool] = None,
+        coverage_provider: Optional[CoverageProvider] = None,
     ):
         self.target_path = target_path
         self.args_template = args_template
@@ -9956,6 +12084,8 @@ class ProcessHarness:
         self.memory_limit_mb = memory_limit_mb
         self.working_dir = working_dir or os.path.dirname(target_path)
         self.environment = environment or {}
+        self.use_stdin = use_stdin if use_stdin is not None else "@@" not in args_template
+        self.coverage_provider = coverage_provider
         
         # Stats
         self.total_executions = 0
@@ -9998,10 +12128,15 @@ class ProcessHarness:
         
         return input_path
     
-    def _build_command(self, input_path: str) -> List[str]:
+    def _build_command(self, input_path: Optional[str]) -> List[str]:
         """Build the command line with input file path."""
-        args = self.args_template.replace("@@", input_path)
-        return [self.target_path] + args.split()
+        args_template = self.args_template
+        if input_path and "@@" in args_template:
+            args_template = args_template.replace("@@", input_path)
+        if not args_template:
+            return [self.target_path]
+        args = shlex.split(args_template, posix=os.name != "nt")
+        return [self.target_path] + args
     
     def _classify_crash(self, exit_code: int) -> Tuple[bool, Optional[CrashType]]:
         """Classify if exit code indicates a crash."""
@@ -10032,7 +12167,7 @@ class ProcessHarness:
         """
         self.total_executions += 1
         
-        input_path = self._prepare_input_file(input_data)
+        input_path = self._prepare_input_file(input_data) if "@@" in self.args_template else None
         input_hash = hashlib.sha256(input_data).hexdigest()
         command = self._build_command(input_path)
         
@@ -10047,25 +12182,43 @@ class ProcessHarness:
             # Prepare environment
             env = os.environ.copy()
             env.update(self.environment)
+            if self.coverage_provider and self.coverage_provider.is_available():
+                try:
+                    self.coverage_provider.reset()
+                    env = self.coverage_provider.prepare_environment(env)
+                except Exception:
+                    pass
             
             # Enable crash dumps on Windows
             if os.name == "nt":
                 env["ASAN_OPTIONS"] = "detect_leaks=0:symbolize=1:abort_on_error=1"
                 env["UBSAN_OPTIONS"] = "print_stacktrace=1"
             
+            preexec_fn = None
+            if resource and os.name != "nt":
+                def _set_limits():
+                    try:
+                        mem_bytes = self.memory_limit_mb * 1024 * 1024
+                        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+                    except Exception:
+                        pass
+                preexec_fn = _set_limits
+
             # Start process
             process = await asyncio.create_subprocess_exec(
                 *command,
+                stdin=asyncio.subprocess.PIPE if self.use_stdin else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.working_dir,
                 env=env,
+                preexec_fn=preexec_fn,
             )
             
             try:
                 # Wait with timeout
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
+                    process.communicate(input_data if self.use_stdin else None),
                     timeout=self.timeout_ms / 1000.0
                 )
                 
@@ -10105,6 +12258,11 @@ class ProcessHarness:
         finally:
             result.duration_ms = (time.time() - start_time) * 1000
             self.total_time_ms += result.duration_ms
+            if self.coverage_provider and self.coverage_provider.is_available():
+                try:
+                    result.coverage_data = self.coverage_provider.read_coverage()
+                except Exception:
+                    pass
         
         return result
     
@@ -10163,6 +12321,57 @@ class ProcessHarness:
             "avg_execution_ms": self.total_time_ms / max(1, self.total_executions),
             "total_time_seconds": self.total_time_ms / 1000,
         }
+
+
+class SanitizerReplay:
+    """Re-run crashing inputs against a sanitizer-instrumented binary."""
+
+    def __init__(
+        self,
+        target_path: str,
+        target_args: str = "@@",
+        timeout_ms: int = 5000,
+        use_stdin: Optional[bool] = None,
+        max_runs: int = 10,
+        environment: Optional[Dict[str, str]] = None,
+    ):
+        self.target_path = target_path
+        self.target_args = target_args
+        self.timeout_ms = timeout_ms
+        self.use_stdin = use_stdin
+        self.max_runs = max(0, max_runs)
+        self._runs = 0
+        self._lock = asyncio.Lock()
+
+        base_env = {
+            "ASAN_OPTIONS": "abort_on_error=1:detect_leaks=0:symbolize=1:allocator_may_return_null=1",
+            "UBSAN_OPTIONS": "print_stacktrace=1",
+            "MSAN_OPTIONS": "halt_on_error=1:symbolize=1",
+        }
+        if environment:
+            base_env.update(environment)
+
+        self._harness = ProcessHarness(
+            target_path=target_path,
+            args_template=target_args,
+            timeout_ms=timeout_ms,
+            use_stdin=use_stdin,
+            environment=base_env,
+        )
+
+    async def replay(self, input_data: bytes) -> Optional[ExecutionResult]:
+        """Run the sanitizer binary with the crashing input."""
+        async with self._lock:
+            if self._runs >= self.max_runs:
+                return None
+            self._runs += 1
+            return await self._harness.execute(input_data)
+
+    def get_runs(self) -> int:
+        return self._runs
+
+    def cleanup(self):
+        self._harness.cleanup()
 
 
 # =============================================================================
@@ -10225,9 +12434,25 @@ class CrashAnalyzer:
         (CrashType.TIMEOUT, CrashSeverity.NOT_EXPLOITABLE),
     ]
     
-    def __init__(self, minidump_dir: Optional[str] = None):
+    def __init__(
+        self,
+        minidump_dir: Optional[str] = None,
+        target_path: Optional[str] = None,
+        target_args: str = "@@",
+        use_stdin: Optional[bool] = None,
+        enable_debugger: bool = True,
+        debugger_timeout: float = 5.0,
+        max_debug_runs: int = 10,
+    ):
         self.minidump_dir = minidump_dir or tempfile.mkdtemp(prefix="minidumps_")
         os.makedirs(self.minidump_dir, exist_ok=True)
+        self.target_path = target_path
+        self.target_args = target_args or "@@"
+        self.use_stdin = use_stdin
+        self.enable_debugger = enable_debugger
+        self.debugger_timeout = debugger_timeout
+        self.max_debug_runs = max_debug_runs
+        self._debug_runs = 0
     
     def analyze(self, execution_result: ExecutionResult, input_data: bytes) -> CrashInfo:
         """
@@ -10265,6 +12490,10 @@ class CrashAnalyzer:
         
         # Additional analysis based on crash type
         self._analyze_crash_details(crash_info, execution_result)
+
+        # Collect debugger info when sanitizer output is missing
+        if self.enable_debugger and (not crash_info.stack_trace or crash_info.exception_address == 0):
+            self._collect_debugger_info(crash_info)
         
         return crash_info
     
@@ -10326,6 +12555,94 @@ class CrashAnalyzer:
                 parts = first_frame.split(" in ")
                 if len(parts) > 1:
                     crash_info.faulting_module = parts[1].split()[0]
+
+    def _collect_debugger_info(self, crash_info: CrashInfo):
+        """Attempt to collect stack trace and registers via debugger."""
+        if os.name == "nt":
+            return
+        if not self.target_path or not os.path.isfile(self.target_path):
+            return
+        if not crash_info.input_path or not os.path.isfile(crash_info.input_path):
+            return
+        if self._debug_runs >= self.max_debug_runs:
+            return
+        if not shutil.which("gdb"):
+            return
+        
+        self._debug_runs += 1
+        
+        args: List[str] = []
+        run_cmd = "run"
+        if self.target_args:
+            if "@@" in self.target_args:
+                args = shlex.split(
+                    self.target_args.replace("@@", crash_info.input_path),
+                    posix=os.name != "nt",
+                )
+            else:
+                args = shlex.split(self.target_args, posix=os.name != "nt")
+                if self.use_stdin:
+                    run_cmd = f"run < {crash_info.input_path}"
+        elif self.use_stdin:
+            run_cmd = f"run < {crash_info.input_path}"
+        
+        gdb_cmds = [
+            "set pagination off",
+            "set confirm off",
+            run_cmd,
+            "bt",
+            "info registers",
+            "x/i $pc",
+        ]
+        
+        cmd = ["gdb", "--batch", "--quiet"]
+        for gdb_cmd in gdb_cmds:
+            cmd.extend(["-ex", gdb_cmd])
+        cmd.extend(["--args", self.target_path])
+        cmd.extend(args)
+        
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.debugger_timeout,
+            )
+        except Exception:
+            return
+        
+        output = "\n".join([proc.stdout or "", proc.stderr or ""])
+        if not output.strip():
+            return
+        
+        stack_trace = []
+        registers: Dict[str, int] = {}
+        faulting_instruction = ""
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                stack_trace.append(stripped)
+            if stripped.startswith("=>"):
+                faulting_instruction = stripped
+            parts = stripped.split()
+            if len(parts) >= 2 and re.match(r"^[a-zA-Z][a-zA-Z0-9]*$", parts[0]):
+                reg_name = parts[0].lower()
+                if parts[1].startswith("0x"):
+                    try:
+                        registers[reg_name] = int(parts[1], 16)
+                    except ValueError:
+                        pass
+        
+        if stack_trace:
+            crash_info.stack_trace = stack_trace
+        if registers:
+            crash_info.registers.update(registers)
+            for reg in ("rip", "eip", "pc"):
+                if reg in registers and crash_info.exception_address == 0:
+                    crash_info.exception_address = registers[reg]
+                    break
+        if faulting_instruction:
+            crash_info.faulting_instruction = faulting_instruction
 
 
 # =============================================================================
@@ -10419,9 +12736,22 @@ class CrashDatabase:
         # Use first 5 frames for hashing
         frames = crash.stack_trace[:5] if crash.stack_trace else []
         
-        # Include crash type and faulting module
-        key_data = f"{crash.crash_type.value}:{crash.faulting_module}:" + "|".join(frames)
+        key_parts = [crash.crash_type.value, str(crash.exception_code)]
+        if crash.faulting_module:
+            key_parts.append(crash.faulting_module)
         
+        if frames:
+            key_parts.append("|".join(frames))
+        else:
+            if crash.exception_address:
+                key_parts.append(hex(crash.exception_address))
+            else:
+                if crash.input_hash:
+                    key_parts.append(crash.input_hash[:8])
+                if crash.input_size:
+                    key_parts.append(str(crash.input_size))
+        
+        key_data = ":".join(key_parts)
         return hashlib.sha256(key_data.encode()).hexdigest()[:16]
     
     def add_crash(self, crash: CrashInfo) -> Tuple[bool, str]:
@@ -10755,6 +13085,7 @@ class CorpusEntry:
     edges_hit: int = 0
     new_edges: int = 0
     edge_bitmap_hash: str = ""
+    edge_ids_sample: List[int] = field(default_factory=list)
     
     # Scheduling info
     favored: bool = False
@@ -10762,6 +13093,8 @@ class CorpusEntry:
     depth: int = 0
     exec_count: int = 0
     last_exec_time: float = 0.0
+    avg_exec_ms: float = 0.0
+    last_exec_ms: float = 0.0
     found_crashes: int = 0
     
     # Metadata
@@ -10776,10 +13109,13 @@ class CorpusEntry:
             "hash": self.hash,
             "edges_hit": self.edges_hit,
             "new_edges": self.new_edges,
+            "edge_ids_sample": self.edge_ids_sample,
             "favored": self.favored,
             "depth": self.depth,
             "exec_count": self.exec_count,
             "found_crashes": self.found_crashes,
+            "avg_exec_ms": self.avg_exec_ms,
+            "last_exec_ms": self.last_exec_ms,
             "parent_id": self.parent_id,
             "mutation_type": self.mutation_type,
             "added_at": self.added_at,
@@ -10797,6 +13133,8 @@ class CorpusManager:
     - Corpus trimming
     """
     
+    EDGE_SAMPLE_LIMIT = 64
+
     def __init__(self, corpus_dir: Optional[str] = None, max_size: int = 10000):
         self.corpus_dir = corpus_dir or tempfile.mkdtemp(prefix="corpus_")
         os.makedirs(self.corpus_dir, exist_ok=True)
@@ -10879,6 +13217,14 @@ class CorpusManager:
         if len(self.entries) >= self.max_size:
             self._trim_corpus()
         
+        edge_ids_sample: List[int] = []
+        if coverage and coverage.hit_counts:
+            edge_ids = list(coverage.hit_counts.keys())
+            if len(edge_ids) <= self.EDGE_SAMPLE_LIMIT:
+                edge_ids_sample = edge_ids
+            else:
+                edge_ids_sample = random.sample(edge_ids, self.EDGE_SAMPLE_LIMIT)
+
         # Create new entry
         entry = CorpusEntry(
             data=data,
@@ -10887,9 +13233,11 @@ class CorpusManager:
             edges_hit=coverage.edge_count if coverage else 0,
             new_edges=coverage.new_edges if coverage else 0,
             edge_bitmap_hash=bitmap_hash,
+            edge_ids_sample=edge_ids_sample,
             parent_id=parent_id,
             mutation_type=mutation_type,
             depth=(self.entries[parent_id].depth + 1) if parent_id and parent_id in self.entries else 0,
+            handicap=4,
         )
         
         # Save data to disk
@@ -10993,12 +13341,26 @@ class CorpusManager:
         """Get all favored entries."""
         return [e for e in self.entries.values() if e.favored]
     
-    def record_execution(self, entry_id: str, found_crash: bool = False):
+    def record_execution(
+        self,
+        entry_id: str,
+        found_crash: bool = False,
+        exec_time_ms: Optional[float] = None,
+    ):
         """Record that an entry was executed."""
         entry = self.entries.get(entry_id)
         if entry:
             entry.exec_count += 1
             entry.last_exec_time = time.time()
+            if exec_time_ms is not None:
+                if entry.exec_count <= 1:
+                    entry.avg_exec_ms = exec_time_ms
+                else:
+                    total = entry.avg_exec_ms * (entry.exec_count - 1)
+                    entry.avg_exec_ms = (total + exec_time_ms) / entry.exec_count
+                entry.last_exec_ms = exec_time_ms
+            if entry.handicap > 0:
+                entry.handicap -= 1
             if found_crash:
                 entry.found_crashes += 1
     
@@ -11057,6 +13419,7 @@ class SeedScheduler:
         # Power schedule state
         self.perf_score: Dict[str, float] = {}
         self.fuzz_count: Dict[str, int] = {}
+        self.avg_exec_ms: float = 0.0
     
     def next(self) -> Optional[CorpusEntry]:
         """Get the next corpus entry to fuzz."""
@@ -11099,16 +13462,9 @@ class SeedScheduler:
     
     def _rare_edge(self, entries: List[CorpusEntry]) -> CorpusEntry:
         """Prioritize entries that hit rare edges."""
-        # Calculate edge rarity based on global hit counts
-        edge_counts = self.coverage.edge_hit_counts
-        
         def entry_rarity_score(entry: CorpusEntry) -> float:
-            if not entry.edges_hit:
-                return 0.0
-            # Higher score for entries hitting rare edges
-            score = 0.0
-            # Use entry's new_edges as a proxy for rarity
-            score += entry.new_edges * 10
+            score = self._edge_rarity(entry)
+            score += entry.new_edges * 2.0
             score += 1.0 / (entry.exec_count + 1)
             return score
         
@@ -11133,14 +13489,23 @@ class SeedScheduler:
         for entry in entries:
             score = self.perf_score.get(entry.id, 1.0)
             fuzz_count = self.fuzz_count.get(entry.id, 0)
-            
+
+            rarity = self._edge_rarity(entry)
+            speed_factor = self._speed_factor(entry)
+            handicap_boost = 1.0 + min(1.0, entry.handicap * 0.25)
+
+            adjusted = score
+            adjusted *= (1.0 + rarity)
+            adjusted *= speed_factor
+            adjusted *= handicap_boost
+
             # Reduce weight for heavily-fuzzed entries
-            adjusted = score / (1 + fuzz_count * 0.1)
-            
+            adjusted /= (1 + fuzz_count * 0.05)
+
             # Boost favored entries
             if entry.favored:
-                adjusted *= 2.0
-            
+                adjusted *= 1.8
+
             weights.append(max(0.01, adjusted))
         
         # Normalize weights
@@ -11174,7 +13539,32 @@ class SeedScheduler:
         
         return score
     
-    def update_score(self, entry_id: str, found_new_coverage: bool, found_crash: bool):
+    def _edge_rarity(self, entry: CorpusEntry) -> float:
+        """Estimate rarity for edges this entry hits."""
+        if not entry.edge_ids_sample:
+            return 0.0
+
+        edge_counts = self.coverage.edge_hit_counts
+        rarity_sum = 0.0
+        for edge_id in entry.edge_ids_sample:
+            rarity_sum += 1.0 / max(1, edge_counts.get(edge_id, 1))
+
+        return rarity_sum / len(entry.edge_ids_sample)
+
+    def _speed_factor(self, entry: CorpusEntry) -> float:
+        """Prefer faster-executing entries to maximize throughput."""
+        if entry.avg_exec_ms <= 0 or self.avg_exec_ms <= 0:
+            return 1.0
+        ratio = self.avg_exec_ms / entry.avg_exec_ms
+        return max(0.25, min(4.0, ratio))
+
+    def update_score(
+        self,
+        entry_id: str,
+        found_new_coverage: bool,
+        found_crash: bool,
+        exec_time_ms: Optional[float] = None,
+    ):
         """Update entry's score based on fuzzing results."""
         if entry_id not in self.perf_score:
             return
@@ -11186,6 +13576,12 @@ class SeedScheduler:
         
         # Decay score over time
         self.perf_score[entry_id] *= 0.99
+
+        if exec_time_ms is not None:
+            if self.avg_exec_ms <= 0:
+                self.avg_exec_ms = exec_time_ms
+            else:
+                self.avg_exec_ms = (self.avg_exec_ms * 0.95) + (exec_time_ms * 0.05)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get scheduler statistics."""
@@ -11195,6 +13591,7 @@ class SeedScheduler:
             "current_index": self.current_index,
             "entries_scored": len(self.perf_score),
             "total_fuzz_count": sum(self.fuzz_count.values()),
+            "avg_exec_ms": round(self.avg_exec_ms, 2),
         }
 
 
@@ -11804,9 +14201,16 @@ class MemorySafetyAnalyzer:
         errors = self._deduplicate_errors(errors)
         
         # Store for later reference
-        self.analyzed_crashes[execution_result.id] = errors
+        if crash_info:
+            self.analyzed_crashes[crash_info.id] = errors
+        else:
+            self.analyzed_crashes[execution_result.id] = errors
         
         return errors
+
+    def record_errors(self, crash_id: str, errors: List[MemoryError]):
+        """Store memory errors for a crash ID."""
+        self.analyzed_crashes[crash_id] = errors
     
     def _analyze_crash_type(
         self,
@@ -12627,6 +15031,17 @@ class FuzzingSession:
     coverage_percentage: float = 0.0
     current_input_size: int = 0
     error: Optional[str] = None
+
+    # Execution/coverage configuration
+    execution_mode: str = ExecutionMode.PROCESS.value
+    execution_warning: Optional[str] = None
+    coverage_backend: str = CoverageBackend.NONE.value
+    coverage_map_size: int = 65536
+    coverage_available: bool = False
+    coverage_warning: Optional[str] = None
+    comparison_hints_enabled: bool = False
+    comparison_hints_generated: int = 0
+    comparison_magic_values: int = 0
     
     # Phase 2: Coverage stats
     total_edges_discovered: int = 0
@@ -12646,7 +15061,18 @@ class FuzzingSession:
     uaf_errors: int = 0
     exploitable_errors: int = 0
     memory_safety_enabled: bool = False
-    
+    sanitizer_target_path: Optional[str] = None
+    sanitizer_replay_enabled: bool = False
+    sanitizer_warning: Optional[str] = None
+    sanitizer_runs: int = 0
+    sanitizer_max_runs: int = 0
+
+    # Smart dictionary extraction stats
+    smart_dict_entries: int = 0
+    smart_dict_strings: int = 0
+    smart_dict_constants: int = 0
+    smart_dict_magic: int = 0
+
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
         result["mode"] = self.mode.value
@@ -12678,6 +15104,18 @@ class BinaryFuzzer:
         dictionary: Optional[List[bytes]] = None,
         coverage_guided: bool = True,
         scheduler_strategy: str = "power_schedule",
+        use_stdin: Optional[bool] = None,
+        execution_mode: str = "auto",
+        coverage_backend: str = "auto",
+        coverage_map_size: int = 65536,
+        enable_cmp_hints: bool = True,
+        enable_compcov: bool = True,
+        cmp_hint_refresh_interval: int = 500,
+        persistent_max_execs: int = 10000,
+        persistent_shm_size: int = 65536,
+        sanitizer_target_path: Optional[str] = None,
+        sanitizer_timeout_ms: int = 5000,
+        sanitizer_max_runs: int = 10,
     ):
         self.session = FuzzingSession(
             target_path=target_path,
@@ -12692,19 +15130,116 @@ class BinaryFuzzer:
         
         # Phase 1 Components
         self.mutation_engine = MutationEngine(dictionary)
-        self.harness = ProcessHarness(
+        try:
+            self.execution_mode = ExecutionMode(execution_mode)
+        except ValueError:
+            self.execution_mode = ExecutionMode.AUTO
+        
+        try:
+            self.coverage_backend = CoverageBackend(coverage_backend)
+        except ValueError:
+            self.coverage_backend = CoverageBackend.AUTO
+        
+        self.session.execution_mode = self.execution_mode.value
+        self.session.coverage_backend = self.coverage_backend.value
+        self.session.coverage_map_size = coverage_map_size
+        self.session.comparison_hints_enabled = enable_cmp_hints
+        self.enable_cmp_hints = enable_cmp_hints
+        self.enable_compcov = enable_compcov
+        self.cmp_hint_refresh_interval = max(10, cmp_hint_refresh_interval)
+        self.symbolic_hint_generator: Optional[SymbolicExecutionHintGenerator] = None
+
+        self.coverage_provider = None
+        if coverage_guided:
+            self.coverage_provider = create_coverage_provider(
+                self.coverage_backend,
+                map_size=coverage_map_size,
+            )
+            if self.coverage_provider and self.coverage_backend == CoverageBackend.AUTO:
+                self.coverage_backend = CoverageBackend.AFL_SHM
+            if not self.coverage_provider:
+                self.coverage_backend = CoverageBackend.NONE
+                logger.info("Coverage backend unavailable. Running without coverage maps.")
+                self.session.coverage_backend = self.coverage_backend.value
+                self.session.coverage_available = False
+                self.session.coverage_warning = "Coverage backend unavailable. Target may be uninstrumented."
+            else:
+                self.session.coverage_backend = self.coverage_backend.value
+        
+        harness_env: Dict[str, str] = {}
+        if self.enable_compcov:
+            harness_env["AFL_COMPCOV_LEVEL"] = "2"
+        
+        self._process_harness = ProcessHarness(
             target_path=target_path,
             args_template=target_args,
             timeout_ms=timeout_ms,
+            use_stdin=use_stdin,
+            environment=harness_env,
+            coverage_provider=self.coverage_provider,
         )
-        self.analyzer = CrashAnalyzer()
+        self._fallback_harness = self._process_harness
+        self.harness = self._process_harness
+        
+        can_use_forkserver = (
+            os.name != "nt"
+            and "@@" in target_args
+            and not (use_stdin is True)
+        )
+        
+        if self.execution_mode == ExecutionMode.PERSISTENT:
+            self.harness = PersistentModeHarness(
+                target_path=target_path,
+                target_args=target_args,
+                timeout_ms=timeout_ms,
+                max_executions_per_instance=persistent_max_execs,
+                shm_size=persistent_shm_size,
+                coverage_provider=self.coverage_provider,
+                environment=harness_env,
+            )
+            self.execution_mode = ExecutionMode.PERSISTENT
+        elif self.execution_mode == ExecutionMode.FORKSERVER:
+            if can_use_forkserver:
+                self.harness = ForkServerHarness(
+                    target_path=target_path,
+                    target_args=target_args,
+                    timeout_ms=timeout_ms,
+                    coverage_provider=self.coverage_provider,
+                    environment=harness_env,
+                )
+                self.execution_mode = ExecutionMode.FORKSERVER
+            else:
+                self.session.execution_warning = "Forkserver requires @@ input and non-stdin execution. Using process mode."
+                logger.info("Forkserver mode not compatible with current target args. Using process mode.")
+                self.execution_mode = ExecutionMode.PROCESS
+        elif self.execution_mode == ExecutionMode.AUTO and can_use_forkserver:
+            self.harness = ForkServerHarness(
+                target_path=target_path,
+                target_args=target_args,
+                timeout_ms=timeout_ms,
+                coverage_provider=self.coverage_provider,
+                environment=harness_env,
+            )
+            self.execution_mode = ExecutionMode.FORKSERVER
+        else:
+            self.execution_mode = ExecutionMode.PROCESS
+        self.session.execution_mode = self.execution_mode.value
+
+        self.analyzer = CrashAnalyzer(
+            target_path=target_path,
+            target_args=target_args,
+            use_stdin=use_stdin,
+        )
         self.crash_db = CrashDatabase(self.output_dir)
         
         # Phase 2 Components: Coverage-guided fuzzing
         self.coverage_guided = coverage_guided
-        self.coverage_tracker = CoverageTracker()
+        self.coverage_tracker = CoverageTracker(bitmap_size=coverage_map_size)
         corpus_dir = os.path.join(self.output_dir, "corpus")
         self.corpus_manager = CorpusManager(corpus_dir)
+        self.coverage_zero_streak = 0
+        self.coverage_zero_threshold = 50
+        self.coverage_unavailable_emitted = False
         
         # Set up scheduler with strategy
         try:
@@ -12724,6 +15259,28 @@ class BinaryFuzzer:
         self.memory_safety_analyzer = MemorySafetyAnalyzer()
         self.memory_safety_enabled = coverage_guided  # Enable with coverage mode
         self.session.memory_safety_enabled = self.memory_safety_enabled
+
+        self.sanitizer_runner: Optional[SanitizerReplay] = None
+        if sanitizer_target_path:
+            if sanitizer_max_runs <= 0:
+                self.session.sanitizer_warning = "Sanitizer replay disabled (max runs set to 0)."
+            elif os.path.isfile(sanitizer_target_path):
+                self.sanitizer_runner = SanitizerReplay(
+                    target_path=sanitizer_target_path,
+                    target_args=target_args,
+                    timeout_ms=sanitizer_timeout_ms,
+                    use_stdin=use_stdin,
+                    max_runs=sanitizer_max_runs,
+                )
+                self.session.sanitizer_target_path = sanitizer_target_path
+                self.session.sanitizer_replay_enabled = True
+                self.session.sanitizer_max_runs = sanitizer_max_runs
+            else:
+                self.session.sanitizer_warning = f"Sanitizer target not found: {sanitizer_target_path}"
+
+        if self.sanitizer_runner:
+            self.memory_safety_enabled = True
+            self.session.memory_safety_enabled = True
         
         # Legacy corpus for dumb mode
         self.corpus: List[bytes] = []
@@ -12738,7 +15295,25 @@ class BinaryFuzzer:
             default_input = b"A" * 16
             self.corpus.append(default_input)
             self.corpus_manager.add(default_input)
-        
+
+        if self.enable_cmp_hints:
+            self._initialize_comparison_hints(target_path)
+
+        # CmpLog/RedQueen Input-to-State Correspondence
+        self.cmplog_tracer: Optional[CmpLogTracer] = None
+        self.cmplog_enabled = enable_cmp_hints  # Use same flag
+        self.cmplog_analysis_interval = 100  # Analyze every N iterations
+        self.cmplog_mutation_probability = 0.25  # 25% chance to use CmpLog mutations
+        self._last_cmplog_analysis = 0
+
+        # Smart Dictionary Extraction
+        self.smart_dict_extractor: Optional[SmartDictionaryExtractor] = None
+        self.smart_dict_enabled = enable_cmp_hints  # Use same flag
+        self._initialize_smart_dictionary(target_path)
+
+        # Delta Debugger for minimization (initialized on demand)
+        self.delta_debugger: Optional[DeltaDebugger] = None
+
         # Running state
         self._running = False
         self._cancel_event = asyncio.Event()
@@ -12760,6 +15335,185 @@ class BinaryFuzzer:
                     pass
         
         logger.info(f"Loaded {len(self.corpus)} seeds from {self.seed_dir}")
+
+    def _initialize_comparison_hints(self, target_path: str):
+        """Analyze binary for comparison hints and seed the dictionary/corpus."""
+        try:
+            generator = SymbolicExecutionHintGenerator(target_path)
+            analysis = generator.analyze_binary()
+            magic_values = analysis.get("magic_values", [])
+            interesting_strings = analysis.get("interesting_strings", [])
+            
+            for value in magic_values:
+                if isinstance(value, bytes):
+                    self.mutation_engine.add_to_dictionary(value)
+            for text in interesting_strings:
+                if isinstance(text, str):
+                    self.mutation_engine.add_to_dictionary(text.encode("utf-8", errors="replace"))
+            
+            self.session.comparison_magic_values = len(magic_values)
+            self.session.comparison_hints_enabled = True
+            self.symbolic_hint_generator = generator
+            
+            seed_input = self.corpus[0] if self.corpus else b"A" * 16
+            hints = generator.generate_hints(seed_input)
+            self.session.comparison_hints_generated = len(hints)
+            
+            for hint in hints[:10]:
+                if hint.suggested_input:
+                    self.corpus.append(hint.suggested_input)
+                    self.corpus_manager.add(hint.suggested_input)
+            self.session.corpus_size = len(self.corpus_manager.entries) or len(self.corpus)
+        except Exception as e:
+            logger.warning(f"Comparison hint initialization failed: {e}")
+
+    def _initialize_smart_dictionary(self, target_path: str):
+        """
+        Extract dictionary entries from target binary using smart analysis.
+
+        This populates the mutation engine with:
+        - Strings found in the binary (ASCII and UTF-16)
+        - Magic values and file format signatures
+        - Constants from instruction operands
+        - Format string patterns
+        - Boundary values for integer fuzzing
+        """
+        if not self.smart_dict_enabled:
+            return
+
+        try:
+            self.smart_dict_extractor = SmartDictionaryExtractor(
+                target_path,
+                max_entries=500,  # Reasonable limit
+            )
+
+            # Extract all dictionary entries
+            entries = self.smart_dict_extractor.extract_all()
+
+            # Add high-scored entries to mutation engine
+            added_count = 0
+            for entry in entries:
+                if entry.score >= 1.0:  # Only add quality entries
+                    self.mutation_engine.add_to_dictionary(entry.value)
+                    added_count += 1
+
+            # Update session stats
+            stats = self.smart_dict_extractor.get_stats()
+            self.session.smart_dict_entries = added_count
+            self.session.smart_dict_strings = stats.get("ascii_strings", 0) + stats.get("utf16_strings", 0)
+            self.session.smart_dict_constants = stats.get("constants", 0)
+            self.session.smart_dict_magic = stats.get("magic_values", 0)
+
+            logger.info(
+                f"Smart dictionary extracted {added_count} entries: "
+                f"{stats.get('ascii_strings', 0)} strings, "
+                f"{stats.get('constants', 0)} constants, "
+                f"{stats.get('magic_values', 0)} magic values"
+            )
+
+            # Export AFL-format dictionary for reference
+            dict_path = os.path.join(self.output_dir, "auto_dictionary.txt")
+            try:
+                self.smart_dict_extractor.export_afl_dict(dict_path)
+            except Exception:
+                pass  # Non-critical
+
+        except Exception as e:
+            logger.warning(f"Smart dictionary extraction failed: {e}")
+            self.smart_dict_extractor = None
+
+    def _binary_supports_persistent(self) -> bool:
+        """Check for persistent mode markers in the binary."""
+        markers = [b"__AFL_LOOP", b"__AFL_PERSISTENT", b"__VR_PERSISTENT"]
+        try:
+            with open(self.session.target_path, "rb") as f:
+                data = f.read(4 * 1024 * 1024)
+            return any(marker in data for marker in markers)
+        except Exception:
+            return False
+
+    def _extract_output_hints(self, result: ExecutionResult, max_hints: int = 5):
+        """Extract potential comparison hints from program output."""
+        if not (result.stdout or result.stderr):
+            return
+        
+        text = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+        hints: List[bytes] = []
+        
+        for match in re.findall(r"0x[0-9a-fA-F]{2,16}", text):
+            try:
+                value = int(match, 16)
+                if value <= 0xFFFFFFFFFFFFFFFF:
+                    hints.append(value.to_bytes((value.bit_length() + 7) // 8 or 1, "little"))
+            except ValueError:
+                continue
+        
+        for match in re.findall(r"['\\\"]([^'\\\"]{2,32})['\\\"]", text):
+            hints.append(match.encode("utf-8", errors="replace"))
+        
+        for hint in hints[:max_hints]:
+            self.mutation_engine.add_to_dictionary(hint)
+
+    async def _run_sanitizer_replay(self, input_data: bytes) -> List[MemoryError]:
+        """Re-run input against sanitizer build to enrich crash triage."""
+        if not self.sanitizer_runner:
+            return []
+        result = await self.sanitizer_runner.replay(input_data)
+        if not result:
+            return []
+        combined_output = (
+            result.stderr.decode("utf-8", errors="replace") +
+            result.stdout.decode("utf-8", errors="replace")
+        )
+        return self.memory_safety_analyzer.sanitizer_parser.parse_any(combined_output)
+
+    async def _start_harness(self):
+        """Start the configured execution harness if needed."""
+        if isinstance(self.harness, PersistentModeHarness):
+            if not self._binary_supports_persistent():
+                self.session.execution_warning = (
+                    "Persistent mode requires __AFL_LOOP or __VR_PERSISTENT instrumentation. "
+                    "Falling back to process mode."
+                )
+                self.harness = self._fallback_harness
+                self.execution_mode = ExecutionMode.PROCESS
+                self.session.execution_mode = self.execution_mode.value
+                return
+        
+        start_method = getattr(self.harness, "start", None)
+        if callable(start_method):
+            try:
+                result = start_method()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                logger.warning(f"Failed to start harness: {e}")
+        
+        if getattr(self.harness, "_running", True) is False and self._fallback_harness:
+            warning = getattr(self.harness, "last_error", None)
+            if warning:
+                self.session.execution_warning = warning
+            logger.info("Falling back to process harness.")
+            cleanup_method = getattr(self.harness, "cleanup", None)
+            if callable(cleanup_method):
+                try:
+                    cleanup_method()
+                except Exception:
+                    pass
+            self.harness = self._fallback_harness
+            self.execution_mode = ExecutionMode.PROCESS
+            self.session.execution_mode = self.execution_mode.value
+
+    async def _stop_harness(self):
+        """Stop the configured execution harness if needed."""
+        stop_method = getattr(self.harness, "stop", None)
+        if callable(stop_method):
+            try:
+                result = stop_method()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception:
+                pass
     
     async def run(
         self,
@@ -12780,6 +15534,7 @@ class BinaryFuzzer:
         self._cancel_event.clear()
         self.session.status = "running"
         self.session.started_at = datetime.utcnow().isoformat()
+        await self._start_harness()
         
         # Update corpus stats
         self.session.corpus_size = len(self.corpus_manager.entries) or len(self.corpus)
@@ -12791,7 +15546,27 @@ class BinaryFuzzer:
             "corpus_size": self.session.corpus_size,
             "coverage_guided": self.coverage_guided,
             "scheduler_strategy": self.session.scheduler_strategy,
+            "execution_mode": self.execution_mode.value,
+            "coverage_backend": self.coverage_backend.value if self.coverage_backend else None,
+            "coverage_map_size": self.coverage_tracker.bitmap_size,
+            "coverage_available": self.session.coverage_available,
+            "coverage_warning": self.session.coverage_warning,
+            "comparison_hints_enabled": self.session.comparison_hints_enabled,
+            "comparison_magic_values": self.session.comparison_magic_values,
+            "execution_warning": self.session.execution_warning,
+            "sanitizer_replay_enabled": self.session.sanitizer_replay_enabled,
+            "sanitizer_warning": self.session.sanitizer_warning,
+            "sanitizer_max_runs": self.session.sanitizer_max_runs,
+            "sanitizer_target_path": self.session.sanitizer_target_path,
         }
+
+        if self.session.coverage_warning:
+            yield {
+                "type": "coverage_unavailable",
+                "coverage_backend": self.session.coverage_backend,
+                "map_size": self.session.coverage_map_size,
+                "message": self.session.coverage_warning,
+            }
         
         iteration = 0
         start_time = time.time()
@@ -12829,17 +15604,97 @@ class BinaryFuzzer:
                     base_input = random.choice(self.corpus)
                     parent_id = None
                 
-                # Mutate
-                mutated_input, mutation_type = self.mutation_engine.mutate_with_info(base_input)
+                # Mutate - with CmpLog/RedQueen support
+                mutation_type = "standard"
+                mutated_input = None
+
+                # Initialize CmpLog tracer if needed
+                if self.cmplog_enabled and self.cmplog_tracer is None:
+                    self.cmplog_tracer = CmpLogTracer(self.harness)
+
+                # Periodically run CmpLog analysis on corpus entries
+                if (self.cmplog_enabled and self.cmplog_tracer and
+                    iteration - self._last_cmplog_analysis >= self.cmplog_analysis_interval):
+                    self._last_cmplog_analysis = iteration
+                    try:
+                        # Analyze current input for I2S mappings
+                        await self.cmplog_tracer.analyze_input(base_input)
+                        # Add extracted dictionary entries to mutation engine
+                        for entry in self.cmplog_tracer.get_dictionary_entries():
+                            self.mutation_engine.add_to_dictionary(entry)
+                    except Exception as e:
+                        logger.debug(f"CmpLog analysis failed: {e}")
+
+                # Try CmpLog targeted mutation first (25% probability)
+                if (self.cmplog_enabled and self.cmplog_tracer and
+                    self.cmplog_tracer.i2s_mappings and
+                    random.random() < self.cmplog_mutation_probability):
+                    try:
+                        targeted = self.cmplog_tracer.generate_targeted_mutations(
+                            base_input, max_mutations=8
+                        )
+                        if targeted:
+                            mutated_input = random.choice(targeted)
+                            mutation_type = "cmplog_i2s"
+                    except Exception as e:
+                        logger.debug(f"CmpLog mutation failed: {e}")
+
+                # Fall back to symbolic hints if CmpLog didn't produce mutation
+                if mutated_input is None and self.enable_cmp_hints and self.symbolic_hint_generator:
+                    if iteration % self.cmp_hint_refresh_interval == 0:
+                        hints = self.symbolic_hint_generator.generate_hints(base_input)
+                        self.session.comparison_hints_generated = len(hints)
+                    if self.symbolic_hint_generator.hints and random.random() < 0.35:
+                        candidates = self.symbolic_hint_generator.get_prioritized_mutations(
+                            self.mutation_engine,
+                            base_input,
+                            num_mutations=4,
+                        )
+                        mutated_input = random.choice(candidates)
+                        mutation_type = "cmp_hint"
+
+                # Standard mutation if no specialized mutation was used
+                if mutated_input is None:
+                    mutated_input, mutation_type = self.mutation_engine.mutate_with_info(base_input)
+
                 self.session.current_input_size = len(mutated_input)
                 
                 # Execute
                 result = await self.harness.execute(mutated_input)
+
+                if self.enable_cmp_hints:
+                    self._extract_output_hints(result)
+
+                coverage_has_hits = bool(result.coverage_data and any(result.coverage_data))
+                if self.coverage_guided and self.coverage_provider:
+                    if coverage_has_hits:
+                        if not self.session.coverage_available:
+                            self.session.coverage_available = True
+                            self.session.coverage_warning = None
+                        self.coverage_zero_streak = 0
+                    else:
+                        self.coverage_zero_streak += 1
+                        if (
+                            self.coverage_zero_streak >= self.coverage_zero_threshold
+                            and not self.coverage_unavailable_emitted
+                        ):
+                            self.coverage_unavailable_emitted = True
+                            self.session.coverage_available = False
+                            self.session.coverage_warning = (
+                                f"No coverage data observed after {self.coverage_zero_threshold} executions. "
+                                "Target is likely uninstrumented or using an incompatible map size."
+                            )
+                            yield {
+                                "type": "coverage_unavailable",
+                                "coverage_backend": self.coverage_backend.value,
+                                "map_size": self.coverage_tracker.bitmap_size,
+                                "message": self.session.coverage_warning,
+                            }
                 
                 # Process coverage (Phase 2)
                 coverage_info = None
                 found_new_coverage = False
-                if self.coverage_guided and result.coverage_data:
+                if self.coverage_guided and coverage_has_hits:
                     coverage_info = self.coverage_tracker.process_coverage(result.coverage_data)
                     found_new_coverage = coverage_info.new_edges > 0 or coverage_info.new_blocks > 0
                     
@@ -12869,14 +15724,19 @@ class BinaryFuzzer:
                                 "input_id": new_entry.id if new_entry else None,
                             }
                     
-                    # Update scheduler scores
-                    if parent_id:
-                        self.scheduler.update_score(
-                            parent_id, 
-                            found_new_coverage, 
-                            result.crashed
-                        )
-                        self.corpus_manager.record_execution(parent_id, result.crashed)
+                # Update scheduler scores
+                if self.coverage_guided and parent_id:
+                    self.scheduler.update_score(
+                        parent_id,
+                        found_new_coverage,
+                        result.crashed,
+                        exec_time_ms=result.duration_ms,
+                    )
+                    self.corpus_manager.record_execution(
+                        parent_id,
+                        result.crashed,
+                        exec_time_ms=result.duration_ms,
+                    )
                 
                 # Handle crash
                 if result.crashed:
@@ -12891,7 +15751,21 @@ class BinaryFuzzer:
                         memory_errors = self.memory_safety_analyzer.analyze_crash(
                             result, crash_info
                         )
-                        
+                    
+                    # Store
+                    is_new, bucket_id = self.crash_db.add_crash(crash_info)
+
+                    sanitizer_errors: List[MemoryError] = []
+                    if self.sanitizer_runner and is_new:
+                        sanitizer_errors = await self._run_sanitizer_replay(mutated_input)
+                        if sanitizer_errors:
+                            memory_errors = self.memory_safety_analyzer._deduplicate_errors(
+                                memory_errors + sanitizer_errors
+                            )
+                            self.memory_safety_analyzer.record_errors(crash_info.id, memory_errors)
+                        self.session.sanitizer_runs = self.sanitizer_runner.get_runs()
+
+                    if self.memory_safety_enabled and memory_errors:
                         # Update memory safety stats
                         self.session.memory_errors_detected += len(memory_errors)
                         for mem_error in memory_errors:
@@ -12903,9 +15777,6 @@ class BinaryFuzzer:
                                 self.session.uaf_errors += 1
                             if mem_error.severity in (CrashSeverity.EXPLOITABLE, CrashSeverity.PROBABLY_EXPLOITABLE):
                                 self.session.exploitable_errors += 1
-                    
-                    # Store
-                    is_new, bucket_id = self.crash_db.add_crash(crash_info)
                     
                     if is_new:
                         self.session.unique_crashes += 1
@@ -12934,6 +15805,8 @@ class BinaryFuzzer:
                             crash_event["exploitability_indicators"] = (
                                 self.memory_safety_analyzer._get_exploitability_indicators(memory_errors)
                             )
+                            if sanitizer_errors:
+                                crash_event["sanitizer_errors"] = len(sanitizer_errors)
                         
                         yield crash_event
                     else:
@@ -12971,8 +15844,35 @@ class BinaryFuzzer:
                             "corpus_size": self.session.corpus_size,
                             "favored_inputs": self.session.favored_inputs,
                             "new_coverage_inputs": self.session.new_coverage_inputs,
+                            "coverage_available": self.session.coverage_available,
+                            "coverage_warning": self.session.coverage_warning,
                         })
                     
+                    if self.session.comparison_hints_enabled:
+                        stats_event.update({
+                            "comparison_hints_generated": self.session.comparison_hints_generated,
+                            "comparison_magic_values": self.session.comparison_magic_values,
+                        })
+
+                    # Add CmpLog/RedQueen stats
+                    if self.cmplog_tracer:
+                        cmplog_stats = self.cmplog_tracer.get_stats()
+                        stats_event.update({
+                            "cmplog_i2s_mappings": cmplog_stats.get("active_mappings", 0),
+                            "cmplog_dictionary_size": cmplog_stats.get("auto_dictionary_size", 0),
+                            "cmplog_targeted_mutations": cmplog_stats.get("targeted_mutations_generated", 0),
+                            "cmplog_comparisons_logged": cmplog_stats.get("comparisons_logged", 0),
+                        })
+
+                    # Add Smart Dictionary stats
+                    if self.smart_dict_extractor:
+                        stats_event.update({
+                            "smart_dict_entries": self.session.smart_dict_entries,
+                            "smart_dict_strings": self.session.smart_dict_strings,
+                            "smart_dict_constants": self.session.smart_dict_constants,
+                            "smart_dict_magic": self.session.smart_dict_magic,
+                        })
+
                     # Add memory safety stats if enabled
                     if self.memory_safety_enabled:
                         stats_event.update({
@@ -12982,6 +15882,8 @@ class BinaryFuzzer:
                             "uaf_errors": self.session.uaf_errors,
                             "exploitable_errors": self.session.exploitable_errors,
                         })
+                    if self.sanitizer_runner:
+                        stats_event["sanitizer_runs"] = self.session.sanitizer_runs
                     
                     yield stats_event
                     last_stats_time = current_time
@@ -12998,6 +15900,7 @@ class BinaryFuzzer:
             self._running = False
             self.session.status = "completed"
             self.session.completed_at = datetime.utcnow().isoformat()
+            await self._stop_harness()
             
             # Save coverage state
             if self.coverage_guided:
@@ -13035,6 +15938,8 @@ class BinaryFuzzer:
                         "exploitable_errors": self.session.exploitable_errors,
                     },
                 })
+            if self.sanitizer_runner:
+                final_stats["sanitizer_runs"] = self.session.sanitizer_runs
             
             yield final_stats
     
@@ -13095,21 +16000,37 @@ class BinaryFuzzer:
         }
     
     async def minimize_crash(
-        self, 
+        self,
         crash_id: str,
-        strategy: str = "all",
-        max_attempts: int = 1000,
+        strategy: str = "ddmin",
+        max_attempts: int = 5000,
+        use_delta_debug: bool = True,
+        structured: bool = False,
     ) -> Dict[str, Any]:
         """
         Minimize a crash input to find the smallest reproducer.
-        
+
+        Uses deterministic delta debugging (ddmin) algorithm for provably
+        minimal crash inputs, with optional token-based minimization for
+        structured data (JSON, XML, etc.).
+
         Args:
             crash_id: ID of the crash to minimize
-            strategy: Minimization strategy (binary, block, linear, nullify, all)
+            strategy: Minimization strategy:
+                - "ddmin": Deterministic delta debugging (recommended)
+                - "binary": Binary search reduction
+                - "block": Block-based removal
+                - "linear": Byte-by-byte removal
+                - "all": All strategies combined (legacy)
             max_attempts: Maximum minimization attempts
-            
+            use_delta_debug: Use new DeltaDebugger (True) or legacy CrashMinimizer
+            structured: Use token-based minimization for structured inputs
+
         Returns:
-            Minimization result dictionary
+            Minimization result dictionary including:
+            - original_size, minimized_size, reduction_percentage
+            - minimized_path, total_tests, ddmin_passes
+            - still_crashes, crash_type, minimization_time
         """
         # Find the crash
         crash_info = None
@@ -13120,43 +16041,76 @@ class BinaryFuzzer:
                     break
             if crash_info:
                 break
-        
+
         if not crash_info:
             return {"success": False, "error": f"Crash {crash_id} not found"}
-        
+
         # Get the crash input
         input_path = crash_info.input_path
         if not os.path.isfile(input_path):
             return {"success": False, "error": f"Crash input file not found: {input_path}"}
-        
+
         with open(input_path, "rb") as f:
             original_input = f.read()
-        
-        # Create minimizer
+
+        # Output directory for minimized inputs
+        minimized_dir = os.path.join(self.output_dir, "minimized")
+        os.makedirs(minimized_dir, exist_ok=True)
+
+        # Use new DeltaDebugger for ddmin strategy
+        if use_delta_debug and strategy in ("ddmin", "all"):
+            # Initialize delta debugger if needed
+            if self.delta_debugger is None:
+                self.delta_debugger = DeltaDebugger(
+                    harness=self.harness,
+                    max_tests=max_attempts,
+                    timeout_seconds=300.0,
+                )
+
+            # Run delta debugging
+            if structured:
+                result = await self.delta_debugger.minimize_structured(
+                    original_input, minimized_dir
+                )
+            else:
+                result = await self.delta_debugger.minimize(
+                    original_input, minimized_dir
+                )
+
+            # Build result
+            result_dict = result.to_dict()
+            result_dict["success"] = result.still_crashes
+            result_dict["algorithm"] = "ddmin_structured" if structured else "ddmin"
+            result_dict["cache_stats"] = self.delta_debugger.get_stats()
+
+            # Copy to standard location with crash ID
+            if result.still_crashes and result.minimized_path:
+                final_path = os.path.join(
+                    minimized_dir,
+                    f"min_{crash_id}_{result.minimized_size}b.bin"
+                )
+                if result.minimized_path != final_path:
+                    shutil.copy2(result.minimized_path, final_path)
+                result_dict["minimized_path"] = final_path
+
+            return result_dict
+
+        # Fall back to legacy CrashMinimizer for other strategies
         minimizer = CrashMinimizer(
             harness=self.harness,
-            crash_type=crash_info.crash_type,
-            max_attempts=max_attempts,
+            target_crash_type=crash_info.crash_type,
+            max_iterations=max_attempts,
         )
-        
+
         # Run minimization
-        result = await minimizer.minimize(original_input, strategy)
-        
-        # Save minimized input if successful
-        if result.success and result.minimized_input:
-            minimized_path = os.path.join(
-                self.output_dir, 
-                "minimized", 
-                f"min_{crash_id}_{len(result.minimized_input)}b.bin"
-            )
-            os.makedirs(os.path.dirname(minimized_path), exist_ok=True)
-            with open(minimized_path, "wb") as f:
-                f.write(result.minimized_input)
-            result_dict = result.to_dict()
-            result_dict["minimized_path"] = minimized_path
-            return result_dict
-        
-        return result.to_dict()
+        result = await minimizer.minimize(original_input, minimized_dir)
+
+        # Build result
+        result_dict = result.to_dict()
+        result_dict["success"] = result.still_crashes
+        result_dict["algorithm"] = "legacy"
+
+        return result_dict
     
     def generate_poc(
         self, 
@@ -13278,6 +16232,10 @@ class BinaryFuzzer:
     def cleanup(self):
         """Clean up resources."""
         self.harness.cleanup()
+        if self.coverage_provider:
+            self.coverage_provider.close()
+        if self.sanitizer_runner:
+            self.sanitizer_runner.cleanup()
 
 
 # =============================================================================
@@ -13298,6 +16256,18 @@ async def start_binary_fuzzing(
     dictionary: Optional[List[str]] = None,
     coverage_guided: bool = True,
     scheduler_strategy: str = "power_schedule",
+    use_stdin: Optional[bool] = None,
+    execution_mode: str = "auto",
+    coverage_backend: str = "auto",
+    coverage_map_size: int = 65536,
+    enable_cmp_hints: bool = True,
+    enable_compcov: bool = True,
+    cmp_hint_refresh_interval: int = 500,
+    persistent_max_execs: int = 10000,
+    persistent_shm_size: int = 65536,
+    sanitizer_target_path: Optional[str] = None,
+    sanitizer_timeout_ms: int = 5000,
+    sanitizer_max_runs: int = 10,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Start a binary fuzzing session with coverage-guided optimization.
@@ -13313,6 +16283,18 @@ async def start_binary_fuzzing(
         dictionary: Custom dictionary entries
         coverage_guided: Enable coverage-guided fuzzing (Phase 2)
         scheduler_strategy: Seed scheduling strategy (round_robin, favored_first, rare_edge, power_schedule)
+        use_stdin: Force stdin input instead of @@ file
+        execution_mode: Execution harness mode (auto, process, forkserver, persistent)
+        coverage_backend: Coverage backend (auto, afl_shm, none)
+        coverage_map_size: Coverage map size for AFL-style instrumentation
+        enable_cmp_hints: Enable comparison hint generation
+        enable_compcov: Enable comparison coverage env var
+        cmp_hint_refresh_interval: Iterations between hint refresh
+        persistent_max_execs: Max executions per persistent instance
+        persistent_shm_size: Shared memory size for persistent mode
+        sanitizer_target_path: Optional sanitizer build path for replay
+        sanitizer_timeout_ms: Timeout for sanitizer replay runs
+        sanitizer_max_runs: Max sanitizer replays per session
         
     Yields:
         Progress events
@@ -13337,6 +16319,18 @@ async def start_binary_fuzzing(
         dictionary=dict_bytes,
         coverage_guided=coverage_guided,
         scheduler_strategy=scheduler_strategy,
+        use_stdin=use_stdin,
+        execution_mode=execution_mode,
+        coverage_backend=coverage_backend,
+        coverage_map_size=coverage_map_size,
+        enable_cmp_hints=enable_cmp_hints,
+        enable_compcov=enable_compcov,
+        cmp_hint_refresh_interval=cmp_hint_refresh_interval,
+        persistent_max_execs=persistent_max_execs,
+        persistent_shm_size=persistent_shm_size,
+        sanitizer_target_path=sanitizer_target_path,
+        sanitizer_timeout_ms=sanitizer_timeout_ms,
+        sanitizer_max_runs=sanitizer_max_runs,
     )
     
     # Register
@@ -13350,6 +16344,206 @@ async def start_binary_fuzzing(
         fuzzer.cleanup()
         if fuzzer.session.id in _active_fuzzers:
             del _active_fuzzers[fuzzer.session.id]
+
+
+def persist_binary_fuzzer_session(
+    session_id: str,
+    db,  # SQLAlchemy session
+    project_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    name: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Persist a binary fuzzer session to the database.
+    
+    Call this after the session completes or when you want to save its state.
+    
+    Args:
+        session_id: The session ID from the in-memory fuzzer
+        db: SQLAlchemy database session
+        project_id: Optional project to associate with
+        user_id: Optional user who ran the session
+        name: Optional custom name for the session
+        
+    Returns:
+        The saved session data or None if session not found
+    """
+    from backend.models import models
+    
+    fuzzer = _active_fuzzers.get(session_id)
+    if not fuzzer:
+        logger.warning(f"Cannot persist session {session_id}: not found in active fuzzers")
+        return None
+    
+    session = fuzzer.session
+    crashes = fuzzer.get_crashes()
+    
+    # Check if session already exists in DB
+    existing = db.query(models.BinaryFuzzerSession).filter(
+        models.BinaryFuzzerSession.session_id == session_id
+    ).first()
+    
+    if existing:
+        # Update existing record
+        db_session = existing
+    else:
+        # Create new record
+        db_session = models.BinaryFuzzerSession(session_id=session_id)
+        db.add(db_session)
+    
+    # Update all fields
+    db_session.project_id = project_id
+    db_session.user_id = user_id
+    db_session.name = name or f"Binary Fuzzer: {os.path.basename(session.target_path)}"
+    db_session.binary_path = session.target_path
+    db_session.binary_name = os.path.basename(session.target_path)
+    db_session.architecture = getattr(session, 'architecture', None)
+    db_session.mode = session.mode.value if hasattr(session.mode, 'value') else str(session.mode)
+    db_session.mutation_strategy = getattr(session, 'scheduler_strategy', None)
+    db_session.status = session.status
+    
+    # Parse timestamps
+    if session.started_at:
+        try:
+            db_session.started_at = datetime.fromisoformat(session.started_at.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            pass
+    if session.completed_at:
+        try:
+            db_session.stopped_at = datetime.fromisoformat(session.completed_at.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            pass
+    
+    # Statistics
+    db_session.total_executions = session.total_executions
+    db_session.executions_per_second = session.executions_per_second
+    db_session.total_crashes = session.total_crashes
+    db_session.unique_crashes = session.unique_crashes
+    db_session.hangs = session.total_timeouts
+    db_session.coverage_edges = session.total_edges_discovered
+    db_session.coverage_percentage = session.coverage_percentage
+    db_session.corpus_size = session.corpus_size
+    
+    # Categorize crashes by severity
+    critical_count = 0
+    high_count = 0
+    medium_count = 0
+    low_count = 0
+    
+    for crash in (crashes or []):
+        severity = crash.get('severity', 'medium').lower()
+        if severity == 'critical':
+            critical_count += 1
+        elif severity == 'high':
+            high_count += 1
+        elif severity == 'medium':
+            medium_count += 1
+        else:
+            low_count += 1
+    
+    # Also count exploitable memory errors as critical/high
+    if hasattr(session, 'exploitable_errors') and session.exploitable_errors > 0:
+        critical_count += session.exploitable_errors
+    
+    db_session.crashes_critical = critical_count
+    db_session.crashes_high = high_count
+    db_session.crashes_medium = medium_count
+    db_session.crashes_low = low_count
+    
+    # Store detailed data as JSON
+    db_session.crashes = crashes
+    db_session.coverage_data = {
+        "total_edges": session.total_edges_discovered,
+        "coverage_percentage": session.coverage_percentage,
+        "new_coverage_inputs": session.new_coverage_inputs,
+        "favored_inputs": session.favored_inputs,
+    }
+    
+    # Store memory errors if available
+    if hasattr(fuzzer, 'memory_errors') and fuzzer.memory_errors:
+        db_session.memory_errors = [e.to_dict() if hasattr(e, 'to_dict') else e for e in fuzzer.memory_errors]
+    
+    # Store config
+    db_session.config = {
+        "target_path": session.target_path,
+        "target_args": session.target_args,
+        "execution_mode": session.execution_mode,
+        "coverage_backend": session.coverage_backend,
+        "coverage_map_size": session.coverage_map_size,
+        "scheduler_strategy": session.scheduler_strategy,
+        "memory_safety_enabled": session.memory_safety_enabled,
+        "sanitizer_target_path": session.sanitizer_target_path,
+    }
+    
+    try:
+        db.commit()
+        db.refresh(db_session)
+        logger.info(f"Persisted binary fuzzer session {session_id} to database (id={db_session.id})")
+        return {
+            "id": db_session.id,
+            "session_id": db_session.session_id,
+            "name": db_session.name,
+            "status": db_session.status,
+            "unique_crashes": db_session.unique_crashes,
+            "coverage_percentage": db_session.coverage_percentage,
+        }
+    except Exception as e:
+        logger.error(f"Failed to persist session {session_id}: {e}")
+        db.rollback()
+        return None
+
+
+def get_persisted_session(
+    session_id: str,
+    db,
+) -> Optional[Dict[str, Any]]:
+    """
+    Get a persisted session from the database.
+    
+    Args:
+        session_id: The session ID
+        db: SQLAlchemy database session
+        
+    Returns:
+        Session data or None if not found
+    """
+    from backend.models import models
+    
+    db_session = db.query(models.BinaryFuzzerSession).filter(
+        models.BinaryFuzzerSession.session_id == session_id
+    ).first()
+    
+    if not db_session:
+        return None
+    
+    return {
+        "id": db_session.id,
+        "session_id": db_session.session_id,
+        "name": db_session.name,
+        "binary_path": db_session.binary_path,
+        "binary_name": db_session.binary_name,
+        "architecture": db_session.architecture,
+        "mode": db_session.mode,
+        "status": db_session.status,
+        "started_at": str(db_session.started_at) if db_session.started_at else None,
+        "stopped_at": str(db_session.stopped_at) if db_session.stopped_at else None,
+        "total_executions": db_session.total_executions,
+        "executions_per_second": db_session.executions_per_second,
+        "total_crashes": db_session.total_crashes,
+        "unique_crashes": db_session.unique_crashes,
+        "hangs": db_session.hangs,
+        "coverage_edges": db_session.coverage_edges,
+        "coverage_percentage": db_session.coverage_percentage,
+        "corpus_size": db_session.corpus_size,
+        "crashes_critical": db_session.crashes_critical,
+        "crashes_high": db_session.crashes_high,
+        "crashes_medium": db_session.crashes_medium,
+        "crashes_low": db_session.crashes_low,
+        "crashes": db_session.crashes,
+        "memory_errors": db_session.memory_errors,
+        "coverage_data": db_session.coverage_data,
+        "ai_analysis": db_session.ai_analysis,
+    }
 
 
 def stop_fuzzing_session(session_id: str) -> Dict[str, Any]:
@@ -14325,15 +17519,42 @@ class AflPlusPlusFuzzer:
         timeout_ms: int = 5000,
         memory_limit_mb: int = 256,
         use_qemu: bool = True,  # Use QEMU mode for uninstrumented binaries
+        session_id: Optional[str] = None,
+        output_dir_is_session: bool = False,
+        dictionary_path: Optional[str] = None,
+        env_vars: Optional[Dict[str, str]] = None,
+        extra_afl_flags: Optional[List[str]] = None,
+        qemu_mode: Optional[QemuModeType] = None,
+        persistent_address: Optional[str] = None,
+        persistent_count: int = 10000,
+        persistent_hook: Optional[str] = None,
+        enable_compcov: bool = False,
+        enable_instrim: bool = False,
+        telemetry_dir: Optional[str] = None,
+        telemetry_interval_sec: float = 2.0,
     ):
-        self.session_id = str(uuid.uuid4())
+        self.session_id = session_id or str(uuid.uuid4())
         self.target_path = target_path
         self.target_args = target_args
         self.input_dir = input_dir
-        self.output_dir = os.path.join(output_dir, self.session_id)
+        self.output_dir = output_dir if output_dir_is_session else os.path.join(output_dir, self.session_id)
         self.timeout_ms = timeout_ms
         self.memory_limit_mb = memory_limit_mb
         self.use_qemu = use_qemu
+        self.dictionary_path = dictionary_path
+        self.env_vars = env_vars or {}
+        self.extra_afl_flags = extra_afl_flags or []
+        self.qemu_mode = qemu_mode or (QemuModeType.STANDARD if use_qemu else None)
+        self.persistent_address = persistent_address
+        self.persistent_count = persistent_count
+        self.persistent_hook = persistent_hook
+        self.enable_compcov = enable_compcov
+        self.enable_instrim = enable_instrim
+        self.telemetry_dir = telemetry_dir or os.path.join(self.output_dir, "telemetry")
+        self.telemetry = None
+        self.telemetry_interval_sec = max(0.5, telemetry_interval_sec)
+        self._last_telemetry_ts = 0.0
+        self._stop_requested = False
         
         # Process handle
         self._process: Optional[asyncio.subprocess.Process] = None
@@ -14363,6 +17584,25 @@ class AflPlusPlusFuzzer:
         
         # Ensure there's at least one seed
         self._ensure_initial_seed()
+
+        if self.telemetry_dir:
+            metadata = {
+                "target_path": self.target_path,
+                "target_args": self.target_args,
+                "input_dir": self.input_dir,
+                "output_dir": self.output_dir,
+                "timeout_ms": self.timeout_ms,
+                "memory_limit_mb": self.memory_limit_mb,
+                "use_qemu": self.use_qemu,
+                "qemu_mode": self.qemu_mode.value if self.qemu_mode else None,
+                "dictionary_path": self.dictionary_path,
+                "extra_afl_flags": self.extra_afl_flags,
+                "command": " ".join(self._build_command()),
+            }
+            try:
+                self.telemetry = AflTelemetryRecorder(self.telemetry_dir, self.session_id, metadata)
+            except Exception as e:
+                logger.warning(f"Failed to initialize AFL telemetry: {e}")
     
     def _ensure_initial_seed(self):
         """Ensure input directory has at least one seed file."""
@@ -14383,6 +17623,11 @@ class AflPlusPlusFuzzer:
                 "afl-fuzz": None,
                 "afl-gcc": None,
                 "afl-clang": None,
+                "afl-clang-fast": None,
+                "afl-clang-fast++": None,
+                "afl-cmin": None,
+                "afl-tmin": None,
+                "afl-showmap": None,
                 "afl-qemu-trace": None,
             }
         }
@@ -14423,7 +17668,16 @@ class AflPlusPlusFuzzer:
             logger.warning(f"Error checking AFL++: {e}")
         
         # Check other tools
-        for tool in ["afl-gcc", "afl-clang", "afl-qemu-trace"]:
+        for tool in [
+            "afl-gcc",
+            "afl-clang",
+            "afl-clang-fast",
+            "afl-clang-fast++",
+            "afl-cmin",
+            "afl-tmin",
+            "afl-showmap",
+            "afl-qemu-trace",
+        ]:
             for base_path in ["/usr/local/bin/", "/opt/AFLplusplus/", "/usr/bin/", ""]:
                 try:
                     path = f"{base_path}{tool}"
@@ -14454,19 +17708,29 @@ class AflPlusPlusFuzzer:
         if self.use_qemu:
             cmd.append(self.AFL_QEMU_MODE)
         
+        # Dictionary
+        if self.dictionary_path and os.path.isfile(self.dictionary_path):
+            cmd.extend(["-x", self.dictionary_path])
+        
+        # Extra flags
+        if self.extra_afl_flags:
+            cmd.extend(self.extra_afl_flags)
+        
         # Add target and args
         cmd.append("--")
         cmd.append(self.target_path)
         
         # Parse target args
         if self.target_args:
-            args = self.target_args.split()
+            args = shlex.split(self.target_args, posix=os.name != "nt")
             cmd.extend(args)
         
         return cmd
     
     async def start(self) -> AsyncGenerator[Dict[str, Any], None]:
         """Start AFL++ fuzzing session."""
+        end_status = "completed"
+        end_error = None
         # Check if AFL++ is available
         availability = self.is_available()
         if not availability["installed"]:
@@ -14486,6 +17750,7 @@ class AflPlusPlusFuzzer:
             "session_id": self.session_id,
             "target": self.target_path,
             "output_dir": self.output_dir,
+            "telemetry_dir": self.telemetry_dir,
             "mode": "afl++",
             "command": " ".join(cmd),
         }
@@ -14496,6 +17761,21 @@ class AflPlusPlusFuzzer:
             env["AFL_NO_UI"] = "1"
             env["AFL_SKIP_CPUFREQ"] = "1"  # Skip CPU frequency check
             env["AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES"] = "1"
+            
+            if self.use_qemu and self.qemu_mode == QemuModeType.PERSISTENT and self.persistent_address:
+                env["AFL_QEMU_PERSISTENT_ADDR"] = self.persistent_address
+                env["AFL_QEMU_PERSISTENT_CNT"] = str(self.persistent_count)
+                if self.persistent_hook:
+                    env["AFL_QEMU_PERSISTENT_HOOK"] = self.persistent_hook
+            
+            if self.enable_compcov or (self.use_qemu and self.qemu_mode == QemuModeType.COMPCOV):
+                env["AFL_COMPCOV_LEVEL"] = "2"
+            
+            if self.enable_instrim:
+                env["AFL_INST_RATIO"] = "50"
+            
+            if self.env_vars:
+                env.update(self.env_vars)
             
             # Start process
             self._process = await asyncio.create_subprocess_exec(
@@ -14512,6 +17792,32 @@ class AflPlusPlusFuzzer:
             while self._running and self._process.returncode is None:
                 # Parse fuzzer_stats file
                 await self._parse_stats()
+
+                if self.telemetry:
+                    now = time.time()
+                    if now - self._last_telemetry_ts >= self.telemetry_interval_sec:
+                        queue_stats = get_afl_dir_stats(
+                            os.path.join(self.output_dir, "default", "queue"),
+                        )
+                        crash_stats = get_afl_dir_stats(
+                            os.path.join(self.output_dir, "default", "crashes"),
+                            skip_names={"README.txt"},
+                        )
+                        hang_stats = get_afl_dir_stats(
+                            os.path.join(self.output_dir, "default", "hangs"),
+                            skip_names={"README.txt"},
+                        )
+                        try:
+                            self.telemetry.record_sample(
+                                stats=self.stats.copy(),
+                                queue=queue_stats,
+                                crashes=crash_stats,
+                                hangs=hang_stats,
+                                runtime_seconds=time.time() - self._start_time,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Telemetry sample failed: {e}")
+                        self._last_telemetry_ts = now
                 
                 # Check for new crashes
                 crashes = await self._get_crashes()
@@ -14523,6 +17829,7 @@ class AflPlusPlusFuzzer:
                     "stats": self.stats.copy(),
                     "crashes": crashes,
                     "runtime_seconds": time.time() - self._start_time,
+                    "telemetry_dir": self.telemetry_dir,
                 }
                 
                 await asyncio.sleep(2)  # Update every 2 seconds
@@ -14534,16 +17841,29 @@ class AflPlusPlusFuzzer:
                 "stats": self.stats.copy(),
                 "crashes": await self._get_crashes(),
                 "runtime_seconds": time.time() - self._start_time if self._start_time else 0,
+                "telemetry_dir": self.telemetry_dir,
             }
             
         except Exception as e:
             logger.exception(f"AFL++ error: {e}")
+            end_status = "error"
+            end_error = str(e)
             yield {
                 "type": "error",
                 "error": str(e),
                 "session_id": self.session_id,
             }
         finally:
+            if self.telemetry and self._start_time:
+                try:
+                    self.telemetry.finalize(
+                        status="stopped" if self._stop_requested else end_status,
+                        runtime_seconds=time.time() - self._start_time,
+                        final_stats=self.stats.copy(),
+                        error=end_error,
+                    )
+                except Exception as e:
+                    logger.debug(f"Telemetry finalize failed: {e}")
             await self.stop()
     
     async def _parse_stats(self):
@@ -14621,6 +17941,7 @@ class AflPlusPlusFuzzer:
     async def stop(self):
         """Stop AFL++ fuzzing session."""
         self._running = False
+        self._stop_requested = True
         if self._process and self._process.returncode is None:
             try:
                 self._process.terminate()
@@ -14666,11 +17987,354 @@ class AflPlusPlusFuzzer:
             "stats": self.stats.copy(),
             "target": self.target_path,
             "runtime_seconds": time.time() - self._start_time if self._start_time else 0,
+            "telemetry_dir": self.telemetry_dir,
         }
 
 
 # Active AFL++ sessions
 _active_afl_fuzzers: Dict[str, AflPlusPlusFuzzer] = {}
+
+
+def _escape_afl_dictionary_bytes(data: bytes) -> str:
+    """Escape bytes for AFL dictionary format."""
+    escaped = []
+    for b in data:
+        if 32 <= b <= 126 and b not in (34, 92):
+            escaped.append(chr(b))
+        elif b == 34:
+            escaped.append('\\"')
+        elif b == 92:
+            escaped.append('\\\\')
+        else:
+            escaped.append(f"\\x{b:02x}")
+    return "".join(escaped)
+
+
+def _write_afl_dictionary_file(dictionary: List[str], output_dir: str) -> Optional[str]:
+    """Write AFL dictionary entries to a file and return its path."""
+    if not dictionary:
+        return None
+    
+    dict_dir = os.path.join(output_dir, "dictionaries")
+    os.makedirs(dict_dir, exist_ok=True)
+    dict_path = os.path.join(dict_dir, "afl_dictionary.txt")
+    
+    try:
+        with open(dict_path, "w", encoding="utf-8") as f:
+            for i, entry in enumerate(dictionary):
+                if entry is None:
+                    continue
+                data = entry if isinstance(entry, bytes) else str(entry).encode("utf-8", errors="replace")
+                escaped = _escape_afl_dictionary_bytes(data)
+                f.write(f"key{i}=\"{escaped}\"\n")
+    except Exception:
+        return None
+    
+    return dict_path
+
+
+def find_afl_tool(tool_name: str) -> Optional[str]:
+    candidates = ["/usr/local/bin", "/opt/AFLplusplus", "/usr/bin", ""]
+    names = [tool_name]
+    if os.name == "nt":
+        names = [f"{tool_name}.exe", f"{tool_name}.bat", f"{tool_name}.cmd", tool_name]
+
+    for base in candidates:
+        for name in names:
+            path = os.path.join(base, name) if base else name
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+
+    for name in names:
+        path = shutil.which(name)
+        if path:
+            return path
+
+    return None
+
+
+def _resolve_qemu_mode(qemu_mode: Optional[str]) -> Optional[QemuModeType]:
+    if not qemu_mode:
+        return None
+    if isinstance(qemu_mode, QemuModeType):
+        return qemu_mode
+    try:
+        return QemuModeType(str(qemu_mode))
+    except ValueError:
+        return None
+
+
+def _select_seed_file(input_dir: str) -> Optional[str]:
+    try:
+        for entry in sorted(Path(input_dir).iterdir()):
+            if entry.is_file():
+                return str(entry)
+    except Exception:
+        return None
+    return None
+
+
+def _check_afl_instrumentation(
+    target_path: str,
+    target_args: str,
+    input_dir: str,
+    showmap_path: str,
+    timeout_ms: int,
+    memory_limit_mb: int,
+    env_vars: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    result = {
+        "checked": False,
+        "detected": False,
+        "edges": 0,
+        "returncode": None,
+        "command": None,
+        "error": None,
+    }
+
+    seed_path = _select_seed_file(input_dir)
+    if not seed_path:
+        result["error"] = "No seed files available for instrumentation check."
+        return result
+
+    input_bytes: Optional[bytes] = None
+    try:
+        input_bytes = Path(seed_path).read_bytes()
+    except Exception:
+        input_bytes = b"AAAA"
+
+    if "@@" in (target_args or ""):
+        args_template = (target_args or "").replace("@@", seed_path)
+        input_payload = None
+    else:
+        args_template = target_args or ""
+        input_payload = input_bytes
+
+    args = shlex.split(args_template, posix=os.name != "nt") if args_template else []
+    target_cmd = [target_path] + args
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".map") as out_file:
+        output_path = out_file.name
+
+    showmap_cmd = [
+        showmap_path,
+        "-q",
+        "-o",
+        output_path,
+        "-t",
+        str(timeout_ms),
+        "-m",
+        str(memory_limit_mb),
+        "--",
+    ] + target_cmd
+    result["command"] = " ".join(showmap_cmd)
+
+    env = os.environ.copy()
+    if env_vars:
+        env.update(env_vars)
+
+    try:
+        proc = subprocess.run(
+            showmap_cmd,
+            input=input_payload,
+            capture_output=True,
+            timeout=max(1.0, timeout_ms / 1000.0 + 1.0),
+            env=env,
+        )
+        result["checked"] = True
+        result["returncode"] = proc.returncode
+        if proc.returncode != 0:
+            stderr_text = proc.stderr.decode("utf-8", errors="replace")
+            result["error"] = stderr_text.strip() or "afl-showmap failed"
+            return result
+
+        edges = 0
+        try:
+            with open(output_path, "r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    if line.strip():
+                        edges += 1
+        except Exception:
+            edges = 0
+        result["edges"] = edges
+        result["detected"] = edges > 0
+        if edges == 0:
+            result["error"] = "No instrumentation detected by afl-showmap."
+    except subprocess.TimeoutExpired:
+        result["checked"] = True
+        result["error"] = "afl-showmap timed out."
+    except Exception as exc:
+        result["error"] = str(exc)
+    finally:
+        try:
+            os.unlink(output_path)
+        except Exception:
+            pass
+
+    return result
+
+
+def run_afl_preflight(
+    target_path: str,
+    target_args: str = "@@",
+    input_dir: str = "/fuzzing/seeds",
+    timeout_ms: int = 5000,
+    memory_limit_mb: int = 256,
+    use_qemu: bool = True,
+    qemu_mode: Optional[str] = None,
+    dictionary_path: Optional[str] = None,
+    env_vars: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "ok": True,
+        "errors": [],
+        "warnings": [],
+        "checks": {},
+        "tools": {},
+        "recommendations": [],
+    }
+
+    availability = check_afl_installation()
+    result["tools"].update(availability.get("tools", {}))
+    result["checks"]["afl_installed"] = bool(availability.get("installed"))
+
+    if not availability.get("installed"):
+        result["errors"].append({
+            "code": "afl_not_installed",
+            "message": "AFL++ not found (afl-fuzz missing).",
+            "hint": "Install AFL++ and ensure afl-fuzz is on PATH.",
+        })
+
+    showmap_path = find_afl_tool("afl-showmap")
+    result["tools"]["afl-showmap"] = showmap_path
+
+    clang_fast = find_afl_tool("afl-clang-fast")
+    result["tools"]["afl-clang-fast"] = clang_fast
+    clang_fast_pp = find_afl_tool("afl-clang-fast++")
+    result["tools"]["afl-clang-fast++"] = clang_fast_pp
+
+    qemu_trace = find_afl_tool("afl-qemu-trace")
+    result["tools"]["afl-qemu-trace"] = qemu_trace
+
+    target_exists = os.path.isfile(target_path)
+    result["checks"]["target_exists"] = target_exists
+    if not target_exists:
+        result["errors"].append({
+            "code": "target_missing",
+            "message": f"Target not found: {target_path}",
+            "hint": "Provide a valid path to the target binary.",
+        })
+    else:
+        if os.name != "nt" and not os.access(target_path, os.X_OK):
+            result["errors"].append({
+                "code": "target_not_executable",
+                "message": "Target exists but is not executable.",
+                "hint": "Run chmod +x on the binary or adjust permissions.",
+            })
+
+    input_dir_exists = os.path.isdir(input_dir)
+    result["checks"]["input_dir_exists"] = input_dir_exists
+    seed_count = 0
+    if input_dir_exists:
+        seed_count = len([p for p in Path(input_dir).iterdir() if p.is_file()])
+    result["checks"]["seed_count"] = seed_count
+    if not input_dir_exists:
+        result["errors"].append({
+            "code": "seed_dir_missing",
+            "message": f"Seed directory not found: {input_dir}",
+            "hint": "Create the directory and add at least one seed input.",
+        })
+    elif seed_count == 0:
+        result["errors"].append({
+            "code": "seed_dir_empty",
+            "message": "Seed directory has no input files.",
+            "hint": "Add seed files or enable ai_generate_seeds.",
+        })
+
+    if dictionary_path and not os.path.isfile(dictionary_path):
+        result["errors"].append({
+            "code": "dictionary_missing",
+            "message": f"Dictionary path not found: {dictionary_path}",
+            "hint": "Remove dictionary_path or provide a valid AFL dictionary file.",
+        })
+
+    resolved_qemu_mode = _resolve_qemu_mode(qemu_mode)
+    if qemu_mode and not resolved_qemu_mode:
+        result["errors"].append({
+            "code": "invalid_qemu_mode",
+            "message": f"Unsupported qemu_mode: {qemu_mode}",
+            "hint": "Use standard, persistent, compcov, or instrim.",
+        })
+
+    if use_qemu:
+        if not qemu_trace:
+            result["errors"].append({
+                "code": "qemu_missing",
+                "message": "afl-qemu-trace not found for QEMU mode.",
+                "hint": "Install AFL++ with QEMU support or disable use_qemu.",
+            })
+        if target_exists:
+            qemu_recs = get_qemu_recommendations(target_path)
+            result["checks"]["qemu_recommendations"] = qemu_recs
+            if not qemu_recs.get("qemu_available", False):
+                result["errors"].append({
+                    "code": "qemu_unavailable",
+                    "message": "QEMU mode is not available for this setup.",
+                    "hint": qemu_recs.get("warnings", ["Install AFL++ QEMU support."])[0],
+                })
+            for warning in qemu_recs.get("warnings", []):
+                result["warnings"].append({
+                    "code": "qemu_warning",
+                    "message": warning,
+                })
+    else:
+        if not showmap_path:
+            result["errors"].append({
+                "code": "showmap_missing",
+                "message": "afl-showmap is required for instrumentation checks.",
+                "hint": "Install AFL++ tools or enable use_qemu.",
+            })
+        elif target_exists and input_dir_exists and seed_count > 0:
+            instrumentation = _check_afl_instrumentation(
+                target_path=target_path,
+                target_args=target_args,
+                input_dir=input_dir,
+                showmap_path=showmap_path,
+                timeout_ms=timeout_ms,
+                memory_limit_mb=memory_limit_mb,
+                env_vars=env_vars,
+            )
+            result["checks"]["instrumentation"] = instrumentation
+            if not instrumentation.get("detected"):
+                result["errors"].append({
+                    "code": "no_instrumentation",
+                    "message": "AFL++ instrumentation not detected.",
+                    "hint": "Rebuild the target with afl-clang-fast or enable use_qemu.",
+                })
+
+    if not use_qemu:
+        result["recommendations"].append({
+            "id": "instrumented_build",
+            "title": "Rebuild with AFL++ instrumentation",
+            "details": "Compile the target with AFL++ compiler wrappers to enable coverage feedback.",
+            "commands": [
+                "CC=afl-clang-fast CXX=afl-clang-fast++ ./configure && make -j",
+                "CC=afl-clang-fast CXX=afl-clang-fast++ cmake -S . -B build && cmake --build build",
+            ],
+            "env": ["AFL_USE_ASAN=1", "AFL_USE_UBSAN=1"],
+        })
+    else:
+        result["recommendations"].append({
+            "id": "qemu_mode",
+            "title": "Use AFL++ QEMU mode for black-box binaries",
+            "details": "QEMU mode fuzzes without compile-time instrumentation.",
+            "commands": [
+                "afl-fuzz -Q -i seeds -o output -- ./target @@",
+            ],
+        })
+
+    result["ok"] = len(result["errors"]) == 0
+    return result
 
 
 async def start_afl_fuzzing(
@@ -14681,6 +18345,20 @@ async def start_afl_fuzzing(
     timeout_ms: int = 5000,
     memory_limit_mb: int = 256,
     use_qemu: bool = True,
+    session_id: Optional[str] = None,
+    output_dir_is_session: bool = False,
+    dictionary: Optional[List[str]] = None,
+    dictionary_path: Optional[str] = None,
+    env_vars: Optional[Dict[str, str]] = None,
+    extra_afl_flags: Optional[List[str]] = None,
+    qemu_mode: Optional[str] = None,
+    persistent_address: Optional[str] = None,
+    persistent_count: int = 10000,
+    persistent_hook: Optional[str] = None,
+    enable_compcov: bool = False,
+    enable_instrim: bool = False,
+    telemetry_dir: Optional[str] = None,
+    telemetry_interval_sec: float = 2.0,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Start an AFL++ fuzzing session.
@@ -14693,6 +18371,20 @@ async def start_afl_fuzzing(
         timeout_ms: Execution timeout in milliseconds
         memory_limit_mb: Memory limit in MB
         use_qemu: Use QEMU mode for uninstrumented binaries
+        session_id: Optional session ID to force
+        output_dir_is_session: Treat output_dir as session dir if True
+        dictionary: Optional dictionary entries
+        dictionary_path: Optional path to AFL dictionary
+        env_vars: Additional environment variables
+        extra_afl_flags: Extra AFL++ command flags
+        qemu_mode: QEMU mode (standard, persistent, compcov)
+        persistent_address: Persistent mode entry address
+        persistent_count: Iterations per fork in persistent mode
+        persistent_hook: Optional persistent hook library
+        enable_compcov: Enable comparison coverage
+        enable_instrim: Enable instruction trimming
+        telemetry_dir: Optional telemetry output directory
+        telemetry_interval_sec: Telemetry sampling interval in seconds
         
     Yields:
         Progress events
@@ -14702,15 +18394,48 @@ async def start_afl_fuzzing(
         yield {"type": "error", "error": f"Target not found: {target_path}"}
         return
     
+    resolved_session_id = session_id or str(uuid.uuid4())
+    final_output_dir = output_dir if output_dir_is_session else os.path.join(output_dir, resolved_session_id)
+    os.makedirs(final_output_dir, exist_ok=True)
+    
+    resolved_qemu_mode = None
+    if qemu_mode:
+        if isinstance(qemu_mode, QemuModeType):
+            resolved_qemu_mode = qemu_mode
+        else:
+            try:
+                resolved_qemu_mode = QemuModeType(str(qemu_mode))
+            except ValueError:
+                resolved_qemu_mode = None
+    
+    dict_path = dictionary_path
+    if dictionary:
+        dict_path = _write_afl_dictionary_file(dictionary, final_output_dir) or dictionary_path
+
+    resolved_telemetry_dir = telemetry_dir or os.path.join(final_output_dir, "telemetry")
+    
     # Create fuzzer
     fuzzer = AflPlusPlusFuzzer(
         target_path=target_path,
         target_args=target_args,
         input_dir=input_dir,
-        output_dir=output_dir,
+        output_dir=final_output_dir,
         timeout_ms=timeout_ms,
         memory_limit_mb=memory_limit_mb,
         use_qemu=use_qemu,
+        session_id=resolved_session_id,
+        output_dir_is_session=True,
+        dictionary_path=dict_path,
+        env_vars=env_vars,
+        extra_afl_flags=extra_afl_flags,
+        qemu_mode=resolved_qemu_mode,
+        persistent_address=persistent_address,
+        persistent_count=persistent_count,
+        persistent_hook=persistent_hook,
+        enable_compcov=enable_compcov,
+        enable_instrim=enable_instrim,
+        telemetry_dir=resolved_telemetry_dir,
+        telemetry_interval_sec=telemetry_interval_sec,
     )
     
     # Register
@@ -14725,13 +18450,50 @@ async def start_afl_fuzzing(
 
 
 def stop_afl_session(session_id: str) -> Dict[str, Any]:
-    """Stop an AFL++ fuzzing session."""
+    """Stop an AFL++ fuzzing session (synchronous wrapper)."""
     fuzzer = _active_afl_fuzzers.get(session_id)
     if not fuzzer:
         return {"success": False, "error": "Session not found"}
-    
+
+    # Create task but don't wait (for backwards compatibility)
     asyncio.create_task(fuzzer.stop())
-    return {"success": True, "message": f"AFL++ session {session_id} stopped"}
+    return {"success": True, "message": f"AFL++ session {session_id} stopping"}
+
+
+async def stop_afl_session_async(session_id: str, timeout: float = 10.0) -> Dict[str, Any]:
+    """
+    Stop an AFL++ fuzzing session and wait for it to fully terminate.
+
+    This is the preferred method to ensure AFL processes are properly cleaned up.
+
+    Args:
+        session_id: The session ID to stop
+        timeout: Maximum seconds to wait for AFL to stop (default 10s)
+
+    Returns:
+        Dict with success status and any error message
+    """
+    fuzzer = _active_afl_fuzzers.get(session_id)
+    if not fuzzer:
+        return {"success": False, "error": "Session not found"}
+
+    try:
+        # Wait for the stop with a timeout
+        await asyncio.wait_for(fuzzer.stop(), timeout=timeout)
+        return {"success": True, "message": f"AFL++ session {session_id} stopped"}
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout waiting for AFL++ session {session_id} to stop, forcing termination")
+        # Force kill if graceful stop times out
+        try:
+            if fuzzer._process and fuzzer._process.returncode is None:
+                fuzzer._process.kill()
+                await asyncio.sleep(0.5)  # Brief wait for kill to take effect
+        except Exception as e:
+            logger.error(f"Error force-killing AFL++ session {session_id}: {e}")
+        return {"success": True, "message": f"AFL++ session {session_id} force-stopped after timeout"}
+    except Exception as e:
+        logger.exception(f"Error stopping AFL++ session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
 
 
 def get_afl_session_status(session_id: str) -> Optional[Dict[str, Any]]:

@@ -34,20 +34,27 @@ class MITMStreamManager:
         logger.debug(f"MITM WebSocket disconnected for proxy {proxy_id}")
 
     async def broadcast(self, proxy_id: str, message: Dict[str, Any]) -> None:
+        """Broadcast message to all connections for a specific proxy."""
         message_json = json.dumps(message, default=str)
         async with self._lock:
             connections = list(self._connections.get(proxy_id, set()))
+
         dead = []
         for websocket in connections:
             try:
                 await websocket.send_text(message_json)
             except Exception:
                 dead.append(websocket)
+
+        # Only clean dead connections from THIS proxy, not all proxies
         if dead:
             async with self._lock:
-                for ws in dead:
-                    for key in list(self._connections.keys()):
-                        self._connections[key].discard(ws)
+                if proxy_id in self._connections:
+                    for ws in dead:
+                        self._connections[proxy_id].discard(ws)
+                    # Clean up empty proxy entry
+                    if not self._connections[proxy_id]:
+                        del self._connections[proxy_id]
 
     def emit(self, proxy_id: str, message: Dict[str, Any]) -> None:
         """Thread-safe broadcast from non-async contexts."""

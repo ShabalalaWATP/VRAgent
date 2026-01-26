@@ -463,7 +463,8 @@ class JWTAttacker:
         self.baseline_authenticated: bool = False
     
     async def __aenter__(self):
-        self.client = httpx.AsyncClient(timeout=self.config.timeout, verify=False)
+        # SSL verification enabled by default; configure via environment if needed
+        self.client = httpx.AsyncClient(timeout=self.config.timeout, verify=True)
         return self
     
     async def __aexit__(self, *args):

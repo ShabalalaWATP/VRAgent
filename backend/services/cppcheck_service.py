@@ -14,7 +14,7 @@ Detects:
 - Dangerous functions usage
 """
 import subprocess
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import shutil

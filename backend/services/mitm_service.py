@@ -23,11 +23,120 @@ import zlib
 import struct
 import hashlib
 import base64
+import ast
+import operator
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, urlencode
 from typing import Dict, List, Optional, Any, Callable, Tuple
+
+
+def _safe_evaluate_condition(condition: str, variables: Dict[str, Any]) -> bool:
+    """
+    Safely evaluate a simple condition expression without using eval().
+
+    Supports:
+    - Variable references (looked up in variables dict)
+    - String/number literals
+    - Comparison operators: ==, !=, <, >, <=, >=
+    - Logical operators: and, or, not
+    - Membership: in, not in
+    - Truthiness checks for single variables
+
+    Returns False if the condition cannot be safely parsed.
+    """
+    if not condition or not condition.strip():
+        return True
+
+    condition = condition.strip()
+
+    # Define safe operators
+    safe_operators = {
+        ast.Eq: operator.eq,
+        ast.NotEq: operator.ne,
+        ast.Lt: operator.lt,
+        ast.LtE: operator.le,
+        ast.Gt: operator.gt,
+        ast.GtE: operator.ge,
+        ast.In: lambda a, b: a in b,
+        ast.NotIn: lambda a, b: a not in b,
+        ast.And: lambda a, b: a and b,
+        ast.Or: lambda a, b: a or b,
+        ast.Not: operator.not_,
+    }
+
+    def _resolve_value(node: ast.AST) -> Any:
+        """Resolve an AST node to a Python value."""
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Str):  # Python 3.7 compatibility
+            return node.s
+        elif isinstance(node, ast.Num):  # Python 3.7 compatibility
+            return node.n
+        elif isinstance(node, ast.Name):
+            # Look up variable name
+            var_name = node.id
+            if var_name in ('True', 'true'):
+                return True
+            elif var_name in ('False', 'false'):
+                return False
+            elif var_name in ('None', 'null'):
+                return None
+            return variables.get(var_name, '')
+        elif isinstance(node, ast.List):
+            return [_resolve_value(elt) for elt in node.elts]
+        elif isinstance(node, ast.Tuple):
+            return tuple(_resolve_value(elt) for elt in node.elts)
+        else:
+            raise ValueError(f"Unsupported node type: {type(node).__name__}")
+
+    def _evaluate_node(node: ast.AST) -> Any:
+        """Recursively evaluate an AST node."""
+        if isinstance(node, ast.Expression):
+            return _evaluate_node(node.body)
+        elif isinstance(node, ast.BoolOp):
+            # Handle 'and' / 'or'
+            op_func = safe_operators.get(type(node.op))
+            if not op_func:
+                raise ValueError(f"Unsupported boolean operator: {type(node.op).__name__}")
+            result = _evaluate_node(node.values[0])
+            for value in node.values[1:]:
+                result = op_func(result, _evaluate_node(value))
+            return result
+        elif isinstance(node, ast.UnaryOp):
+            # Handle 'not'
+            if isinstance(node.op, ast.Not):
+                return not _evaluate_node(node.operand)
+            raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+        elif isinstance(node, ast.Compare):
+            # Handle comparisons like a == b, x in y, etc.
+            left = _resolve_value(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                op_func = safe_operators.get(type(op))
+                if not op_func:
+                    raise ValueError(f"Unsupported comparison operator: {type(op).__name__}")
+                right = _resolve_value(comparator)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, (ast.Constant, ast.Str, ast.Num, ast.Name, ast.List, ast.Tuple)):
+            # Single value - check truthiness
+            return bool(_resolve_value(node))
+        else:
+            raise ValueError(f"Unsupported expression type: {type(node).__name__}")
+
+    try:
+        tree = ast.parse(condition, mode='eval')
+        return bool(_evaluate_node(tree))
+    except (SyntaxError, ValueError, TypeError, KeyError) as e:
+        # Log the error and return False for safety
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Failed to evaluate condition '{condition}': {e}"
+        )
+        return False
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from collections import defaultdict
@@ -1024,6 +1133,23 @@ class TrafficStore:
         except json.JSONDecodeError:
             return None
 
+    def update_session_meta(self, proxy_id: str, session_id: str, meta: Dict[str, Any]) -> None:
+        """Update session metadata with additional info like analysis."""
+        sessions_dir = self._sessions_dir(proxy_id)
+        meta_path = sessions_dir / f"{session_id}.meta.json"
+        if meta_path.exists():
+            meta_path.write_text(json.dumps(meta, ensure_ascii=True, default=str), encoding="utf-8")
+
+    def delete_session(self, proxy_id: str, session_id: str) -> None:
+        """Delete a saved session and its metadata."""
+        sessions_dir = self._sessions_dir(proxy_id)
+        session_file = sessions_dir / f"{session_id}.jsonl"
+        meta_file = sessions_dir / f"{session_id}.meta.json"
+        if session_file.exists():
+            session_file.unlink()
+        if meta_file.exists():
+            meta_file.unlink()
+
 
 class MITMProxy:
     """TCP/HTTP Proxy for traffic interception"""
@@ -1034,7 +1160,7 @@ class MITMProxy:
         listen_port: int = 8080,
         target_host: str = "localhost",
         target_port: int = 80,
-        mode: InterceptionMode = InterceptionMode.PASSTHROUGH,
+        mode: InterceptionMode = InterceptionMode.AUTO_MODIFY,  # Default to auto-modify for attack tools
         tls_enabled: bool = False
     ):
         self.listen_host = listen_host
@@ -1100,8 +1226,8 @@ class MITMProxy:
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except:
-                pass
+            except OSError:
+                pass  # Socket already closed
         logger.info("MITM Proxy stopped")
     
     def _accept_connections(self):
@@ -1215,10 +1341,10 @@ class MITMProxy:
                     dst.sendall(modified)
 
         except socket.timeout:
-            pass
+            logger.debug(f"Socket timeout in {direction} for {connection_id}")
         except Exception as e:
             if self.running:
-                logger.debug(f"Proxy data error: {e}")
+                logger.warning(f"Proxy data error in {direction} for {connection_id}: {type(e).__name__}: {e}")
 
     def _extract_http_message(self, buffer: bytearray) -> Tuple[Optional[bytes], bytearray]:
         """Extract a complete HTTP message from the buffer if available."""
@@ -1661,22 +1787,33 @@ class MITMProxy:
         content_encoding = header_map.get("content-encoding", "").lower()
 
         decoded_body = body
+        was_chunked = False
+        was_compressed = False
+        decompression_succeeded = True
+
         if "chunked" in transfer_encoding:
             decoded = self._decode_chunked_body(body)
             if decoded is not None:
                 decoded_body = decoded
+                was_chunked = True
 
         if content_encoding in ("gzip", "deflate"):
+            was_compressed = True
             try:
                 if content_encoding == "gzip":
                     decoded_body = gzip.decompress(decoded_body)
                 else:
                     decoded_body = zlib.decompress(decoded_body)
             except Exception:
-                decoded_body = decoded_body
+                # Decompression failed - skip body modifications and pass through unchanged
+                decompression_succeeded = False
+                logger.debug(f"Decompression failed for {content_encoding}, passing through unchanged")
 
         body_text = None
-        if decoded_body:
+        body_modified = False
+
+        # Only attempt body modifications if we successfully decompressed (or content wasn't compressed)
+        if decompression_succeeded and decoded_body:
             try:
                 body_text = decoded_body.decode("utf-8", errors="replace")
             except Exception:
@@ -1694,17 +1831,19 @@ class MITMProxy:
                 parts[1] = str(rule.modify_status_code)
                 start_line = " ".join(parts)
 
-        if rule.json_path_edits and decoded_body:
+        if decompression_succeeded and rule.json_path_edits and decoded_body:
             updated_json = self._apply_json_path_edits(decoded_body, rule.json_path_edits)
             if updated_json is not None:
                 decoded_body = updated_json
                 body_text = decoded_body.decode("utf-8", errors="replace")
+                body_modified = True
 
-        if rule.modify_body is not None:
+        if decompression_succeeded and rule.modify_body is not None:
             decoded_body = rule.modify_body.encode("utf-8")
             body_text = rule.modify_body
+            body_modified = True
 
-        if rule.body_find_replace and body_text is not None:
+        if decompression_succeeded and rule.body_find_replace and body_text is not None:
             try:
                 if rule.body_find_replace_regex:
                     for find, replace in rule.body_find_replace.items():
@@ -1713,17 +1852,24 @@ class MITMProxy:
                     for find, replace in rule.body_find_replace.items():
                         body_text = body_text.replace(find, replace)
                 decoded_body = body_text.encode("utf-8")
+                body_modified = True
             except Exception:
                 pass
 
-        if content_encoding in ("gzip", "deflate"):
+        # Recompress if we successfully decompressed and modified the body
+        if was_compressed and decompression_succeeded and body_modified:
             try:
                 if content_encoding == "gzip":
                     decoded_body = gzip.compress(decoded_body)
                 else:
                     decoded_body = zlib.compress(decoded_body)
             except Exception:
-                pass
+                # Recompression failed - remove Content-Encoding header and send uncompressed
+                logger.debug(f"Recompression failed for {content_encoding}, removing encoding header")
+                self._remove_header(headers, "Content-Encoding")
+        elif was_compressed and not decompression_succeeded:
+            # Decompression failed - use original body unchanged
+            decoded_body = body if not was_chunked else self._decode_chunked_body(body) or body
 
         if "chunked" in transfer_encoding:
             body = self._encode_chunked_body(decoded_body)
@@ -3213,7 +3359,7 @@ class MacroRecorder:
                     if isinstance(body, str):
                         try:
                             body = json.loads(body)
-                        except:
+                        except json.JSONDecodeError:
                             continue
                     
                     # Simple dot-notation path
@@ -3285,8 +3431,8 @@ class MacroRecorder:
                     # Check condition
                     if step.condition:
                         condition = self._substitute_variables(step.condition, result.variables)
-                        # Simple condition check
-                        if not eval(condition, {"__builtins__": {}}, result.variables):
+                        # Safe condition check (no eval)
+                        if not _safe_evaluate_condition(condition, result.variables):
                             result.results.append({
                                 "step_id": step.id,
                                 "skipped": True,
@@ -3633,7 +3779,7 @@ class MessagePackDecoder(ProtocolDecoder):
         try:
             import msgpack
             return msgpack.packb(data.get("decoded", data))
-        except:
+        except (TypeError, ValueError, ImportError):
             return super().encode(data)
 
 
@@ -4614,7 +4760,7 @@ class MITMService:
         listen_port: int = 8080,
         target_host: str = "localhost",
         target_port: int = 80,
-        mode: str = "passthrough",
+        mode: str = "auto_modify",
         tls_enabled: bool = False
     ) -> Dict:
         """Create a new MITM proxy"""
@@ -4767,6 +4913,66 @@ class MITMService:
         self._get_proxy(proxy_id)
         return self.traffic_store.save_session(proxy_id, name)
 
+    def save_session_with_analysis(self, proxy_id: str, name: Optional[str] = None, analysis: Optional[Dict[str, Any]] = None) -> Dict:
+        """Save current traffic log as a session with AI analysis data."""
+        proxy = self._get_proxy(proxy_id)
+        session_meta = self.traffic_store.save_session(proxy_id, name)
+        
+        # Add proxy info and analysis to session metadata
+        session_meta["proxy_id"] = proxy_id
+        session_meta["target_host"] = proxy.target_host
+        session_meta["target_port"] = proxy.target_port
+        
+        if analysis:
+            # Extract key analysis info
+            analysis_summary = {
+                "summary": analysis.get("summary", ""),
+                "risk_score": analysis.get("risk_score", 0),
+                "findings_count": len(analysis.get("findings", [])),
+                "critical_count": sum(1 for f in analysis.get("findings", []) if f.get("severity") == "Critical"),
+                "high_count": sum(1 for f in analysis.get("findings", []) if f.get("severity") == "High"),
+                "medium_count": sum(1 for f in analysis.get("findings", []) if f.get("severity") == "Medium"),
+                "low_count": sum(1 for f in analysis.get("findings", []) if f.get("severity") == "Low"),
+                "findings": [
+                    {"severity": f.get("severity"), "title": f.get("title"), "description": f.get("description", "")[:200]}
+                    for f in analysis.get("findings", [])[:20]  # Store top 20 findings summaries
+                ],
+                "ai_writeup": analysis.get("ai_writeup", "")[:2000] if analysis.get("ai_writeup") else None,
+                "attack_paths": analysis.get("attack_paths", [])[:10] if analysis.get("attack_paths") else None,
+            }
+            session_meta["analysis"] = analysis_summary
+            session_meta["has_analysis"] = True
+        else:
+            session_meta["has_analysis"] = False
+        
+        # Update the session metadata file
+        self.traffic_store.update_session_meta(proxy_id, session_meta["id"], session_meta)
+        return session_meta
+
+    def delete_session(self, proxy_id: str, session_id: str) -> None:
+        """Delete a saved session."""
+        self._get_proxy(proxy_id)
+        self.traffic_store.delete_session(proxy_id, session_id)
+
+    def list_all_sessions(self) -> List[Dict[str, Any]]:
+        """List all saved sessions across all proxies."""
+        all_sessions = []
+        for proxy_id in self.proxies.keys():
+            try:
+                sessions = self.traffic_store.list_sessions(proxy_id)
+                for session in sessions:
+                    session["proxy_id"] = proxy_id
+                    proxy = self.proxies.get(proxy_id)
+                    if proxy:
+                        session["target_host"] = proxy.target_host
+                        session["target_port"] = proxy.target_port
+                all_sessions.extend(sessions)
+            except Exception:
+                continue
+        # Sort by created_at descending
+        all_sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
+        return all_sessions
+
     def list_sessions(self, proxy_id: str) -> List[Dict[str, Any]]:
         """List saved sessions for a proxy."""
         self._get_proxy(proxy_id)
@@ -4891,9 +5097,21 @@ class MITMService:
         return {"status": "updated", "mode": mode}
     
     def add_rule(self, proxy_id: str, rule_data: Dict) -> Dict:
-        """Add an interception rule"""
+        """Add an interception rule. Prevents duplicates by checking rule name."""
         proxy = self._get_proxy(proxy_id)
-        
+
+        # Check for existing rule with same name to prevent duplicates
+        rule_name = rule_data.get("name", "Unnamed Rule")
+        for existing_rule in proxy.rules:
+            if existing_rule.name == rule_name:
+                logger.debug(f"Rule '{rule_name}' already exists, skipping duplicate")
+                return {
+                    "status": "exists",
+                    "rule_id": existing_rule.id,
+                    "rule_name": existing_rule.name,
+                    "message": "Rule with this name already exists"
+                }
+
         rule = InterceptionRule(
             id=str(uuid.uuid4()),
             name=rule_data.get("name", "Unnamed Rule"),
@@ -5603,65 +5821,109 @@ mitm_service = MITMService()
 
 
 # ============================================================================
-# AI Analysis for MITM Traffic
+# AI Analysis for MITM Traffic - Enhanced Multi-Pass System
 # ============================================================================
 
 async def analyze_mitm_traffic(
     traffic_log: List[Dict],
     rules: List[Dict],
-    proxy_config: Dict
+    proxy_config: Dict,
+    agent_activity: Optional[Dict] = None
 ) -> Dict:
     """
-    AI-powered analysis of MITM intercepted traffic.
+    Enhanced AI-powered analysis of MITM intercepted traffic.
     
-    Analyzes:
-    - Security vulnerabilities in traffic
-    - Sensitive data exposure
-    - Authentication weaknesses
-    - API security issues
-    - Common attack patterns
+    Uses a 3-pass analysis system:
+    - Pass 1: Pattern-based vulnerability detection
+    - Pass 2: AI-powered contextual analysis and additional findings
+    - Pass 3: Verification, deduplication, and false positive removal
+    
+    Includes:
+    - Security vulnerabilities with exploitation details
+    - CVE database lookup
+    - Exploit database references
+    - Attack path generation
+    - Detailed exploitation steps
+    - Professional penetration test writeup
     """
     from backend.core.config import settings
+    from backend.services.vuln_intelligence_service import (
+        enrich_finding_with_intelligence,
+        generate_attack_paths,
+        generate_ai_exploitation_writeup,
+        search_cve_database,
+        get_offline_exploit_references
+    )
     
     if not traffic_log:
         return {
             "summary": "No traffic to analyze",
             "risk_score": 0,
             "findings": [],
-            "recommendations": []
+            "recommendations": [],
+            "attack_paths": [],
+            "exploit_references": [],
+            "cve_references": [],
+            "analysis_passes": 0
         }
     
-    # Analyze traffic without AI first (pattern-based)
-    findings = []
+    logger.info(f"Starting 3-pass MITM analysis on {len(traffic_log)} traffic entries")
     
-    for entry in traffic_log[:100]:  # Limit analysis
+    # =========================================================================
+    # PASS 1: Pattern-based vulnerability detection
+    # =========================================================================
+    logger.info("Pass 1: Pattern-based vulnerability detection")
+    
+    pass1_findings = []
+    detected_technologies = set()
+    endpoint_findings = defaultdict(list)  # Track findings per endpoint
+    
+    for entry in traffic_log[:250]:  # Analyze up to 250 traffic entries
         request = entry.get("request", {})
         response = entry.get("response", {})
         
         # Check for sensitive data in requests
         request_body = request.get("body_text", "") or ""
         request_headers = request.get("headers", {})
+        request_path = request.get("path", "")
         
-        # Check for credentials in clear text
+        # Detect technologies from headers/paths
+        if response:
+            server = response.get("headers", {}).get("Server", "")
+            x_powered = response.get("headers", {}).get("X-Powered-By", "")
+            if server:
+                detected_technologies.add(f"Server: {server}")
+            if x_powered:
+                detected_technologies.add(f"Framework: {x_powered}")
+        
+        # Enhanced sensitive data patterns
         sensitive_patterns = [
-            ("password", "Password transmitted in clear text"),
-            ("api_key", "API key exposed in request"),
-            ("secret", "Secret value in request"),
-            ("token", "Token exposed in request"),
-            ("authorization", "Authorization header exposed"),
-            ("credit_card", "Credit card data detected"),
-            ("ssn", "SSN pattern detected"),
+            ("password", "high", "Password transmitted in request"),
+            ("passwd", "high", "Password field detected"),
+            ("api_key", "critical", "API key exposed in request"),
+            ("apikey", "critical", "API key exposed in request"),
+            ("secret", "high", "Secret value in request"),
+            ("token", "medium", "Token in request (verify if sensitive)"),
+            ("bearer", "high", "Bearer token exposed"),
+            ("authorization", "high", "Authorization credentials exposed"),
+            ("credit_card", "critical", "Credit card data detected"),
+            ("card_number", "critical", "Card number detected"),
+            ("cvv", "critical", "CVV code detected"),
+            ("ssn", "critical", "SSN pattern detected"),
+            ("social_security", "critical", "Social security number detected"),
+            ("private_key", "critical", "Private key exposed"),
         ]
         
-        for pattern, message in sensitive_patterns:
-            if pattern in request_body.lower():
-                findings.append({
-                    "severity": "high",
+        for pattern, severity, message in sensitive_patterns:
+            if pattern in request_body.lower() or pattern in str(request_headers).lower():
+                pass1_findings.append({
+                    "severity": severity,
                     "category": "sensitive_data",
                     "title": message,
-                    "description": f"Sensitive data pattern '{pattern}' found in request body",
-                    "evidence": f"Request to {request.get('path', 'unknown')}",
-                    "recommendation": "Encrypt sensitive data or use secure transport"
+                    "description": f"Sensitive data pattern '{pattern}' found in request",
+                    "evidence": f"Request: {request.get('method', 'GET')} {request_path}",
+                    "recommendation": "Encrypt sensitive data, use HTTPS, avoid logging sensitive values",
+                    "affected_endpoint": request_path
                 })
         
         # Check for missing security headers in responses
@@ -5669,144 +5931,536 @@ async def analyze_mitm_traffic(
             response_headers = response.get("headers", {})
             header_lower = {k.lower(): v for k, v in response_headers.items()}
             
+            # Enhanced security header checks with categories
             security_headers = [
-                ("content-security-policy", "Missing Content-Security-Policy header"),
-                ("x-content-type-options", "Missing X-Content-Type-Options header"),
-                ("x-frame-options", "Missing X-Frame-Options header"),
-                ("strict-transport-security", "Missing HSTS header"),
-                ("x-xss-protection", "Missing X-XSS-Protection header"),
+                ("content-security-policy", "missing_csp", "Missing Content-Security-Policy header", "critical"),
+                ("x-content-type-options", "missing_x_content_type", "Missing X-Content-Type-Options header", "medium"),
+                ("x-frame-options", "missing_x_frame", "Missing X-Frame-Options header", "medium"),
+                ("strict-transport-security", "missing_hsts", "Missing HSTS header", "high"),
+                ("x-xss-protection", "missing_x_xss", "Missing X-XSS-Protection header", "low"),
+                ("referrer-policy", "missing_referrer", "Missing Referrer-Policy header", "low"),
+                ("permissions-policy", "missing_permissions", "Missing Permissions-Policy header", "low"),
             ]
             
-            for header, message in security_headers:
+            for header, category, message, severity in security_headers:
                 if header not in header_lower:
-                    findings.append({
-                        "severity": "medium",
-                        "category": "headers",
+                    pass1_findings.append({
+                        "severity": severity,
+                        "category": category,
                         "title": message,
                         "description": f"Response missing security header: {header}",
-                        "evidence": f"Response from {request.get('path', 'unknown')}",
-                        "recommendation": f"Add {header} header to response"
+                        "evidence": f"Response from {request_path}",
+                        "recommendation": f"Add {header} header to all responses",
+                        "affected_endpoint": request_path
                     })
         
-        # Check for insecure cookies
-        set_cookie = response.get("headers", {}).get("Set-Cookie", "") if response else ""
-        if set_cookie:
-            if "httponly" not in set_cookie.lower():
-                findings.append({
-                    "severity": "medium",
-                    "category": "cookies",
-                    "title": "Cookie without HttpOnly flag",
-                    "description": "Cookie set without HttpOnly flag, vulnerable to XSS",
-                    "evidence": f"Set-Cookie: {set_cookie[:50]}...",
-                    "recommendation": "Add HttpOnly flag to cookies"
-                })
-            if "secure" not in set_cookie.lower():
-                findings.append({
-                    "severity": "medium",
-                    "category": "cookies",
-                    "title": "Cookie without Secure flag",
-                    "description": "Cookie set without Secure flag, may be sent over HTTP",
-                    "evidence": f"Set-Cookie: {set_cookie[:50]}...",
-                    "recommendation": "Add Secure flag to cookies"
-                })
+        # Check for insecure cookies with detailed analysis
+        if response:
+            for header_name, header_value in response.get("headers", {}).items():
+                if header_name.lower() == "set-cookie":
+                    cookie_lower = header_value.lower()
+                    cookie_name = header_value.split("=")[0] if "=" in header_value else "unknown"
+                    
+                    if "httponly" not in cookie_lower:
+                        pass1_findings.append({
+                            "severity": "high",
+                            "category": "cookie_no_httponly",
+                            "title": f"Cookie '{cookie_name}' missing HttpOnly flag",
+                            "description": "Cookie accessible via JavaScript, enabling theft via XSS attacks",
+                            "evidence": f"Set-Cookie: {header_value[:80]}...",
+                            "recommendation": "Add HttpOnly flag: Set-Cookie: {name}=value; HttpOnly",
+                            "affected_endpoint": request_path
+                        })
+                    
+                    if "secure" not in cookie_lower:
+                        pass1_findings.append({
+                            "severity": "medium",
+                            "category": "cookie_no_secure",
+                            "title": f"Cookie '{cookie_name}' missing Secure flag",
+                            "description": "Cookie may be transmitted over unencrypted HTTP connections",
+                            "evidence": f"Set-Cookie: {header_value[:80]}...",
+                            "recommendation": "Add Secure flag: Set-Cookie: {name}=value; Secure",
+                            "affected_endpoint": request_path
+                        })
+                    
+                    if "samesite" not in cookie_lower:
+                        pass1_findings.append({
+                            "severity": "medium",
+                            "category": "cookie_no_samesite",
+                            "title": f"Cookie '{cookie_name}' missing SameSite attribute",
+                            "description": "Cookie may be sent in cross-site requests, enabling CSRF attacks",
+                            "evidence": f"Set-Cookie: {header_value[:80]}...",
+                            "recommendation": "Add SameSite=Strict or SameSite=Lax",
+                            "affected_endpoint": request_path
+                        })
         
         # Check for CORS misconfigurations
-        acao = response.get("headers", {}).get("Access-Control-Allow-Origin", "") if response else ""
-        if acao == "*":
-            findings.append({
-                "severity": "high",
-                "category": "cors",
-                "title": "Overly permissive CORS policy",
-                "description": "CORS allows any origin (*), potentially allowing cross-site attacks",
-                "evidence": "Access-Control-Allow-Origin: *",
-                "recommendation": "Restrict CORS to specific trusted origins"
-            })
+        if response:
+            acao = response.get("headers", {}).get("Access-Control-Allow-Origin", "")
+            acac = response.get("headers", {}).get("Access-Control-Allow-Credentials", "")
+            
+            if acao == "*":
+                pass1_findings.append({
+                    "severity": "high",
+                    "category": "cors",
+                    "title": "Overly permissive CORS: Access-Control-Allow-Origin: *",
+                    "description": "Any website can make cross-origin requests and read responses",
+                    "evidence": "Access-Control-Allow-Origin: *",
+                    "recommendation": "Restrict to specific trusted origins",
+                    "affected_endpoint": request_path
+                })
+            elif acao and acac.lower() == "true":
+                pass1_findings.append({
+                    "severity": "critical",
+                    "category": "cors",
+                    "title": "CORS allows credentials with dynamic origin",
+                    "description": "If origin is reflected from request, attackers can steal authenticated data",
+                    "evidence": f"ACAO: {acao}, ACAC: true",
+                    "recommendation": "Never combine Allow-Credentials with dynamic/reflected origins",
+                    "affected_endpoint": request_path
+                })
         
         # Check for error information disclosure
-        if response and response.get("status_code", 0) >= 500:
+        if response and response.get("status_code", 0) >= 400:
             body = response.get("body_text", "") or ""
-            if any(x in body.lower() for x in ["stacktrace", "exception", "traceback", "error at"]):
-                findings.append({
-                    "severity": "medium",
-                    "category": "information_disclosure",
-                    "title": "Stack trace exposed in error response",
-                    "description": "Server error reveals internal stack trace information",
-                    "evidence": f"500 error on {request.get('path', 'unknown')}",
-                    "recommendation": "Implement generic error messages in production"
+            body_lower = body.lower()
+            
+            disclosure_patterns = [
+                ("stacktrace", "Stack trace exposed"),
+                ("exception", "Exception details exposed"),
+                ("traceback", "Python traceback exposed"),
+                ("error at line", "Line number disclosed"),
+                ("sqlstate", "SQL error disclosed"),
+                ("mysql", "MySQL error exposed"),
+                ("postgresql", "PostgreSQL error exposed"),
+                ("mongodb", "MongoDB error exposed"),
+                ("syntax error", "Syntax error exposed"),
+                ("undefined variable", "Debug info exposed"),
+                ("/var/www/", "Server path disclosed"),
+                ("/home/", "Server path disclosed"),
+                ("c:\\", "Windows path disclosed"),
+            ]
+            
+            for pattern, message in disclosure_patterns:
+                if pattern in body_lower:
+                    pass1_findings.append({
+                        "severity": "medium",
+                        "category": "information_disclosure",
+                        "title": message,
+                        "description": f"Error response reveals internal information: {pattern}",
+                        "evidence": f"{response.get('status_code')} error on {request_path}",
+                        "recommendation": "Use generic error messages in production",
+                        "affected_endpoint": request_path
+                    })
+                    break  # One disclosure per response
+        
+        # Check for potential injection points
+        if "?" in request_path or request_body:
+            params = request_path.split("?")[1] if "?" in request_path else ""
+            if any(x in params.lower() or x in request_body.lower() for x in ["id=", "user=", "name=", "search=", "query=", "q="]):
+                pass1_findings.append({
+                    "severity": "info",
+                    "category": "injection_point",
+                    "title": "Potential injection point identified",
+                    "description": "User-controllable parameters detected - test for SQLi, XSS, etc.",
+                    "evidence": f"Parameters in {request_path}",
+                    "recommendation": "Test these parameters with injection payloads",
+                    "affected_endpoint": request_path
                 })
     
-    # Deduplicate findings
-    seen = set()
-    unique_findings = []
-    for f in findings:
-        key = (f["title"], f["category"])
-        if key not in seen:
-            seen.add(key)
-            unique_findings.append(f)
+    logger.info(f"Pass 1 complete: {len(pass1_findings)} raw findings")
     
-    # Calculate risk score
-    severity_weights = {"critical": 40, "high": 25, "medium": 10, "low": 5, "info": 1}
-    risk_score = min(100, sum(severity_weights.get(f["severity"], 5) for f in unique_findings))
+    # =========================================================================
+    # PASS 2: AI-Powered Contextual Analysis
+    # =========================================================================
+    logger.info("Pass 2: AI-powered contextual analysis")
     
-    # Generate recommendations
-    recommendations = []
-    categories_found = set(f["category"] for f in unique_findings)
+    pass2_findings = []
     
-    if "sensitive_data" in categories_found:
-        recommendations.append("Implement encryption for sensitive data in transit")
-    if "headers" in categories_found:
-        recommendations.append("Add comprehensive security headers to all responses")
-    if "cookies" in categories_found:
-        recommendations.append("Review and secure all cookie configurations")
-    if "cors" in categories_found:
-        recommendations.append("Implement restrictive CORS policy with explicit origins")
-    if "information_disclosure" in categories_found:
-        recommendations.append("Configure generic error handling for production")
-    
-    # AI-powered analysis if available
-    ai_analysis = None
-    if settings.gemini_api_key and len(traffic_log) > 0:
+    if settings.gemini_api_key and len(traffic_log) > 5:
         try:
             from google import genai
             from google.genai import types
             
             client = genai.Client(api_key=settings.gemini_api_key)
             
-            # Prepare traffic summary for AI
-            traffic_summary = []
-            for entry in traffic_log[:20]:
+            # Build traffic context for AI
+            traffic_context = []
+            for entry in traffic_log[:100]:  # Analyze up to 100 entries for AI context
                 req = entry.get("request", {})
                 resp = entry.get("response", {})
-                traffic_summary.append({
+                traffic_context.append({
                     "method": req.get("method"),
                     "path": req.get("path"),
                     "status": resp.get("status_code") if resp else None,
-                    "modified": entry.get("modified", False)
+                    "response_headers": list(resp.get("headers", {}).keys()) if resp else [],
+                    "has_body": bool(req.get("body_text"))
                 })
             
-            prompt = f"""Analyze this intercepted HTTP traffic from a Man-in-the-Middle proxy for security issues.
+            pass2_prompt = f"""You are a senior penetration tester analyzing HTTP traffic for security vulnerabilities.
 
-TRAFFIC SUMMARY ({len(traffic_log)} requests intercepted):
-{json.dumps(traffic_summary, indent=2)}
+TARGET: {proxy_config.get('target_host', 'Unknown')}:{proxy_config.get('target_port', 'Unknown')}
 
-RULES APPLIED: {len(rules)} interception rules active
+TRAFFIC SAMPLE (first 50 requests):
+{json.dumps(traffic_context[:30], indent=2)}
 
-PATTERN-BASED FINDINGS ALREADY IDENTIFIED:
-{json.dumps([{"title": f["title"], "severity": f["severity"]} for f in unique_findings[:10]], indent=2)}
+INITIAL FINDINGS COUNT: {len(pass1_findings)}
 
-Provide a brief security analysis (150 words max) covering:
-1. Overall security posture assessment
-2. Key concerns or attack vectors identified
-3. Specific recommendations for the application being tested
+Analyze this traffic for ADDITIONAL security issues that pattern matching might miss:
+1. Authentication/authorization weaknesses (missing auth on sensitive endpoints)
+2. Business logic flaws (predictable IDs, race conditions potential)
+3. API security issues (excessive data exposure, lack of rate limiting indicators)
+4. Session management weaknesses
+5. Information leakage in URL patterns or headers
 
-Focus on actionable insights for a security tester using this MITM workbench."""
+Return ONLY a JSON array of new findings. Each finding must have:
+{{"severity": "critical|high|medium|low", "category": "string", "title": "string", "description": "string", "evidence": "string", "affected_endpoint": "string"}}
 
+Return [] if no additional issues found. NO explanation, ONLY valid JSON array."""
+
+            response = client.models.generate_content(
+                model=settings.gemini_model_id,
+                contents=pass2_prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config={"thinking_level": "medium"},
+                    max_output_tokens=1500,
+                )
+            )
+            
+            if response and response.text:
+                try:
+                    # Extract JSON from response
+                    response_text = response.text.strip()
+                    if response_text.startswith("```json"):
+                        response_text = response_text[7:]
+                    if response_text.startswith("```"):
+                        response_text = response_text[3:]
+                    if response_text.endswith("```"):
+                        response_text = response_text[:-3]
+                    
+                    ai_findings = json.loads(response_text.strip())
+                    if isinstance(ai_findings, list):
+                        for af in ai_findings:
+                            if isinstance(af, dict) and "title" in af and "severity" in af:
+                                af["source"] = "ai_analysis"
+                                pass2_findings.append(af)
+                        logger.info(f"Pass 2 found {len(pass2_findings)} additional findings via AI")
+                except json.JSONDecodeError:
+                    logger.warning("Pass 2 AI response was not valid JSON")
+                    
+        except Exception as e:
+            logger.warning(f"Pass 2 AI analysis failed: {e}")
+    
+    # Combine Pass 1 and Pass 2 findings
+    all_findings = pass1_findings + pass2_findings
+    
+    # =========================================================================
+    # PASS 3: Verification, Deduplication & False Positive Removal
+    # =========================================================================
+    logger.info("Pass 3: Verification and deduplication")
+    
+    # Step 3a: Deduplicate by category+title
+    seen = set()
+    deduped_findings = []
+    for f in all_findings:
+        key = (f.get("title", ""), f.get("category", ""))
+        if key not in seen:
+            seen.add(key)
+            deduped_findings.append(f)
+    
+    logger.info(f"After basic dedup: {len(deduped_findings)} findings (from {len(all_findings)})")
+    
+    # Step 3b: Deduplicate similar findings per endpoint (preserve endpoint-specific findings)
+    # Use category + endpoint as key to keep findings on different endpoints separate
+    endpoint_dedup = {}
+    severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+
+    for f in deduped_findings:
+        category = f.get("category", "")
+        endpoint = f.get("affected_endpoint", f.get("path", "unknown"))
+        # Use category+endpoint as key to preserve endpoint-specific findings
+        dedup_key = (category, endpoint)
+
+        if dedup_key not in endpoint_dedup:
+            endpoint_dedup[dedup_key] = f
+        else:
+            # Same category AND endpoint - keep most severe
+            existing_severity = endpoint_dedup[dedup_key].get("severity", "low")
+            new_severity = f.get("severity", "low")
+            if severity_order.get(new_severity, 0) > severity_order.get(existing_severity, 0):
+                endpoint_dedup[dedup_key] = f
+
+    # Group security header findings for summary while keeping individual instances
+    header_findings_by_category = {}
+    other_findings = []
+    all_individual_findings = []  # Keep ALL individual findings
+
+    for f in endpoint_dedup.values():
+        category = f.get("category", "")
+        all_individual_findings.append(f)  # Preserve individual finding
+
+        if category.startswith("missing_"):
+            # Track for summary but don't replace individual findings
+            if category not in header_findings_by_category:
+                header_findings_by_category[category] = {
+                    "endpoints": [f.get("affected_endpoint", "unknown")],
+                    "count": 1,
+                    "severity": f.get("severity", "low")
+                }
+            else:
+                header_findings_by_category[category]["endpoints"].append(f.get("affected_endpoint", "unknown"))
+                header_findings_by_category[category]["count"] += 1
+
+    # Add occurrence count to individual findings for context
+    for f in all_individual_findings:
+        category = f.get("category", "")
+        if category in header_findings_by_category:
+            total_count = header_findings_by_category[category]["count"]
+            if total_count > 1:
+                f["total_occurrences"] = total_count
+
+    consolidated_findings = all_individual_findings
+    
+    logger.info(f"After consolidation: {len(consolidated_findings)} findings")
+    
+    # Step 3c: False Positive Filtering with AI (if available)
+    verified_findings = consolidated_findings
+    false_positives_removed = 0
+    
+    if settings.gemini_api_key and len(consolidated_findings) > 3:
+        try:
+            from google import genai
+            from google.genai import types
+            
+            client = genai.Client(api_key=settings.gemini_api_key)
+            
+            findings_for_review = [
+                {"index": i, "severity": f.get("severity"), "title": f.get("title"), "category": f.get("category")}
+                for i, f in enumerate(consolidated_findings)
+            ]
+            
+            verification_prompt = f"""As a security expert, review these findings for false positives.
+
+TARGET: {proxy_config.get('target_host', 'Unknown')}
+
+FINDINGS TO VERIFY:
+{json.dumps(findings_for_review, indent=2)}
+
+Return a JSON array of indices (integers) that are likely FALSE POSITIVES and should be removed.
+Consider:
+- "info" severity items that add no security value
+- Duplicate concepts with different wording
+- Items that are not actual security vulnerabilities
+- Low-risk findings that would overwhelm the report
+
+Only mark clear false positives. When in doubt, keep the finding.
+Return [] if all findings are valid.
+ONLY return a JSON array of integers, nothing else."""
+
+            response = client.models.generate_content(
+                model=settings.gemini_model_id,
+                contents=verification_prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config={"thinking_level": "low"},
+                    max_output_tokens=200,
+                )
+            )
+            
+            if response and response.text:
+                try:
+                    response_text = response.text.strip()
+                    if response_text.startswith("```"):
+                        response_text = response_text.split("```")[1]
+                        if response_text.startswith("json"):
+                            response_text = response_text[4:]
+                    
+                    fp_indices = json.loads(response_text.strip())
+                    if isinstance(fp_indices, list):
+                        fp_set = set(fp_indices)
+                        verified_findings = [
+                            f for i, f in enumerate(consolidated_findings) 
+                            if i not in fp_set
+                        ]
+                        false_positives_removed = len(fp_set)
+                        logger.info(f"Pass 3 verification removed {false_positives_removed} false positives")
+                except json.JSONDecodeError:
+                    logger.warning("Pass 3 verification response was not valid JSON")
+                    
+        except Exception as e:
+            logger.warning(f"Pass 3 AI verification failed: {e}")
+    
+    logger.info(f"Final finding count: {len(verified_findings)} (removed {false_positives_removed} FPs)")
+    
+    # =========================================================================
+    # Enrich and Generate Final Report
+    # =========================================================================
+    
+    # Enrich findings with vulnerability intelligence
+    enriched_findings = []
+    for finding in verified_findings:
+        enriched = enrich_finding_with_intelligence(finding)
+        enriched_findings.append(enriched)
+    
+    # Calculate risk score (weighted by severity)
+    severity_weights = {"critical": 40, "high": 25, "medium": 10, "low": 5, "info": 1}
+    risk_score = min(100, sum(severity_weights.get(f["severity"], 5) for f in enriched_findings))
+    
+    # Generate attack paths
+    attack_paths = generate_attack_paths(enriched_findings)
+    
+    # Get exploit references based on findings
+    exploit_keywords = []
+    for f in enriched_findings:
+        if "csp" in f.get("title", "").lower():
+            exploit_keywords.extend(["xss", "csp bypass"])
+        if "cors" in f.get("title", "").lower():
+            exploit_keywords.extend(["cors", "cross-origin"])
+        if "hsts" in f.get("title", "").lower():
+            exploit_keywords.extend(["ssl stripping", "hsts"])
+        if "cookie" in f.get("title", "").lower():
+            exploit_keywords.extend(["session hijacking", "cookie theft"])
+    
+    exploit_references = get_offline_exploit_references(list(set(exploit_keywords)))
+    
+    # Search CVE database for related vulnerabilities
+    cve_references = []
+    if detected_technologies:
+        try:
+            cve_keywords = list(detected_technologies)[:3]
+            cve_references = await search_cve_database(cve_keywords, max_results=5)
+        except Exception as e:
+            logger.warning(f"CVE lookup failed: {e}")
+    
+    # Generate enhanced recommendations
+    recommendations = []
+    categories_found = set(f["category"] for f in enriched_findings)
+    
+    if "sensitive_data" in categories_found:
+        recommendations.append({
+            "priority": "critical",
+            "title": "Protect Sensitive Data in Transit",
+            "description": "Implement TLS 1.3, avoid logging sensitive data, use secure storage"
+        })
+    if any("csp" in cat for cat in categories_found):
+        recommendations.append({
+            "priority": "high",
+            "title": "Implement Content Security Policy",
+            "description": "Add strict CSP to prevent XSS: default-src 'self'; script-src 'self'"
+        })
+    if any("hsts" in cat for cat in categories_found):
+        recommendations.append({
+            "priority": "high",
+            "title": "Enable HTTP Strict Transport Security",
+            "description": "Add HSTS header: Strict-Transport-Security: max-age=31536000; includeSubDomains"
+        })
+    if "cors" in categories_found:
+        recommendations.append({
+            "priority": "high",
+            "title": "Restrict CORS Policy",
+            "description": "Whitelist specific origins, never use * with credentials"
+        })
+    if any("cookie" in cat for cat in categories_found):
+        recommendations.append({
+            "priority": "medium",
+            "title": "Secure Cookie Configuration",
+            "description": "Add HttpOnly, Secure, and SameSite=Strict to all session cookies"
+        })
+    if "information_disclosure" in categories_found:
+        recommendations.append({
+            "priority": "medium",
+            "title": "Implement Proper Error Handling",
+            "description": "Return generic error messages, log details server-side only"
+        })
+    
+    # AI-powered comprehensive writeup
+    ai_writeup = None
+    ai_analysis = None
+    
+    if settings.gemini_api_key and len(traffic_log) > 0:
+        # Generate comprehensive AI writeup
+        traffic_summary = []
+        for entry in traffic_log[:30]:
+            req = entry.get("request", {})
+            resp = entry.get("response", {})
+            traffic_summary.append({
+                "method": req.get("method"),
+                "path": req.get("path"),
+                "status": resp.get("status_code") if resp else None
+            })
+        
+        ai_writeup = await generate_ai_exploitation_writeup(
+            enriched_findings,
+            traffic_summary,
+            proxy_config,
+            agent_activity
+        )
+
+        # Append deterministic agentic activity summary for report clarity
+        if agent_activity and ai_writeup:
+            exec_log = agent_activity.get("execution_log", [])
+            verifications = agent_activity.get("verification_results", [])
+            verification_lookup = {v.get("tool_id"): v for v in verifications}
+            captured = agent_activity.get("captured_data_summary", {})
+            decision_log = agent_activity.get("decision_log", [])
+
+            summary_lines = [
+                "",
+                "### Agentic Tool Activity Summary",
+                "",
+                f"- **Monitoring Active:** {agent_activity.get('monitoring_active', False)}",
+                f"- **Captured Data:** Credentials={captured.get('credentials', 0)}, Tokens={captured.get('tokens', 0)}, Cookies={captured.get('cookies', 0)}",
+                "",
+                "**Executed Tools:**",
+            ]
+
+            if exec_log:
+                for log in exec_log:
+                    verification = verification_lookup.get(log.get("tool_id"), {})
+                    summary_lines.append(
+                        f"- {log.get('tool_name', log.get('tool_id'))}: "
+                        f"success={log.get('success')} | findings={log.get('findings_count', 0)} | "
+                        f"verified={verification.get('success', False)}"
+                    )
+            else:
+                summary_lines.append("- None")
+
+            summary_lines.extend(["", "**Decision Log (latest session):**"]) 
+            if decision_log:
+                for entry in decision_log[:10]:
+                    summary_lines.append(
+                        f"- {entry.get('step', 'step')}: {entry.get('decision', 'decision')}"
+                        f"{(' | tool=' + entry.get('tool')) if entry.get('tool') else ''}"
+                        f"{(' | reason=' + entry.get('reason')) if entry.get('reason') else ''}"
+                    )
+            else:
+                summary_lines.append("- None")
+
+            ai_writeup = ai_writeup + "\n" + "\n".join(summary_lines)
+        
+        # Also generate quick summary
+        try:
+            from google import genai
+            from google.genai import types
+            
+            client = genai.Client(api_key=settings.gemini_api_key)
+            
+            findings_summary = [{"title": f["title"], "severity": f["severity"]} for f in enriched_findings[:10]]
+            
+            prompt = f"""As a penetration tester, provide a 2-sentence security posture summary for this application.
+
+Target: {proxy_config.get('target_host', 'Unknown')}:{proxy_config.get('target_port', 'Unknown')}
+Findings: {json.dumps(findings_summary)}
+Attack Paths Identified: {len(attack_paths)}
+
+Be direct and actionable. Example: "The application exhibits weak browser-side security with missing CSP and HttpOnly flags, creating a high-risk XSS attack surface. Immediate remediation of security headers is recommended before production deployment."
+"""
+            
             response = client.models.generate_content(
                 model=settings.gemini_model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
-                    max_output_tokens=500,
+                    thinking_config={"thinking_level": "medium"},
+                    max_output_tokens=200,
                 )
             )
             
@@ -5814,17 +6468,46 @@ Focus on actionable insights for a security tester using this MITM workbench."""
                 ai_analysis = response.text
                 
         except Exception as e:
-            logger.warning(f"AI analysis failed: {e}")
+            logger.warning(f"AI quick analysis failed: {e}")
+    
+    # Determine risk level
+    if risk_score >= 70:
+        risk_level = "critical"
+    elif risk_score >= 50:
+        risk_level = "high"
+    elif risk_score >= 25:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+    
+    # Calculate analysis stats
+    analysis_stats = {
+        "pass1_findings": len(pass1_findings),
+        "pass2_ai_findings": len(pass2_findings),
+        "after_dedup": len(consolidated_findings),
+        "false_positives_removed": false_positives_removed,
+        "final_count": len(enriched_findings)
+    }
+    
+    logger.info(f"3-pass analysis complete: {analysis_stats}")
     
     return {
-        "summary": f"Analyzed {len(traffic_log)} traffic entries, found {len(unique_findings)} security issues",
+        "summary": f"Analyzed {len(traffic_log)} traffic entries with 3-pass analysis, found {len(enriched_findings)} verified security issues",
         "risk_score": risk_score,
-        "risk_level": "critical" if risk_score >= 70 else "high" if risk_score >= 50 else "medium" if risk_score >= 25 else "low",
-        "findings": unique_findings,
+        "risk_level": risk_level,
+        "findings": enriched_findings,
         "recommendations": recommendations,
         "ai_analysis": ai_analysis,
+        "ai_writeup": ai_writeup,
+        "agent_activity": agent_activity or {},
+        "attack_paths": attack_paths,
+        "exploit_references": exploit_references[:5],
+        "cve_references": cve_references,
+        "detected_technologies": list(detected_technologies),
         "traffic_analyzed": len(traffic_log),
-        "rules_active": len(rules)
+        "rules_active": len(rules),
+        "analysis_passes": 3,
+        "analysis_stats": analysis_stats
     }
 
 
@@ -5832,13 +6515,93 @@ Focus on actionable insights for a security tester using this MITM workbench."""
 # Export MITM Analysis Reports
 # ============================================================================
 
+def _format_evidence_as_code(evidence: str) -> str:
+    """
+    Format evidence as a proper markdown code block with language detection.
+
+    Detects common code patterns and wraps in appropriate code block.
+    """
+    if not evidence or evidence == "N/A":
+        return "`N/A`"
+
+    # Check if it's multi-line or contains code patterns
+    is_multiline = "\n" in evidence
+
+    # Detect language patterns
+    lang = ""
+    evidence_lower = evidence.lower()
+
+    if any(p in evidence_lower for p in ["cookie:", "set-cookie:", "authorization:", "content-type:"]):
+        lang = "http"
+    elif evidence.strip().startswith("{") or evidence.strip().startswith("["):
+        lang = "json"
+    elif any(p in evidence_lower for p in ["<script", "<html", "<div", "</", "/>"]):
+        lang = "html"
+    elif any(p in evidence_lower for p in ["select ", "insert ", "update ", "delete ", " from ", " where "]):
+        lang = "sql"
+    elif any(p in evidence_lower for p in ["def ", "import ", "class ", "print(", "self."]):
+        lang = "python"
+    elif any(p in evidence_lower for p in ["function ", "const ", "let ", "var ", "=>"]):
+        lang = "javascript"
+    elif any(p in evidence_lower for p in ["curl ", "wget ", "bash", "#!/"]):
+        lang = "bash"
+    elif any(p in evidence_lower for p in ["get ", "post ", "put ", "patch ", "delete "]) and "http" in evidence_lower:
+        lang = "http"
+
+    # If multi-line or detected as code, use code block
+    if is_multiline or lang:
+        # Escape any existing code block markers
+        evidence_safe = evidence.replace("```", "\\`\\`\\`")
+        return f"```{lang}\n{evidence_safe}\n```"
+    else:
+        # Single line, use inline code
+        return f"`{evidence}`"
+
+
+def _format_execution_log_entry(entry: Dict) -> str:
+    """Format an execution log entry for markdown output."""
+    tool_id = entry.get("tool_id", "unknown")
+    success = "Success" if entry.get("success") else "Failed"
+    timestamp = entry.get("timestamp", "")
+
+    lines = [f"- **{tool_id}** ({success})"]
+
+    if timestamp:
+        lines[0] += f" - {timestamp}"
+
+    if entry.get("findings"):
+        lines.append(f"  - Findings: {len(entry['findings'])}")
+
+    if entry.get("captured_data"):
+        captured = entry["captured_data"]
+        creds = len(captured.get("credentials", []))
+        tokens = len(captured.get("tokens", []))
+        if creds or tokens:
+            lines.append(f"  - Captured: {creds} credentials, {tokens} tokens")
+
+    if entry.get("error"):
+        lines.append(f"  - Error: {entry['error']}")
+
+    return "\n".join(lines)
+
+
 def generate_mitm_markdown_report(
     proxy_config: Dict,
     traffic_log: List[Dict],
     rules: List[Dict],
-    analysis: Dict
+    analysis: Dict,
+    agentic_data: Optional[Dict] = None,
 ) -> str:
-    """Generate comprehensive Markdown report for MITM analysis."""
+    """Generate comprehensive Markdown report for MITM analysis.
+
+    Args:
+        proxy_config: Proxy configuration details
+        traffic_log: Captured traffic entries
+        rules: Active interception rules
+        analysis: Security analysis results
+        agentic_data: Optional dict with phases_executed, mitre_techniques,
+                      attack_chains_executed, reasoning_traces, execution_log
+    """
     lines = []
     
     # Header
@@ -5885,6 +6648,83 @@ def generate_mitm_markdown_report(
             "",
         ])
     
+    # Comprehensive AI Pentest Writeup (if available)
+    if analysis.get("ai_writeup"):
+        lines.extend([
+            "---",
+            "",
+            "## 📝 Comprehensive Penetration Test Report",
+            "",
+            analysis["ai_writeup"],
+            "",
+        ])
+    
+    # Attack Paths (if available)
+    attack_paths = analysis.get("attack_paths", [])
+    if attack_paths:
+        lines.extend([
+            "---",
+            "",
+            "## ⚔️ Attack Paths",
+            "",
+        ])
+        
+        for i, path in enumerate(attack_paths, 1):
+            lines.extend([
+                f"### Attack Path {i}: {path.get('name', 'Unknown')}",
+                "",
+                f"**Risk:** {path.get('risk', 'N/A')}",
+                "",
+                f"**Description:** {path.get('description', 'N/A')}",
+                "",
+            ])
+            steps = path.get('steps', [])
+            if steps:
+                lines.append("**Steps:**")
+                lines.append("")
+                for j, step in enumerate(steps, 1):
+                    lines.append(f"{j}. {step}")
+                lines.append("")
+        lines.append("")
+    
+    # CVE References (if available)
+    cve_refs = analysis.get("cve_references", [])
+    if cve_refs:
+        lines.extend([
+            "---",
+            "",
+            "## 🔍 Related CVE References",
+            "",
+            "| CVE ID | Description | Severity |",
+            "|--------|-------------|----------|",
+        ])
+        
+        for cve in cve_refs[:10]:
+            cve_id = cve.get('id', 'N/A')
+            desc = cve.get('description', 'N/A')[:80] + "..." if len(cve.get('description', '')) > 80 else cve.get('description', 'N/A')
+            severity = cve.get('severity', 'N/A')
+            lines.append(f"| {cve_id} | {desc} | {severity} |")
+        
+        lines.append("")
+    
+    # Exploit References (if available)
+    exploit_refs = analysis.get("exploit_references", [])
+    if exploit_refs:
+        lines.extend([
+            "---",
+            "",
+            "## 💣 Exploit Database References",
+            "",
+        ])
+        
+        for exploit in exploit_refs[:5]:
+            lines.extend([
+                f"- **{exploit.get('title', 'Unknown')}** ({exploit.get('platform', 'N/A')})",
+                f"  - Type: {exploit.get('type', 'N/A')}",
+                f"  - Source: {exploit.get('source', 'N/A')}",
+                "",
+            ])
+    
     # Security Findings
     findings = analysis.get("findings", [])
     if findings:
@@ -5920,14 +6760,22 @@ def generate_mitm_markdown_report(
                 ])
                 
                 for i, f in enumerate(sev_findings, 1):
+                    evidence = f.get('evidence', 'N/A')
+                    # Format evidence as code block if it's multi-line or contains code patterns
+                    evidence_formatted = _format_evidence_as_code(evidence)
+
                     lines.extend([
                         f"#### {i}. {f.get('title', 'Unknown')}",
                         "",
                         f"**Category:** {f.get('category', 'N/A')}",
                         "",
+                        f"**Affected Endpoint:** `{f.get('affected_endpoint', 'N/A')}`",
+                        "",
                         f"**Description:** {f.get('description', 'N/A')}",
                         "",
-                        f"**Evidence:** `{f.get('evidence', 'N/A')}`",
+                        "**Evidence:**",
+                        "",
+                        evidence_formatted,
                         "",
                         f"**Recommendation:** {f.get('recommendation', 'N/A')}",
                         "",
@@ -5986,15 +6834,180 @@ def generate_mitm_markdown_report(
         lines.extend([
             "---",
             "",
-            "## ✅ Recommendations",
+            "## Recommendations",
             "",
         ])
-        
+
         for i, rec in enumerate(recommendations, 1):
             lines.append(f"{i}. {rec}")
-        
+
         lines.append("")
-    
+
+    # =========================================================================
+    # Agentic Session Data (if available)
+    # =========================================================================
+    if agentic_data:
+        # MITRE ATT&CK Techniques
+        mitre = agentic_data.get("mitre_techniques")
+        if mitre and mitre.get("techniques_used"):
+            lines.extend([
+                "---",
+                "",
+                "## MITRE ATT&CK Mapping",
+                "",
+            ])
+
+            techniques = mitre.get("technique_details", [])
+            if techniques:
+                lines.append("| Technique ID | Name | Tactic | Description |")
+                lines.append("|--------------|------|--------|-------------|")
+                for tech in techniques:
+                    tid = tech.get("technique_id", "N/A")
+                    name = tech.get("name", "N/A")
+                    tactic = tech.get("tactic", "N/A")
+                    desc = tech.get("description", "")[:60] + "..." if len(tech.get("description", "")) > 60 else tech.get("description", "N/A")
+                    lines.append(f"| {tid} | {name} | {tactic} | {desc} |")
+                lines.append("")
+            else:
+                for tid in mitre.get("techniques_used", []):
+                    lines.append(f"- {tid}")
+                lines.append("")
+
+        # Attack Phases
+        phases = agentic_data.get("phases_executed")
+        if phases:
+            lines.extend([
+                "---",
+                "",
+                "## Attack Phase Progression",
+                "",
+                f"**Current Phase:** {phases.get('current_phase', 'N/A')}",
+                "",
+            ])
+
+            phase_history = phases.get("phase_history", [])
+            if phase_history:
+                lines.append("### Phase History")
+                lines.append("")
+                for ph in phase_history:
+                    phase_name = ph.get("phase", "N/A")
+                    timestamp = ph.get("timestamp", "")
+                    goals = ph.get("goals_achieved", [])
+                    lines.append(f"- **{phase_name}** ({timestamp})")
+                    for goal in goals:
+                        lines.append(f"  - Goal achieved: {goal}")
+                lines.append("")
+
+        # Attack Chains Executed
+        chains = agentic_data.get("attack_chains_executed")
+        if chains and chains.get("execution_history"):
+            lines.extend([
+                "---",
+                "",
+                "## Attack Chains Executed",
+                "",
+            ])
+
+            for exec_entry in chains.get("execution_history", [])[:10]:
+                chain_id = exec_entry.get("chain_id", "N/A")
+                status = exec_entry.get("status", "N/A")
+                started = exec_entry.get("started_at", "")
+                tools_run = len(exec_entry.get("tools_executed", []))
+                lines.append(f"- **{chain_id}** - {status} ({tools_run} tools) - {started}")
+            lines.append("")
+
+            stats = chains.get("stats")
+            if stats:
+                lines.append(f"**Total Chains Executed:** {stats.get('total_executions', 0)}")
+                lines.append(f"**Successful:** {stats.get('successful', 0)}")
+                lines.append(f"**Failed:** {stats.get('failed', 0)}")
+                lines.append("")
+
+        # Execution Log
+        exec_log = agentic_data.get("execution_log")
+        if exec_log:
+            lines.extend([
+                "---",
+                "",
+                "## Tool Execution Log",
+                "",
+            ])
+
+            for entry in exec_log[:20]:
+                lines.append(_format_execution_log_entry(entry))
+            if len(exec_log) > 20:
+                lines.append(f"- *... and {len(exec_log) - 20} more executions*")
+            lines.append("")
+
+        # Reasoning Traces Summary
+        reasoning = agentic_data.get("reasoning_traces")
+        if reasoning:
+            lines.extend([
+                "---",
+                "",
+                "## Agent Reasoning Traces",
+                "",
+                f"**Total Reasoning Chains:** {len(reasoning)}",
+                "",
+            ])
+
+            for trace in reasoning[:5]:
+                tool_id = trace.get("tool_id", "N/A")
+                decision = trace.get("decision", "N/A")
+                confidence = trace.get("confidence", 0)
+                lines.append(f"### {tool_id} (Confidence: {confidence:.1%})")
+                lines.append("")
+                lines.append(f"**Decision:** {decision}")
+                lines.append("")
+
+                steps = trace.get("steps", [])
+                if steps:
+                    lines.append("**Reasoning Steps:**")
+                    lines.append("")
+                    for i, step in enumerate(steps, 1):
+                        step_type = step.get("type", "")
+                        content = step.get("content", "")
+                        lines.append(f"{i}. **{step_type}:** {content[:200]}...")
+                    lines.append("")
+
+            if len(reasoning) > 5:
+                lines.append(f"*... and {len(reasoning) - 5} more reasoning chains*")
+                lines.append("")
+
+        # Captured Data Summary
+        captured = agentic_data.get("captured_data")
+        if captured:
+            creds = captured.get("credentials", [])
+            tokens = captured.get("tokens", [])
+            cookies = captured.get("cookies", [])
+
+            if creds or tokens or cookies:
+                lines.extend([
+                    "---",
+                    "",
+                    "## Captured Sensitive Data",
+                    "",
+                    f"- **Credentials:** {len(creds)}",
+                    f"- **Tokens:** {len(tokens)}",
+                    f"- **Session Cookies:** {len(cookies)}",
+                    "",
+                ])
+
+                if creds:
+                    lines.append("### Captured Credentials")
+                    lines.append("")
+                    lines.append("```")
+                    for cred in creds[:5]:
+                        # Redact actual passwords
+                        username = cred.get("username", "N/A")
+                        cred_type = cred.get("type", "N/A")
+                        source = cred.get("source", "N/A")
+                        lines.append(f"Type: {cred_type}, User: {username}, Source: {source}")
+                    if len(creds) > 5:
+                        lines.append(f"... and {len(creds) - 5} more")
+                    lines.append("```")
+                    lines.append("")
+
     # Footer
     lines.extend([
         "---",
@@ -6002,7 +7015,7 @@ def generate_mitm_markdown_report(
         "*Report generated by VRAgent MITM Workbench*",
         "",
     ])
-    
+
     return "\n".join(lines)
 
 
@@ -6019,6 +7032,7 @@ def generate_mitm_pdf_report(
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        import re
         from io import BytesIO
     except ImportError:
         logger.error("reportlab not installed")
@@ -6028,6 +7042,15 @@ def generate_mitm_pdf_report(
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
     styles = getSampleStyleSheet()
     story = []
+    writeup_body_style = ParagraphStyle(
+        'WriteupBody', parent=styles['Normal'], fontSize=11, leading=15
+    )
+    writeup_heading_style = ParagraphStyle(
+        'WriteupHeading', parent=styles['Heading3'], fontSize=14, spaceBefore=10, spaceAfter=6
+    )
+    writeup_subheading_style = ParagraphStyle(
+        'WriteupSubHeading', parent=styles['Heading4'], fontSize=12, spaceBefore=8, spaceAfter=4
+    )
     
     # Title
     title_style = ParagraphStyle(
@@ -6063,6 +7086,93 @@ def generate_mitm_pdf_report(
         ai_text = analysis["ai_analysis"].replace("**", "").replace("*", "")
         story.append(Paragraph(ai_text, styles['Normal']))
         story.append(Spacer(1, 20))
+    
+    # Comprehensive AI Pentest Writeup
+    if analysis.get("ai_writeup"):
+        story.append(PageBreak())
+        story.append(Paragraph("Comprehensive Penetration Test Report", styles['Heading2']))
+        writeup_text = analysis["ai_writeup"]
+
+        def _fmt_bold(text: str) -> str:
+            return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+
+        for line in writeup_text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                story.append(Spacer(1, 6))
+                continue
+
+            if stripped.startswith("####"):
+                story.append(Paragraph(stripped.lstrip("#").strip(), writeup_subheading_style))
+                continue
+            if stripped.startswith("###"):
+                story.append(Paragraph(stripped.lstrip("#").strip(), writeup_heading_style))
+                continue
+            if stripped.startswith("##"):
+                story.append(Paragraph(stripped.lstrip("#").strip(), styles['Heading2']))
+                continue
+            if stripped.startswith("#"):
+                story.append(Paragraph(stripped.lstrip("#").strip(), styles['Heading1']))
+                continue
+
+            numbered = re.match(r"^(\d+)\.\s+(.*)$", stripped)
+            if numbered:
+                story.append(Paragraph(_fmt_bold(numbered.group(2)), writeup_body_style, bulletText=f"{numbered.group(1)}."))
+                continue
+
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                story.append(Paragraph(_fmt_bold(stripped[2:]), writeup_body_style, bulletText="•"))
+                continue
+
+            story.append(Paragraph(_fmt_bold(stripped), writeup_body_style))
+        story.append(Spacer(1, 20))
+    
+    # Attack Paths
+    attack_paths = analysis.get("attack_paths", [])
+    if attack_paths:
+        story.append(Paragraph("Attack Paths", styles['Heading2']))
+        for i, path in enumerate(attack_paths, 1):
+            story.append(Paragraph(f"{i}. {path.get('name', 'Unknown')} (Risk: {path.get('risk', 'N/A')})", styles['Heading3']))
+            story.append(Paragraph(path.get('description', 'N/A'), styles['Normal']))
+            steps = path.get('steps', [])
+            if steps:
+                story.append(Paragraph("Steps:", styles['Normal']))
+                for j, step in enumerate(steps, 1):
+                    story.append(Paragraph(f"    {j}. {step}", styles['Normal']))
+            story.append(Spacer(1, 10))
+        story.append(Spacer(1, 10))
+    
+    # CVE References
+    cve_refs = analysis.get("cve_references", [])
+    if cve_refs:
+        story.append(Paragraph("Related CVE References", styles['Heading2']))
+        cve_data = [["CVE ID", "Severity", "Description"]]
+        for cve in cve_refs[:10]:
+            desc = cve.get('description', 'N/A')[:60] + "..." if len(cve.get('description', '')) > 60 else cve.get('description', 'N/A')
+            cve_data.append([cve.get('id', 'N/A'), cve.get('severity', 'N/A'), desc])
+        
+        cve_table = Table(cve_data, colWidths=[1.2*inch, 0.8*inch, 4*inch])
+        cve_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#333333')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('PADDING', (0, 0), (-1, -1), 4),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(cve_table)
+        story.append(Spacer(1, 20))
+    
+    # Exploit References
+    exploit_refs = analysis.get("exploit_references", [])
+    if exploit_refs:
+        story.append(Paragraph("Exploit Database References", styles['Heading2']))
+        for exploit in exploit_refs[:5]:
+            story.append(Paragraph(f"• {exploit.get('title', 'Unknown')} ({exploit.get('platform', 'N/A')})", styles['Normal']))
+            story.append(Paragraph(f"  Type: {exploit.get('type', 'N/A')} | Source: {exploit.get('source', 'N/A')}", styles['Normal']))
+            story.append(Spacer(1, 6))
+        story.append(Spacer(1, 10))
     
     # Findings
     findings = analysis.get("findings", [])
@@ -6104,6 +7214,7 @@ def generate_mitm_docx_report(
         from docx.shared import Inches, Pt
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from io import BytesIO
+        import re
     except ImportError:
         logger.error("python-docx not installed")
         return b"PK placeholder"
@@ -6138,6 +7249,102 @@ def generate_mitm_docx_report(
     if analysis.get("ai_analysis"):
         doc.add_heading("AI Security Analysis", level=1)
         doc.add_paragraph(analysis["ai_analysis"])
+    
+    # Comprehensive AI Pentest Writeup
+    if analysis.get("ai_writeup"):
+        doc.add_page_break()
+        doc.add_heading("Comprehensive Penetration Test Report", level=1)
+        writeup_text = analysis["ai_writeup"]
+        def _add_bold_runs(paragraph, text: str):
+            parts = text.split("**")
+            for j, part in enumerate(parts):
+                run = paragraph.add_run(part)
+                if j % 2 == 1:
+                    run.bold = True
+                run.font.size = Pt(11)
+
+        for line in writeup_text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                doc.add_paragraph()
+                continue
+
+            if stripped.startswith("####"):
+                doc.add_heading(stripped.lstrip("#").strip(), level=4)
+                continue
+            if stripped.startswith("###"):
+                doc.add_heading(stripped.lstrip("#").strip(), level=3)
+                continue
+            if stripped.startswith("##"):
+                doc.add_heading(stripped.lstrip("#").strip(), level=2)
+                continue
+            if stripped.startswith("#"):
+                doc.add_heading(stripped.lstrip("#").strip(), level=1)
+                continue
+
+            numbered = re.match(r"^(\d+)\.\s+(.*)$", stripped)
+            if numbered:
+                p = doc.add_paragraph(style='List Number')
+                _add_bold_runs(p, numbered.group(2))
+                continue
+
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                p = doc.add_paragraph(style='List Bullet')
+                _add_bold_runs(p, stripped[2:])
+                continue
+
+            p = doc.add_paragraph()
+            _add_bold_runs(p, stripped)
+    
+    # Attack Paths
+    attack_paths = analysis.get("attack_paths", [])
+    if attack_paths:
+        doc.add_heading("Attack Paths", level=1)
+        for i, path in enumerate(attack_paths, 1):
+            doc.add_heading(f"{i}. {path.get('name', 'Unknown')}", level=2)
+            p = doc.add_paragraph()
+            p.add_run("Risk Level: ").bold = True
+            p.add_run(path.get('risk', 'N/A'))
+            doc.add_paragraph(path.get('description', 'N/A'))
+            steps = path.get('steps', [])
+            if steps:
+                p = doc.add_paragraph()
+                p.add_run("Attack Steps:").bold = True
+                for j, step in enumerate(steps, 1):
+                    doc.add_paragraph(f"{j}. {step}", style='List Number')
+            doc.add_paragraph()
+    
+    # CVE References
+    cve_refs = analysis.get("cve_references", [])
+    if cve_refs:
+        doc.add_heading("Related CVE References", level=1)
+        cve_table = doc.add_table(rows=1, cols=3)
+        cve_table.style = 'Table Grid'
+        header_cells = cve_table.rows[0].cells
+        header_cells[0].text = "CVE ID"
+        header_cells[1].text = "Severity"
+        header_cells[2].text = "Description"
+        for cell in header_cells:
+            cell.paragraphs[0].runs[0].bold = True
+        
+        for cve in cve_refs[:10]:
+            row = cve_table.add_row().cells
+            row[0].text = cve.get('id', 'N/A')
+            row[1].text = cve.get('severity', 'N/A')
+            desc = cve.get('description', 'N/A')
+            row[2].text = desc[:80] + "..." if len(desc) > 80 else desc
+        doc.add_paragraph()
+    
+    # Exploit References
+    exploit_refs = analysis.get("exploit_references", [])
+    if exploit_refs:
+        doc.add_heading("Exploit Database References", level=1)
+        for exploit in exploit_refs[:5]:
+            p = doc.add_paragraph()
+            p.add_run(f"• {exploit.get('title', 'Unknown')}").bold = True
+            p.add_run(f" ({exploit.get('platform', 'N/A')})")
+            doc.add_paragraph(f"  Type: {exploit.get('type', 'N/A')} | Source: {exploit.get('source', 'N/A')}")
+        doc.add_paragraph()
     
     # Findings
     findings = analysis.get("findings", [])
@@ -6295,7 +7502,7 @@ Return ONLY valid JSON, no explanation."""
             model=settings.gemini_model_id,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.1,
+                thinking_config={"thinking_level": "low"},
                 max_output_tokens=500,
             )
         )
@@ -6450,7 +7657,7 @@ async def get_ai_traffic_suggestions(
     has_cookies = False
     error_count = 0
 
-    for entry in traffic_log[:100]:
+    for entry in traffic_log[:250]:  # Analyze up to 250 entries for statistics
         req = entry.get("request", {})
         resp = entry.get("response", {}) or {}
 
@@ -6680,7 +7887,7 @@ Return ONLY JSON."""
                 model=settings.gemini_model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
+                    thinking_config={"thinking_level": "medium"},
                     max_output_tokens=500,
                 )
             )
@@ -7040,7 +8247,7 @@ class MITMIntelligenceAnalyzer:
                 return json.loads(body) if isinstance(body, str) else body
             elif "x-www-form-urlencoded" in content_type:
                 return self._parse_query_string(body)
-        except:
+        except (json.JSONDecodeError, ValueError, TypeError):
             pass
         return {}
     
@@ -7155,7 +8362,7 @@ Return ONLY valid JSON."""
                     model=settings.gemini_model_id,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.2,
+                        thinking_config={"thinking_level": "medium"},
                         max_output_tokens=500,
                     )
                 )
@@ -7441,7 +8648,7 @@ Return ONLY valid JSON."""
                     model=settings.gemini_model_id,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.3,
+                        thinking_config={"thinking_level": "medium"},
                         max_output_tokens=800,
                     )
                 )

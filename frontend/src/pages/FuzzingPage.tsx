@@ -116,9 +116,15 @@ import CableIcon from "@mui/icons-material/Cable";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import RadarIcon from "@mui/icons-material/Radar";
+import ExploreIcon from "@mui/icons-material/Explore";
+import GpsFixedIcon from "@mui/icons-material/GpsFixed";
+import SettingsIcon from "@mui/icons-material/Settings";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import CloseIcon from "@mui/icons-material/Close";
+import BusinessIcon from "@mui/icons-material/Business";
 import ReactMarkdown from "react-markdown";
 import { ChatCodeBlock } from "../components/ChatCodeBlock";
-import { fuzzer, FuzzerResponse, FuzzerConfig as APIFuzzerConfig } from "../api/client";
+import { fuzzer, FuzzerResponse, FuzzerConfig as APIFuzzerConfig, zapClient, ZAPScanRequest, ZAPScanProgress, ZAPAlert, ZAPScanSummary, ZAPScanDetail, ZAPAIAnalysis } from "../api/client";
 import { jsPDF } from "jspdf";
 import { 
   Document as DocxDocument, 
@@ -955,6 +961,30 @@ const FuzzingPage: React.FC = () => {
   const [coverageNewSessionUrl, setCoverageNewSessionUrl] = useState("");
   const [showCoverageReport, setShowCoverageReport] = useState(false);
   const [coverageReportContent, setCoverageReportContent] = useState("");
+  
+  // ============================================================================
+  // ZAP (OWASP DAST) STATE
+  // ============================================================================
+  const [zapTargetUrl, setZapTargetUrl] = useState("");
+  const [zapScanType, setZapScanType] = useState<"spider" | "ajax_spider" | "active_scan" | "full_scan">("full_scan");
+  const [zapMaxDepth, setZapMaxDepth] = useState(5);
+  const [zapRecurse, setZapRecurse] = useState(true);
+  const [zapIsRunning, setZapIsRunning] = useState(false);
+  const [zapProgress, setZapProgress] = useState<ZAPScanProgress | null>(null);
+  const [zapAlerts, setZapAlerts] = useState<ZAPAlert[]>([]);
+  const [zapScans, setZapScans] = useState<ZAPScanSummary[]>([]);
+  const [zapSelectedScan, setZapSelectedScan] = useState<ZAPScanDetail | null>(null);
+  const [zapHealthy, setZapHealthy] = useState<boolean | null>(null);
+  const [zapLoading, setZapLoading] = useState(false);
+  const [zapAlertFilter, setZapAlertFilter] = useState<string>("all");
+  const [zapError, setZapError] = useState<string | null>(null);
+  const zapAbortRef = useRef<AbortController | null>(null);
+  
+  // ZAP AI Analysis state
+  const [zapAiAnalysis, setZapAiAnalysis] = useState<ZAPAIAnalysis | null>(null);
+  const [zapAiAnalyzing, setZapAiAnalyzing] = useState(false);
+  const [zapAiError, setZapAiError] = useState<string | null>(null);
+  const [zapShowAiPanel, setZapShowAiPanel] = useState(false);
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -2226,6 +2256,171 @@ const FuzzingPage: React.FC = () => {
     },
   ];
 
+  // ============================================================================
+  // ZAP (OWASP DAST) FUNCTIONS
+  // ============================================================================
+  
+  // Check ZAP health on mount
+  useEffect(() => {
+    const checkZapHealth = async () => {
+      try {
+        const health = await zapClient.getHealth();
+        setZapHealthy(health.available);
+      } catch {
+        setZapHealthy(false);
+      }
+    };
+    checkZapHealth();
+  }, []);
+
+  // Load ZAP scans
+  const loadZapScans = async () => {
+    setZapLoading(true);
+    try {
+      const result = await zapClient.getSavedScans();
+      setZapScans(result.scans);
+    } catch (err: any) {
+      setZapError(err.message || "Failed to load scans");
+    } finally {
+      setZapLoading(false);
+    }
+  };
+
+  // Start ZAP scan
+  const startZapScan = async () => {
+    if (!zapTargetUrl) {
+      setZapError("Target URL is required");
+      return;
+    }
+    setZapIsRunning(true);
+    setZapError(null);
+    setZapAlerts([]);
+    setZapProgress(null);
+
+    try {
+      const request: ZAPScanRequest = {
+        target_url: zapTargetUrl,
+        scan_type: zapScanType,
+        recurse: zapRecurse,
+        max_depth: zapMaxDepth,
+      };
+
+      // Use startScan with callbacks
+      const controller = zapClient.startScan(
+        request,
+        (progress: ZAPScanProgress) => {
+          setZapProgress(progress);
+          if (progress.alerts) {
+            setZapAlerts(progress.alerts);
+          }
+        },
+        (error: string) => {
+          setZapError(error);
+          setZapIsRunning(false);
+        },
+        () => {
+          setZapIsRunning(false);
+          loadZapScans();
+        }
+      );
+
+      zapAbortRef.current = controller;
+    } catch (err: any) {
+      setZapError(err.message || "Failed to start scan");
+      setZapIsRunning(false);
+    }
+  };
+
+  // Stop ZAP scan
+  const stopZapScan = () => {
+    if (zapAbortRef.current) {
+      zapAbortRef.current.abort();
+      zapAbortRef.current = null;
+    }
+    setZapIsRunning(false);
+  };
+
+  // Load scan details
+  const loadZapScanDetails = async (scanId: number) => {
+    setZapLoading(true);
+    try {
+      const detail = await zapClient.getSavedScan(scanId);
+      setZapSelectedScan(detail);
+      // Convert findings to ZAPAlert format for display
+      if (detail.alerts) {
+        const alerts: ZAPAlert[] = detail.alerts.map((f) => ({
+          id: f.id,
+          name: f.title,
+          risk: f.severity,
+          risk_code: f.severity === "High" ? 3 : f.severity === "Medium" ? 2 : f.severity === "Low" ? 1 : 0,
+          confidence: "Medium",
+          url: f.endpoint,
+          method: "GET",
+          description: f.description,
+          solution: f.recommendation,
+          cwe_id: f.cwe_id,
+        }));
+        setZapAlerts(alerts);
+      }
+    } catch (err: any) {
+      setZapError(err.message || "Failed to load scan details");
+    } finally {
+      setZapLoading(false);
+    }
+  };
+
+  // Get severity color for ZAP alerts
+  const getZapSeverityColor = (risk: string) => {
+    switch (risk.toLowerCase()) {
+      case "high": return "error";
+      case "medium": return "warning";
+      case "low": return "info";
+      case "informational": return "default";
+      default: return "default";
+    }
+  };
+
+  // Filter ZAP alerts
+  const filteredZapAlerts = zapAlertFilter === "all" 
+    ? zapAlerts 
+    : zapAlerts.filter(a => a.risk.toLowerCase() === zapAlertFilter);
+
+  // Run ZAP AI Analysis
+  const runZapAiAnalysis = async () => {
+    if (zapAlerts.length === 0) {
+      setZapAiError("No alerts to analyze. Run a scan first.");
+      return;
+    }
+    
+    setZapAiAnalyzing(true);
+    setZapAiError(null);
+    setZapShowAiPanel(true);
+    
+    try {
+      const analysis = await zapClient.aiAnalyze(zapAlerts, zapTargetUrl, {
+        includeExploitChains: true,
+        includeRemediation: true,
+        includeBusinessImpact: true,
+      });
+      setZapAiAnalysis(analysis);
+    } catch (err: any) {
+      setZapAiError(err.message || "AI analysis failed");
+    } finally {
+      setZapAiAnalyzing(false);
+    }
+  };
+
+  // Get risk level color
+  const getRiskLevelColor = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case "critical": return "#f44336";
+      case "high": return "#ff5722";
+      case "medium": return "#ff9800";
+      case "low": return "#4caf50";
+      default: return "#9e9e9e";
+    }
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -2233,7 +2428,7 @@ const FuzzingPage: React.FC = () => {
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
           <Button
             component={Link}
-            to="/network"
+            to="/dynamic"
             startIcon={<ArrowBackIcon />}
           >
             Back to Network Hub
@@ -2352,7 +2547,7 @@ const FuzzingPage: React.FC = () => {
         {/* 🔥 CYBERPUNK Agentic Fuzzer Banner 🔥 */}
         <Paper
           component={Link}
-          to="/network/agentic-fuzzer"
+          to="/dynamic/agentic-fuzzer"
           sx={{
             mb: 3,
             p: 0,
@@ -2431,32 +2626,12 @@ const FuzzingPage: React.FC = () => {
               "0%": { transform: "scale(1)", filter: "drop-shadow(0 0 10px #ff00ff)" },
               "100%": { transform: "scale(1.1)", filter: "drop-shadow(0 0 20px #00ffff)" },
             },
-            "@keyframes scanLine": {
-              "0%": { top: "-100%" },
-              "100%": { top: "200%" },
-            },
             "@keyframes dataStream": {
               "0%": { backgroundPosition: "0% 0%" },
               "100%": { backgroundPosition: "0% 100%" },
             },
           }}
         >
-          {/* Scanning Line Effect */}
-          <Box
-            className="cyber-scan-line"
-            sx={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              height: "2px",
-              background: "linear-gradient(90deg, transparent, #00ffff, #ff00ff, #00ffff, transparent)",
-              boxShadow: "0 0 20px #00ffff, 0 0 40px #ff00ff",
-              animation: "scanLine 2s linear infinite",
-              opacity: 0.6,
-              zIndex: 10,
-            }}
-          />
-
           {/* Corner Decorations */}
           <Box sx={{ position: "absolute", top: 0, left: 0, width: 40, height: 40, borderTop: "3px solid #00ffff", borderLeft: "3px solid #00ffff", zIndex: 5 }} />
           <Box sx={{ position: "absolute", top: 0, right: 20, width: 40, height: 40, borderTop: "3px solid #ff00ff", borderRight: "3px solid #ff00ff", zIndex: 5 }} />

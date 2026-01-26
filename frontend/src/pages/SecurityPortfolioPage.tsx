@@ -492,6 +492,186 @@ const projectIdeasByLevel = [
   },
 ];
 
+const starterRoadmap = [
+  {
+    phase: "Days 1-14: Foundations",
+    color: "#6366f1",
+    focus: "Pick a role target and set up your workspace",
+    actions: [
+      "Choose one role track and 1-2 focus topics",
+      "Create a GitHub profile and a portfolio README",
+      "Set up a lab or CTF account and document the setup",
+      "Draft a simple portfolio outline with sections",
+    ],
+    output: "One public repo and a one-page portfolio outline",
+  },
+  {
+    phase: "Days 15-45: Build and Document",
+    color: "#f59e0b",
+    focus: "Ship 1-2 small projects with evidence",
+    actions: [
+      "Pick a beginner project you can finish in 1-2 weeks",
+      "Capture evidence as you go (logs, screenshots, notes)",
+      "Write a short case study using the template below",
+      "Ask for peer feedback and iterate",
+    ],
+    output: "One finished project with a clear writeup",
+  },
+  {
+    phase: "Days 46-90: Polish and Publish",
+    color: "#10b981",
+    focus: "Improve presentation and add one advanced signal",
+    actions: [
+      "Add a second project or expand the first with new features",
+      "Create a short demo video or GIF",
+      "Align resume bullets with your strongest work",
+      "Publish a blog post or CTF writeup",
+    ],
+    output: "Two strong artifacts and a polished presentation",
+  },
+];
+
+const projectSelectionMatrix = [
+  {
+    criteria: "Role alignment",
+    why: "Shows relevance to the jobs you want",
+    greenFlag: "Matches keywords in target job listings",
+    risk: "Interesting but unrelated to your goal role",
+  },
+  {
+    criteria: "Evidence depth",
+    why: "Proof-of-work beats claims",
+    greenFlag: "Repro steps, artifacts, and validation",
+    risk: "No screenshots, logs, or results",
+  },
+  {
+    criteria: "Scope and finishability",
+    why: "Completed work beats big unfinished ideas",
+    greenFlag: "Clear 1-3 week scope with milestones",
+    risk: "Overly broad or vague objectives",
+  },
+  {
+    criteria: "Original thinking",
+    why: "Employers want your analysis, not copy-paste",
+    greenFlag: "Unique twist, insights, or automation",
+    risk: "Generic tutorial with no added value",
+  },
+  {
+    criteria: "Impact and measurement",
+    why: "Impact makes the project memorable",
+    greenFlag: "Shows measurable outcomes or improvements",
+    risk: "No results or validation steps",
+  },
+  {
+    criteria: "Safety and ethics",
+    why: "Professional judgment is required",
+    greenFlag: "Lab-only scope and clear permission",
+    risk: "Unclear authorization or live targets",
+  },
+];
+
+const portfolioEntryTemplate = [
+  "Project title + one-line impact statement",
+  "Goal and scope (what is in/out of scope)",
+  "Tools and environment used",
+  "Methodology summary (3-5 steps)",
+  "Key findings or outcomes with evidence",
+  "Validation steps and limitations",
+  "Lessons learned and next improvements",
+  "Links to code, writeup, and demo",
+  "Status and last updated date",
+];
+
+const impactStatementFormula = "Built [thing] to solve [problem], resulting in [impact] measured by [metric].";
+
+const resumeAlignmentTips = [
+  "Mirror the job description keywords in your project summaries",
+  "Link each resume bullet to a portfolio artifact or writeup",
+  "Lead with outcomes (risk reduced, time saved, findings found)",
+  "Keep each project to 1-2 strong resume bullets",
+  "Use consistent names for tools and projects across all pages",
+  "Add a short skills matrix tied to your portfolio sections",
+];
+
+const atsKeywordBanks = [
+  { role: "SOC / Blue Team", keywords: ["SIEM", "alert triage", "incident response", "MITRE ATT&CK", "EDR", "log analysis"] },
+  { role: "AppSec", keywords: ["SAST", "DAST", "code review", "threat modeling", "OWASP", "secure SDLC"] },
+  { role: "Cloud Security", keywords: ["IAM", "CSPM", "CloudTrail", "Terraform", "Kubernetes", "least privilege"] },
+  { role: "Pentest / Red Team", keywords: ["recon", "Nmap", "Burp Suite", "exploitation", "reporting", "post-exploitation"] },
+];
+
+const redactionChecklist = [
+  "Remove tokens, API keys, credentials, and secrets",
+  "Replace real IPs, hostnames, and domains with placeholders",
+  "Redact client or employer names unless you have permission",
+  "Blur personal data in screenshots (names, emails, IDs)",
+  "Sanitize logs to remove session IDs and access tokens",
+  "Avoid publishing exploit code for unpatched systems",
+];
+
+const publishingChecklist = [
+  "Confirm project goal in the first 2 sentences of the README",
+  "Include setup steps and a short demo command",
+  "Add screenshots or short demos of results",
+  "List dependencies and versions",
+  "State scope and limitations clearly",
+  "Run the redaction checklist before publishing",
+  "Add a license and contact info",
+  "Tag a release or version to mark completion",
+];
+
+const portfolioAuditChecklist = [
+  "Check for broken links and outdated screenshots",
+  "Update your top 3 featured projects",
+  "Ensure your pinned repos match your target role",
+  "Remove or archive stale projects with a note",
+  "Refresh your bio, skills, and contact details",
+  "Confirm your resume links still work",
+];
+
+const pitchTemplate = [
+  "Who you are and your target role",
+  "Your strongest project and the outcome",
+  "One technical strength you want to highlight",
+  "How you validated or measured results",
+  "What you are working on next",
+];
+
+const pitchDoDont = [
+  "Do keep it under 45-60 seconds",
+  "Do lead with impact, not tools",
+  "Do mention scope and ethics briefly",
+  "Do not list every project in detail",
+  "Do not claim skills you cannot demo",
+];
+
+const faqItems = [
+  {
+    question: "How many projects do I need?",
+    answer: "Two to four strong, well-documented projects beat ten weak ones. Quality and proof-of-work matter most.",
+  },
+  {
+    question: "Should I include CTF writeups?",
+    answer: "Yes, if they show methodology and learning. Focus on retired boxes or post-event writeups only.",
+  },
+  {
+    question: "What if I am a beginner with no experience?",
+    answer: "Start with a small lab setup, a simple tool, and a clear writeup. Consistency matters more than scale.",
+  },
+  {
+    question: "Do certifications replace a portfolio?",
+    answer: "Certifications help, but a portfolio proves you can apply the skills in real scenarios.",
+  },
+  {
+    question: "Can I use work projects?",
+    answer: "Only if you have written permission and can fully redact sensitive details. When in doubt, do not publish.",
+  },
+  {
+    question: "Where should I host my portfolio?",
+    answer: "GitHub Pages or a simple site is enough. Focus on clarity and evidence over fancy design.",
+  },
+];
+
 const reviewerChecklist = [
   "Is the project goal crystal clear within the first 1-2 sentences?",
   "Can I reproduce the results quickly without extensive troubleshooting?",
@@ -864,7 +1044,7 @@ export default function SecurityPortfolioPage() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  const pageContext = `Building a Security Portfolio Guide - How to build an impressive cybersecurity portfolio including GitHub projects (security tools, CTF writeups, home lab configs), technical blog writing (walkthroughs, tutorials, research), CTF achievements (HackTheBox, TryHackMe, CTFtime), and bug bounty/research (CVEs, hall of fame, case studies). Covers role-focused strategy, case study templates, evidence artifacts, metrics that matter, safety guidelines, maintenance cadence, online presence, and common portfolio mistakes to avoid.`;
+  const pageContext = `Building a Security Portfolio Guide - How to build an impressive cybersecurity portfolio including GitHub projects (security tools, CTF writeups, home lab configs), technical blog writing (walkthroughs, tutorials, research), CTF achievements (HackTheBox, TryHackMe, CTFtime), and bug bounty/research (CVEs, hall of fame, case studies). Covers a starter roadmap, project selection matrix, role-focused strategy, portfolio layout blueprint, case study and project entry templates, portfolio pitch, publishing checklist, evidence artifacts, metrics that matter, redaction guidance, resume alignment, safety guidelines, maintenance cadence, online presence, and common portfolio mistakes to avoid.`;
 
   // Quick stats for visual impact
   const quickStats = [
@@ -1005,18 +1185,27 @@ export default function SecurityPortfolioPage() {
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {[
               { label: "Components", id: "components" },
+              { label: "Roadmap", id: "starter-roadmap" },
               { label: "Role Focus", id: "role-focus" },
               { label: "Blueprint", id: "blueprint" },
               { label: "Project Ideas", id: "project-ideas" },
+              { label: "Selection Matrix", id: "selection-matrix" },
               { label: "GitHub Examples", id: "github-examples" },
               { label: "CTF Platforms", id: "ctf-platforms" },
               { label: "Home Labs", id: "home-labs" },
               { label: "Case Study", id: "case-study" },
+              { label: "Entry Template", id: "entry-template" },
+              { label: "Portfolio Pitch", id: "portfolio-pitch" },
+              { label: "Publishing", id: "publishing-checklist" },
               { label: "Safety", id: "safety" },
+              { label: "Redaction", id: "redaction-checklist" },
+              { label: "Resume Alignment", id: "resume-alignment" },
+              { label: "Portfolio Audit", id: "portfolio-audit" },
               { label: "Mistakes", id: "mistakes" },
               { label: "UK Tips", id: "uk-tips" },
               { label: "Industry Focus", id: "industry-focus" },
               { label: "Platforms", id: "platforms" },
+              { label: "FAQ", id: "portfolio-faq" },
             ].map((nav) => (
               <Chip
                 key={nav.id}
@@ -1078,6 +1267,92 @@ export default function SecurityPortfolioPage() {
               </Box>
             </Box>
           </Box>
+        </Paper>
+
+        {/* Starter Roadmap */}
+        <Paper
+          id="starter-roadmap"
+          sx={{
+            p: 4,
+            mb: 5,
+            borderRadius: 4,
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            background: `linear-gradient(135deg, ${alpha("#6366f1", 0.03)} 0%, ${alpha("#10b981", 0.03)} 100%)`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2,
+                bgcolor: alpha("#6366f1", 0.1),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <RouteIcon sx={{ color: "#6366f1", fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                Starter Roadmap (First 90 Days)
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                If you are starting from zero, follow this simple timeline. It focuses on shipping small, clear projects
+                and building a consistent habit of documenting your work.
+              </Typography>
+            </Box>
+          </Box>
+          <Grid container spacing={2}>
+            {starterRoadmap.map((phase) => (
+              <Grid item xs={12} md={4} key={phase.phase}>
+                <Paper
+                  sx={{
+                    p: 2.5,
+                    height: "100%",
+                    borderRadius: 3,
+                    border: `1px solid ${alpha(phase.color, 0.25)}`,
+                    bgcolor: alpha(phase.color, 0.05),
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: phase.color, mb: 0.5 }}>
+                    {phase.phase}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    {phase.focus}
+                  </Typography>
+                  <List dense>
+                    {phase.actions.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: phase.color }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1,
+                      borderRadius: 2,
+                      bgcolor: alpha(phase.color, 0.12),
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: phase.color }}>
+                      Output
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25 }}>
+                      {phase.output}
+                    </Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
         </Paper>
 
         {/* Section Divider */}
@@ -1486,6 +1761,61 @@ export default function SecurityPortfolioPage() {
           ))}
         </Grid>
 
+        {/* Project Selection Matrix */}
+        <Typography id="selection-matrix" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+          🧭 Project Selection Matrix
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Use this quick matrix to choose projects that are finishable, relevant, and easy to prove.
+        </Typography>
+        <Paper
+          sx={{
+            p: 0,
+            mb: 5,
+            borderRadius: 4,
+            overflow: "hidden",
+            border: `1px solid ${alpha("#6366f1", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2,
+              background: `linear-gradient(135deg, ${alpha("#6366f1", 0.12)} 0%, ${alpha("#3b82f6", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#6366f1", 0.1)}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <BuildIcon sx={{ color: "#6366f1" }} />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Choose Projects That Score High
+            </Typography>
+          </Box>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha("#6366f1", 0.03) }}>
+                  <TableCell sx={{ fontWeight: 700, width: "20%" }}>Criteria</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: "30%" }}>Why it matters</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: "25%" }}>Green flag</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: "25%" }}>Risk if missing</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {projectSelectionMatrix.map((item) => (
+                  <TableRow key={item.criteria} sx={{ "&:hover": { bgcolor: alpha("#6366f1", 0.02) } }}>
+                    <TableCell sx={{ fontWeight: 600, color: "#6366f1" }}>{item.criteria}</TableCell>
+                    <TableCell>{item.why}</TableCell>
+                    <TableCell>{item.greenFlag}</TableCell>
+                    <TableCell>{item.risk}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+
         {/* Section Divider */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
           <Divider sx={{ flex: 1 }} />
@@ -1891,6 +2221,89 @@ export default function SecurityPortfolioPage() {
           </Grid>
         </Grid>
 
+        {/* Portfolio Entry Template */}
+        <Paper
+          id="entry-template"
+          sx={{
+            p: 0,
+            mb: 4,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#6366f1", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2,
+              background: `linear-gradient(135deg, ${alpha("#6366f1", 0.12)} 0%, ${alpha("#8b5cf6", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#6366f1", 0.1)}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <AssignmentIcon sx={{ color: "#6366f1" }} />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Portfolio Entry Template (One Page)
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={7}>
+                <List dense>
+                  {portfolioEntryTemplate.map((item, index) => (
+                    <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <Box
+                          sx={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 1,
+                            bgcolor: alpha("#6366f1", 0.1),
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "0.65rem",
+                            fontWeight: 700,
+                            color: "#6366f1",
+                          }}
+                        >
+                          {index + 1}
+                        </Box>
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", lineHeight: 1.6 }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    bgcolor: alpha("#6366f1", 0.05),
+                    border: `1px dashed ${alpha("#6366f1", 0.3)}`,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#6366f1" }}>
+                    Impact Statement Formula
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: "monospace", bgcolor: "transparent", lineHeight: 1.6 }}
+                  >
+                    {impactStatementFormula}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                    Example: Built a log parser to reduce triage time by 30 percent using automated enrichment.
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+        </Paper>
+
         {/* Storytelling and Review Signals */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
@@ -1988,6 +2401,78 @@ export default function SecurityPortfolioPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Portfolio Pitch */}
+        <Paper
+          id="portfolio-pitch"
+          sx={{
+            p: 0,
+            mb: 4,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#8b5cf6", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.12)} 0%, ${alpha("#6366f1", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#8b5cf6", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <RocketLaunchIcon sx={{ color: "#8b5cf6" }} />
+              Portfolio Pitch (45 Seconds)
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              A short intro you can use in interviews, networking, or cold outreach.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={7}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#8b5cf6" }}>
+                  Simple Template
+                </Typography>
+                <List dense>
+                  {pitchTemplate.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#8b5cf6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", lineHeight: 1.6 }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    bgcolor: alpha("#8b5cf6", 0.05),
+                    border: `1px dashed ${alpha("#8b5cf6", 0.3)}`,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#8b5cf6" }}>
+                    Do / Don't
+                  </Typography>
+                  <List dense>
+                    {pitchDoDont.map((item) => (
+                      <ListItem key={item} sx={{ py: 0.4, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <StarIcon sx={{ fontSize: 14, color: "#8b5cf6" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", lineHeight: 1.5 }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+        </Paper>
 
         {/* Evidence Artifacts */}
         <Paper 
@@ -2283,6 +2768,236 @@ export default function SecurityPortfolioPage() {
           </Grid>
         </Grid>
 
+        {/* Publishing Checklist */}
+        <Paper
+          id="publishing-checklist"
+          sx={{
+            p: 0,
+            mb: 4,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#10b981", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#10b981", 0.12)} 0%, ${alpha("#3b82f6", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#10b981", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <CheckCircleIcon sx={{ color: "#10b981" }} />
+              Publishing Checklist (Before You Share)
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              A final pass to make each project easy to understand and safe to publish.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              {publishingChecklist.map((item, i) => (
+                <Grid item xs={12} md={6} key={item}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 1.5,
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: alpha("#10b981", 0.03),
+                      border: `1px dashed ${alpha("#10b981", 0.15)}`,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 1,
+                        bgcolor: alpha("#10b981", 0.12),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: "#10b981",
+                        flexShrink: 0,
+                        mt: 0.25,
+                      }}
+                    >
+                      {i + 1}
+                    </Box>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Redaction Checklist */}
+        <Paper
+          id="redaction-checklist"
+          sx={{
+            p: 0,
+            mb: 4,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#ef4444", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#ef4444", 0.12)} 0%, ${alpha("#f59e0b", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#ef4444", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ShieldIcon sx={{ color: "#ef4444" }} />
+              Redaction and Safe Publishing Checklist
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Use this before you publish any writeup, screenshot, or repo.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              {redactionChecklist.map((item, i) => (
+                <Grid item xs={12} md={6} key={item}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 1.5,
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: alpha("#ef4444", 0.03),
+                      border: `1px dashed ${alpha("#ef4444", 0.15)}`,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 1,
+                        bgcolor: alpha("#ef4444", 0.1),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: "#ef4444",
+                        flexShrink: 0,
+                        mt: 0.25,
+                      }}
+                    >
+                      {i + 1}
+                    </Box>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Resume Alignment */}
+        <Paper
+          id="resume-alignment"
+          sx={{
+            p: 0,
+            mb: 5,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.12)} 0%, ${alpha("#6366f1", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#3b82f6", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <WorkIcon sx={{ color: "#3b82f6" }} />
+              Resume Alignment and Keywords
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Make it easy for recruiters to connect your resume to real proof-of-work.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={7}>
+                <List dense>
+                  {resumeAlignmentTips.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", lineHeight: 1.6 }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    bgcolor: alpha("#3b82f6", 0.05),
+                    border: `1px dashed ${alpha("#3b82f6", 0.3)}`,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#3b82f6", display: "flex", alignItems: "center", gap: 1 }}>
+                    <LinkIcon sx={{ fontSize: 18 }} />
+                    Linking Map
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: "monospace", lineHeight: 1.6 }}>
+                    Role keyword {"->"} Project {"->"} Evidence link
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                    Example: "Detection engineering" {"->"} Sigma rules repo {"->"} README + screenshots.
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#3b82f6" }}>
+                ATS Keyword Bank (Pick the ones that match your work)
+              </Typography>
+              <Grid container spacing={1.5}>
+                {atsKeywordBanks.map((bank) => (
+                  <Grid item xs={12} md={6} key={bank.role}>
+                    <Paper
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 3,
+                        bgcolor: alpha("#3b82f6", 0.04),
+                        border: `1px solid ${alpha("#3b82f6", 0.12)}`,
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#3b82f6" }}>
+                        {bank.role}
+                      </Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+                        {bank.keywords.map((keyword) => (
+                          <Chip key={keyword} label={keyword} size="small" variant="outlined" sx={{ fontSize: "0.65rem", height: 22 }} />
+                        ))}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Box>
+        </Paper>
+
         {/* Online Presence */}
         <Paper
           sx={{
@@ -2344,6 +3059,74 @@ export default function SecurityPortfolioPage() {
                       {i + 1}
                     </Box>
                     <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{tip}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </Paper>
+
+        {/* Portfolio Audit */}
+        <Paper
+          id="portfolio-audit"
+          sx={{
+            p: 0,
+            mb: 5,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#6366f1", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#6366f1", 0.12)} 0%, ${alpha("#8b5cf6", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#6366f1", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <AssessmentIcon sx={{ color: "#6366f1" }} />
+              Monthly Portfolio Audit (15 Minutes)
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Small monthly updates keep your portfolio fresh and trustworthy.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={2}>
+              {portfolioAuditChecklist.map((item, i) => (
+                <Grid item xs={12} md={6} key={item}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 1.5,
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: alpha("#6366f1", 0.03),
+                      border: `1px dashed ${alpha("#6366f1", 0.15)}`,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 1,
+                        bgcolor: alpha("#6366f1", 0.12),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: "#6366f1",
+                        flexShrink: 0,
+                        mt: 0.25,
+                      }}
+                    >
+                      {i + 1}
+                    </Box>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item}</Typography>
                   </Box>
                 </Grid>
               ))}
@@ -2645,6 +3428,61 @@ export default function SecurityPortfolioPage() {
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* Portfolio FAQ */}
+        <Paper
+          id="portfolio-faq"
+          sx={{
+            p: 0,
+            mb: 5,
+            borderRadius: 4,
+            overflow: "hidden",
+            scrollMarginTop: 180,
+            border: `1px solid ${alpha("#6366f1", 0.2)}`,
+          }}
+        >
+          <Box
+            sx={{
+              p: 2.5,
+              background: `linear-gradient(135deg, ${alpha("#6366f1", 0.12)} 0%, ${alpha("#3b82f6", 0.08)} 100%)`,
+              borderBottom: `1px solid ${alpha("#6366f1", 0.1)}`,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <QuestionAnswerIcon sx={{ color: "#6366f1" }} />
+              Portfolio FAQ
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Quick answers to common questions from beginners.
+            </Typography>
+          </Box>
+          <Box sx={{ p: 2 }}>
+            {faqItems.map((item, index) => (
+              <Accordion
+                key={item.question}
+                defaultExpanded={index === 0}
+                sx={{
+                  mb: 1,
+                  borderRadius: "12px !important",
+                  overflow: "hidden",
+                  "&:before": { display: "none" },
+                  border: `1px solid ${alpha("#6366f1", 0.12)}`,
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {item.question}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    {item.answer}
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
+        </Paper>
 
         {/* Related Pages - Enhanced */}
         <Paper 

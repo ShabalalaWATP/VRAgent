@@ -9,8 +9,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-vragent}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Port removed - containers use internal Docker network (hostname: db)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vragent}"]
       interval: 10s
@@ -22,8 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: vragent-redis
-    ports:
-      - "6379:6379"
+    # Port removed - containers use internal Docker network (hostname: redis)
     volumes:
       - redis_data:/data
     healthcheck:
@@ -43,30 +41,56 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-vragent}:${POSTGRES_PASSWORD:-vragent_secret}@db:5432/${POSTGRES_DB:-vragent}
       REDIS_URL: redis://redis:6379/0
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-pro}
+      GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-3-flash-preview}
       NVD_API_KEY: ${NVD_API_KEY:-}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      # Enable localhost/private IP scanning for local testing (e.g., Juice Shop)
+      ALLOW_LOCALHOST_SCANS: "true"
+      ALLOW_PRIVATE_IP_SCANS: "true"
       GHIDRA_HOME: /opt/ghidra
       UPLOAD_DIR: /app/uploads
+      ZAP_URL: http://zap:8080
+      ZAP_API_KEY: ${ZAP_API_KEY:-}
+      SCANNER_URL: http://scanner:9999
+      OPENVAS_URL: https://openvas:9392
+      OPENVAS_USER: ${OPENVAS_USER:-admin}
+      OPENVAS_PASSWORD: ${OPENVAS_PASSWORD:-admin}
+      # Juice Shop URL for practice scanning
+      JUICESHOP_URL: http://juiceshop:3000
     ports:
       - "8000:8000"
+      # MITM Proxy ports - range for multiple proxy instances
+      - "8080-8089:8080-8089"
     volumes:
       - upload_data:/app/uploads
+      - exploit_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      # Offline security databases
+      - ./data/offline:/app/data/offline:ro
       # Optional: Mount external wordlists directory (e.g., rockyou.txt, SecLists)
       # Uncomment and modify path to use external wordlists:
       # - /path/to/wordlists:/wordlists:ro
       # - /usr/share/seclists:/usr/share/seclists:ro
+    # Enable access to host network for MITM and scanning
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Required for nmap to perform network scans
     cap_add:
       - NET_RAW
       - NET_ADMIN
     security_opt:
       - seccomp:unconfined
+    # OPTIONAL: Uncomment network_mode: host to enable LAN scanning
+    # This allows nmap to scan your actual local network (192.168.x.x, 10.x.x.x)
+    # instead of Docker's virtual network. WARNING: This disables port mapping,
+    # so the backend will be accessible directly on port 8000 on your host.
+    # network_mode: host
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zap:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
@@ -87,7 +111,7 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-vragent}:${POSTGRES_PASSWORD:-vragent_secret}@db:5432/${POSTGRES_DB:-vragent}
       REDIS_URL: redis://redis:6379/0
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-pro}
+      GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-3-flash-preview}
       NVD_API_KEY: ${NVD_API_KEY:-}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       GHIDRA_HOME: /opt/ghidra
@@ -105,6 +129,33 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+  # OWASP ZAP - Dynamic Application Security Testing
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: vragent-zap
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true -config api.disablekey=true
+    ports:
+      - "8090:8080"  # ZAP API/Proxy port
+      - "8091:8090"  # ZAP additional port for proxying
+    # Enable access to host network for internal scanning
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - zap_data:/home/zap/.ZAP
+      - zap_reports:/zap/reports
+    environment:
+      - ZAP_PORT=8080
+      - ZAP_WEBSWING_OPTS=-Xmx512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/JSON/core/view/version/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - default
 
   # React Frontend
   frontend:
@@ -124,10 +175,145 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Network Scanner Sidecar
+  # This container has nmap + nuclei for network security scanning
+  scanner:
+    build:
+      context: ./scanner
+      dockerfile: Dockerfile
+    container_name: vragent-scanner
+    ports:
+      - "9999:9999"
+    volumes:
+      - scan_data:/scans
+      # Offline Nuclei templates
+      - ./data/offline/nuclei-templates:/nuclei-templates:ro
+      # Local wordlists for directory enumeration
+      - ./backend/wordlists:/wordlists:ro
+    environment:
+      - SCANNER_PORT=9999
+      - NUCLEI_TEMPLATES=/nuclei-templates
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # OpenVAS/GVM - Greenbone Vulnerability Management
+  # Full network vulnerability scanner with extensive CVE database
+  openvas:
+    image: securecompliance/gvm:latest
+    container_name: vragent-openvas
+    ports:
+      - "9392:9392"  # GSA Web Interface
+    volumes:
+      - openvas_data:/var/lib/gvm
+      - openvas_scans:/var/lib/openvas
+    environment:
+      - PASSWORD=${OPENVAS_PASSWORD:-admin}
+      - USERNAME=${OPENVAS_USER:-admin}
+      - AUTO_SYNC=true
+    # OpenVAS needs significant resources
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9392/login"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+      start_period: 600s  # GVM takes 10+ minutes to fully initialize on first run
+    restart: unless-stopped
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vragent-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./backend/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./backend/monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Grafana - Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vragent-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./backend/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # OWASP Juice Shop - Intentionally Vulnerable Web Application for Practice
+  # Perfect target for MITM interception, dynamic scanning, and security testing
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: vragent-juiceshop
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=unsafe
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   upload_data:
+  exploit_data:
+  scan_data:
+  zap_data:
+  zap_reports:
+  openvas_data:
+  openvas_scans:
+  prometheus_data:
+  grafana_data:
 
 networks:
   default:

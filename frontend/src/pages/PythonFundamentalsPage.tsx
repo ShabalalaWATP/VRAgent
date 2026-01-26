@@ -1021,6 +1021,19 @@ print(f"Hello, {name}! You just ran Python.")`}
             Before writing any code, you need to set up your Python environment. This module covers installing Python, 
             understanding the interpreter, and configuring your development tools.
           </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Python is released frequently, so it is worth choosing a recent stable 3.x version and being consistent. On
+            Windows, the <code>py</code> launcher helps you target a specific version (for example <code>py -3.12</code>),
+            while macOS and Linux typically use <code>python3</code>. Knowing which interpreter your terminal is running
+            avoids confusing errors when packages appear to be "missing" or when your code uses syntax not supported by
+            an older install.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            Think of Python as two parts: the interpreter and the standard library. The interpreter runs your code, and
+            the standard library provides batteries like <code>json</code>, <code>pathlib</code>, and <code>datetime</code>.
+            Keeping versions aligned per project with virtual environments prevents dependency conflicts and makes your
+            projects reproducible for teammates and future you.
+          </Typography>
 
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
@@ -1071,10 +1084,15 @@ Hello, Python!
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Python is an <strong>interpreted language</strong>, meaning code is executed line by line by the Python 
-                interpreter rather than being compiled into machine code first. This enables:
-              </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Python is an <strong>interpreted language</strong>, meaning code is executed line by line by the Python 
+            interpreter rather than being compiled into machine code first. This enables:
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Under the hood, Python compiles your source into bytecode and runs it on a virtual machine. You do not need
+            to manage that process, but understanding it helps explain why startup time exists, why some libraries use
+            C extensions for speed, and why caching is beneficial in long-running programs.
+          </Typography>
               <List dense>
                 {[
                   "Interactive development with the REPL (Read-Eval-Print Loop)",
@@ -1170,6 +1188,16 @@ deactivate`}
           <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
             Python's syntax is designed to be clean and readable. Unlike many languages that use braces, Python uses 
             <strong> indentation</strong> to define code blocks. This enforces readable code by design.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Indentation is not just style in Python, it is part of the grammar. That means whitespace conveys structure
+            the same way braces do in other languages. A single extra space can change program meaning, so editors that
+            show indentation guides and automatically format files are very helpful.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            Python also favors explicit, readable constructs over clever shortcuts. You will see that mindset again and
+            again in core features like list comprehensions, readable boolean operators, and the standard library naming
+            conventions. Following PEP 8 formatting rules makes your code easier to scan and easier to share.
           </Typography>
 
           <Grid container spacing={3}>
@@ -1319,6 +1347,16 @@ x = 10  # This is an inline comment`}
             Variables are containers for storing data values. Python is <strong>dynamically typed</strong>, meaning 
             you don't need to declare the type—Python figures it out automatically.
           </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Dynamic typing does not mean types are ignored. Every value in Python has a type at runtime, and variables
+            simply reference those values. That makes reassignment easy, but it also means you should be clear about the
+            shape of your data through naming, docstrings, and (optionally) type hints.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            It also helps to understand mutability early. Lists and dictionaries can be modified in place, while strings
+            and tuples cannot. This influences performance and bugs, especially when the same object is referenced from
+            multiple places. Learning when Python copies a value versus when it shares a reference will save time later.
+          </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3776ab" }}>
             Variable Naming Rules
@@ -1451,6 +1489,16 @@ text.replace("World", "Python")`}
           <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem', lineHeight: 1.8 }}>
             Operators are special symbols that perform operations on values. Python supports arithmetic, comparison, 
             logical, assignment, and more. Understanding operators is essential for writing expressions and making decisions.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Operator behavior is predictable but has a few important nuances. Division with <code>/</code> always
+            produces a float, while <code>//</code> floors to an integer. Comparisons can be chained
+            (<code>1 &lt; x &lt; 10</code>), and logical operators return one of the operands, not just True or False.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            Later you will also see bitwise operators, identity checks with <code>is</code>, and membership tests with
+            <code>in</code>. These are powerful tools for working with flags, caching, and container types, so it is worth
+            building an intuition for them early.
           </Typography>
 
           {/* Arithmetic Operators */}
@@ -1808,6 +1856,16 @@ a is b  # True (Python caches -5 to 256)`}
           <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem', lineHeight: 1.8 }}>
             Strings are one of Python's most used data types. This module covers string creation, indexing, slicing, 
             methods, and formatting - essential skills for any Python programmer.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Strings are sequences of Unicode characters and are immutable. That means you can index and slice them like
+            lists, but any "change" creates a new string. This design is safe and efficient for many workloads, but it
+            also means you should build strings with <code>"".join(...)</code> when you are combining many pieces.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            It is also important to distinguish between text (<code>str</code>) and raw bytes (<code>bytes</code>).
+            Files, network traffic, and encryption libraries often require bytes, so learning how to encode and decode
+            text will help you avoid bugs like mojibake or unexpected exceptions when handling non-ASCII data.
           </Typography>
 
           {/* String Creation */}

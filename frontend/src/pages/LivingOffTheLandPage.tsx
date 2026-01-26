@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -31,6 +29,11 @@ import {
   Card,
   CardContent,
   alpha,
+  useMediaQuery,
+  useTheme,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -49,22 +52,42 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import StorageIcon from "@mui/icons-material/Storage";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import ComputerIcon from "@mui/icons-material/Computer";
+import AppleIcon from "@mui/icons-material/Apple";
 import { Link, useNavigate } from "react-router-dom";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+// Theme colors
+const theme = {
+  primary: "#f97316",
+  primaryLight: "#fb923c",
+  secondary: "#fb7185",
+  accent: "#8b5cf6",
+  success: "#10b981",
+  warning: "#f59e0b",
+  info: "#3b82f6",
+  text: "#e2e8f0",
+  textMuted: "#94a3b8",
+  bgDark: "#0a0d18",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(255,255,255,0.08)",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <TerminalIcon /> },
+  { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+  { id: "windows-lolbas", label: "Windows LOLBAS", icon: <ComputerIcon /> },
+  { id: "linux-gtfobins", label: "Linux GTFOBins", icon: <TerminalIcon /> },
+  { id: "macos-lotl", label: "macOS LOTL", icon: <AppleIcon /> },
+  { id: "attack-chains", label: "Attack Chains", icon: <BugReportIcon /> },
+  { id: "siem-queries", label: "SIEM Queries", icon: <CodeIcon /> },
+  { id: "hardening", label: "Hardening", icon: <ShieldIcon /> },
+  { id: "labs", label: "Labs", icon: <SchoolIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -1097,7 +1120,92 @@ const quizQuestions: QuizQuestion[] = [
 
 const LivingOffTheLandPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const element = document.getElementById(sections[i]);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            setActiveSection(sections[i]);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progress = ((currentIndex + 1) / sectionNavItems.length) * 100;
+
+  const sidebarNav = (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+      <LinearProgress
+        variant="determinate"
+        value={progress}
+        sx={{
+          mb: 2,
+          height: 6,
+          borderRadius: 3,
+          bgcolor: alpha(theme.primary, 0.1),
+          "& .MuiLinearProgress-bar": {
+            bgcolor: theme.primary,
+            borderRadius: 3,
+          },
+        }}
+      />
+      {sectionNavItems.map((item) => (
+        <Box
+          key={item.id}
+          onClick={() => scrollToSection(item.id)}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            p: 1.5,
+            borderRadius: 2,
+            cursor: "pointer",
+            bgcolor: activeSection === item.id ? alpha(theme.primary, 0.15) : "transparent",
+            borderLeft: activeSection === item.id ? `3px solid ${theme.primary}` : "3px solid transparent",
+            transition: "all 0.2s ease",
+            "&:hover": {
+              bgcolor: alpha(theme.primary, 0.1),
+            },
+          }}
+        >
+          <Box sx={{ color: activeSection === item.id ? theme.primary : theme.textMuted, display: "flex" }}>
+            {item.icon}
+          </Box>
+          <Typography
+            variant="body2"
+            sx={{
+              color: activeSection === item.id ? theme.primary : theme.textMuted,
+              fontWeight: activeSection === item.id ? 600 : 400,
+            }}
+          >
+            {item.label}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  );
 
   const pageContext = `This page covers Living off the Land (LOTL) techniques including LOLBAS (Windows) and GTFOBins (Linux). Topics include understanding LOLBins, proxy execution, signed binary abuse, and detection strategies. Windows tools covered: certutil, bitsadmin, powershell, rundll32, regsvr32, mshta, wmic, schtasks, netsh, msiexec, cscript/wscript, forfiles, pcalua. Linux tools: bash/sh, sudo, python/perl, tar, find, curl/wget, awk/sed, vim/nano, nmap, socat, openssl. macOS tools: osascript, launchctl, plutil, defaults, security, curl. Includes MITRE ATT&CK mappings, SIEM detection queries (Splunk, Sentinel, Elastic), real-world attack chains, and hands-on labs. The page focuses on detection signals, hardening checklists, safe inventory commands, and defensive security.`;
 
@@ -1836,8 +1944,50 @@ const LivingOffTheLandPage: React.FC = () => {
 
   return (
     <LearnPageLayout pageTitle="Living off the Land (LOLBAS/GTFOBins)" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
+    <Box sx={{ minHeight: "100vh", bgcolor: theme.bgDark, py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation */}
+          <Grid
+            item
+            xs={12}
+            md={2.5}
+            sx={{
+              display: { xs: "none", md: "block" },
+            }}
+          >
+            <Box
+              sx={{
+                position: "sticky",
+                top: 80,
+                maxHeight: "calc(100vh - 100px)",
+                overflowY: "auto",
+                pr: 2,
+                "&::-webkit-scrollbar": { width: 6 },
+                "&::-webkit-scrollbar-thumb": {
+                  bgcolor: alpha(theme.primary, 0.3),
+                  borderRadius: 3,
+                },
+              }}
+            >
+              <Typography
+                variant="overline"
+                sx={{
+                  color: theme.textMuted,
+                  fontWeight: 600,
+                  letterSpacing: 1.2,
+                  mb: 2,
+                  display: "block",
+                }}
+              >
+                On This Page
+              </Typography>
+              {sidebarNav}
+            </Box>
+          </Grid>
+
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
         <Chip
           component={Link}
           to="/learn"
@@ -1848,68 +1998,66 @@ const LivingOffTheLandPage: React.FC = () => {
           sx={{ borderRadius: 2, mb: 2 }}
         />
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <TerminalIcon sx={{ fontSize: 42, color: "#f97316" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #f97316 0%, #fb7185 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Living off the Land (LOLBAS/GTFOBins)
-          </Typography>
-        </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          Learn what living off the land means, why it is effective, and how to detect risky use of built-in tools.
-        </Typography>
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            Living off the land means using tools that are already installed on a computer instead of bringing in
-            new malware or custom binaries. Attackers like it because these tools are trusted and often used by
-            administrators, so the activity can blend into normal operations.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            This page focuses on safe, beginner-friendly discovery and detection. You will learn how to inventory
-            built-in tools, understand common misuse patterns, and write clear notes for remediation.
-          </Typography>
-        </Paper>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<SecurityIcon />} label="LOLBins" size="small" />
-          <Chip icon={<SearchIcon />} label="Discovery" size="small" />
-          <Chip icon={<BuildIcon />} label="Defense and Logging" size="small" />
-          <Chip icon={<WarningIcon />} label="Misuse Patterns" size="small" />
+        {/* Introduction Section */}
+        <Box id="intro" sx={{ scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+              <TerminalIcon sx={{ fontSize: 42, color: theme.primary }} />
+              <Typography
+                variant="h3"
+                sx={{
+                  fontWeight: 700,
+                  background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Living off the Land (LOLBAS/GTFOBins)
+              </Typography>
+            </Box>
+            <Typography variant="h6" sx={{ color: theme.textMuted, mb: 2 }}>
+              Master the art of detecting and defending against Living off the Land techniques used by sophisticated threat actors.
+            </Typography>
+            <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+              <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                <strong>Living off the Land (LOTL)</strong> is an attack strategy where adversaries leverage legitimate, pre-installed system tools and binaries to achieve their objectives rather than deploying custom malware. This approach has become the hallmark of advanced persistent threats (APTs) and sophisticated cybercriminal groups because it dramatically reduces the chances of detection by traditional security controls.
+              </Typography>
+              <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                When attackers use tools like PowerShell, certutil, or bash, they're essentially hiding in plain sight. These binaries are digitally signed by Microsoft, Apple, or Linux vendors, whitelisted by default in most security solutions, and generate activity that closely resembles legitimate administrative work. The challenge for defenders is distinguishing between a system administrator running a PowerShell script and an attacker using the same tool for malicious purposes.
+              </Typography>
+              <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                This comprehensive guide covers the three major ecosystems: <strong>Windows LOLBAS</strong> (Living Off The Land Binaries And Scripts), <strong>Linux GTFOBins</strong> (Get The F* Out Binaries), and <strong>macOS LOTL techniques</strong>. You'll learn not just what these tools can do, but more importantly, how to detect their misuse through log analysis, SIEM queries, and behavioral monitoring.
+              </Typography>
+              <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                This page focuses on safe, beginner-friendly discovery and detection. You will learn how to inventory
+                built-in tools, understand common misuse patterns, and write clear notes for remediation.
+              </Typography>
+            </Paper>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Chip icon={<SecurityIcon />} label="LOLBins" size="small" sx={{ bgcolor: alpha(theme.primary, 0.15), color: theme.primary }} />
+              <Chip icon={<SearchIcon />} label="Discovery" size="small" sx={{ bgcolor: alpha(theme.info, 0.15), color: theme.info }} />
+              <Chip icon={<BuildIcon />} label="Defense and Logging" size="small" sx={{ bgcolor: alpha(theme.success, 0.15), color: theme.success }} />
+              <Chip icon={<WarningIcon />} label="Misuse Patterns" size="small" sx={{ bgcolor: alpha(theme.warning, 0.15), color: theme.warning }} />
+            </Box>
+          </Paper>
         </Box>
 
-        <Paper sx={{ bgcolor: "#111424", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#f97316" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<TerminalIcon />} label="Windows LOLBAS" />
-            <Tab icon={<TerminalIcon />} label="Linux GTFOBins" />
-            <Tab icon={<TerminalIcon />} label="macOS LOTL" />
-            <Tab icon={<BugReportIcon />} label="Attack Chains" />
-            <Tab icon={<CodeIcon />} label="SIEM Queries" />
-            <Tab icon={<ShieldIcon />} label="Hardening" />
-            <Tab icon={<SchoolIcon />} label="Labs" />
-          </Tabs>
+        {/* Section: Overview */}
+        <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <SecurityIcon sx={{ color: theme.primary }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Overview
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
 
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ mb: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#f97316", mb: 1 }}>
+              <Paper sx={{ mb: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Learning Objectives
                 </Typography>
                 <List dense>
@@ -1928,8 +2076,8 @@ const LivingOffTheLandPage: React.FC = () => {
                 sx={{
                   p: 2.5,
                   mb: 3,
-                  bgcolor: "#0e1222",
-                  border: "1px solid rgba(239,68,68,0.3)",
+                  bgcolor: theme.bgNested,
+                  border: `1px solid ${alpha(theme.primary, 0.3)}`,
                   borderRadius: 2,
                 }}
               >
@@ -2044,7 +2192,7 @@ const LivingOffTheLandPage: React.FC = () => {
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
                 <Typography variant="subtitle1" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Beginner Signals to Watch For
                 </Typography>
@@ -2059,23 +2207,68 @@ const LivingOffTheLandPage: React.FC = () => {
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3, bgcolor: "rgba(59, 130, 246, 0.1)" }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2, border: `1px solid ${alpha(theme.success, 0.3)}` }}>
+                <Typography variant="subtitle1" sx={{ color: theme.success, mb: 1 }}>
+                  Critical Data Points to Collect
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  When investigating potential LOTL activity, collecting the right data is essential for accurate analysis and reporting. These are the key data points you should capture for any suspicious process:
+                </Typography>
+                <Grid container spacing={2}>
+                  {safeDataPoints.map((point) => (
+                    <Grid item xs={12} sm={6} key={point}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CheckCircleIcon sx={{ color: theme.success, fontSize: 16 }} />
+                        <Typography variant="body2" sx={{ color: "grey.300" }}>{point}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+          </Paper>
+        </Box>
+
+        {/* Section: Windows LOLBAS */}
+        <Box id="windows-lolbas" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <ComputerIcon sx={{ color: theme.primary }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Windows LOLBAS
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(theme.info, 0.1) }}>
                 <strong>LOLBAS Project:</strong> Living Off The Land Binaries And Scripts - a community-maintained list of Windows binaries that can be abused.
               </Alert>
 
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Windows systems come pre-installed with hundreds of utilities that serve legitimate administrative purposes but can be weaponized by attackers. The <strong>LOLBAS project</strong> (lolbas-project.github.io) catalogs these binaries, documenting their abuse potential across categories like execution, download, ADS (Alternate Data Streams), and more.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  What makes Windows LOLBins particularly dangerous is that they're <strong>digitally signed by Microsoft</strong>, meaning they pass certificate validation checks and are often explicitly trusted by application whitelisting solutions like AppLocker. When certutil.exe downloads a payload, it's doing so with a valid Microsoft signature—making it nearly impossible for signature-based detection to flag the activity as malicious.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  The key to detecting LOLBIN abuse lies in understanding the <strong>context</strong> of execution. For example, certutil downloading files from the internet is suspicious because that's not its primary purpose (it's designed for certificate management). Similarly, rundll32 loading a DLL from a user's temp folder or mshta executing a script from a URL are red flags that warrant investigation.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  Below are some of the most commonly abused Windows LOLBins. Each entry includes the legitimate use case, known abuse methods, MITRE ATT&CK mappings, and detection guidance.
+                </Typography>
+              </Paper>
+
               {windowsLOLBins.slice(0, 5).map((bin) => (
-                <Accordion key={bin.name} sx={{ mb: 1, bgcolor: "#0c0f1c", "&:before": { display: "none" } }}>
+                <Accordion key={bin.name} sx={{ mb: 1, bgcolor: theme.bgNested, "&:before": { display: "none" } }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                      <Typography variant="h6" sx={{ color: "#f97316", fontWeight: 700 }}>{bin.name}</Typography>
+                      <Typography variant="h6" sx={{ color: theme.primary, fontWeight: 700 }}>{bin.name}</Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         {bin.mitre.map((t) => (
-                          <Chip key={t} label={t} size="small" sx={{ bgcolor: "rgba(239, 68, 68, 0.2)", color: "#f87171", fontSize: "0.7rem" }} />
+                          <Chip key={t} label={t} size="small" sx={{ bgcolor: alpha(theme.primary, 0.2), color: "#f87171", fontSize: "0.7rem" }} />
                         ))}
                       </Box>
                     </Box>
@@ -2096,9 +2289,9 @@ const LivingOffTheLandPage: React.FC = () => {
                           <Table size="small">
                             <TableHead>
                               <TableRow>
-                                <TableCell sx={{ color: "#f97316" }}>Method</TableCell>
-                                <TableCell sx={{ color: "#f97316" }}>Command</TableCell>
-                                <TableCell sx={{ color: "#f97316" }}>Risk</TableCell>
+                                <TableCell sx={{ color: theme.primary }}>Method</TableCell>
+                                <TableCell sx={{ color: theme.primary }}>Command</TableCell>
+                                <TableCell sx={{ color: theme.primary }}>Risk</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -2159,23 +2352,49 @@ Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';I
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3, bgcolor: "rgba(59, 130, 246, 0.1)" }}>
+        {/* Section: Linux GTFOBins */}
+        <Box id="linux-gtfobins" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <TerminalIcon sx={{ color: theme.success }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.success} 0%, ${theme.info} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Linux GTFOBins
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(theme.info, 0.1) }}>
                 <strong>GTFOBins:</strong> A curated list of Unix binaries that can be exploited when misconfigured with SUID, sudo, or capabilities.
               </Alert>
 
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Linux and Unix systems present a different but equally dangerous landscape for LOTL attacks. The <strong>GTFOBins project</strong> (gtfobins.github.io) documents binaries that can be exploited when they have elevated permissions—particularly <strong>SUID bits</strong> (allowing execution as the file owner), <strong>sudo permissions</strong>, or <strong>Linux capabilities</strong>.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Unlike Windows where abuse typically involves downloading and executing payloads, Linux LOTL techniques often focus on <strong>privilege escalation</strong>. A misconfigured sudo rule that allows a user to run vim without a password, for instance, can be trivially escalated to root access using vim's built-in shell escape (`:!bash`). Similarly, find with the SUID bit can spawn a privileged shell through its `-exec` flag.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  The scripting capabilities built into Linux make it even more potent for attackers. Languages like Python, Perl, and Ruby are often pre-installed and can execute arbitrary code with minimal footprint. A simple `python -c 'import pty;pty.spawn("/bin/bash")'` can upgrade a basic shell to a fully interactive TTY, enabling more sophisticated post-exploitation.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  The binaries below represent some of the most commonly abused tools on Linux systems. Pay special attention to their presence in sudo configurations and SUID/SGID searches.
+                </Typography>
+              </Paper>
+
               {linuxGTFOBins.slice(0, 5).map((bin) => (
-                <Accordion key={bin.name} sx={{ mb: 1, bgcolor: "#0c0f1c", "&:before": { display: "none" } }}>
+                <Accordion key={bin.name} sx={{ mb: 1, bgcolor: theme.bgNested, "&:before": { display: "none" } }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                      <Typography variant="h6" sx={{ color: "#f97316", fontWeight: 700 }}>{bin.name}</Typography>
+                      <Typography variant="h6" sx={{ color: theme.success, fontWeight: 700 }}>{bin.name}</Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         {bin.capabilities.map((c) => (
-                          <Chip key={c} label={c} size="small" sx={{ bgcolor: "rgba(139, 92, 246, 0.2)", color: "#a78bfa", fontSize: "0.7rem" }} />
+                          <Chip key={c} label={c} size="small" sx={{ bgcolor: alpha(theme.accent, 0.2), color: "#a78bfa", fontSize: "0.7rem" }} />
                         ))}
                       </Box>
                     </Box>
@@ -2196,9 +2415,9 @@ Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';I
                           <Table size="small">
                             <TableHead>
                               <TableRow>
-                                <TableCell sx={{ color: "#f97316" }}>Method</TableCell>
-                                <TableCell sx={{ color: "#f97316" }}>Condition</TableCell>
-                                <TableCell sx={{ color: "#f97316" }}>Risk</TableCell>
+                                <TableCell sx={{ color: theme.success }}>Method</TableCell>
+                                <TableCell sx={{ color: theme.success }}>Condition</TableCell>
+                                <TableCell sx={{ color: theme.success }}>Risk</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -2233,7 +2452,7 @@ Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';I
                 </Accordion>
               ))}
 
-              <Accordion sx={{ mt: 3, bgcolor: "#0c0f1c" }}>
+              <Accordion sx={{ mt: 3, bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
                   <Typography variant="h6">SUID/Sudo Audit Commands</Typography>
                 </AccordionSummary>
@@ -2260,26 +2479,46 @@ echo $PATH | tr ':' '\\n' | xargs -I{} ls -ld {} 2>/dev/null | grep -E "^d......
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Accordion defaultExpanded>
+        {/* Section: macOS LOTL */}
+        <Box id="macos-lotl" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <AppleIcon sx={{ color: theme.textMuted }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.textMuted} 0%, ${theme.info} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  macOS LOTL
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Accordion defaultExpanded sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">macOS Built-in Tools</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                    macOS presents a unique blend of Unix heritage and Apple-specific technologies that create distinct LOTL opportunities. While it shares many tools with Linux (bash, curl, python), it also includes <strong>macOS-specific binaries</strong> like osascript, launchctl, and the security command that enable sophisticated persistence and automation capabilities.
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                    <strong>AppleScript and osascript</strong> deserve special attention because they can interact with virtually any application on the system, including manipulating dialogs, accessing system events, and even controlling applications via AppleEvents. An attacker who gains a foothold can use osascript to silently interact with applications, create fake credential prompts, or automate post-exploitation tasks without triggering common security controls.
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                    <strong>Persistence on macOS</strong> typically involves LaunchAgents and LaunchDaemons—plist files that configure services to run at login or system startup. The launchctl command manages these services, and attackers often create malicious LaunchAgents in user directories (~/Library/LaunchAgents) because they don't require elevated privileges to install.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: theme.textMuted, mb: 2 }}>
                     macOS has powerful utilities that can be abused if not monitored. Focus on detection and safe inventory.
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#f97316" }}>Binary</TableCell>
-                          <TableCell sx={{ color: "#f97316" }}>Category</TableCell>
-                          <TableCell sx={{ color: "#f97316" }}>Detection Signal</TableCell>
+                          <TableCell sx={{ color: theme.primary }}>Binary</TableCell>
+                          <TableCell sx={{ color: theme.primary }}>Category</TableCell>
+                          <TableCell sx={{ color: theme.primary }}>Detection Signal</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2296,7 +2535,7 @@ echo $PATH | tr ':' '\\n' | xargs -I{} ls -ld {} 2>/dev/null | grep -E "^d......
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Safe Inventory Commands</Typography>
                 </AccordionSummary>
@@ -2311,7 +2550,7 @@ ls -la ~/Library/LaunchAgents`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Beginner Focus Areas</Typography>
                 </AccordionSummary>
@@ -2333,29 +2572,55 @@ ls -la ~/Library/LaunchAgents`}
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="warning" sx={{ mb: 3, bgcolor: "rgba(249, 115, 22, 0.1)" }}>
+        {/* Section: Attack Chains */}
+        <Box id="attack-chains" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <BugReportIcon sx={{ color: theme.warning }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.warning} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Attack Chains
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha(theme.warning, 0.1) }}>
                 <strong>Real-World Attack Chains:</strong> Understanding how LOLBins are chained together helps build better detections.
               </Alert>
 
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  In real-world attacks, LOLBins are rarely used in isolation. Sophisticated threat actors chain multiple tools together to achieve their objectives while minimizing detection risk. Understanding these <strong>attack chains</strong> is crucial for building effective defenses because it reveals the relationships between different stages of an intrusion.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Consider a typical malware delivery scenario: a user opens a malicious Office document (WINWORD.EXE), which executes a macro that spawns PowerShell (powershell.exe). PowerShell downloads a second-stage payload using Invoke-WebRequest, then rundll32.exe executes that payload. Finally, schtasks.exe creates persistence. Each tool is legitimate, but the <strong>chain of execution</strong> reveals malicious intent.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  The detection opportunity lies in monitoring these <strong>parent-child process relationships</strong>. Office applications shouldn't spawn PowerShell. PowerShell shouldn't download executables to temp folders. Rundll32 shouldn't load DLLs from user directories. By building detections around these unusual relationships, defenders can catch attacks that would otherwise fly under the radar of traditional signature-based tools.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  Below are documented attack chains used by real threat actors. Each chain shows the progression of tools and the MITRE ATT&CK techniques at each stage.
+                </Typography>
+              </Paper>
+
               {attackChains.map((chain, idx) => (
-                <Paper key={idx} sx={{ p: 3, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ color: "#f97316", mb: 1 }}>{chain.name}</Typography>
+                <Paper key={idx} sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>{chain.name}</Typography>
                   <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>{chain.description}</Typography>
                   
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
                     {chain.steps.map((step, i) => (
                       <React.Fragment key={i}>
-                        <Paper sx={{ p: 1.5, bgcolor: "#0b1020", borderRadius: 1, border: "1px solid rgba(249,115,22,0.3)" }}>
-                          <Typography variant="caption" sx={{ color: "#f97316" }}>Step {step.step}</Typography>
+                        <Paper sx={{ p: 1.5, bgcolor: "#0b1020", borderRadius: 1, border: `1px solid ${alpha(theme.primary, 0.3)}` }}>
+                          <Typography variant="caption" sx={{ color: theme.primary }}>Step {step.step}</Typography>
                           <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.8rem" }}>{step.action}</Typography>
                           <Box sx={{ display: "flex", gap: 0.5, mt: 0.5 }}>
-                            <Chip label={step.binary} size="small" sx={{ fontSize: "0.65rem", bgcolor: "rgba(139, 92, 246, 0.2)", color: "#a78bfa" }} />
-                            <Chip label={step.technique} size="small" sx={{ fontSize: "0.65rem", bgcolor: "rgba(239, 68, 68, 0.2)", color: "#f87171" }} />
+                            <Chip label={step.binary} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha(theme.accent, 0.2), color: "#a78bfa" }} />
+                            <Chip label={step.technique} size="small" sx={{ fontSize: "0.65rem", bgcolor: alpha(theme.primary, 0.2), color: "#f87171" }} />
                           </Box>
                         </Paper>
                         {i < chain.steps.length - 1 && <Typography sx={{ color: "grey.600", alignSelf: "center" }}>→</Typography>}
@@ -2363,24 +2628,50 @@ ls -la ~/Library/LaunchAgents`}
                     ))}
                   </Box>
 
-                  <Typography variant="subtitle2" sx={{ color: "#10b981", mb: 1 }}>Detection Opportunities</Typography>
+                  <Typography variant="subtitle2" sx={{ color: theme.success, mb: 1 }}>Detection Opportunities</Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                     {chain.detectionOpportunities.map((opp, i) => (
-                      <Chip key={i} label={opp} size="small" sx={{ bgcolor: "rgba(16, 185, 129, 0.2)", color: "#34d399" }} />
+                      <Chip key={i} label={opp} size="small" sx={{ bgcolor: alpha(theme.success, 0.2), color: "#34d399" }} />
                     ))}
                   </Box>
                 </Paper>
               ))}
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3, bgcolor: "rgba(59, 130, 246, 0.1)" }}>
+        {/* Section: SIEM Queries */}
+        <Box id="siem-queries" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <CodeIcon sx={{ color: theme.info }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.info} 0%, ${theme.accent} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  SIEM Queries
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(theme.info, 0.1) }}>
                 Copy-paste ready SIEM queries for detecting LOLBin abuse. Adjust field names for your environment.
               </Alert>
 
-              <Typography variant="h6" sx={{ color: "#f97316", mb: 2 }}>Splunk Queries</Typography>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Effective LOLBin detection requires robust logging and well-tuned SIEM queries. The queries below are designed to identify suspicious patterns while minimizing false positives, but they'll need to be <strong>tuned for your environment</strong>. What's suspicious in one organization might be normal in another—for example, IT automation tools might legitimately use PowerShell with encoded commands.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong>Prerequisites for effective detection:</strong> These queries assume you have adequate logging in place. For Windows, this means Sysmon (events 1, 3, 7, 11) or enhanced Windows Security logging with command-line auditing enabled. For Linux, auditd rules for execve and network connections are essential. Without proper logging, you're blind to LOTL activity regardless of how good your queries are.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong>Tuning strategy:</strong> Start by running these queries in "audit mode" to understand your baseline. Identify legitimate administrative use cases and create exceptions (ideally based on user accounts, source machines, or time windows rather than disabling the detection entirely). Once you've reduced noise, enable alerting and establish response playbooks for each detection type.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  The queries are provided for three major platforms: Splunk (SPL), Microsoft Sentinel (KQL), and Elastic (Query DSL). Choose the format that matches your SIEM.
+                </Typography>
+              </Paper>
+
+              <Typography variant="h6" sx={{ color: theme.primary, mb: 2 }}>Splunk Queries</Typography>
               {siemQueries.splunk.slice(0, 3).map((query, idx) => (
                 <Accordion key={idx} sx={{ mb: 1, bgcolor: "#0c0f1c", "&:before": { display: "none" } }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
@@ -2393,9 +2684,9 @@ ls -la ~/Library/LaunchAgents`}
                 </Accordion>
               ))}
 
-              <Typography variant="h6" sx={{ color: "#3b82f6", mb: 2, mt: 3 }}>Microsoft Sentinel (KQL)</Typography>
+              <Typography variant="h6" sx={{ color: theme.info, mb: 2, mt: 3 }}>Microsoft Sentinel (KQL)</Typography>
               {siemQueries.sentinel.slice(0, 3).map((query, idx) => (
-                <Accordion key={idx} sx={{ mb: 1, bgcolor: "#0c0f1c", "&:before": { display: "none" } }}>
+                <Accordion key={idx} sx={{ mb: 1, bgcolor: theme.bgNested, "&:before": { display: "none" } }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
                     <Typography sx={{ color: "grey.200" }}>{query.name}</Typography>
                   </AccordionSummary>
@@ -2405,14 +2696,40 @@ ls -la ~/Library/LaunchAgents`}
                   </AccordionDetails>
                 </Accordion>
               ))}
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Hardening */}
+        <Box id="hardening" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <ShieldIcon sx={{ color: theme.success }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.success} 0%, ${theme.info} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Hardening
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Defending against LOTL attacks requires a <strong>defense-in-depth approach</strong> because no single control can completely eliminate the risk. Remember, these are legitimate tools—you can't simply remove PowerShell or bash without breaking critical functionality. Instead, focus on layered controls that make abuse harder, increase visibility, and enable rapid response when suspicious activity is detected.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong>Application whitelisting</strong> is often cited as the gold standard for LOLBin defense, and while it's powerful, it's not a silver bullet. Tools like AppLocker and WDAC (Windows Defender Application Control) can restrict which binaries run, but LOLBins are typically already whitelisted because they're signed system components. The real value of these tools comes from restricting script execution locations, blocking unsigned code, and limiting which users can run administrative tools.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong>PowerShell hardening</strong> deserves special attention because it's the Swiss Army knife of Windows-based attacks. Constrained Language Mode limits what PowerShell can do for non-administrators, blocking access to .NET types, COM objects, and other dangerous capabilities. Combine this with comprehensive logging (Script Block Logging, Module Logging, and Transcription) to create a complete audit trail of all PowerShell activity.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  The recommendations below are organized by category and priority. Critical controls should be implemented first, followed by High and Medium priority items as resources allow.
+                </Typography>
+              </Paper>
+
               {hardeningRecommendations.map((category, idx) => (
-                <Paper key={idx} sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ color: "#f97316", mb: 2 }}>{category.category}</Typography>
+                <Paper key={idx} sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: theme.primary, mb: 2 }}>{category.category}</Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
@@ -2432,8 +2749,8 @@ ls -la ~/Library/LaunchAgents`}
                                 label={item.priority} 
                                 size="small" 
                                 sx={{ 
-                                  bgcolor: item.priority === "Critical" ? "rgba(239, 68, 68, 0.2)" : 
-                                           item.priority === "High" ? "rgba(249, 115, 22, 0.2)" : "rgba(59, 130, 246, 0.2)",
+                                  bgcolor: item.priority === "Critical" ? alpha(theme.secondary, 0.2) : 
+                                           item.priority === "High" ? alpha(theme.primary, 0.2) : alpha(theme.info, 0.2),
                                   color: item.priority === "Critical" ? "#f87171" : 
                                          item.priority === "High" ? "#fb923c" : "#60a5fa"
                                 }} 
@@ -2446,30 +2763,53 @@ ls -la ~/Library/LaunchAgents`}
                   </TableContainer>
                 </Paper>
               ))}
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={7}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Labs */}
+        <Box id="labs" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <SchoolIcon sx={{ color: theme.accent }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.accent} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Labs
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Hands-on practice is essential for mastering LOTL detection. These labs are designed to build your skills progressively, starting with basic inventory and working up to advanced threat hunting exercises. Each lab is <strong>safe to run in an isolated environment</strong>—never execute these exercises on production systems or without proper authorization.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong>Lab Environment Recommendations:</strong> Set up dedicated virtual machines for these exercises. For Windows labs, a Windows 10/11 VM with Sysmon installed is ideal. For Linux labs, any modern distribution (Ubuntu, CentOS, Kali) will work. Consider using tools like DetectionLab, DVWA, or Metasploitable to create realistic attack scenarios.
+                </Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted }}>
+                  Each lab includes difficulty rating, estimated time, learning objectives, and step-by-step guidance. Start with Beginner labs before progressing to Intermediate and Advanced exercises.
+                </Typography>
+              </Paper>
+
               <Grid container spacing={3}>
                 {labExercises.map((lab, idx) => (
                   <Grid item xs={12} md={6} key={idx}>
-                    <Card sx={{ bgcolor: "#0c0f1c", height: "100%", border: "1px solid rgba(249,115,22,0.2)" }}>
+                    <Card sx={{ bgcolor: theme.bgNested, height: "100%", border: `1px solid ${alpha(theme.primary, 0.2)}` }}>
                       <CardContent>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                          <Typography variant="h6" sx={{ color: "#f97316" }}>{lab.name}</Typography>
+                          <Typography variant="h6" sx={{ color: theme.primary }}>{lab.name}</Typography>
                           <Box sx={{ display: "flex", gap: 1 }}>
                             <Chip 
                               label={lab.difficulty} 
                               size="small" 
                               sx={{ 
-                                bgcolor: lab.difficulty === "Beginner" ? "rgba(16, 185, 129, 0.2)" : 
-                                         lab.difficulty === "Intermediate" ? "rgba(249, 115, 22, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                                bgcolor: lab.difficulty === "Beginner" ? alpha(theme.success, 0.2) : 
+                                         lab.difficulty === "Intermediate" ? alpha(theme.primary, 0.2) : alpha(theme.secondary, 0.2),
                                 color: lab.difficulty === "Beginner" ? "#34d399" : 
                                        lab.difficulty === "Intermediate" ? "#fb923c" : "#f87171"
                               }} 
                             />
-                            <Chip label={lab.duration} size="small" sx={{ bgcolor: "rgba(59, 130, 246, 0.2)", color: "#60a5fa" }} />
+                            <Chip label={lab.duration} size="small" sx={{ bgcolor: alpha(theme.info, 0.2), color: "#60a5fa" }} />
                           </Box>
                         </Box>
                         <Typography variant="subtitle2" sx={{ color: "#a5b4fc", mb: 1 }}>Objectives</Typography>
@@ -2477,7 +2817,7 @@ ls -la ~/Library/LaunchAgents`}
                           {lab.objectives.map((obj, i) => (
                             <ListItem key={i} sx={{ py: 0 }}>
                               <ListItemIcon sx={{ minWidth: 28 }}>
-                                <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                                <CheckCircleIcon sx={{ fontSize: 14, color: theme.success }} />
                               </ListItemIcon>
                               <ListItemText primary={obj} primaryTypographyProps={{ variant: "body2", sx: { color: "grey.400" } }} />
                             </ListItem>
@@ -2488,43 +2828,86 @@ ls -la ~/Library/LaunchAgents`}
                   </Grid>
                 ))}
               </Grid>
-            </Box>
-          </TabPanel>
-        </Paper>
+          </Paper>
+        </Box>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Living Off The Land Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+        {/* Section: Knowledge Check */}
+        <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${QUIZ_ACCENT_COLOR} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Knowledge Check
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+            <QuizSection
+              questions={quizQuestions}
+              accentColor={QUIZ_ACCENT_COLOR}
+              title="Living Off The Land Knowledge Check"
+              description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+              questionsPerQuiz={QUIZ_QUESTION_COUNT}
+            />
+          </Paper>
+        </Box>
 
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#f97316", color: "#f97316" }}
+            sx={{ borderColor: theme.primary, color: theme.primary }}
           >
             Back to Learning Hub
           </Button>
         </Box>
+        </Grid>
+        </Grid>
       </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        sx={{ display: { xs: "block", md: "none" } }}
+        PaperProps={{ sx: { bgcolor: theme.bgCard, width: 280 } }}
+      >
+        <Box sx={{ p: 2, borderBottom: `1px solid ${theme.border}` }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Typography variant="h6" sx={{ color: theme.primary, fontWeight: 700 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* Mobile FABs */}
+      {isMobile && (
+        <>
+          <Fab
+            size="small"
+            onClick={() => setNavDrawerOpen(true)}
+            sx={{ position: "fixed", bottom: 80, right: 16, bgcolor: theme.primary, color: "white", "&:hover": { bgcolor: theme.primaryLight } }}
+          >
+            <ListAltIcon />
+          </Fab>
+          <Fab
+            size="small"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            sx={{ position: "fixed", bottom: 24, right: 16, bgcolor: alpha(theme.primary, 0.8), color: "white", "&:hover": { bgcolor: theme.primary } }}
+          >
+            <KeyboardArrowUpIcon />
+          </Fab>
+        </>
+      )}
     </Box>
     </LearnPageLayout>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -21,6 +21,13 @@ import {
   TableRow,
   alpha,
   useTheme,
+  Fab,
+  Drawer,
+  IconButton,
+  Divider,
+  LinearProgress,
+  Tooltip,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CodeIcon from "@mui/icons-material/Code";
@@ -33,6 +40,14 @@ import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 import SearchIcon from "@mui/icons-material/Search";
 import ShieldIcon from "@mui/icons-material/Shield";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import CategoryIcon from "@mui/icons-material/Category";
+import BuildIcon from "@mui/icons-material/Build";
+import HistoryIcon from "@mui/icons-material/History";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import { Link, useNavigate } from "react-router-dom";
 
 interface XSSType {
@@ -76,43 +91,64 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
 };
 
 const xssTypes: XSSType[] = [
-  { title: "Reflected XSS", description: "Payload in URL/request, reflected back in response", persistence: "Non-persistent", color: "#f59e0b" },
-  { title: "Stored XSS", description: "Payload saved in database, executes for all users", persistence: "Persistent", color: "#ef4444" },
-  { title: "DOM-Based XSS", description: "Payload manipulates DOM directly via client-side JS", persistence: "Client-side", color: "#8b5cf6" },
+  {
+    title: "Reflected XSS",
+    description: "Payload in URL or request data is echoed into the response without encoding; often requires a victim to click a crafted link.",
+    persistence: "Non-persistent",
+    color: "#f59e0b",
+  },
+  {
+    title: "Stored XSS",
+    description: "Payload is saved in a database or cache and rendered to other users later; high impact because it spreads widely.",
+    persistence: "Persistent",
+    color: "#ef4444",
+  },
+  {
+    title: "DOM-Based XSS",
+    description: "Payload moves from a DOM source to a dangerous sink in client-side JS; the server might never see it.",
+    persistence: "Client-side",
+    color: "#8b5cf6",
+  },
 ];
 
 const xssFlow = [
-  "Untrusted input enters the app (URL, form, API, or stored data).",
-  "The app inserts that input into the page without proper encoding.",
-  "The browser interprets the input as HTML or JavaScript.",
-  "The injected code runs with the site's permissions.",
-  "The attacker can read data or perform actions as the user.",
+  "Attacker identifies an input that influences a page or client-side template.",
+  "Untrusted data crosses a trust boundary (URL, form, API, or stored data).",
+  "The app inserts the data into HTML, attributes, or scripts without context-aware encoding.",
+  "The browser interprets the input as markup or code instead of data.",
+  "The script runs with the site's origin (cookies, DOM, storage, and APIs).",
+  "The attacker reads sensitive data or performs actions as the victim.",
+  "If content is stored or shared, the impact can scale to many users.",
 ];
 
 const entryPoints = [
-  "Search, filter, and sort parameters in URLs",
-  "Comment fields, profile bios, and support tickets",
-  "Markdown or rich text editors",
-  "File names and metadata rendered in the UI",
-  "JSON values rendered into templates",
-  "Single-page app routes using URL fragments",
+  "Search, filter, and sort parameters in URLs or query strings",
+  "Comment fields, profile bios, chat messages, and support tickets",
+  "Markdown or rich text editors that allow HTML",
+  "File names, metadata, and image captions rendered in the UI",
+  "JSON values rendered into templates or client-side state",
+  "Single-page app routes using URL fragments or client-side routing",
+  "Error pages, validation messages, and inline previews",
+  "Third-party widgets or integrations that echo user data",
 ];
 
 const highRiskFeatures = [
-  "User-generated content feeds",
-  "Admin dashboards with custom queries or notes",
+  "User-generated content feeds and activity streams",
+  "Admin dashboards with custom queries, filters, or notes",
   "Preview pages or content moderation queues",
   "Notifications and email template previews",
-  "Analytics dashboards with custom filters",
+  "Analytics dashboards with custom filters and saved views",
+  "Import/export flows that render uploaded content",
+  "Multi-tenant portals where content is shared widely",
 ];
 
 const domSources = [
-  "location.search, location.hash, location.pathname",
+  "location.search, location.hash, location.pathname, document.URL",
   "document.cookie (if not HttpOnly)",
-  "localStorage and sessionStorage",
-  "postMessage event data",
-  "document.referrer",
-  "window.name or injected JSON blobs",
+  "localStorage, sessionStorage, and indexedDB",
+  "postMessage event data and window.name",
+  "document.referrer or history.state",
+  "Injected JSON blobs and data-* attributes",
 ];
 
 const safeDomPractices = [
@@ -120,7 +156,9 @@ const safeDomPractices = [
   "Use createElement + appendChild for DOM building",
   "Sanitize HTML with DOMPurify before insertion",
   "Validate URL schemes before setting href or src",
-  "Avoid eval or new Function for dynamic code",
+  "Avoid eval, new Function, and dynamic script creation",
+  "Adopt Trusted Types to harden DOM sinks",
+  "Keep template rendering in frameworks that auto-escape",
 ];
 
 const commonPayloads = [
@@ -135,21 +173,24 @@ const commonPayloads = [
 ];
 
 const impactScenarios = [
-  "Session hijacking (steal cookies)",
-  "Keylogging user input",
-  "Phishing via page modification",
-  "Cryptocurrency mining",
-  "Malware distribution",
-  "Credential theft via fake login forms",
+  "Session hijacking (steal cookies or tokens)",
+  "Silent actions as the user (payments, password changes)",
+  "Keylogging or form data interception",
+  "Phishing via page modification and fake login prompts",
+  "Data exfiltration from the DOM or APIs",
+  "Malware distribution or crypto mining in the browser",
+  "Privilege escalation when admins view infected content",
 ];
 
 const preventionMethods = [
   "Context-aware output encoding (HTML, JS, URL, CSS)",
-  "Content Security Policy (CSP) headers",
-  "HttpOnly and Secure cookie flags",
-  "Input validation (whitelist allowed chars)",
-  "Use frameworks with auto-escaping (React, Angular)",
+  "Prefer safe DOM APIs over string-based HTML creation",
+  "Content Security Policy (CSP) with nonces or hashes",
+  "Trusted Types enforcement for high-risk sinks",
+  "Input validation with allowlists for rich text",
+  "Frameworks with auto-escaping (React, Angular, Vue)",
   "Sanitize HTML with DOMPurify or similar",
+  "HttpOnly, Secure, and SameSite cookie flags",
 ];
 
 const dangerousSinks = [
@@ -160,7 +201,8 @@ const dangerousSinks = [
   "new Function()",
   "location.href, location.assign()",
   "setAttribute with untrusted href or src",
-  "jQuery .html(), .append()",
+  "setAttribute for on* event handlers",
+  "jQuery .html(), .append(), .before()",
 ];
 
 const encodingContexts = [
@@ -174,10 +216,11 @@ const encodingContexts = [
 
 const detectionSignals = [
   "Unexpected HTML tags rendered in user content",
-  "CSP reports blocking inline scripts",
+  "CSP reports blocking inline scripts or eval",
   "WAF alerts for script or event handler patterns",
-  "DOM changes after input is rendered",
-  "User reports of popups or page tampering",
+  "DOM changes after input is rendered or updated",
+  "Audit logs showing odd query strings or markup",
+  "User reports of popups, redirects, or page tampering",
 ];
 
 const testingChecklist = [
@@ -187,6 +230,8 @@ const testingChecklist = [
   "Inspect the DOM in dev tools, not only the response",
   "Review client-side code for unsafe sinks",
   "Confirm CSP behavior in Report-Only mode",
+  "Use safe, non-destructive payloads for verification",
+  "Document the data flow and validate fixes end-to-end",
 ];
 
 const cspGuidelines = [
@@ -194,7 +239,9 @@ const cspGuidelines = [
   "Use nonces or hashes for scripts instead of unsafe-inline",
   "Avoid unsafe-eval unless absolutely required",
   "Set object-src 'none' and base-uri 'none'",
+  "Limit frame-ancestors to prevent clickjacking",
   "Enable Report-Only before enforcing blocking",
+  "Monitor CSP reports for drift and regressions",
 ];
 
 const responseSteps = [
@@ -203,6 +250,8 @@ const responseSteps = [
   "Add a CSP policy and validate coverage",
   "Rotate sessions if exposure is suspected",
   "Add regression tests for the vulnerable view",
+  "Review logs to estimate exposure and affected users",
+  "Notify stakeholders and document remediation steps",
 ];
 
 const frameworkNotes = [
@@ -210,6 +259,7 @@ const frameworkNotes = [
   "Angular sanitizes templates; avoid bypassSecurityTrust unless required.",
   "Vue escapes by default; v-html requires sanitization.",
   "Template engines with auto-escape can be bypassed with unsafe flags.",
+  "Server-side rendering can amplify impact if output is unsafe.",
 ];
 
 // Advanced XSS Techniques
@@ -1244,26 +1294,322 @@ const quizQuestions: QuizQuestion[] = [
   },
 ];
 
+const ACCENT_COLOR = "#f59e0b";
+
 export default function XSSGuidePage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
-  const pageContext = `Cross-Site Scripting (XSS) Guide - Covers reflected, stored, and DOM-based XSS types, attack flow, entry points, sources and sinks, context-aware encoding, detection signals, safe testing checklist, CSP guidance, and secure coding examples.`;
+  // Navigation State
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
+
+  const pageContext = `Cross-Site Scripting (XSS) Guide - Covers reflected, stored, and DOM-based XSS types, attack flow, entry points, sources and sinks, context-aware encoding, detection signals, safe testing checklist, prevention layers, CSP guidance, response steps, framework-safe patterns, real-world case studies, and tooling.`;
+
+  // Section Navigation Items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "overview", label: "What is XSS?", icon: <WebIcon /> },
+    { id: "how-xss-works", label: "How XSS Works", icon: <SecurityIcon /> },
+    { id: "xss-types", label: "XSS Types", icon: <CategoryIcon /> },
+    { id: "encoding", label: "Context Encoding", icon: <CodeIcon /> },
+    { id: "payloads", label: "Common Payloads", icon: <BugReportIcon /> },
+    { id: "sinks", label: "Dangerous Sinks", icon: <WarningIcon /> },
+    { id: "detection", label: "Detection & Testing", icon: <SearchIcon /> },
+    { id: "prevention", label: "Prevention", icon: <ShieldIcon /> },
+    { id: "advanced", label: "Advanced Techniques", icon: <TerminalIcon /> },
+    { id: "waf-bypass", label: "WAF Bypass", icon: <BuildIcon /> },
+    { id: "case-studies", label: "Case Studies", icon: <HistoryIcon /> },
+    { id: "tools", label: "Testing Tools", icon: <BuildIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Sidebar Navigation Component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(ACCENT_COLOR, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: ACCENT_COLOR, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(ACCENT_COLOR, 0.1),
+              "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR, borderRadius: 3 },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? ACCENT_COLOR : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
 
   return (
     <LearnPageLayout pageTitle="Cross-Site Scripting (XSS)" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Chip
-            component={Link}
-            to="/learn"
-            icon={<ArrowBackIcon />}
-            label="Back to Learning Hub"
-            clickable
-            variant="outlined"
-            sx={{ borderRadius: 2, mb: 2 }}
-          />
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: ACCENT_COLOR,
+            "&:hover": { bgcolor: "#d97706" },
+            boxShadow: `0 4px 20px ${alpha(ACCENT_COLOR, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(ACCENT_COLOR, 0.15),
+            color: ACCENT_COLOR,
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: ACCENT_COLOR }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(ACCENT_COLOR, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(ACCENT_COLOR, 0.1),
+                "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR, borderRadius: 3 },
+              }}
+            />
+          </Box>
+
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                  "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.1) },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? ACCENT_COLOR : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(ACCENT_COLOR, 0.2), color: ACCENT_COLOR }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz-section")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Header */}
+          <Box id="intro" sx={{ mb: 4 }}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Box
               sx={{
@@ -1285,6 +1631,10 @@ export default function XSSGuidePage() {
               <Typography variant="body1" color="text.secondary">
                 Client-Side Code Injection
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 720, mt: 0.5, lineHeight: 1.7 }}>
+                This guide explains how XSS happens, where it hides in modern apps, and how to prevent it with context-aware encoding,
+                safe DOM patterns, and defense-in-depth controls like CSP and Trusted Types.
+              </Typography>
             </Box>
           </Box>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -1295,7 +1645,7 @@ export default function XSSGuidePage() {
         </Box>
 
         {/* Overview */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Paper id="overview" sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <WebIcon color="warning" /> What is XSS?
           </Typography>
@@ -1304,14 +1654,33 @@ export default function XSSGuidePage() {
             users. The victim's browser executes the script in the context of the vulnerable site, enabling session 
             hijacking, data theft, and account takeover.
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, lineHeight: 1.8 }}>
+            XSS is not about breaking servers. It is about tricking the browser into treating untrusted data as executable code. Because the
+            script runs under the vulnerable site's origin, it can read sensitive DOM data, call APIs, and perform actions the user can perform.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, lineHeight: 1.8 }}>
+            Most XSS bugs come from a mismatch between input, output context, and encoding. When data is inserted into HTML, attributes, URLs,
+            or inline scripts without the right encoding, it becomes a code path.
+          </Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 2, mb: 1 }}>
+            Why teams miss XSS
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+            The same data can be safe in one context and unsafe in another. XSS often appears in edge UI flows like previews, error messages,
+            and admin tooling where trust boundaries are weaker and tests are thin.
+          </Typography>
         </Paper>
 
         {/* How XSS Happens */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="how-xss-works" container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <SecurityIcon sx={{ color: "#f59e0b" }} /> How XSS Works (Step-by-Step)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                XSS is a data flow problem: a string that should be treated as data is instead parsed as code. The steps
+                below highlight where that trust boundary is crossed.
               </Typography>
               <List dense>
                 {xssFlow.map((step) => (
@@ -1329,6 +1698,10 @@ export default function XSSGuidePage() {
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <SearchIcon sx={{ color: "#8b5cf6" }} /> Common Entry Points
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                These inputs often look harmless because they are meant for display. Treat them as untrusted unless
+                they are generated by the application and kept server-side.
               </Typography>
               <List dense>
                 {entryPoints.map((item) => (
@@ -1348,6 +1721,10 @@ export default function XSSGuidePage() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
             High-Risk Features to Review
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            If a feature accepts user input and later renders it for another user, it should be treated as high risk.
+            These are the places where XSS shows up most often in real systems.
+          </Typography>
           <Grid container spacing={1}>
             {highRiskFeatures.map((item) => (
               <Grid item xs={12} sm={6} key={item}>
@@ -1361,11 +1738,19 @@ export default function XSSGuidePage() {
         </Paper>
 
         {/* Sources and Sinks */}
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+          Sources are untrusted entry points. Sinks are the APIs that interpret data as HTML or code. XSS happens when
+          untrusted sources flow into dangerous sinks without the right controls.
+        </Typography>
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <SearchIcon sx={{ color: "#3b82f6" }} /> Untrusted Sources
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                Any data that originated from a user, another tenant, or a third-party system should be treated as untrusted.
+                Even data stored in your own database can be attacker-controlled.
               </Typography>
               <List dense>
                 {domSources.map((s, i) => (
@@ -1384,6 +1769,10 @@ export default function XSSGuidePage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <WarningIcon sx={{ color: "#8b5cf6" }} /> Safer DOM Practices
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                When you need to update the DOM, prefer APIs that treat content as text, and sanitize when HTML is required.
+                Make the safe path the default in your codebase.
+              </Typography>
               <List dense>
                 {safeDomPractices.map((s, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1399,7 +1788,11 @@ export default function XSSGuidePage() {
         </Grid>
 
         {/* XSS Types */}
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 XSS Types</Typography>
+        <Typography id="xss-types" variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 XSS Types</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+          The three main XSS families differ by where the payload lives and how it reaches the browser. Understanding
+          the source and lifecycle of the payload helps you choose the correct fix.
+        </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {xssTypes.map((type) => (
             <Grid item xs={12} md={4} key={type.title}>
@@ -1427,12 +1820,16 @@ export default function XSSGuidePage() {
         </Grid>
 
         {/* Context-Aware Encoding */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+        <Paper id="encoding" sx={{ p: 3, mb: 4, borderRadius: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
             Context-Aware Encoding Cheat Sheet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             The safe fix depends on where the data is placed. Always encode for the correct context.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Encoding is an output decision, not an input decision. Input validation helps reduce noise, but it is not
+            sufficient on its own. Make sure the rendering layer is responsible for proper encoding every time.
           </Typography>
           <TableContainer>
             <Table size="small">
@@ -1458,6 +1855,7 @@ export default function XSSGuidePage() {
 
         {/* Common Payloads */}
         <Paper
+          id="payloads"
           sx={{
             p: 3,
             mb: 4,
@@ -1472,6 +1870,10 @@ export default function XSSGuidePage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Use these only in authorized environments. They help identify the context (HTML, attribute, URL) and confirm
             whether encoding or sanitization is working as expected.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Keep tests non-destructive. Simple alerts or harmless DOM markers are enough to confirm a vulnerability
+            without touching real user data or sessions.
           </Typography>
           <Grid container spacing={1}>
             {commonPayloads.map((p, i) => (
@@ -1488,11 +1890,15 @@ export default function XSSGuidePage() {
         </Paper>
 
         {/* Dangerous Sinks & Impact */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="sinks" container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <WarningIcon sx={{ color: "#8b5cf6" }} /> Dangerous Sinks (DOM XSS)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                Sinks are the APIs that turn strings into executable markup or code. Audit these carefully, especially
+                when the value can be influenced by users or third-party data.
               </Typography>
               <List dense>
                 {dangerousSinks.map((s, i) => (
@@ -1511,6 +1917,10 @@ export default function XSSGuidePage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <BugReportIcon sx={{ color: "#ef4444" }} /> Impact Scenarios
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                XSS is a browser-side compromise. It lets an attacker act as the user within your application, often
+                without needing to steal credentials directly.
+              </Typography>
               <List dense>
                 {impactScenarios.map((s, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1526,11 +1936,15 @@ export default function XSSGuidePage() {
         </Grid>
 
         {/* Detection and Testing */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid id="detection" container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <SearchIcon sx={{ color: "#3b82f6" }} /> Detection Signals
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                Detection combines user reports, automated monitoring, and code review. Look for places where untrusted
+                data reaches HTML or script contexts.
               </Typography>
               <List dense>
                 {detectionSignals.map((s, i) => (
@@ -1549,6 +1963,10 @@ export default function XSSGuidePage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <TipsAndUpdatesIcon sx={{ color: "#10b981" }} /> Safe Testing Checklist
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                Testing should validate the data flow and the fix. Use a controlled environment and avoid payloads that
+                touch real user data or sessions.
+              </Typography>
               <List dense>
                 {testingChecklist.map((s, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1564,9 +1982,13 @@ export default function XSSGuidePage() {
         </Grid>
 
         {/* Prevention */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
+        <Paper id="prevention" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <SecurityIcon sx={{ color: "#10b981" }} /> Prevention Methods
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Effective prevention layers encoding, safe DOM usage, and strong browser policies. No single control is
+            sufficient on its own, so build in defense in depth.
           </Typography>
           <Grid container spacing={1}>
             {preventionMethods.map((m, i) => (
@@ -1586,6 +2008,10 @@ export default function XSSGuidePage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <ShieldIcon sx={{ color: "#f59e0b" }} /> CSP Essentials
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                CSP reduces the blast radius by restricting what scripts can execute. Treat it as a safety net for
+                mistakes, not a replacement for correct output encoding.
+              </Typography>
               <List dense>
                 {cspGuidelines.map((item, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1602,6 +2028,10 @@ export default function XSSGuidePage() {
             <Paper sx={{ p: 3, height: "100%", borderRadius: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <CodeIcon sx={{ color: "#8b5cf6" }} /> Framework Notes
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                Modern frameworks help, but only if you avoid bypasses and unsafe escape hatches. Review any use of raw
+                HTML rendering or template escape overrides.
               </Typography>
               <List dense>
                 {frameworkNotes.map((item, i) => (
@@ -1621,6 +2051,10 @@ export default function XSSGuidePage() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <CodeIcon sx={{ color: "#f59e0b" }} /> Secure Coding Examples
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Compare unsafe patterns with safer alternatives. The goal is to keep user data as text unless you have a
+            strong reason to render HTML.
+          </Typography>
           <Grid container spacing={2}>
             {codeSamples.map((sample) => (
               <Grid item xs={12} md={6} key={sample.title}>
@@ -1638,6 +2072,10 @@ export default function XSSGuidePage() {
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.05) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <SecurityIcon sx={{ color: "#3b82f6" }} /> Response Steps
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            When you find XSS, focus on a durable fix. Patch the unsafe rendering, reduce exposure, and add tests so the
+            issue does not regress.
           </Typography>
           <Grid container spacing={1}>
             {responseSteps.map((m, i) => (
@@ -1671,7 +2109,11 @@ export default function XSSGuidePage() {
         </Paper>
 
         {/* Advanced XSS Techniques */}
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 Advanced XSS Techniques</Typography>
+        <Typography id="advanced" variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 Advanced XSS Techniques</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+          These patterns show how modern browsers and frameworks can still be tricked when unsafe HTML flows through.
+          Study them to understand risk, but test only with explicit authorization.
+        </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {advancedTechniques.map((tech) => (
             <Grid item xs={12} md={6} key={tech.name}>
@@ -1702,12 +2144,16 @@ export default function XSSGuidePage() {
         </Grid>
 
         {/* WAF Bypass Techniques */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+        <Paper id="waf-bypass" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <WarningIcon sx={{ color: "#f59e0b" }} /> WAF Bypass Techniques
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Web Application Firewalls can be bypassed using various encoding and obfuscation techniques. These are for authorized testing only.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Treat WAF rules as an extra barrier, not the primary fix. If output encoding is wrong, a bypass is only a
+            matter of time.
           </Typography>
           <TableContainer>
             <Table size="small">
@@ -1732,9 +2178,13 @@ export default function XSSGuidePage() {
         </Paper>
 
         {/* Real-World Case Studies */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+        <Paper id="case-studies" sx={{ p: 3, mb: 4, borderRadius: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <WarningIcon sx={{ color: "#ef4444" }} /> Real-World XSS Case Studies
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            These incidents show how a small rendering bug can create large-scale impact when user-generated content is
+            shared or processed by privileged accounts.
           </Typography>
           <Grid container spacing={2}>
             {realWorldCases.map((case_) => (
@@ -1763,6 +2213,10 @@ export default function XSSGuidePage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Even strong CSP policies can sometimes be bypassed through misconfigurations or browser quirks.
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            The safest CSP strategy is strict defaults with explicit allowlists, plus automated testing to catch new
+            endpoints or libraries that would weaken your policy.
+          </Typography>
           <Grid container spacing={2}>
             {cspBypassTechniques.map((bypass) => (
               <Grid item xs={12} md={6} key={bypass.scenario}>
@@ -1783,9 +2237,13 @@ export default function XSSGuidePage() {
         </Paper>
 
         {/* XSS Testing Tools */}
-        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03) }}>
+        <Paper id="tools" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <SearchIcon sx={{ color: "#22c55e" }} /> XSS Testing Tools
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Use a mix of proxy tools, scanners, and browser instrumentation. Automated scanners are useful for coverage,
+            but manual validation is still needed for DOM-based flows and context-specific encodings.
           </Typography>
           <Grid container spacing={2}>
             {xssTestingTools.map((tool) => (
@@ -1804,6 +2262,10 @@ export default function XSSGuidePage() {
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
             🌐 Browser-Specific Behaviors
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Browser engines parse HTML differently and enforce CSP with subtle differences. Validate fixes in the
+            browsers your users rely on most.
           </Typography>
           <TableContainer>
             <Table size="small">
@@ -1832,6 +2294,10 @@ export default function XSSGuidePage() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <CodeIcon sx={{ color: "#8b5cf6" }} /> Framework-Specific Examples
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Framework defaults are safer than manual HTML construction, but they still provide escape hatches. The
+            examples below highlight common safe and unsafe patterns.
+          </Typography>
           <Grid container spacing={2}>
             {extendedCodeSamples.slice(0, 4).map((sample) => (
               <Grid item xs={12} md={6} key={sample.title}>
@@ -1850,6 +2316,10 @@ export default function XSSGuidePage() {
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <BugReportIcon sx={{ color: "#ef4444" }} /> Exploit Scenarios by Context
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            Use these scenarios to reason about where output encoding should occur. The vulnerable pattern is what to
+            look for in code reviews and tests.
           </Typography>
           <TableContainer>
             <Table size="small">
@@ -1915,7 +2385,8 @@ export default function XSSGuidePage() {
             Back to Learning Hub
           </Button>
         </Box>
-      </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

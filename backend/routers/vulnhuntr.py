@@ -4,7 +4,7 @@ VulnHuntr Router - LLM-Powered Vulnerability Hunting API
 Endpoints for running VulnHuntr analysis on projects.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -18,6 +18,9 @@ from ..services.vulnhuntr_service import (
     VulnHuntrResult
 )
 from ..core.logging import get_logger
+from backend.core.auth import get_current_active_user
+from backend.core.file_validator import sanitize_filename
+from backend.models.models import User
 
 logger = get_logger(__name__)
 
@@ -65,7 +68,7 @@ _scan_results: Dict[str, VulnHuntrResult] = {}
 # ============================================================================
 
 @router.post("/analyze", response_model=VulnHuntrResponse)
-async def analyze_project(request: VulnHuntrRequest):
+async def analyze_project(request: VulnHuntrRequest, current_user: User = Depends(get_current_active_user)):
     """
     Run VulnHuntr analysis on a project.
     
@@ -121,7 +124,7 @@ async def analyze_project(request: VulnHuntrRequest):
 
 
 @router.get("/results/{scan_id}")
-async def get_scan_results(scan_id: str):
+async def get_scan_results(scan_id: str, current_user: User = Depends(get_current_active_user)):
     """Get results from a previous VulnHuntr scan"""
     if scan_id not in _scan_results:
         raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
@@ -131,7 +134,7 @@ async def get_scan_results(scan_id: str):
 
 
 @router.get("/results/{scan_id}/markdown")
-async def get_scan_markdown(scan_id: str):
+async def get_scan_markdown(scan_id: str, current_user: User = Depends(get_current_active_user)):
     """Get VulnHuntr results as Markdown report"""
     if scan_id not in _scan_results:
         raise HTTPException(status_code=404, detail=f"Scan not found: {scan_id}")
@@ -147,7 +150,7 @@ async def get_scan_markdown(scan_id: str):
 
 
 @router.post("/quick-scan")
-async def quick_scan_code(request: VulnHuntrQuickScanRequest):
+async def quick_scan_code(request: VulnHuntrQuickScanRequest, current_user: User = Depends(get_current_active_user)):
     """
     Quick scan a code snippet for vulnerabilities.
     
@@ -155,13 +158,15 @@ async def quick_scan_code(request: VulnHuntrQuickScanRequest):
     """
     import tempfile
     import shutil
-    
+
     # Create temporary directory with the code
     temp_dir = tempfile.mkdtemp(prefix="vulnhuntr_")
-    
+
     try:
+        # Sanitize filename to prevent path traversal attacks
+        safe_filename = sanitize_filename(request.filename, preserve_extension=True)
         # Write code to temp file
-        file_path = os.path.join(temp_dir, request.filename)
+        file_path = os.path.join(temp_dir, safe_filename)
         with open(file_path, 'w') as f:
             f.write(request.code)
         
@@ -187,7 +192,7 @@ async def quick_scan_code(request: VulnHuntrQuickScanRequest):
 
 
 @router.get("/patterns")
-async def get_vulnerability_patterns():
+async def get_vulnerability_patterns(current_user: User = Depends(get_current_active_user)):
     """
     Get the list of vulnerability patterns that VulnHuntr checks for.
     
@@ -216,7 +221,7 @@ async def get_vulnerability_patterns():
 
 
 @router.get("/stats")
-async def get_vulnhuntr_stats():
+async def get_vulnhuntr_stats(current_user: User = Depends(get_current_active_user)):
     """Get statistics about VulnHuntr scans"""
     total_scans = len(_scan_results)
     total_vulns = sum(len(r.vulnerabilities) for r in _scan_results.values())

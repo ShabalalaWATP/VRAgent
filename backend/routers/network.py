@@ -26,7 +26,7 @@ router = APIRouter(prefix="/network", tags=["network-analysis"])
 logger = get_logger(__name__)
 
 # Constants
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB per file
+MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB per file - supports large network captures (was 100MB)
 PCAP_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
 NMAP_EXTENSIONS = {".xml", ".nmap", ".gnmap", ".txt"}
 
@@ -131,6 +131,8 @@ class NmapScanRequest(BaseModel):
     ports: Optional[str] = None
     title: Optional[str] = None
     template_id: Optional[int] = None  # Use settings from a saved template
+    scripts: Optional[List[str]] = None  # Individual NSE scripts to run
+    script_categories: Optional[List[str]] = None  # NSE script categories (e.g., "vuln", "safe")
 
 
 # ============================================================================
@@ -856,6 +858,43 @@ def get_nmap_scan_types():
     ]
 
 
+@router.get("/nmap/script-categories")
+def get_nmap_script_categories():
+    """
+    Get available NSE script categories that can be added to scans.
+    
+    These categories can be used with the `script_categories` parameter
+    in the scan request to run additional scripts.
+    
+    **Categories:**
+    - `vuln`: Vulnerability detection scripts (may trigger IDS)
+    - `safe`: Non-intrusive scripts
+    - `discovery`: Service enumeration
+    - `auth`: Authentication checks
+    - `brute`: Password brute forcing (use with caution)
+    - `exploit`: Exploitation attempts (pentesting only)
+    - `malware`: Malware detection
+    """
+    return nmap_service.get_nse_script_categories()
+
+
+@router.get("/nmap/scripts")
+def get_nmap_scripts():
+    """
+    Get available individual NSE scripts that can be run.
+    
+    These scripts can be used with the `scripts` parameter in the scan request.
+    
+    Returns a list of commonly useful NSE scripts organized by category,
+    including vulnerability checks for:
+    - SSL/TLS (Heartbleed, POODLE, etc.)
+    - SMB (EternalBlue, MS08-067, etc.)
+    - HTTP (Shellshock, Struts, Log4j, etc.)
+    - Authentication issues
+    """
+    return nmap_service.get_nse_individual_scripts()
+
+
 @router.post("/nmap/scan", response_model=MultiAnalysisResponse)
 async def run_nmap_scan(
     request: NmapScanRequest,
@@ -923,13 +962,15 @@ async def run_nmap_scan(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error)
     
-    logger.info(f"Starting live Nmap scan: target={request.target}, type={scan_type}")
+    logger.info(f"Starting live Nmap scan: target={request.target}, type={scan_type}, scripts={request.scripts}, script_categories={request.script_categories}")
     
     # Run the scan
     output_file, command_used, error = nmap_service.run_nmap_scan(
         target=request.target,
         scan_type=scan_type,
         ports=ports,
+        scripts=request.scripts,
+        script_categories=request.script_categories,
     )
     
     if error:
@@ -1563,7 +1604,7 @@ Based on the above SSL/TLS scan context, answer the user's questions. Be specifi
 Keep responses concise but informative. Use technical terms but explain them when needed."""
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             contents=[
                 {"role": "user", "parts": [{"text": system_prompt}]},
                 {"role": "user", "parts": [{"text": request.message}]}

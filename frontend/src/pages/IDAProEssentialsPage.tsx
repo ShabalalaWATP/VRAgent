@@ -1411,6 +1411,18 @@ export default function IDAProEssentialsPage() {
 
             {/* Main Content */}
             <Box ref={mainContentRef} sx={{ flex: 1, minWidth: 0 }}>
+        {/* Back Link */}
+        <Box sx={{ mb: 3 }} id="intro">
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2 }}
+          />
+        </Box>
         <Paper
           id="intro-section"
           sx={{
@@ -1558,15 +1570,6 @@ export default function IDAProEssentialsPage() {
           </Grid>
         </Paper>
 
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 3 }}
-        />
         <Paper id="quickstart-section" sx={{ p: 4, mb: 4, borderRadius: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
             Quick Start Workflow

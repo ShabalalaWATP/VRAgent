@@ -4612,6 +4612,9 @@ export default function ReportDetailPage() {
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Ref for auto-scrolling to report bottom
+  const reportEndRef = useRef<HTMLDivElement>(null);
+
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareDialogFinding, setShareDialogFinding] = useState<Finding | null>(null);
@@ -4667,6 +4670,7 @@ export default function ReportDetailPage() {
 
   // State for regenerating AI summaries
   const [regeneratingSummary, setRegeneratingSummary] = useState(false);
+  const [autoTriggeredAI, setAutoTriggeredAI] = useState(false);
   
   // Function to regenerate AI summaries
   const handleRegenerateSummary = async () => {
@@ -4681,6 +4685,22 @@ export default function ReportDetailPage() {
       setRegeneratingSummary(false);
     }
   };
+
+  // Auto-trigger AI analysis if not available and hasn't been triggered yet
+  useEffect(() => {
+    if (
+      !autoTriggeredAI &&
+      !summaryQuery.isLoading &&
+      !regeneratingSummary &&
+      summaryQuery.data &&
+      !summaryQuery.data.has_app_summary &&
+      !summaryQuery.data.has_security_summary &&
+      findingsQuery.data // Wait for findings to load
+    ) {
+      setAutoTriggeredAI(true);
+      handleRegenerateSummary();
+    }
+  }, [summaryQuery.isLoading, summaryQuery.data, regeneratingSummary, autoTriggeredAI, findingsQuery.data]);
 
   const startExploitMutation = useMutation({
     mutationFn: () => api.startExploitability(id, exploitMode),
@@ -4756,6 +4776,17 @@ export default function ReportDetailPage() {
       setSortOrder("asc");
     }
   };
+
+  // Auto-scroll to bottom of report when data loads
+  useEffect(() => {
+    if (reportQuery.data && findingsQuery.data && reportEndRef.current) {
+      // Small delay to ensure DOM is rendered
+      const timer = setTimeout(() => {
+        reportEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [reportQuery.data, findingsQuery.data]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -4891,33 +4922,62 @@ export default function ReportDetailPage() {
                   {reportQuery.data.summary || "No summary available"}
                 </Typography>
 
-                {/* Export Buttons */}
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => handleExport("markdown")}
-                  >
-                    Markdown
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => handleExport("pdf")}
-                  >
-                    PDF
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => handleExport("docx")}
-                  >
-                    Word
-                  </Button>
-                </Stack>
+                {/* Export Buttons - All formats prominently displayed */}
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    EXPORT REPORT
+                  </Typography>
+                  <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+                    <Button
+                      variant="contained"
+                      size="medium"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleExport("markdown")}
+                      sx={{
+                        bgcolor: alpha(theme.palette.info.main, 0.15),
+                        color: theme.palette.info.main,
+                        fontWeight: 600,
+                        "&:hover": {
+                          bgcolor: alpha(theme.palette.info.main, 0.25),
+                        },
+                      }}
+                    >
+                      📝 Markdown
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="medium"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleExport("pdf")}
+                      sx={{
+                        bgcolor: alpha(theme.palette.error.main, 0.15),
+                        color: theme.palette.error.main,
+                        fontWeight: 600,
+                        "&:hover": {
+                          bgcolor: alpha(theme.palette.error.main, 0.25),
+                        },
+                      }}
+                    >
+                      📄 PDF
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="medium"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => handleExport("docx")}
+                      sx={{
+                        bgcolor: alpha(theme.palette.primary.main, 0.15),
+                        color: theme.palette.primary.main,
+                        fontWeight: 600,
+                        "&:hover": {
+                          bgcolor: alpha(theme.palette.primary.main, 0.25),
+                        },
+                      }}
+                    >
+                      📃 Word
+                    </Button>
+                  </Stack>
+                </Box>
               </Grid>
 
               <Grid item xs={12} md={4}>
@@ -6612,6 +6672,9 @@ export default function ReportDetailPage() {
           Finding shared successfully! Check your Social Hub messages.
         </Alert>
       </Snackbar>
+
+      {/* Auto-scroll target at report bottom */}
+      <div ref={reportEndRef} />
     </Box>
   );
 }

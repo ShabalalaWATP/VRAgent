@@ -1135,12 +1135,59 @@ export default function ThreatHuntingPage() {
             Unlike reactive alert-driven detection, hunters form hypotheses about attacker behavior and actively 
             search for evidence. It assumes breach and looks for what automated tools miss.
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 2 }}>
+            A simple way to think about hunting is the difference between "alerts" and "questions." Alerts are what
+            your tools decide to tell you. Hunting is what you decide to ask. For example, an alert might say "malware
+            blocked," but a hunt asks "are any systems making outbound connections to new domains after PowerShell runs?"
+            This mindset helps you discover behaviors that rules have not been written for yet.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+            Beginner hunters should focus on clear outcomes: either you confirm a suspicious pattern or you learn that
+            the behavior is normal. Both are valuable. Each hunt improves understanding of your environment, which is the
+            foundation for stronger detections.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+            Think of hunting as a bridge between detection and incident response. Detection is about automation. Response
+            is about containment. Hunting sits in the middle, turning raw data into knowledge that can be automated later.
+            A strong hunt often ends with a new detection rule, a new data requirement, or a documented gap to fix.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+            Hunters also need context. If you do not know how your organization normally uses PowerShell, VPN, or cloud
+            services, you will misclassify common activity as suspicious. Spend time learning normal patterns first, then
+            look for deviations with a clear hypothesis.
+          </Typography>
+          <Paper sx={{ p: 2.5, mt: 3, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.05) }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+              Beginner Lesson: Hunting Is a Structured Investigation
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+              Hunting is not a random search. It is a structured investigation that starts with a question, uses
+              evidence to test that question, and ends with a clear conclusion. This is why good hunters write down
+              their hypothesis and define exactly what data they need before they start querying.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+              For beginners, the safest way to hunt is to keep the scope small: pick one behavior (like unusual
+              PowerShell usage), select 1-2 data sources, and prove or disprove the hypothesis. That approach builds
+              confidence and prevents overwhelming results.
+            </Typography>
+          </Paper>
         </Paper>
 
         {/* Hypothesis Sources */}
         <Paper id="hypothesis" sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.04), scrollMarginTop: 100 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
             <LightbulbIcon sx={{ color: "#8b5cf6" }} /> Hypothesis Sources
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            Hypotheses should be grounded in real-world attacker behavior. That means using threat intelligence,
+            incident retrospectives, and framework mappings (like MITRE ATT&CK) to form questions that are likely
+            to reveal real risk. When a hypothesis is too broad, it produces noise. When it is too narrow, it can
+            miss relevant behavior. Aim for a hypothesis that is specific but testable with your available data.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            A good rule of thumb: if you cannot describe your hypothesis in one sentence with a clear verb, data source,
+            and timeframe, it is probably too vague. "Look for lateral movement" is vague. "Look for RDP logons to servers
+            outside normal admin hours from newly created accounts in the last 14 days" is testable.
           </Typography>
           <List dense>
             {hypothesisSources.map((source, i) => (
@@ -1152,6 +1199,19 @@ export default function ThreatHuntingPage() {
               </ListItem>
             ))}
           </List>
+          <Paper sx={{ p: 2.5, mt: 2, borderRadius: 2, bgcolor: alpha("#6366f1", 0.06) }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+              How to Write a Good Hypothesis
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+              A strong hypothesis is specific, testable, and grounded in real attacker behavior. Avoid vague statements
+              like "check for malware." Instead, define a behavior, a data source, and a time window.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+              Example: "Adversaries in our sector often use scheduled tasks for persistence. Search for new scheduled
+              tasks created in the last 7 days on endpoints, excluding approved IT automation accounts."
+            </Typography>
+          </Paper>
         </Paper>
 
         {/* Example Hypothesis */}
@@ -1161,6 +1221,17 @@ export default function ThreatHuntingPage() {
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {hypothesisExample.hypothesis}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            Notice how this hypothesis defines a behavior (PowerShell usage), a context (non-admin users), and a threat
+            pattern (downloading remote content). This makes the hunt practical. You can translate it into queries,
+            use the results to validate the behavior, and then decide if it is benign or suspicious.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
+            For a beginner, the most important part is "decide if it is benign." That decision should be based on
+            evidence. For example, if the PowerShell command was launched by a known software deployment tool and the
+            destination domain is corporate, it may be expected. If it was launched by a user clicking a document and
+            connects to a newly registered domain, it likely warrants escalation.
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
@@ -1190,10 +1261,69 @@ export default function ThreatHuntingPage() {
               </List>
             </Grid>
           </Grid>
+          <Paper sx={{ p: 2.5, mt: 3, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.08) }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+              Mini Walkthrough: From Query to Conclusion
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+              Start by searching for PowerShell execution from non-admin users. Then filter to commands that include
+              suspicious keywords like "IEX" or "DownloadString." If you find hits, pivot into network logs to see
+              what external domains were contacted. Finally, check process trees to verify whether PowerShell launched
+              additional binaries.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+              If the hits map to known IT scripts, document and close the hunt as a false positive. If you see unusual
+              domains or child processes, escalate to incident response with evidence.
+            </Typography>
+          </Paper>
         </Paper>
 
         {/* Hunting Process */}
         <Typography id="hunting-process" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 100 }}>🔄 Hunting Process</Typography>
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.04) }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Lesson: The Hunt Loop
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+            A hunt is iterative. You form a hypothesis, test it with queries, refine based on results, and document
+            what you learned. Even a "no findings" hunt is valuable because it validates assumptions and improves
+            detection coverage.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+            Beginners should keep a hunt log with timestamps, queries, and decisions. This makes the work repeatable
+            and helps senior analysts review your reasoning.
+          </Typography>
+        </Paper>
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.08) }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Detailed Steps: What to Do in Each Phase
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+            Plan: Define the question, scope the time range, and pick the data sources. Decide what "success" looks like.
+            Collect: Validate the data source is complete and recent. Make sure you know the field names you will query.
+            Analyze: Start with broad filters, then tighten them. Pivot to related data sources when you find a hit.
+            Conclude: Decide if the hypothesis is supported. If not, document why and what gaps exist.
+            Share: Convert findings into detections, playbooks, or detection tuning.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+            The most common failure is skipping the "Conclude" step. Even when you find nothing, you should record it.
+            This prevents repeating the same hunt later and helps justify data collection priorities.
+          </Typography>
+        </Paper>
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#1d4ed8", 0.06) }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Common Beginner Pitfalls (and How to Avoid Them)
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+            Pitfall 1: Starting with complex queries. Fix: start broad, then narrow. Pitfall 2: Ignoring asset context.
+            Fix: always check whether the host is a server, workstation, or lab system. Pitfall 3: Over-trusting a single
+            data source. Fix: corroborate with another source before escalating.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+            Pitfall 4: Treating every anomaly as malicious. Fix: learn what "normal" looks like for your environment.
+            Pitfall 5: Forgetting to document. Fix: keep a running hunt note with queries, dates, and decisions.
+          </Typography>
+        </Paper>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 4 }}>
           {huntingPhases.map((phase, i) => (
             <React.Fragment key={phase.title}>
@@ -1276,6 +1406,15 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Readiness means you can trust your data and your team can respond if you find something. If you do not
+                have reliable endpoint logs or a plan to contain a compromised host, your hunt results will stall.
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Another readiness check is permissions. Make sure you have access to the data you need before the hunt
+                begins. If you discover a gap mid-hunt (missing DNS or EDR data), note it in your findings and treat it
+                as a measurable improvement task.
+              </Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
@@ -1293,6 +1432,14 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Data quality issues are the biggest reason hunts fail. If timestamps are missing or fields are inconsistent,
+                you will misinterpret results. Always confirm ingestion latency and field coverage before trusting a query.
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                If you can, build small validation queries that check for empty fields, sudden drops in event volume,
+                or mismatched time zones. These quick checks can save hours of confusion later in the hunt.
+              </Typography>
             </Paper>
           </Grid>
         </Grid>
@@ -1312,6 +1459,18 @@ export default function ThreatHuntingPage() {
               </ListItem>
             ))}
           </List>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1 }}>
+            Consistency matters more than volume. A weekly cadence with clean documentation builds better detections
+            than a large, infrequent hunt with no follow-through.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+            Beginners should choose a cadence they can sustain. A small hunt each week, documented well, creates a
+            backlog of findings and tuning opportunities. Over time, these small hunts build a strong detection program.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+            Pair your cadence with a simple review ritual. For example, review the last three hunts monthly and ask:
+            What did we learn? What should we automate? What data gaps remain? This creates momentum and measurable progress.
+          </Typography>
         </Paper>
 
         {/* Data Sources & Hunt Ideas */}
@@ -1331,6 +1490,14 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                If you are just starting, prioritize endpoint process data and authentication logs. These provide
+                high signal for many attacker behaviors, and they are easier to interpret than raw network flows.
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                As you mature, add DNS, proxy, and cloud audit logs. These sources help track lateral movement and
+                data exfiltration, but they require stronger normalization and enrichment to be useful.
+              </Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
@@ -1353,6 +1520,14 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Map each hunt idea to a real question: what behavior should exist if this technique is used, and what
+                data can prove it? This keeps your hunt focused and prevents vague "fishing" queries.
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Over time, track which hunt ideas produce valuable findings. Retire low-value hunts and spend more time
+                on areas that consistently reveal issues. That is how a hunting program matures.
+              </Typography>
             </Paper>
           </Grid>
         </Grid>
@@ -1374,6 +1549,10 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Baselines are not static. Revisit them after major changes like new software rollouts, mergers, or
+                remote work policy shifts. Outdated baselines lead to false positives and wasted hunt time.
+              </Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
@@ -1391,6 +1570,42 @@ export default function ThreatHuntingPage() {
                   </ListItem>
                 ))}
               </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                When applying analysis techniques, document why you chose them. For example, if you use clustering,
+                note the field used for clustering and the timeframe. This transparency makes results easier to review
+                and repeat later.
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#0f172a", 0.4), border: `1px solid ${alpha(theme.palette.divider, 0.08)}` }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                Lesson: Evidence Confidence Levels
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 1.5 }}>
+                Not all evidence is equal. A single log entry may be weak evidence, while multiple independent artifacts
+                that agree on the same event provide high confidence. Document confidence so others understand your
+                conclusions.
+              </Typography>
+              <List dense>
+                {[
+                  "Low: single data point with no corroboration.",
+                  "Medium: two related artifacts (e.g., log + process tree).",
+                  "High: three or more sources confirm the same behavior.",
+                  "Critical: evidence indicates confirmed compromise and impact.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <CheckCircleIcon sx={{ fontSize: 16, color: "#94a3b8" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mt: 1.5 }}>
+                Confidence levels help you communicate urgency. A "high confidence" finding should trigger response
+                actions, while a "low confidence" observation may lead to more data collection or a refined hypothesis.
+              </Typography>
             </Paper>
           </Grid>
         </Grid>

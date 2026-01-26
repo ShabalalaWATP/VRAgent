@@ -403,7 +403,7 @@ export default function SoftwareEngineeringFundamentalsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  const pageContext = `Software Engineering Fundamentals learning page. Covers core software engineering concepts, tools and IDEs (VS Code, Visual Studio, IntelliJ, Xcode), Git and GitHub workflows, SDLC and methodologies, clean code principles, testing and quality, debugging, delivery and operations basics, security and performance fundamentals, and common software engineering specializations including web, mobile, backend, cloud, DevOps, data, and security. Includes a randomized 75-question quiz to reinforce learning.`;
+  const pageContext = `Software Engineering Fundamentals learning page. Covers core software engineering concepts, tools and IDEs (VS Code, Visual Studio, IntelliJ, Xcode), AI-assisted programming workflows, Git and GitHub workflows, SDLC and methodologies, clean code principles, testing and quality, debugging, delivery and operations basics, security and performance fundamentals, and common software engineering specializations including web, mobile, backend, cloud, DevOps, data, and security. Includes a randomized 75-question quiz to reinforce learning.`;
 
   const quickStats = [
     { label: "Modules", value: "18", color: "#f97316" },
@@ -539,6 +539,45 @@ export default function SoftwareEngineeringFundamentalsPage() {
     { tool: "Xcode", bestFor: "iOS and macOS apps", notes: "Required for Apple platform builds and signing." },
     { tool: "Android Studio", bestFor: "Android apps", notes: "Android SDK, emulator, and profiling tools." },
     { tool: "Vim / Neovim", bestFor: "Terminal-centric workflows", notes: "Fast once mastered, highly customizable." },
+  ];
+
+  const aiAssistantTools = [
+    {
+      name: "Claude Code",
+      bestFor: "Repository-scale refactors, multi-file edits, and long-context planning.",
+      strengths: "Strong at reasoning over large codebases, explaining tradeoffs, and drafting structured plans before edits.",
+      limitations: "Still requires clear constraints, may miss repo-specific conventions, and should never run unchecked changes.",
+    },
+    {
+      name: "Codex",
+      bestFor: "Precise code generation, targeted fixes, and test scaffolding from detailed prompts.",
+      strengths: "Fast at translating specifications into code, good at iterative patching and code review-style feedback.",
+      limitations: "Can hallucinate APIs or edge cases if requirements are vague; needs verification against real code.",
+    },
+    {
+      name: "Gemini CLI",
+      bestFor: "Command-line workflows, quick analysis, and multi-step problem solving with tool context.",
+      strengths: "Good at summarizing outputs, drafting scripts, and reasoning about system-level tasks.",
+      limitations: "Requires careful prompt boundaries and secure handling of credentials or sensitive data.",
+    },
+    {
+      name: "OpenCode",
+      bestFor: "Privacy-first or self-hosted AI assistance inside restricted environments.",
+      strengths: "Control over models and data flow, flexible integrations, and offline-friendly setups.",
+      limitations: "Model quality depends on your backend choice; setup and maintenance can be heavier.",
+    },
+    {
+      name: "GitHub Copilot",
+      bestFor: "Inline code completion, boilerplate generation, and quick function drafts.",
+      strengths: "Seamless IDE integration, helpful for repetitive code and common patterns.",
+      limitations: "Suggestions can be generic or subtly incorrect; licensing and policy checks still apply.",
+    },
+    {
+      name: "Cursor",
+      bestFor: "AI-first editing with chat-driven multi-file updates and code navigation.",
+      strengths: "Good for fast project-wide edits, refactors, and answering questions inside the editor.",
+      limitations: "Changes can be broad if prompts are loose; always review diffs and run tests.",
+    },
   ];
 
   const codePrinciples = [
@@ -1008,6 +1047,7 @@ export default function SoftwareEngineeringFundamentalsPage() {
     { id: "engineering-mindset", label: "Engineering Mindset", icon: "🧠" },
     { id: "learning-plan", label: "Learning Plan", icon: "📋" },
     { id: "tooling-ides", label: "Tooling & IDEs", icon: "🔧" },
+    { id: "ai-assisted-programming", label: "AI-Assisted Programming", icon: "🤖" },
     { id: "git-github", label: "Git & GitHub", icon: "🐙" },
     { id: "workflow", label: "Dev Workflow", icon: "⚡" },
     { id: "project-structure", label: "Project Structure", icon: "📁" },
@@ -2075,6 +2115,83 @@ export default function SoftwareEngineeringFundamentalsPage() {
             <AlertTitle sx={{ fontWeight: 700 }}>Beginner Tip</AlertTitle>
             Pick one editor or IDE and learn it well before switching. Productivity comes from mastery, not from having
             every tool installed.
+          </Alert>
+        </Paper>
+
+        <Paper id="ai-assisted-programming" sx={{ p: 4, mb: 5, borderRadius: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+            <TipsAndUpdatesIcon sx={{ color: "#f97316" }} />
+            AI-Assisted Programming
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            AI assistants are best viewed as junior collaborators that can draft, explain, and refactor code quickly. They
+            excel at scaffolding new modules, summarizing unfamiliar code, and proposing fixes. They do not replace your
+            engineering judgment. Treat every suggestion as a hypothesis that must be verified with tests, linters, and
+            careful review.
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            The most productive workflow is iterative: describe the goal and constraints, request a small change, review
+            the diff, and then expand. Avoid handing an assistant a vague request like "fix everything." Instead, define
+            desired behavior, risk boundaries, and what is out of scope. This keeps the output focused and reduces
+            surprises.
+          </Typography>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            Where AI Helps the Most
+          </Typography>
+          <List dense>
+            {[
+              "Drafting boilerplate (API handlers, test scaffolds, data models) faster than typing by hand.",
+              "Explaining unfamiliar code paths and documenting intent for future maintainers.",
+              "Proposing refactors to reduce duplication or improve readability with before/after diffs.",
+              "Generating test cases and edge conditions you may not have considered.",
+              "Summarizing logs, stack traces, and error patterns into actionable next steps.",
+            ].map((item) => (
+              <ListItem key={item} sx={{ px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  <CheckCircleIcon sx={{ color: "#22c55e" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} />
+              </ListItem>
+            ))}
+          </List>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 3, mb: 2 }}>
+            Tool Landscape and Tradeoffs
+          </Typography>
+          <Grid container spacing={3}>
+            {aiAssistantTools.map((tool) => (
+              <Grid item xs={12} md={6} key={tool.name}>
+                <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#f97316", 0.05), border: `1px solid ${alpha("#f97316", 0.15)}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                    {tool.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1.5 }}>
+                    <strong>Best use:</strong> {tool.bestFor}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1.5 }}>
+                    <strong>Benefits:</strong> {tool.strengths}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Limitations:</strong> {tool.limitations}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Limitations You Must Plan For</AlertTitle>
+            AI can hallucinate APIs, misunderstand business rules, or miss hidden dependencies. It may also reuse patterns
+            that do not match your style guide. Never paste secrets into prompts. Always run tests and validate behavior
+            in the real environment before shipping changes.
+          </Alert>
+
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Practical Safety Checklist</AlertTitle>
+            Keep prompts small and specific, request tests or verification steps, review diffs line by line, and measure
+            performance or security impact if the change is sensitive. Use AI to speed up your work, not to skip critical
+            engineering discipline.
           </Alert>
         </Paper>
 

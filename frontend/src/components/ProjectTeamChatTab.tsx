@@ -325,7 +325,7 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
   const [showThreadView, setShowThreadView] = useState(false);
   const [threadParentMessage, setThreadParentMessage] = useState<SocialMessage | null>(null);
 
-  // Get or create the team chat
+  // Get or create the project chat
   const teamChatQuery = useQuery({
     queryKey: ["project-team-chat", projectId],
     queryFn: () => api.getProjectTeamChat(projectId),
@@ -772,7 +772,7 @@ export default function ProjectTeamChatTab({ projectId, projectName }: ProjectTe
               </Box>
               <Box>
                 <Typography variant="h6" fontWeight={700}>
-                  {teamChatQuery.data?.name || `${projectName} Team Chat`}
+                  {teamChatQuery.data?.name || `${projectName} Project Chat`}
                 </Typography>
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Chip

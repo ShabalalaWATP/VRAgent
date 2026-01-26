@@ -23,6 +23,8 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Set
 from functools import lru_cache
+import os
+import sqlite3
 
 import httpx
 
@@ -36,8 +38,19 @@ NVD_CVE_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 NVD_CPE_API = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
 CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
+# Local offline database path
+LOCAL_CVE_DB = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "data", "offline", "cve", "nvd_cve.db"
+)
+
 REQUEST_TIMEOUT = 30
 MAX_RESULTS_PER_PAGE = 100  # NVD allows up to 2000, but smaller is more reliable
+
+# Connectivity tracking
+_last_connectivity_check: Optional[datetime] = None
+_is_online: Optional[bool] = None
+CONNECTIVITY_CHECK_INTERVAL = 300  # 5 minutes
 
 # Rate limiting based on API key presence
 # Without API key: 5 req/30s → delay 6s
@@ -54,6 +67,356 @@ _kev_cache: Optional[Set[str]] = None
 _kev_cache_time: Optional[datetime] = None
 CACHE_TTL_HOURS = 24
 KEV_CACHE_TTL_HOURS = 6
+
+
+def _check_local_db_available() -> bool:
+    """Check if local CVE database exists."""
+    return os.path.exists(LOCAL_CVE_DB)
+
+
+def _lookup_cve_local(cve_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Look up CVE from local SQLite database (offline fallback).
+    
+    Args:
+        cve_id: CVE identifier
+        
+    Returns:
+        Dictionary with CVE data or None if not found
+    """
+    if not _check_local_db_available():
+        return None
+    
+    try:
+        conn = sqlite3.connect(LOCAL_CVE_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get main CVE data
+        cursor.execute("""
+            SELECT * FROM cves WHERE cve_id = ?
+        """, (cve_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+        
+        # Get CWEs
+        cursor.execute("""
+            SELECT cwe_id FROM cve_cwes WHERE cve_id = ?
+        """, (cve_id,))
+        cwes = [r["cwe_id"] for r in cursor.fetchall()]
+        
+        # Get references
+        cursor.execute("""
+            SELECT url, source, tags FROM cve_references WHERE cve_id = ? LIMIT 10
+        """, (cve_id,))
+        references = [
+            {"url": r["url"], "source": r["source"], "tags": r["tags"].split(",") if r["tags"] else []}
+            for r in cursor.fetchall()
+        ]
+        
+        # Check KEV status
+        cursor.execute("""
+            SELECT * FROM kev_catalog WHERE cve_id = ?
+        """, (cve_id,))
+        kev_row = cursor.fetchone()
+        
+        conn.close()
+        
+        # Build CVSS v3 object
+        cvss_v3 = None
+        if row["cvss_v3_score"]:
+            cvss_v3 = {
+                "version": "3.1",
+                "vector_string": row["cvss_v3_vector"],
+                "base_score": row["cvss_v3_score"],
+                "base_severity": row["cvss_v3_severity"],
+            }
+        
+        enriched = {
+            "cve_id": cve_id,
+            "source_identifier": row["source_identifier"],
+            "published": row["published"],
+            "last_modified": row["last_modified"],
+            "vuln_status": row["vuln_status"],
+            "description": row["description"],
+            "cvss_v3": cvss_v3,
+            "cvss_v4": None,  # Not in local DB yet
+            "cwes": cwes,
+            "references": references,
+            "has_configurations": False,
+            "source": "local_db",
+            "in_kev": kev_row is not None,
+        }
+        
+        if kev_row:
+            enriched["kev_details"] = {
+                "vendor_project": kev_row["vendor_project"],
+                "product": kev_row["product"],
+                "vulnerability_name": kev_row["vulnerability_name"],
+                "date_added": kev_row["date_added"],
+                "short_description": kev_row["short_description"],
+                "known_ransomware_use": kev_row["known_ransomware_use"],
+            }
+        
+        logger.debug(f"Found {cve_id} in local database")
+        return enriched
+        
+    except Exception as e:
+        logger.warning(f"Local CVE DB lookup error for {cve_id}: {e}")
+        return None
+
+
+def _lookup_cves_local_batch(cve_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """
+    Batch lookup CVEs from local database.
+    
+    Args:
+        cve_ids: List of CVE identifiers
+        
+    Returns:
+        Dictionary mapping CVE ID to data
+    """
+    if not _check_local_db_available() or not cve_ids:
+        return {}
+    
+    results = {}
+    
+    try:
+        conn = sqlite3.connect(LOCAL_CVE_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Query in batches to avoid SQL parameter limits
+        batch_size = 500
+        for i in range(0, len(cve_ids), batch_size):
+            batch = cve_ids[i:i + batch_size]
+            placeholders = ",".join(["?" for _ in batch])
+            
+            cursor.execute(f"""
+                SELECT c.*, 
+                       GROUP_CONCAT(DISTINCT cw.cwe_id) as cwes,
+                       k.cve_id IS NOT NULL as in_kev
+                FROM cves c
+                LEFT JOIN cve_cwes cw ON c.cve_id = cw.cve_id
+                LEFT JOIN kev_catalog k ON c.cve_id = k.cve_id
+                WHERE c.cve_id IN ({placeholders})
+                GROUP BY c.cve_id
+            """, batch)
+            
+            for row in cursor.fetchall():
+                cve_id = row["cve_id"]
+                
+                cvss_v3 = None
+                if row["cvss_v3_score"]:
+                    cvss_v3 = {
+                        "version": "3.1",
+                        "vector_string": row["cvss_v3_vector"],
+                        "base_score": row["cvss_v3_score"],
+                        "base_severity": row["cvss_v3_severity"],
+                    }
+                
+                results[cve_id] = {
+                    "cve_id": cve_id,
+                    "source_identifier": row["source_identifier"],
+                    "published": row["published"],
+                    "last_modified": row["last_modified"],
+                    "vuln_status": row["vuln_status"],
+                    "description": row["description"],
+                    "cvss_v3": cvss_v3,
+                    "cvss_v4": None,
+                    "cwes": row["cwes"].split(",") if row["cwes"] else [],
+                    "references": [],  # Skip for batch performance
+                    "has_configurations": False,
+                    "source": "local_db",
+                    "in_kev": bool(row["in_kev"]),
+                }
+        
+        conn.close()
+        logger.info(f"Found {len(results)}/{len(cve_ids)} CVEs in local database")
+        
+    except Exception as e:
+        logger.warning(f"Local CVE DB batch lookup error: {e}")
+    
+    return results
+
+
+def search_cves_local_by_keyword(keyword: str, max_results: int = 50) -> List[Dict[str, Any]]:
+    """
+    Search local CVE database by keyword in description.
+    
+    This enables offline CVE searches without requiring API connectivity.
+    
+    Args:
+        keyword: Search keyword (matches in description)
+        max_results: Maximum number of results to return
+        
+    Returns:
+        List of CVE data dictionaries
+    """
+    if not _check_local_db_available():
+        return []
+    
+    results = []
+    
+    try:
+        conn = sqlite3.connect(LOCAL_CVE_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Search in description field with keyword
+        cursor.execute("""
+            SELECT c.*, 
+                   GROUP_CONCAT(DISTINCT cw.cwe_id) as cwes,
+                   k.cve_id IS NOT NULL as in_kev
+            FROM cves c
+            LEFT JOIN cve_cwes cw ON c.cve_id = cw.cve_id
+            LEFT JOIN kev_catalog k ON c.cve_id = k.cve_id
+            WHERE c.description LIKE ?
+            GROUP BY c.cve_id
+            ORDER BY c.cvss_v3_score DESC NULLS LAST, c.published DESC
+            LIMIT ?
+        """, (f"%{keyword}%", max_results))
+        
+        for row in cursor.fetchall():
+            cvss_v3 = None
+            if row["cvss_v3_score"]:
+                cvss_v3 = {
+                    "version": "3.1",
+                    "vector_string": row["cvss_v3_vector"],
+                    "base_score": row["cvss_v3_score"],
+                    "base_severity": row["cvss_v3_severity"],
+                }
+            
+            results.append({
+                "cve_id": row["cve_id"],
+                "source_identifier": row["source_identifier"],
+                "published": row["published"],
+                "last_modified": row["last_modified"],
+                "vuln_status": row["vuln_status"],
+                "description": row["description"],
+                "cvss_v3": cvss_v3,
+                "cvss_v3_score": row["cvss_v3_score"],
+                "cvss_v3_severity": row["cvss_v3_severity"],
+                "cwes": row["cwes"].split(",") if row["cwes"] else [],
+                "references": [],  # Skip for performance
+                "source": "local_db",
+                "in_kev": bool(row["in_kev"]),
+            })
+        
+        conn.close()
+        logger.info(f"Local CVE keyword search '{keyword}' found {len(results)} results")
+        
+    except Exception as e:
+        logger.warning(f"Local CVE keyword search error for '{keyword}': {e}")
+    
+    return results
+
+
+def _check_kev_local(cve_ids: List[str]) -> Dict[str, bool]:
+    """
+    Check KEV status from local database.
+    
+    Args:
+        cve_ids: List of CVE identifiers
+        
+    Returns:
+        Dictionary mapping CVE ID to KEV status
+    """
+    if not _check_local_db_available() or not cve_ids:
+        return {cve_id: False for cve_id in cve_ids}
+    
+    results = {cve_id: False for cve_id in cve_ids}
+    
+    try:
+        conn = sqlite3.connect(LOCAL_CVE_DB)
+        cursor = conn.cursor()
+        
+        placeholders = ",".join(["?" for _ in cve_ids])
+        cursor.execute(f"""
+            SELECT cve_id FROM kev_catalog WHERE cve_id IN ({placeholders})
+        """, cve_ids)
+        
+        for row in cursor.fetchall():
+            results[row[0]] = True
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.warning(f"Local KEV lookup error: {e}")
+    
+    return results
+
+
+async def _check_nvd_connectivity() -> bool:
+    """
+    Check if NVD API is reachable.
+    
+    Caches result for CONNECTIVITY_CHECK_INTERVAL seconds.
+    """
+    global _last_connectivity_check, _is_online
+    
+    # Return cached result if recent
+    if _last_connectivity_check and _is_online is not None:
+        elapsed = (datetime.utcnow() - _last_connectivity_check).total_seconds()
+        if elapsed < CONNECTIVITY_CHECK_INTERVAL:
+            return _is_online
+    
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            # Quick health check - just see if API responds
+            resp = await client.get(
+                NVD_CVE_API,
+                params={"cveId": "CVE-2021-44228", "resultsPerPage": 1},
+                headers=_get_api_headers()
+            )
+            _is_online = resp.status_code in (200, 403)  # 403 = rate limited but online
+    except Exception:
+        _is_online = False
+    
+    _last_connectivity_check = datetime.utcnow()
+    
+    if not _is_online:
+        logger.info("NVD API offline - using local database fallback")
+    
+    return _is_online
+
+
+def get_local_db_stats() -> Dict[str, Any]:
+    """Get statistics about the local CVE database."""
+    if not _check_local_db_available():
+        return {"available": False, "path": LOCAL_CVE_DB}
+    
+    try:
+        conn = sqlite3.connect(LOCAL_CVE_DB)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM cves")
+        cve_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM kev_catalog")
+        kev_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
+        row = cursor.fetchone()
+        last_sync = row[0] if row else None
+        
+        conn.close()
+        
+        db_size = os.path.getsize(LOCAL_CVE_DB) / (1024 * 1024)
+        
+        return {
+            "available": True,
+            "path": LOCAL_CVE_DB,
+            "cve_count": cve_count,
+            "kev_count": kev_count,
+            "last_sync": last_sync,
+            "size_mb": round(db_size, 1),
+        }
+    except Exception as e:
+        return {"available": False, "path": LOCAL_CVE_DB, "error": str(e)}
 
 
 def _get_api_headers() -> Dict[str, str]:
@@ -198,13 +561,18 @@ def _parse_references(references: List[Dict]) -> List[Dict[str, Any]]:
     return parsed
 
 
-async def lookup_cve(cve_id: str) -> Optional[Dict[str, Any]]:
+async def lookup_cve(cve_id: str, prefer_live: bool = True) -> Optional[Dict[str, Any]]:
     """
     Look up detailed CVE information from NVD.
-    Uses Redis cache to avoid redundant API calls.
+    
+    Uses multi-tier lookup strategy:
+    1. Redis/in-memory cache
+    2. NVD API (if online and prefer_live)
+    3. Local SQLite database (offline fallback)
     
     Args:
         cve_id: CVE identifier (e.g., "CVE-2021-44228")
+        prefer_live: If True, prefer live API over local DB
         
     Returns:
         Dictionary with enriched CVE data, or None if not found
@@ -218,85 +586,89 @@ async def lookup_cve(cve_id: str) -> Optional[Dict[str, Any]]:
         logger.debug(f"Cache hit for {cve_id}")
         return cached
     
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            resp = await client.get(
-                NVD_CVE_API,
-                params={"cveId": cve_id},
-                headers=_get_api_headers()
-            )
-            
-            if resp.status_code == 404:
-                logger.debug(f"CVE not found in NVD: {cve_id}")
-                return None
-            
-            if resp.status_code == 403:
-                logger.warning("NVD API rate limit exceeded. Consider adding NVD_API_KEY to .env")
-                return None
-            
-            resp.raise_for_status()
-            data = resp.json()
-            
-            vulnerabilities = data.get("vulnerabilities", [])
-            if not vulnerabilities:
-                return None
-            
-            cve_data = vulnerabilities[0].get("cve", {})
-            
-            # Parse the response
-            metrics = cve_data.get("metrics", {})
-            
-            enriched = {
-                "cve_id": cve_id,
-                "source_identifier": cve_data.get("sourceIdentifier"),
-                "published": cve_data.get("published"),
-                "last_modified": cve_data.get("lastModified"),
-                "vuln_status": cve_data.get("vulnStatus"),
+    # Check connectivity if preferring live API
+    is_online = await _check_nvd_connectivity() if prefer_live else False
+    
+    # Try NVD API if online
+    if is_online:
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+                resp = await client.get(
+                    NVD_CVE_API,
+                    params={"cveId": cve_id},
+                    headers=_get_api_headers()
+                )
                 
-                # Description
-                "description": next(
-                    (d.get("value") for d in cve_data.get("descriptions", []) 
-                     if d.get("lang") == "en"),
-                    None
-                ),
-                
-                # CVSS Scores
-                "cvss_v3": _parse_cvss_v3(metrics),
-                "cvss_v4": _parse_cvss_v4(metrics),
-                
-                # Weaknesses (CWE)
-                "cwes": _parse_weaknesses(cve_data.get("weaknesses", [])),
-                
-                # References
-                "references": _parse_references(cve_data.get("references", [])),
-                
-                # Configurations (affected products)
-                "has_configurations": bool(cve_data.get("configurations")),
-            }
-            
-            # Cache the result
-            _cache_cve(cve_id, enriched)
-            logger.debug(f"Fetched and cached NVD data for {cve_id}")
-            
-            return enriched
-            
-    except httpx.TimeoutException:
-        logger.warning(f"NVD API timeout for {cve_id}")
-        return None
-    except httpx.HTTPStatusError as e:
-        logger.error(f"NVD API HTTP error for {cve_id}: {e.response.status_code}")
-        return None
-    except Exception as e:
-        logger.error(f"NVD API error for {cve_id}: {e}")
-        return None
+                if resp.status_code == 404:
+                    logger.debug(f"CVE not found in NVD: {cve_id}")
+                    # Fall through to local DB
+                elif resp.status_code == 403:
+                    logger.warning("NVD API rate limit exceeded")
+                    # Fall through to local DB
+                elif resp.status_code == 200:
+                    data = resp.json()
+                    
+                    vulnerabilities = data.get("vulnerabilities", [])
+                    if vulnerabilities:
+                        cve_data = vulnerabilities[0].get("cve", {})
+                        
+                        # Parse the response
+                        metrics = cve_data.get("metrics", {})
+                        
+                        enriched = {
+                            "cve_id": cve_id,
+                            "source_identifier": cve_data.get("sourceIdentifier"),
+                            "published": cve_data.get("published"),
+                            "last_modified": cve_data.get("lastModified"),
+                            "vuln_status": cve_data.get("vulnStatus"),
+                            "description": next(
+                                (d.get("value") for d in cve_data.get("descriptions", []) 
+                                 if d.get("lang") == "en"),
+                                None
+                            ),
+                            "cvss_v3": _parse_cvss_v3(metrics),
+                            "cvss_v4": _parse_cvss_v4(metrics),
+                            "cwes": _parse_weaknesses(cve_data.get("weaknesses", [])),
+                            "references": _parse_references(cve_data.get("references", [])),
+                            "has_configurations": bool(cve_data.get("configurations")),
+                            "source": "nvd_live",
+                        }
+                        
+                        # Cache the result
+                        _cache_cve(cve_id, enriched)
+                        logger.debug(f"Fetched and cached NVD data for {cve_id}")
+                        
+                        return enriched
+                        
+        except httpx.TimeoutException:
+            logger.warning(f"NVD API timeout for {cve_id}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"NVD API HTTP error for {cve_id}: {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"NVD API error for {cve_id}: {e}")
+    
+    # Fallback to local database
+    local_result = _lookup_cve_local(cve_id)
+    if local_result:
+        # Cache for faster subsequent lookups
+        _cache_cve(cve_id, local_result)
+        return local_result
+    
+    return None
 
 
-async def lookup_cves_batch(cve_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+async def lookup_cves_batch(cve_ids: List[str], prefer_live: bool = True) -> Dict[str, Dict[str, Any]]:
     """
     Look up multiple CVEs from NVD with rate limiting.
     
+    Uses multi-tier lookup strategy:
+    1. Redis/in-memory cache
+    2. NVD API (if online and prefer_live)
+    3. Local SQLite database (offline fallback)
+    
     Args:
         cve_ids: List of CVE identifiers
+        prefer_live: If True, prefer live API over local DB
         
     Returns:
         Dictionary mapping CVE ID to enriched data
@@ -310,7 +682,7 @@ async def lookup_cves_batch(cve_ids: List[str]) -> Dict[str, Dict[str, Any]]:
     if not valid_ids:
         return {}
     
-    logger.info(f"Looking up {len(valid_ids)} CVEs from NVD")
+    logger.info(f"Looking up {len(valid_ids)} CVEs")
     
     results: Dict[str, Dict[str, Any]] = {}
     
@@ -336,53 +708,60 @@ async def lookup_cves_batch(cve_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         logger.info(f"All {len(valid_ids)} CVEs found in cache")
         return results
     
-    logger.info(f"Fetching {len(uncached_ids)} uncached CVEs from NVD (cached: {len(results)})")
+    # Check connectivity
+    is_online = await _check_nvd_connectivity() if prefer_live else False
     
-    # Check API key for rate limit
-    has_api_key = bool(settings.nvd_api_key)
-    
-    # With API key: 50 req/30s = ~1.7 req/s, use 3 concurrent with 0.6s delay
-    # Without API key: 5 req/30s = ~0.17 req/s, use 1 concurrent with 6s delay
-    if has_api_key:
-        max_concurrent = 3
-        delay_between_batches = 0.6
+    if is_online:
+        logger.info(f"Fetching {len(uncached_ids)} uncached CVEs from NVD API (cached: {len(results)})")
+        
+        # Check API key for rate limit
+        has_api_key = bool(settings.nvd_api_key)
+        
+        if has_api_key:
+            max_concurrent = 3
+            delay_between_batches = 0.6
+        else:
+            max_concurrent = 1
+            delay_between_batches = 6.0
+        
+        # Process with controlled concurrency
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def fetch_with_rate_limit(cve_id: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+            async with semaphore:
+                result = await lookup_cve(cve_id, prefer_live=True)
+                await asyncio.sleep(delay_between_batches / max_concurrent)
+                return cve_id, result
+        
+        batch_size = 10 if has_api_key else 5
+        
+        for i in range(0, len(uncached_ids), batch_size):
+            batch = uncached_ids[i:i + batch_size]
+            
+            tasks = [fetch_with_rate_limit(cve_id) for cve_id in batch]
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for item in batch_results:
+                if isinstance(item, Exception):
+                    logger.warning(f"NVD batch error: {item}")
+                    continue
+                cve_id, result = item
+                if result:
+                    results[cve_id] = result
+            
+            if i + batch_size < len(uncached_ids):
+                await asyncio.sleep(delay_between_batches)
     else:
-        max_concurrent = 1
-        delay_between_batches = 6.0
-    
-    # Process with controlled concurrency
-    semaphore = asyncio.Semaphore(max_concurrent)
-    
-    async def fetch_with_rate_limit(cve_id: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-        async with semaphore:
-            result = await lookup_cve(cve_id)
-            # Small delay between concurrent requests
-            await asyncio.sleep(delay_between_batches / max_concurrent)
-            return cve_id, result
-    
-    # Process in smaller batches for better progress tracking
-    batch_size = 10 if has_api_key else 5
-    
-    for i in range(0, len(uncached_ids), batch_size):
-        batch = uncached_ids[i:i + batch_size]
+        # Offline mode - use local database batch lookup
+        logger.info(f"Offline mode - looking up {len(uncached_ids)} CVEs from local database")
+        local_results = _lookup_cves_local_batch(uncached_ids)
         
-        # Fetch batch concurrently
-        tasks = [fetch_with_rate_limit(cve_id) for cve_id in batch]
-        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for item in batch_results:
-            if isinstance(item, Exception):
-                logger.warning(f"NVD batch error: {item}")
-                continue
-            cve_id, result = item
-            if result:
-                results[cve_id] = result
-        
-        # Delay between batches to respect rate limits
-        if i + batch_size < len(uncached_ids):
-            await asyncio.sleep(delay_between_batches)
+        # Cache the local results
+        for cve_id, data in local_results.items():
+            results[cve_id] = data
+            _cache_cve(cve_id, data)
     
-    logger.info(f"Retrieved {len(results)} CVE details from NVD")
+    logger.info(f"Retrieved {len(results)} CVE details (online: {is_online})")
     return results
 
 
@@ -441,7 +820,9 @@ async def check_kev_status(cve_ids: List[str]) -> Dict[str, bool]:
                 
         except Exception as e:
             logger.warning(f"Failed to fetch CISA KEV catalog: {e}")
-            return results
+            # Fallback to local database
+            logger.info("Falling back to local KEV database")
+            return _check_kev_local(cve_ids)
     
     # Check which of our CVEs are in KEV
     kev_matches = 0

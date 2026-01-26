@@ -825,9 +825,99 @@ export default function AgilePMPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               Agile is not a specific methodology but an umbrella term covering various frameworks like <strong>Scrum</strong>, <strong>Kanban</strong>, <strong>XP (Extreme Programming)</strong>, and others. What they share is a commitment to iterative development, customer collaboration, and continuous improvement.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Why Agile Exists
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The Problem with Traditional Development:</strong><br/>
+                Imagine you're building a house. You hire an architect who spends 6 months creating detailed blueprints.
+                Then construction takes 12 months. Finally, you move in and realize: "I wanted the kitchen on the other side!"
+                But it's too late—the house is built.<br/><br/>
+
+                <strong>This happened constantly in software:</strong><br/>
+                • 18-month projects delivered software nobody wanted anymore<br/>
+                • Requirements gathered in month 1 were obsolete by month 12<br/>
+                • Customers saw nothing until the very end—too late to change course<br/>
+                • Teams delivered what was specified, not what was actually needed<br/><br/>
+
+                <strong>Agile's Solution:</strong><br/>
+                Instead of building the whole house, build one room at a time. After each room, check with the
+                homeowner: "Is this what you wanted? What should we adjust?" This way, even if requirements change,
+                you've only invested in one room, not the whole house.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Waterfall vs. Agile: A Side-by-Side Comparison
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ bgcolor: alpha("#dc2626", 0.08), p: 2, borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#dc2626", mb: 1 }}>
+                      Traditional Waterfall
+                    </Typography>
+                    <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                      • Plan everything upfront (months)<br/>
+                      • Build everything at once<br/>
+                      • Test at the end<br/>
+                      • Deliver once, at the end<br/>
+                      • Change is expensive and discouraged<br/>
+                      • Customer sees product only at delivery
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 2, borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#22c55e", mb: 1 }}>
+                      Agile Approach
+                    </Typography>
+                    <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                      • Plan just enough for the next iteration<br/>
+                      • Build in small increments<br/>
+                      • Test continuously<br/>
+                      • Deliver frequently (every 1-4 weeks)<br/>
+                      • Change is welcomed and expected<br/>
+                      • Customer sees working software regularly
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                When Agile Works Best (And When It Doesn't)
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Agile Excels When:</Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • Requirements are uncertain or evolving<br/>
+                    • Fast feedback is valuable<br/>
+                    • Innovation and experimentation matter<br/>
+                    • Customer collaboration is possible<br/>
+                    • Teams need autonomy to solve problems
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Consider Alternatives When:</Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • Requirements are truly fixed and well-understood<br/>
+                    • Regulatory compliance requires upfront documentation<br/>
+                    • Customer can't or won't participate regularly<br/>
+                    • The project is very short (&lt; 1 month)<br/>
+                    • Physical manufacturing with high change costs
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+
             <Alert severity="info" sx={{ borderRadius: 2 }}>
               <AlertTitle sx={{ fontWeight: 700 }}>Key Insight</AlertTitle>
-              Agile is a mindset, not just a process. The goal is not to follow rituals but to deliver value to customers faster and respond to change effectively.
+              Agile is a mindset, not just a process. The goal is not to follow rituals but to deliver value to customers faster and respond to change effectively. If you're doing Scrum ceremonies but not delivering working software every Sprint, you're missing the point.
             </Alert>
           </Paper>
 
@@ -838,9 +928,10 @@ export default function AgilePMPage() {
               The Agile Manifesto
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-              The Agile Manifesto defines four core values. While there is value in the items on the right, Agile values the items on the left more.
+              The Agile Manifesto defines four core values. <strong>Important:</strong> This isn't saying the items on the right
+              are bad—they have value. But when forced to choose, Agile prioritizes the items on the left.
             </Typography>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
               {agileValues.map((value, idx) => (
                 <Grid item xs={12} key={idx}>
                   <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha(accent, 0.03) }}>
@@ -853,6 +944,59 @@ export default function AgilePMPage() {
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha(accent, 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha(accent, 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: accent }}>
+                Understanding Each Value (With Real Examples)
+              </Typography>
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
+                1. Individuals and Interactions over Processes and Tools
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                <strong>What it means:</strong> A great team with mediocre tools will outperform a mediocre team with
+                great tools. Focus on hiring well, communicating openly, and building trust.<br/>
+                <strong>Example:</strong> Instead of mandating that all communication go through Jira tickets, allow
+                developers to walk over and have a 5-minute conversation when needed. The ticket can be updated afterward.
+              </Typography>
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                2. Working Software over Comprehensive Documentation
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                <strong>What it means:</strong> Documentation is valuable, but running code that users can actually use
+                is more valuable. Write enough documentation to be useful, not more.<br/>
+                <strong>Example:</strong> Instead of spending 3 weeks writing a 100-page specification, spend 2 weeks
+                building a working prototype. Show it to users and let their feedback guide the detailed requirements.
+              </Typography>
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                3. Customer Collaboration over Contract Negotiation
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.8 }}>
+                <strong>What it means:</strong> Treat customers as partners in building the product, not adversaries
+                bound by contract terms. Success is measured by customer outcomes, not contract compliance.<br/>
+                <strong>Example:</strong> When a customer says "this feature isn't quite what we needed," respond with
+                "let's figure out what you actually need" rather than "but that's what the contract specified."
+              </Typography>
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                4. Responding to Change over Following a Plan
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+                <strong>What it means:</strong> Plans are useful starting points, but the world changes. The ability
+                to adapt is more valuable than rigid adherence to an outdated plan.<br/>
+                <strong>Example:</strong> Mid-project, a competitor launches a similar feature. Instead of ignoring
+                this and following the original plan, the team pivots to differentiate—delivering more value.
+              </Typography>
+            </Box>
+
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              <AlertTitle sx={{ fontWeight: 700 }}>Common Misunderstanding</AlertTitle>
+              "Agile means no documentation" is FALSE. The manifesto says working software is <em>more valuable</em>,
+              not that documentation has <em>no value</em>. Write documentation that helps—just don't write it for its
+              own sake or because "that's the process."
+            </Alert>
           </Paper>
 
           {/* 12 Principles */}
@@ -1009,9 +1153,55 @@ export default function AgilePMPage() {
               Kanban
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-              <strong>Kanban</strong> is a visual workflow management method. Unlike Scrum, Kanban doesn't use fixed iterations - work flows continuously through the system. The key focus is on visualizing work and limiting work-in-progress to improve flow and identify bottlenecks.
+              <strong>Kanban</strong> is a visual workflow management method. Unlike Scrum, Kanban doesn't use fixed iterations—work
+              flows continuously through the system. The key focus is on visualizing work and limiting work-in-progress to improve
+              flow and identify bottlenecks.
             </Typography>
-            <Grid container spacing={2}>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Beginner's Guide: Understanding the Kanban Board
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Imagine a Whiteboard with Columns:</strong><br/>
+                A typical Kanban board has columns representing workflow stages. Cards (sticky notes or digital) represent
+                work items that move from left to right as work progresses.<br/><br/>
+
+                <strong>Simple Example Board:</strong><br/>
+                | <strong>To Do</strong> | <strong>In Progress</strong> | <strong>Review</strong> | <strong>Done</strong> |<br/>
+                | Task A | Task C | Task E | Task F |<br/>
+                | Task B | Task D | | Task G |<br/><br/>
+
+                <strong>How It Works:</strong><br/>
+                1. New work enters the "To Do" column<br/>
+                2. When someone starts work, they pull a card to "In Progress"<br/>
+                3. When coding is complete, it moves to "Review"<br/>
+                4. After review/testing, it moves to "Done"<br/>
+                5. Each column has a <strong>WIP limit</strong>—max cards allowed at once
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#dc2626", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#dc2626" }}>
+                Why WIP Limits Matter (The Highway Analogy)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                Think of a highway. When there are few cars, traffic flows smoothly at 70 mph. Add more cars and
+                everyone slows to 50 mph. Add even more and you get a traffic jam—nobody moves.<br/><br/>
+
+                <strong>The same happens with work:</strong><br/>
+                • <strong>Too much WIP:</strong> Context-switching kills productivity. Starting 10 tasks means finishing none.<br/>
+                • <strong>Optimal WIP:</strong> Starting fewer tasks means finishing them faster. "Stop starting, start finishing."<br/>
+                • <strong>Example:</strong> If your "In Progress" WIP limit is 3, nobody can start a 4th task until one finishes.
+                This forces the team to collaborate to finish work rather than starting new work.<br/><br/>
+
+                <strong>Little's Law:</strong> Lead Time = WIP / Throughput<br/>
+                Translation: The more work in progress, the longer everything takes to complete.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>The Six Kanban Practices</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               {kanbanPrinciples.map((item) => (
                 <Grid item xs={12} md={6} key={item.principle}>
                   <Paper sx={{ p: 2.5, borderRadius: 2, height: "100%", bgcolor: alpha(accent, 0.05) }}>
@@ -1021,6 +1211,32 @@ export default function AgilePMPage() {
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Scrum vs. Kanban: When to Use Each
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Choose Scrum When:</Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • Teams are new to Agile (more structure helps)<br/>
+                    • Work is project-based with clear goals<br/>
+                    • You need predictable delivery cadence<br/>
+                    • Stakeholders want regular demos
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Choose Kanban When:</Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • Work is interrupt-driven (support, ops)<br/>
+                    • Priorities change frequently<br/>
+                    • You want to improve existing process gradually<br/>
+                    • Fixed iterations feel too rigid
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
           </Paper>
 
           {/* User Stories */}
@@ -1030,7 +1246,8 @@ export default function AgilePMPage() {
               User Stories
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-              User stories are short, simple descriptions of a feature told from the perspective of the user. They follow a specific format and help teams focus on delivering user value.
+              User stories are short, simple descriptions of a feature told from the perspective of the user. They follow
+              a specific format and help teams focus on delivering user value rather than technical specifications.
             </Typography>
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
               <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
@@ -1045,15 +1262,68 @@ export default function AgilePMPage() {
                 <span style={{ color: "#ff79c6" }}>So that</span> <span style={{ color: "#f1fa8c" }}>I can regain access if I forget it</span>.
               </Typography>
             </Paper>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>INVEST Criteria</Typography>
-            <Grid container spacing={2}>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Writing Great User Stories: A Beginner's Guide
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Why the Format Matters:</strong><br/>
+                The "As a... I want... So that..." format forces you to think about:<br/>
+                • <strong>WHO</strong> benefits from this feature (the persona)<br/>
+                • <strong>WHAT</strong> they want to do (the functionality)<br/>
+                • <strong>WHY</strong> they want it (the value/benefit)<br/><br/>
+
+                <strong>Good vs. Bad User Stories:</strong><br/><br/>
+
+                <strong style={{ color: "#dc2626" }}>Bad:</strong> "Implement login functionality"<br/>
+                <em>Problem: No user, no benefit, sounds like a task</em><br/><br/>
+
+                <strong style={{ color: "#22c55e" }}>Good:</strong> "As a returning customer, I want to log in with my email
+                and password so that I can access my order history and saved preferences."<br/>
+                <em>Clear user, clear action, clear benefit</em><br/><br/>
+
+                <strong style={{ color: "#dc2626" }}>Bad:</strong> "Build admin dashboard"<br/>
+                <em>Problem: Too vague, no specific value</em><br/><br/>
+
+                <strong style={{ color: "#22c55e" }}>Good:</strong> "As a store manager, I want to see today's sales summary
+                on my dashboard so that I can quickly assess daily performance without running reports."
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Acceptance Criteria: How You Know When It's Done
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                Every user story needs <strong>acceptance criteria</strong>—specific conditions that must be met for the
+                story to be considered complete.<br/><br/>
+
+                <strong>Example User Story:</strong><br/>
+                "As a customer, I want to filter products by price range so that I can find items within my budget."<br/><br/>
+
+                <strong>Acceptance Criteria:</strong><br/>
+                • User can set minimum and maximum price values<br/>
+                • Filter updates product list immediately (no page reload)<br/>
+                • Product count shows number of matching items<br/>
+                • "Clear filters" button resets to show all products<br/>
+                • Filter persists when navigating back to the product page<br/>
+                • Works on mobile devices (responsive design)<br/><br/>
+
+                <strong>Why this matters:</strong> Without acceptance criteria, "done" is subjective. With them,
+                everyone agrees on what complete looks like.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>INVEST Criteria for Good User Stories</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               {[
-                { letter: "I", word: "Independent", desc: "Can be developed in any order" },
-                { letter: "N", word: "Negotiable", desc: "Details can be discussed" },
-                { letter: "V", word: "Valuable", desc: "Delivers user value" },
-                { letter: "E", word: "Estimable", desc: "Can be sized" },
-                { letter: "S", word: "Small", desc: "Fits in one sprint" },
-                { letter: "T", word: "Testable", desc: "Has clear acceptance criteria" },
+                { letter: "I", word: "Independent", desc: "Can be developed in any order, not dependent on other stories" },
+                { letter: "N", word: "Negotiable", desc: "Details can be discussed and refined with the team" },
+                { letter: "V", word: "Valuable", desc: "Delivers clear value to users or business" },
+                { letter: "E", word: "Estimable", desc: "Team can estimate the effort required" },
+                { letter: "S", word: "Small", desc: "Can be completed in one sprint (ideally a few days)" },
+                { letter: "T", word: "Testable", desc: "Has clear acceptance criteria that can be verified" },
               ].map((item) => (
                 <Grid item xs={6} md={4} key={item.letter}>
                   <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
@@ -1068,6 +1338,25 @@ export default function AgilePMPage() {
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Story Hierarchy: Epics, Stories, and Tasks
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Epic:</strong> A large body of work that takes multiple sprints. Too big to estimate accurately.<br/>
+                <em>Example: "User Account Management"</em><br/><br/>
+
+                <strong>User Story:</strong> A single piece of functionality that delivers value. Fits in one sprint.<br/>
+                <em>Example: "As a user, I want to update my email address..."</em><br/><br/>
+
+                <strong>Task:</strong> Technical work needed to complete a story. Assigned to individuals.<br/>
+                <em>Example: "Add email validation", "Update database schema", "Write unit tests"</em><br/><br/>
+
+                <strong>The Flow:</strong> Epics are broken into Stories during backlog refinement.
+                Stories are broken into Tasks during Sprint Planning.
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Estimation */}
@@ -1076,7 +1365,54 @@ export default function AgilePMPage() {
               <BarChartIcon sx={{ color: accent }} />
               Estimation Techniques
             </Typography>
-            <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Why We Use Story Points (Not Hours)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The Problem with Hours:</strong><br/>
+                If you ask "how many hours will this take?", different developers give wildly different answers.
+                A senior might say "4 hours" while a junior says "16 hours." Who's right? Both are—for themselves.<br/><br/>
+
+                <strong>Story Points Solve This:</strong><br/>
+                Story points measure <strong>relative complexity</strong>, not absolute time. Instead of asking "how long?",
+                we ask "how hard is this compared to other things we've done?"<br/><br/>
+
+                <strong>Example:</strong><br/>
+                • "Add a new button" = 1 point (simple, we've done this many times)<br/>
+                • "Integrate payment gateway" = 8 points (complex, unfamiliar, risk involved)<br/>
+                • The payment task is "8 times more complex" than the button—regardless of who does it<br/><br/>
+
+                <strong>How Teams Learn Their Velocity:</strong><br/>
+                After a few sprints, you'll know "we complete about 30 story points per sprint." Now you can plan:
+                "We have 30 points of capacity, let's not commit to 50 points of work."
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                How to Run Planning Poker (Step-by-Step)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Setup:</strong> Each person gets cards with Fibonacci numbers: 1, 2, 3, 5, 8, 13, 21<br/><br/>
+
+                <strong>Step 1:</strong> Product Owner reads the user story and answers questions about it<br/>
+                <strong>Step 2:</strong> Each person privately selects a card representing their estimate<br/>
+                <strong>Step 3:</strong> Everyone reveals their cards simultaneously<br/>
+                <strong>Step 4:</strong> If estimates differ significantly (e.g., 3 and 13), discuss:<br/>
+                &nbsp;&nbsp;• "Why did you say 13?" → "There's a database migration nobody mentioned"<br/>
+                &nbsp;&nbsp;• "Why did you say 3?" → "We can reuse the existing component"<br/>
+                <strong>Step 5:</strong> Re-vote after discussion. Repeat until consensus.<br/>
+                <strong>Step 6:</strong> Record the agreed estimate and move to the next story<br/><br/>
+
+                <strong>Why it works:</strong> Simultaneous reveal prevents anchoring bias (people don't just agree
+                with the first number said). Discussion surfaces hidden knowledge.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Estimation Techniques Comparison</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: alpha(accent, 0.08) }}>
@@ -1096,6 +1432,24 @@ export default function AgilePMPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                The Fibonacci Scale: Why Those Weird Numbers?
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                The Fibonacci sequence (1, 2, 3, 5, 8, 13, 21...) has gaps that grow larger as numbers increase.
+                This reflects reality:<br/><br/>
+
+                • <strong>Small stories are easier to estimate:</strong> You can distinguish 2 from 3 fairly accurately<br/>
+                • <strong>Large stories are harder:</strong> Can you really tell the difference between a "15" and a "17"? No.<br/>
+                • <strong>The gaps signal uncertainty:</strong> If something is bigger than an 8, it's either a 13 or needs
+                to be broken down further<br/><br/>
+
+                <strong>Rule of thumb:</strong> If a story is larger than 13 points, break it into smaller stories before
+                committing to it in a sprint.
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Metrics & Charts */}
@@ -1104,23 +1458,132 @@ export default function AgilePMPage() {
               <TrendingUpIcon sx={{ color: accent }} />
               Metrics & Charts
             </Typography>
-            <Grid container spacing={3}>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Agile teams use metrics not to measure individual performance, but to understand team health, predict future
+              capacity, and identify areas for improvement. The key is using metrics to ask questions, not to assign blame.
+            </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Understanding Velocity
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What is Velocity?</strong><br/>
+                Velocity is the average number of story points your team completes per sprint. It's your team's "speed"
+                for planning purposes.<br/><br/>
+
+                <strong>Example:</strong><br/>
+                • Sprint 1: Team completed 24 story points<br/>
+                • Sprint 2: Team completed 28 story points<br/>
+                • Sprint 3: Team completed 26 story points<br/>
+                • <strong>Average velocity: 26 points</strong><br/><br/>
+
+                <strong>How to Use Velocity:</strong><br/>
+                For your next sprint planning: "We have 26 points of capacity. Let's select roughly 26 points of work
+                from the backlog." Don't overcommit just because one sprint went well—use the average.<br/><br/>
+
+                <strong>Common Mistakes:</strong><br/>
+                • <strong>Comparing team velocities:</strong> "Team A does 40 points, Team B only does 25!"—This is meaningless.
+                Story points are relative within a team, not across teams.<br/>
+                • <strong>Velocity as a target:</strong> "You need to increase velocity by 20%!"—This leads to point inflation, not more work.
+                • <strong>Ignoring context:</strong> Velocity will drop during holidays, onboarding, or technical debt sprints—that's normal.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                How to Read a Burndown Chart
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                A burndown chart shows remaining work over time. The ideal line goes from top-left to bottom-right.<br/><br/>
+
+                <strong>Anatomy of a Burndown Chart:</strong><br/>
+                • <strong>Y-axis:</strong> Remaining work (story points or tasks)<br/>
+                • <strong>X-axis:</strong> Time (days of the sprint)<br/>
+                • <strong>Ideal line:</strong> Straight diagonal showing perfect progress<br/>
+                • <strong>Actual line:</strong> Zigzag showing real progress<br/><br/>
+
+                <strong>Reading the Patterns:</strong><br/>
+                • <strong>Line above ideal:</strong> Behind schedule—team may not finish all committed work<br/>
+                • <strong>Line below ideal:</strong> Ahead of schedule—team might pull in more work<br/>
+                • <strong>Flat line:</strong> No progress—something's blocking the team<br/>
+                • <strong>Line goes UP:</strong> Scope was added mid-sprint (usually a problem!)<br/><br/>
+
+                <strong>Example Sprint Burndown:</strong><br/>
+                Day 1: 30 points remaining (started with 30)<br/>
+                Day 3: 24 points remaining (6 points done, on track)<br/>
+                Day 5: 22 points remaining (slightly behind)<br/>
+                Day 7: 12 points remaining (big push, catching up)<br/>
+                Day 10: 2 points remaining (almost done!)<br/>
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Burnup Charts: The Better Alternative?
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                Burnup charts show work completed over time, with a line showing total scope. They reveal scope changes
+                that burndowns hide.<br/><br/>
+
+                <strong>Why Burnups Can Be Better:</strong><br/>
+                • <strong>Burndown problem:</strong> If scope increases and team works harder, the burndown looks flat—hiding both facts.<br/>
+                • <strong>Burnup solution:</strong> Two lines—one for completed work (going up), one for total scope (also tracked).
+                You can see when scope grew AND when the team made progress.<br/><br/>
+
+                <strong>Reading a Burnup:</strong><br/>
+                • <strong>Work line approaching scope line:</strong> On track to finish<br/>
+                • <strong>Scope line keeps rising:</strong> Scope creep! New work being added faster than completed<br/>
+                • <strong>Gap between lines:</strong> The remaining work to be done
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#8b5cf6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#8b5cf6" }}>
+                Cumulative Flow Diagrams (CFD) for Kanban
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                A CFD shows how many work items are in each state over time. It's the primary chart for Kanban teams.<br/><br/>
+
+                <strong>How to Read a CFD:</strong><br/>
+                • <strong>Bands represent states:</strong> To Do (bottom), In Progress (middle), Done (top)<br/>
+                • <strong>Band width = WIP:</strong> A wide "In Progress" band means lots of work in progress<br/>
+                • <strong>Vertical distance = cycle time:</strong> Measure vertically from when work enters "In Progress"
+                to when it reaches "Done"<br/>
+                • <strong>Horizontal distance = lead time:</strong> Measure horizontally from entry to completion<br/><br/>
+
+                <strong>Warning Signs:</strong><br/>
+                • <strong>Widening bands:</strong> Work piling up in a state—bottleneck<br/>
+                • <strong>Parallel lines:</strong> Healthy flow, stable system<br/>
+                • <strong>"Staircase" pattern:</strong> Batch releases instead of continuous flow
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Key Metrics Summary</Typography>
+            <Grid container spacing={3} sx={{ mb: 3 }}>
               {[
-                { name: "Velocity", desc: "Amount of work completed per sprint, used for planning" },
-                { name: "Burndown Chart", desc: "Shows remaining work over time in a sprint" },
-                { name: "Burnup Chart", desc: "Shows completed work and scope over time" },
-                { name: "Cumulative Flow Diagram", desc: "Shows work items in each state over time (Kanban)" },
-                { name: "Cycle Time", desc: "Time from work started to completed" },
-                { name: "Lead Time", desc: "Time from request to delivery" },
+                { name: "Velocity", desc: "Story points completed per sprint. Use for capacity planning, not performance measurement.", color: "#22c55e" },
+                { name: "Burndown Chart", desc: "Remaining work over time in a sprint. Shows if team is on track to meet sprint goal.", color: "#3b82f6" },
+                { name: "Burnup Chart", desc: "Completed work and scope over time. Better than burndown for tracking scope changes.", color: "#f59e0b" },
+                { name: "Cumulative Flow Diagram", desc: "Work items in each state over time. Primary chart for Kanban teams.", color: "#8b5cf6" },
+                { name: "Cycle Time", desc: "Time from work started to completed. Lower is better—indicates faster delivery.", color: "#ec4899" },
+                { name: "Lead Time", desc: "Time from request to delivery. What customers experience end-to-end.", color: "#06b6d4" },
               ].map((metric) => (
                 <Grid item xs={12} md={6} key={metric.name}>
-                  <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: accent }}>{metric.name}</Typography>
+                  <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: alpha(metric.color, 0.08), border: `1px solid ${alpha(metric.color, 0.2)}` }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: metric.color }}>{metric.name}</Typography>
                     <Typography variant="body2" color="text.secondary">{metric.desc}</Typography>
                   </Paper>
                 </Grid>
               ))}
             </Grid>
+
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              <AlertTitle sx={{ fontWeight: 700 }}>Metrics Anti-Pattern Warning</AlertTitle>
+              Never use metrics to compare individuals or punish teams. "Developer X completed fewer points" creates
+              gaming behavior where people inflate estimates or avoid hard problems. Metrics are for team improvement,
+              not surveillance.
+            </Alert>
           </Paper>
 
           {/* Agile Practices */}
@@ -1129,22 +1592,160 @@ export default function AgilePMPage() {
               <BuildIcon sx={{ color: accent }} />
               Agile Practices
             </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Agile is supported by engineering practices that enable teams to deliver quality software frequently.
+              These practices aren't optional extras—they're what make sustainable Agile delivery possible.
+            </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Continuous Integration / Continuous Delivery (CI/CD)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Continuous Integration (CI):</strong><br/>
+                Developers merge code changes into a shared repository multiple times a day. Each merge triggers
+                automated builds and tests. This catches integration problems early, when they're small and easy to fix.<br/><br/>
+
+                <strong>Continuous Delivery (CD):</strong><br/>
+                Code is always in a deployable state. After passing automated tests, code could be released to production
+                at any moment with the push of a button. Some teams practice "Continuous Deployment"—automatically
+                releasing every change that passes tests.<br/><br/>
+
+                <strong>Why This Matters for Agile:</strong><br/>
+                • <strong>Without CI/CD:</strong> "Integration hell" at the end of each sprint. Merging weeks of work causes conflicts and bugs.<br/>
+                • <strong>With CI/CD:</strong> Small, frequent integrations. If something breaks, you know exactly which small change caused it.<br/><br/>
+
+                <strong>Beginner Tip:</strong> Start with basic CI—run automated tests on every push. Add more automation
+                gradually: code linting, security scans, automated deployments to staging environments.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Test-Driven Development (TDD)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The TDD Cycle (Red-Green-Refactor):</strong><br/>
+                1. <strong>Red:</strong> Write a failing test for the behavior you want<br/>
+                2. <strong>Green:</strong> Write the minimum code to make the test pass<br/>
+                3. <strong>Refactor:</strong> Clean up the code while keeping tests green<br/>
+                4. Repeat<br/><br/>
+
+                <strong>Example:</strong><br/>
+                Want to build a function that calculates discounts?<br/>
+                • First write a test: <code>expect(calculateDiscount(100, 0.1)).toBe(90)</code><br/>
+                • Test fails (red)—the function doesn't exist yet<br/>
+                • Write simple code to make it pass (green)<br/>
+                • Clean up, add more test cases, repeat<br/><br/>
+
+                <strong>Why TDD Works:</strong><br/>
+                • Tests written after code often test what code does, not what it should do<br/>
+                • Writing tests first forces you to think about design before coding<br/>
+                • You build a safety net of tests that enables fearless refactoring
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Pair Programming & Mob Programming
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Pair Programming:</strong><br/>
+                Two developers work together at one computer. One "drives" (types), one "navigates" (thinks ahead, spots
+                errors, suggests improvements). Roles switch frequently.<br/><br/>
+
+                <strong>Mob Programming:</strong><br/>
+                The whole team works on the same thing, at the same time, on the same computer. One person types while
+                others guide. Sounds inefficient? Teams report fewer bugs, faster knowledge sharing, and better designs.<br/><br/>
+
+                <strong>Common Objections (and Responses):</strong><br/>
+                • <strong>"Half the output!"</strong> → Studies show pairs produce fewer bugs, so total cost is often lower<br/>
+                • <strong>"Introverts hate it!"</strong> → Many introverts prefer pairing to meetings. It's focused collaboration.<br/>
+                • <strong>"Slows seniors down!"</strong> → Seniors share knowledge; juniors ramp up faster. Investment pays off.<br/><br/>
+
+                <strong>How to Start:</strong><br/>
+                Don't mandate 100% pairing. Start with complex features, bug investigations, or onboarding new team members.
+                Let pairs form naturally for hard problems.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#8b5cf6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#8b5cf6" }}>
+                Technical Debt Management
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What is Technical Debt?</strong><br/>
+                Quick solutions that save time now but require more work later. Like financial debt, it accumulates
+                interest—the longer you wait, the harder it is to fix.<br/><br/>
+
+                <strong>Types of Technical Debt:</strong><br/>
+                • <strong>Deliberate:</strong> "We know this is hacky but we need to ship. We'll fix it next sprint."<br/>
+                • <strong>Accidental:</strong> "We didn't know a better way when we wrote this."<br/>
+                • <strong>Bit rot:</strong> Code that was fine but became debt as requirements evolved<br/><br/>
+
+                <strong>Managing Technical Debt:</strong><br/>
+                1. <strong>Make it visible:</strong> Track debt items in the backlog, not in developers' heads<br/>
+                2. <strong>Allocate capacity:</strong> Reserve 10-20% of each sprint for debt paydown<br/>
+                3. <strong>Pay as you go:</strong> When touching code, leave it better than you found it<br/>
+                4. <strong>Prioritize by pain:</strong> Fix debt that slows the team daily, not theoretical concerns<br/><br/>
+
+                <strong>Warning Signs of Too Much Debt:</strong><br/>
+                • Simple changes take days instead of hours<br/>
+                • Fear of touching certain parts of the codebase<br/>
+                • New developers take months to become productive
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#ec4899", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#ec4899", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#ec4899" }}>
+                Definition of Done (DoD) & Definition of Ready (DoR)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Definition of Done:</strong><br/>
+                A checklist of criteria that must be met before work is considered complete. Prevents "90% done" stories
+                from lingering sprint after sprint.<br/><br/>
+
+                <strong>Example DoD:</strong><br/>
+                • Code is written and code-reviewed<br/>
+                • Unit tests written and passing<br/>
+                • Integration tests passing<br/>
+                • Documentation updated<br/>
+                • Deployed to staging environment<br/>
+                • Product Owner has accepted the work<br/><br/>
+
+                <strong>Definition of Ready:</strong><br/>
+                Criteria a story must meet before it can be pulled into a sprint. Prevents poorly defined work from
+                causing confusion mid-sprint.<br/><br/>
+
+                <strong>Example DoR:</strong><br/>
+                • User story follows standard format<br/>
+                • Acceptance criteria are clear and testable<br/>
+                • Dependencies identified<br/>
+                • Story is sized (estimated)<br/>
+                • UI mockups available (if applicable)
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Quick Reference: Engineering Practices</Typography>
             <Grid container spacing={2}>
               {[
-                "Continuous Integration / Continuous Delivery",
-                "Test-Driven Development (TDD)",
-                "Pair Programming / Mob Programming",
-                "Code Reviews and Pull Requests",
-                "Refactoring and Technical Debt Management",
-                "Definition of Done and Definition of Ready",
-                "Information Radiators (visible boards)",
-                "Walking Skeletons and Spikes",
-              ].map((practice) => (
-                <Grid item xs={12} md={6} key={practice}>
+                { practice: "Continuous Integration", desc: "Merge code frequently, run automated tests on every commit" },
+                { practice: "Continuous Delivery", desc: "Keep code deployable at all times, automate release process" },
+                { practice: "Test-Driven Development", desc: "Write tests first, then code to pass them" },
+                { practice: "Pair Programming", desc: "Two developers, one computer, real-time collaboration" },
+                { practice: "Code Reviews", desc: "Peer review all code changes before merging" },
+                { practice: "Refactoring", desc: "Continuously improve code structure without changing behavior" },
+                { practice: "Information Radiators", desc: "Visible boards showing team status and progress" },
+                { practice: "Walking Skeletons", desc: "Minimal end-to-end implementation proving architecture works" },
+              ].map((item) => (
+                <Grid item xs={12} md={6} key={item.practice}>
                   <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05) }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <CheckCircleIcon sx={{ color: "#22c55e" }} />
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{practice}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                      <CheckCircleIcon sx={{ color: "#22c55e", mt: 0.3 }} />
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.practice}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                      </Box>
                     </Box>
                   </Paper>
                 </Grid>
@@ -1158,25 +1759,137 @@ export default function AgilePMPage() {
               <RocketLaunchIcon sx={{ color: accent }} />
               Scaling Agile
             </Typography>
-            <Typography variant="body1" sx={{ mb: 3 }}>
-              When organizations grow, they often need frameworks to scale Agile across multiple teams.
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Agile started with small, co-located teams. But what happens when you have 50 developers? 200? Large organizations
+              need frameworks to coordinate multiple Agile teams while preserving the benefits of agility.
             </Typography>
-            <Grid container spacing={2}>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: The Scaling Challenge
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Why Scaling Is Hard:</strong><br/>
+                A single Scrum team of 7 people works great. But what happens with 70 people building one product?<br/><br/>
+
+                <strong>Common Problems at Scale:</strong><br/>
+                • <strong>Dependencies:</strong> Team A can't finish their story until Team B completes theirs<br/>
+                • <strong>Integration:</strong> 10 teams each building features—how do you merge them into one product?<br/>
+                • <strong>Alignment:</strong> How do you ensure all teams are pulling in the same direction?<br/>
+                • <strong>Communication:</strong> In a 7-person team, there are 21 communication paths. In 70 people? 2,415!<br/><br/>
+
+                <strong>The Key Insight:</strong><br/>
+                Scaling isn't about doing Agile at a bigger scale. It's about creating structures that allow multiple
+                small teams to work together while staying agile. The goal is "scaling down" the problem into manageable
+                pieces, not "scaling up" the bureaucracy.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Scrum of Scrums: The Simplest Scaling Approach
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>How It Works:</strong><br/>
+                Representatives from each Scrum team meet regularly (daily or several times per week) to synchronize
+                across teams. It's like a Daily Scrum, but for the whole program.<br/><br/>
+
+                <strong>The Format:</strong><br/>
+                Each representative answers:<br/>
+                1. What did my team do since the last meeting that affects other teams?<br/>
+                2. What will my team do that might affect other teams?<br/>
+                3. What impediments does my team face that involve other teams?<br/><br/>
+
+                <strong>When to Use:</strong><br/>
+                • 2-5 teams working on related products<br/>
+                • Teams have occasional dependencies<br/>
+                • You want minimal process overhead<br/><br/>
+
+                <strong>Limitations:</strong><br/>
+                Becomes unwieldy with more than 5-7 teams. Representatives become bottlenecks. Consider more
+                structured frameworks at that point.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Scaling Frameworks Comparison</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               {[
-                { name: "SAFe", full: "Scaled Agile Framework", desc: "Comprehensive framework for large enterprises" },
-                { name: "LeSS", full: "Large-Scale Scrum", desc: "Minimal framework extending Scrum to multiple teams" },
-                { name: "Nexus", full: "Scrum.org's scaling framework", desc: "Extension of Scrum for 3-9 teams" },
-                { name: "Scrum of Scrums", full: "Coordination meeting", desc: "Representatives from each team synchronize" },
+                {
+                  name: "SAFe",
+                  full: "Scaled Agile Framework",
+                  desc: "Most comprehensive and prescriptive. Defines roles, events, and artifacts at team, program, and portfolio levels. Good for large enterprises needing structure.",
+                  pros: "Comprehensive, well-documented, training available",
+                  cons: "Heavy, can feel bureaucratic, expensive to implement",
+                  teams: "50-500+ people",
+                  color: "#6366f1"
+                },
+                {
+                  name: "LeSS",
+                  full: "Large-Scale Scrum",
+                  desc: "Minimalist approach—extend Scrum rules to multiple teams with minimal additions. One Product Backlog, one Product Owner, multiple teams.",
+                  pros: "Simple, true to Scrum, low overhead",
+                  cons: "Requires strong Scrum foundation, limited guidance",
+                  teams: "2-8 teams",
+                  color: "#22c55e"
+                },
+                {
+                  name: "Nexus",
+                  full: "Scrum.org's Scaling Framework",
+                  desc: "Created by Scrum.org. Adds a Nexus Integration Team to coordinate multiple Scrum teams. Focus on integration and dependencies.",
+                  pros: "Official Scrum extension, clear integration focus",
+                  cons: "Less guidance for portfolio level",
+                  teams: "3-9 teams",
+                  color: "#f59e0b"
+                },
+                {
+                  name: "Spotify Model",
+                  full: "Squads, Tribes, Chapters, Guilds",
+                  desc: "Not a framework but an organizational structure. Autonomous squads grouped into tribes. Chapters for functional expertise, guilds for cross-cutting interests.",
+                  pros: "Flexible, emphasizes autonomy and culture",
+                  cons: "Hard to copy—it emerged from Spotify's culture",
+                  teams: "Varies",
+                  color: "#ec4899"
+                },
               ].map((fw) => (
                 <Grid item xs={12} md={6} key={fw.name}>
-                  <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: accent }}>{fw.name}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{fw.full}</Typography>
-                    <Typography variant="body2" sx={{ mt: 0.5 }}>{fw.desc}</Typography>
+                  <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha(fw.color, 0.05), border: `1px solid ${alpha(fw.color, 0.2)}`, height: "100%" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: fw.color, mb: 0.5 }}>{fw.name}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>{fw.full}</Typography>
+                    <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>{fw.desc}</Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                      <Typography variant="caption"><strong>Best for:</strong> {fw.teams}</Typography>
+                      <Typography variant="caption" sx={{ color: "#22c55e" }}><strong>Pros:</strong> {fw.pros}</Typography>
+                      <Typography variant="caption" sx={{ color: "#ef4444" }}><strong>Cons:</strong> {fw.cons}</Typography>
+                    </Box>
                   </Paper>
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                How to Choose a Scaling Framework
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Start With These Questions:</strong><br/>
+                1. <strong>How mature is your Agile practice?</strong> If teams aren't doing Scrum well yet, scaling will magnify problems.<br/>
+                2. <strong>How many teams?</strong> 3 teams? Start with Scrum of Scrums. 30 teams? Consider SAFe or LeSS Huge.<br/>
+                3. <strong>How coupled are the teams?</strong> Independent products need less coordination than one integrated system.<br/>
+                4. <strong>What's your culture?</strong> Command-and-control cultures may need SAFe's structure. Autonomous cultures may prefer LeSS.<br/><br/>
+
+                <strong>Common Mistakes:</strong><br/>
+                • <strong>Adopting the Spotify Model because Spotify is cool:</strong> Their model emerged from their culture. You can't copy-paste it.<br/>
+                • <strong>Choosing SAFe because it's comprehensive:</strong> More process isn't always better. Start simple.<br/>
+                • <strong>Scaling before you need to:</strong> If 2 teams can be truly independent, don't force coordination on them.
+              </Typography>
+            </Box>
+
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              <AlertTitle sx={{ fontWeight: 700 }}>Before You Scale</AlertTitle>
+              Make sure individual teams are doing Agile well before scaling. Scaling broken processes just creates bigger
+              broken processes. Get one team working well, then expand. As the saying goes: "If you can't feed a team with
+              two pizzas, it's too large."
+            </Alert>
           </Paper>
 
           {/* Anti-Patterns */}
@@ -1185,27 +1898,147 @@ export default function AgilePMPage() {
               <CancelIcon sx={{ color: "#ef4444" }} />
               Common Anti-Patterns
             </Typography>
-            <Grid container spacing={2}>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Anti-patterns are common mistakes that look like good practices but actually undermine Agile values. Learning
+              to recognize them helps teams avoid common traps and stay truly agile instead of "Agile in name only."
+            </Typography>
+
+            <Box sx={{ bgcolor: alpha("#ef4444", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#ef4444" }}>
+                "Scrumbut" and "Dark Scrum"
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Scrumbut:</strong><br/>
+                "We use Scrum, but..." followed by dropping essential elements. Examples:<br/>
+                • "We do Scrum, but we don't have a Product Owner—the manager decides priorities"<br/>
+                • "We do Scrum, but sprints are 6 weeks because 2 weeks is too short"<br/>
+                • "We do Scrum, but we skip retrospectives—no time"<br/><br/>
+
+                <strong>Dark Scrum:</strong><br/>
+                Using Scrum terminology while practicing command-and-control management:<br/>
+                • Managers attend Daily Scrum and use it to check up on people<br/>
+                • Velocity is used as a performance metric to pressure teams<br/>
+                • "Self-organization" means "figure it out yourselves with no support"<br/>
+                • Sprints become mini-waterfalls with deadlines to meet<br/><br/>
+
+                <strong>The Core Problem:</strong><br/>
+                Adopting Scrum's practices without its values creates a worse situation than no Agile at all. Teams get
+                the overhead of ceremonies without the benefits of agility.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Anti-Patterns Explained</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               {[
-                "Treating Daily Scrum as a status report to managers",
-                "Extending sprints to finish incomplete work",
-                "Product Owner writing detailed specifications",
-                "Scrum Master assigning tasks to developers",
-                "Skipping retrospectives when under pressure",
-                "Not having a clear Definition of Done",
-                "Ignoring technical debt indefinitely",
-                "Cherry-picking practices without embracing the mindset",
-              ].map((pattern) => (
-                <Grid item xs={12} md={6} key={pattern}>
-                  <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ef4444", 0.05) }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <CancelIcon sx={{ color: "#ef4444" }} />
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{pattern}</Typography>
+                {
+                  pattern: "Daily Scrum as Status Report",
+                  symptom: "Team members report to a manager instead of coordinating with each other",
+                  fix: "Managers should not attend. Focus on team coordination, not individual accountability.",
+                  color: "#ef4444"
+                },
+                {
+                  pattern: "Sprint Extension",
+                  symptom: "Sprints regularly run over to 'finish everything'",
+                  fix: "Sprints are fixed timeboxes. Incomplete work returns to the backlog. Adjust capacity, not time.",
+                  color: "#f59e0b"
+                },
+                {
+                  pattern: "Absent Product Owner",
+                  symptom: "PO is too busy to attend planning, refinement, or answer questions",
+                  fix: "PO must be available. If they can't, they need a proxy with decision authority.",
+                  color: "#ef4444"
+                },
+                {
+                  pattern: "Scrum Master as Task Assigner",
+                  symptom: "SM tells developers what to work on instead of team self-organizing",
+                  fix: "SM facilitates, doesn't direct. Team members pull work based on priorities and skills.",
+                  color: "#f59e0b"
+                },
+                {
+                  pattern: "Skipping Retrospectives",
+                  symptom: "'We're too busy to improve' or retros become complaint sessions",
+                  fix: "Retros are mandatory. If they're not useful, fix the retro format—don't skip them.",
+                  color: "#ef4444"
+                },
+                {
+                  pattern: "No Definition of Done",
+                  symptom: "'Done' means different things to different people; stories reopen",
+                  fix: "Create and enforce a team DoD. Stories that don't meet DoD aren't done.",
+                  color: "#f59e0b"
+                },
+                {
+                  pattern: "Technical Debt Denial",
+                  symptom: "'We don't have time for cleanup' sprint after sprint",
+                  fix: "Allocate capacity for debt. Track debt items visibly. Pay as you go.",
+                  color: "#ef4444"
+                },
+                {
+                  pattern: "Fake Self-Organization",
+                  symptom: "'Team decides' but manager overrules decisions or punishes 'wrong' choices",
+                  fix: "True self-organization requires psychological safety and real authority over how work is done.",
+                  color: "#f59e0b"
+                },
+              ].map((item) => (
+                <Grid item xs={12} key={item.pattern}>
+                  <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: alpha(item.color, 0.05), border: `1px solid ${alpha(item.color, 0.15)}` }}>
+                    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                      <CancelIcon sx={{ color: item.color, mt: 0.3 }} />
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: item.color }}>{item.pattern}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}><strong>Symptom:</strong> {item.symptom}</Typography>
+                        <Typography variant="body2" sx={{ color: "#22c55e" }}><strong>Fix:</strong> {item.fix}</Typography>
+                      </Box>
                     </Box>
                   </Paper>
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                "Cargo Cult Agile"
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What It Is:</strong><br/>
+                Copying Agile practices superficially without understanding why they work. Named after Pacific Island
+                cargo cults that built fake runways hoping planes would bring goods.<br/><br/>
+
+                <strong>Examples:</strong><br/>
+                • Standing during Daily Scrum (copying the "standup" practice) but meetings still last 45 minutes<br/>
+                • Using story points but converting them to hours for management<br/>
+                • Having a Kanban board but never updating it or using WIP limits<br/>
+                • Renaming "Project Manager" to "Scrum Master" with no change in behavior<br/><br/>
+
+                <strong>The Problem:</strong><br/>
+                The rituals are visible; the values aren't. Teams adopt what they can see (standups, boards, sprints)
+                but miss what makes them work (collaboration, feedback loops, continuous improvement).<br/><br/>
+
+                <strong>The Solution:</strong><br/>
+                Start with "why." Don't just do standups—understand they're for team coordination. Don't just have
+                sprints—understand they create feedback loops. Then adapt practices to serve those purposes.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Signs You're Actually Doing Agile Well
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Healthy Signs:</strong><br/>
+                • Working software ships every sprint (or more frequently)<br/>
+                • Customers give feedback regularly and it influences priorities<br/>
+                • Team members feel safe raising problems and experiments<br/>
+                • Retrospective actions actually get implemented<br/>
+                • People ask "what's the value?" not just "what's the deadline?"<br/>
+                • Technical quality stays high (tests, clean code, etc.)<br/>
+                • Stakeholders trust the team's estimates and commitments<br/>
+                • Change is welcomed, not feared<br/><br/>
+
+                <strong>The Ultimate Test:</strong><br/>
+                If your practices aren't helping you deliver value faster, respond to change better, and keep teams
+                sustainable—something's wrong. Agile isn't about following rules; it's about getting results.
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Quiz Section */}

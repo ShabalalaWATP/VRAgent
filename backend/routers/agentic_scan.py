@@ -20,7 +20,8 @@ from ..services.agentic_scan_service import (
 )
 from ..core.logging import get_logger
 from ..core.database import get_db
-from ..models.models import AgenticScanReport
+from ..core.auth import get_current_active_user
+from ..models.models import AgenticScanReport, User
 
 logger = get_logger(__name__)
 
@@ -129,13 +130,19 @@ active_connections: dict[str, WebSocket] = {}
 # ============================================================================
 
 @router.post("/start")
-async def start_scan(request: StartScanRequest, background_tasks: BackgroundTasks):
+async def start_scan(
+    request: StartScanRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Start a new agentic AI security scan.
-    
+
     The scan runs asynchronously. Use /status/{scan_id} or WebSocket to track progress.
-    
+
     Returns the scan_id for tracking.
+
+    Requires authentication.
     """
     try:
         # Generate scan ID early for immediate response
@@ -173,12 +180,17 @@ async def start_scan(request: StartScanRequest, background_tasks: BackgroundTask
 
 
 @router.post("/start-sync")
-async def start_scan_sync(request: StartScanRequest):
+async def start_scan_sync(
+    request: StartScanRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Start an agentic scan and wait for completion.
-    
+
     Use this for smaller projects or when you need the results immediately.
     For larger projects, use /start and poll /status.
+
+    Requires authentication.
     """
     try:
         extensions = request.file_extensions or [".py", ".js", ".ts", ".jsx", ".tsx"]
@@ -203,9 +215,14 @@ async def start_scan_sync(request: StartScanRequest):
 
 
 @router.get("/status/{scan_id}")
-async def get_scan_status(scan_id: str):
+async def get_scan_status(
+    scan_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get the current status/progress of a scan.
+
+    Requires authentication.
     """
     progress = agentic_scan_service.get_progress(scan_id)
     
@@ -235,9 +252,14 @@ async def get_scan_status(scan_id: str):
 
 
 @router.get("/result/{scan_id}")
-async def get_scan_result(scan_id: str):
+async def get_scan_result(
+    scan_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get the full result of a completed scan.
+
+    Requires authentication.
     """
     result = agentic_scan_service.get_result(scan_id)
     
@@ -255,9 +277,15 @@ async def get_scan_result(scan_id: str):
 
 
 @router.get("/vulnerabilities/{scan_id}")
-async def get_vulnerabilities(scan_id: str, severity: Optional[str] = None):
+async def get_vulnerabilities(
+    scan_id: str,
+    severity: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get just the vulnerabilities from a scan, optionally filtered by severity.
+
+    Requires authentication.
     """
     result = agentic_scan_service.get_result(scan_id)
     

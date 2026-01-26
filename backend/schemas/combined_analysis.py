@@ -16,7 +16,13 @@ from datetime import datetime
 
 class SelectedScan(BaseModel):
     """A selected scan/report to include in the combined analysis."""
-    scan_type: str = Field(..., description="Type: 'security_scan', 'network_report', 're_report', 'fuzzing_session'")
+    scan_type: str = Field(
+        ...,
+        description="Type: 'security_scan', 'network_report', 'ssl_scan', 'dns_scan', "
+                    "'traceroute_scan', 'nmap_scan', 'pcap_report', 'api_tester_report', "
+                    "'dynamic_scan', 'mitm_analysis_report', 'fuzzing_session', "
+                    "'agentic_fuzzer_report', 'binary_fuzzer_session', 're_report'"
+    )
     scan_id: int = Field(..., description="The ID of the scan/report")
     title: Optional[str] = None  # For display purposes
 
@@ -39,6 +45,9 @@ class CombinedAnalysisRequest(BaseModel):
     
     # Optional supporting documents
     supporting_documents: Optional[List[SupportingDocument]] = None
+
+    # Optional references to existing document analysis reports
+    document_analysis_report_ids: Optional[List[int]] = None
     
     # Project info dump from user
     project_info: Optional[str] = Field(None, max_length=10000, description="User-provided project context and information")
@@ -74,16 +83,32 @@ class AvailableScansResponse(BaseModel):
     """Response listing all available scans for a project."""
     project_id: int
     project_name: str
-    
+
+    # Static Analysis
     security_scans: List[AvailableScanItem] = []
+
+    # Dynamic Analysis - Network
     network_reports: List[AvailableScanItem] = []
     ssl_scans: List[AvailableScanItem] = []  # SSL/TLS security scans
     dns_scans: List[AvailableScanItem] = []  # DNS reconnaissance scans
     traceroute_scans: List[AvailableScanItem] = []  # Traceroute network path analysis
-    re_reports: List[AvailableScanItem] = []
+    nmap_scans: List[AvailableScanItem] = []  # Nmap port/service scans (live + uploaded)
+    pcap_reports: List[AvailableScanItem] = []  # PCAP packet capture analysis
+    api_tester_reports: List[AvailableScanItem] = []  # API endpoint security testing
+
+    # Dynamic Analysis - Scanning
+    dynamic_scans: List[AvailableScanItem] = []  # Dynamic Application Security Testing (DAST) scans
+    mitm_analysis_reports: List[AvailableScanItem] = []  # MITM traffic analysis reports
+
+    # Fuzzing
     fuzzing_sessions: List[AvailableScanItem] = []
     agentic_fuzzer_reports: List[AvailableScanItem] = []  # AI-driven agentic fuzzer reports
-    
+    binary_fuzzer_sessions: List[AvailableScanItem] = []  # Binary/AFL++ fuzzing sessions
+    fuzzing_campaign_reports: List[AvailableScanItem] = []  # AI-generated campaign reports from Agentic Binary Fuzzer
+
+    # Reverse Engineering
+    re_reports: List[AvailableScanItem] = []
+
     total_available: int = 0
 
 

@@ -1236,6 +1236,21 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
           From fundamentals to frontier: understanding and applying AI/ML in the real world
         </Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.04), border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+            How to Navigate This Page
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+            This page is intentionally long and layered. Each section builds on the previous one, moving from
+            foundational concepts to advanced systems and real-world applications. If you are new, read in order.
+            If you are experienced, jump to the section that matches your immediate goal, then backfill the basics.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+            The goal is practical understanding, not memorization. Every topic includes plain language summaries,
+            reasons it matters, and how it connects to deployment, risk, or security. Treat this as a living
+            reference you return to as your work evolves.
+          </Typography>
+        </Paper>
 
         {/* ==================== COURSE OUTLINE (Moved to top) ==================== */}
         <Box id="outline" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, scrollMarginTop: 80 }}>
@@ -1319,6 +1334,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Understanding what AI is, where it came from, and how AI projects work
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Foundations in Practice
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Foundations are about building intuition. You will see repeated themes: data quality, clear objectives,
+          and honest evaluation. These themes matter more than any single model family, because they determine
+          whether AI adds real value or just complexity.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          As you read, keep asking: What is the input? What is the output? How will we know if the system helps?
+          The answers guide model choice, deployment architecture, and even staffing requirements.
         </Typography>
 
         {/* What is AI - Introduction */}
@@ -1520,6 +1547,18 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The foundation of every AI system — where quality matters more than quantity
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Data as a Product
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Treat data like a product with owners, documentation, and quality standards. Most ML failures are not
+          algorithmic; they are caused by missing coverage, drifting distributions, or ambiguous labels. Good data
+          practices reduce incident response and shorten model iteration cycles.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          For security and operational teams, data quality is a risk control. It prevents misleading alerts,
+          reduces false positives, and makes model outputs defensible in audits or incident reviews.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -1676,6 +1715,19 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The mathematical foundations that make machine learning work
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Math for Decision Making
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          You do not need to derive proofs, but you do need to understand what the math is trying to optimize.
+          Concepts like gradients, distributions, and variance explain why models behave the way they do under
+          change, noise, or adversarial inputs.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Strong mathematical intuition helps you ask better questions: Is the data separable? Are we overfitting?
+          Does the loss function match the business objective? These questions lead to better models and safer
+          deployments.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03), border: `1px solid ${alpha("#ef4444", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -1826,6 +1878,19 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The tools and infrastructure that bring AI systems to life
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Engineering Reality
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          AI work quickly becomes a software engineering problem. Experiments are exploratory, but production
+          systems require reproducibility, monitoring, and clear ownership. That means thinking about tests,
+          versioning, and rollback strategies from day one.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Compute choices influence cost and speed. A model that trains in hours instead of days enables faster
+          iteration, better debugging, and more reliable outcomes. Infrastructure is not just a detail; it is a
+          core part of the product.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -1970,6 +2035,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The fundamental learning paradigms that power AI systems
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Choosing the Right Paradigm
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          The learning paradigm you choose drives data needs, evaluation metrics, and deployment complexity. A
+          supervised classifier can be straightforward to operate, while reinforcement learning might require a
+          simulation environment and continuous tuning.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Practical teams start with the simplest approach that meets requirements, then add complexity only
+          when it yields measurable improvements. This saves time and reduces operational risk.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
@@ -2135,6 +2212,17 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The foundational algorithms that still power much of production ML
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Why Classical Models Still Win
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Classical models are fast, explainable, and often more reliable for structured data. They are easier to
+          debug, cheaper to serve, and more transparent to stakeholders who need to understand decisions.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Even when you deploy deep learning, classical baselines remain essential. They provide a sanity check
+          and help quantify whether the added complexity is truly justified.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.03), border: `1px solid ${alpha("#06b6d4", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -2288,6 +2376,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Neural networks that learn hierarchical representations from data
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Why Depth Changes the Game
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Deep learning excels when the raw input is complex and high dimensional, like images, text, or audio.
+          It reduces the need for handcrafted features by learning representations directly from data, but it also
+          demands more compute, more data, and more careful evaluation.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Understanding the strengths and limits of deep learning helps you decide when to use it and when to keep
+          a simpler model. Depth is powerful, but it is not always the most practical choice.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#ec4899", 0.03), border: `1px solid ${alpha("#ec4899", 0.1)}` }}>
@@ -2506,6 +2606,18 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Teaching machines to understand, generate, and work with human language
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Language is Hard for Machines
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Human language is full of ambiguity, implied meaning, and cultural context. NLP systems must deal with
+          sarcasm, domain jargon, and shifting definitions over time. That is why evaluation often requires domain
+          experts, not just benchmark scores.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          In practice, NLP success depends on careful data curation and clear intent. A model that performs well
+          in a lab can still fail in the field if it does not match real user language or operational constraints.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#14b8a6", 0.03), border: `1px solid ${alpha("#14b8a6", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -2624,6 +2736,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           The frontier of AI: from text generators to reasoning systems with tools
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          From Text Prediction to Systems
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          LLMs are powerful, but they are not databases or search engines. They generate likely sequences based on
+          patterns, which means they can be persuasive even when wrong. This makes grounding, verification, and
+          tool-based retrieval essential for reliable applications.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Agents add orchestration and memory, enabling multi-step workflows. That also increases risk: more tools
+          means more attack surface, and more autonomy means stricter safeguards are required.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#a855f7", 0.03), border: `1px solid ${alpha("#a855f7", 0.1)}` }}>
@@ -3713,6 +3837,18 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Teaching machines to see and understand visual information
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Seeing is Not Understanding
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Vision models are powerful pattern recognizers, but they can still fail under distribution shift,
+          lighting changes, or adversarial inputs. Real-world deployment requires careful validation with
+          data that matches the target environment.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          In security and safety contexts, false positives and false negatives have real costs. That makes
+          robust evaluation, calibrated confidence scores, and human oversight essential.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -3821,12 +3957,134 @@ export default function ArtificialIntelligencePage() {
           ))}
         </Grid>
 
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Vision Theory Essentials</Typography>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0ea5e9" }}>🧠 Inductive Biases</Typography>
+              <List dense>
+                {[
+                  "Locality + shared weights (convolutions)",
+                  "Receptive field grows with depth and stride",
+                  "Translation equivariance; pooling adds invariance",
+                  "Multi-scale features (FPN, pyramids)",
+                  "Positional encoding for ViT patches",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.1, px: 0 }}>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>📐 Objectives & Losses</Typography>
+              <List dense>
+                {[
+                  "Cross-entropy for classification",
+                  "Focal loss for class imbalance",
+                  "IoU/GIoU/DIoU for box regression",
+                  "Dice or IoU loss for segmentation",
+                  "Contrastive/self-supervised losses (SimCLR, DINO)",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.1, px: 0 }}>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>🧪 Evaluation & Robustness</Typography>
+              <List dense>
+                {[
+                  "mAP for detection, mIoU for segmentation",
+                  "Calibration and confidence thresholds",
+                  "NMS or Soft-NMS to merge overlaps",
+                  "Augmentations: crop, flip, color jitter, mixup",
+                  "Domain shift tests: lighting, occlusion, blur",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.1, px: 0 }}>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Open Source Vision Models</Typography>
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {[
+            {
+              title: "Backbone Networks",
+              desc: "Feature extractors for most CV pipelines",
+              models: "ResNet, EfficientNet, ConvNeXt, MobileNet, ViT, Swin",
+              color: "#0ea5e9",
+            },
+            {
+              title: "Detection Models",
+              desc: "Bounding boxes + classes at scale",
+              models: "Faster R-CNN, RetinaNet, YOLOv5/YOLOv8, DETR, Deformable DETR",
+              color: "#22c55e",
+            },
+            {
+              title: "Segmentation Models",
+              desc: "Pixel-accurate scene understanding",
+              models: "U-Net, Mask R-CNN, DeepLabv3+, SegFormer, Segment Anything (SAM)",
+              color: "#f59e0b",
+            },
+            {
+              title: "Foundation & Self-Supervised",
+              desc: "General-purpose representations",
+              models: "DINOv2, MAE, MoCo, CLIP, BLIP-2",
+              color: "#8b5cf6",
+            },
+            {
+              title: "Pose, Tracking, OCR",
+              desc: "Keypoints, motion, and text extraction",
+              models: "OpenPose, MediaPipe BlazePose/Hands, ByteTrack, Tesseract, PaddleOCR",
+              color: "#ec4899",
+            },
+            {
+              title: "Video Understanding",
+              desc: "Temporal reasoning in video streams",
+              models: "SlowFast, TimeSformer, VideoMAE, X3D",
+              color: "#06b6d4",
+            },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.title}>
+              <Paper sx={{ p: 2.5, borderRadius: 2, height: "100%", border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color, mb: 0.5 }}>{item.title}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  {item.desc}
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>Examples</Typography>
+                <Typography variant="caption" color="text.secondary">{item.models}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
         {/* ==================== SECTION 11: SPEECH AND AUDIO AI ==================== */}
         <Typography id="speech-audio" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
           🎤 Speech and Audio AI
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Converting between speech and text, and understanding audio signals
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Audio is Temporal and Contextual
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Speech systems must handle accents, background noise, overlapping speakers, and domain-specific
+          vocabulary. Success often depends on careful dataset selection and post-processing, not just model size.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          In regulated environments, audio data raises privacy concerns. Consent, retention policies, and
+          secure storage are as important as recognition accuracy.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#f97316", 0.03), border: `1px solid ${alpha("#f97316", 0.1)}` }}>
@@ -3910,6 +4168,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Models that create new content: images, text, audio, video, and code
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Creativity Meets Risk
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Generative models can compress expertise into accessible tools, but they also raise issues like
+          attribution, originality, and misuse. Organizations need clear policies on acceptable use and
+          human review for sensitive outputs.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Quality control is critical. Generative systems are probabilistic and can produce confident errors,
+          so outputs should be validated when used for decisions, security, or public-facing content.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#d946ef", 0.03), border: `1px solid ${alpha("#d946ef", 0.1)}` }}>
@@ -4039,6 +4309,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Measuring model performance, understanding predictions, and ensuring reliability
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Beyond Accuracy
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Good evaluation aligns metrics to real-world risk. In security, a small increase in false positives can
+          overwhelm analysts, while a small increase in false negatives can create blind spots. Testing should
+          reflect operational constraints, not just benchmark scores.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Reliable systems also require robustness checks: stress tests, adversarial inputs, and drift monitoring.
+          If a model fails quietly, the downstream impact can be larger than a traditional software bug.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#84cc16", 0.03), border: `1px solid ${alpha("#84cc16", 0.1)}` }}>
@@ -4192,6 +4474,18 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Taking models from notebooks to production at scale
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Production is a Different World
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Deployment introduces latency, cost, and reliability constraints that rarely appear in research. A model
+          that is accurate but slow can fail a product requirement. MLOps is about making trade-offs explicit and
+          keeping them measurable over time.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          The most successful teams treat ML systems as continuously evolving products. Monitoring, retraining,
+          and versioned rollouts are core practices, not optional extras.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#6366f1", 0.03), border: `1px solid ${alpha("#6366f1", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -4289,6 +4583,17 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Cloud AI services, on-premises stacks, and the infrastructure powering modern AI
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Choosing the Right Stack
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Platform choices influence speed, cost, and compliance. Managed platforms simplify operations but can
+          limit flexibility, while self-hosted stacks require more expertise and maintenance.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          For security teams, infrastructure decisions also affect threat models. Data residency, access controls,
+          and auditability should be considered alongside performance and budget.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#0891b2", 0.03), border: `1px solid ${alpha("#0891b2", 0.1)}` }}>
@@ -4439,6 +4744,18 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Threats against AI systems and how to defend them
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Security Starts at Design
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          AI security is not an add-on. It requires threat modeling, data governance, access control, and
+          monitoring across the entire lifecycle. Decisions made in data collection or model hosting can
+          create long-lived security risks.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Treat models as production services with unique failure modes. Build guardrails, validate inputs,
+          and assume adversarial pressure when models are exposed to untrusted users or data sources.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#dc2626", 0.03), border: `1px solid ${alpha("#dc2626", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -4560,6 +4877,17 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Using AI/ML to detect threats, automate response, and enhance security operations
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Augmentation, Not Replacement
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          The most effective defensive systems use AI to triage, summarize, and correlate events while keeping
+          humans in control of critical decisions. This improves speed without sacrificing accountability.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Successful adoption requires clear feedback loops. Analysts should be able to correct false positives,
+          report missed detections, and see improvements reflected in model updates.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#16a34a", 0.03), border: `1px solid ${alpha("#16a34a", 0.1)}` }}>
@@ -4709,6 +5037,17 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Using AI/ML to enhance penetration testing, red teaming, and security research
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Responsible Use and Scope
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Offensive applications must stay within explicit authorization and scope. The value of AI here is in
+          faster analysis, better reporting, and more thorough coverage, not in bypassing safeguards.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Keep outputs reviewable and auditable. Human oversight is essential to ensure safe execution and to
+          translate AI findings into actionable defensive improvements.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#ea580c", 0.03), border: `1px solid ${alpha("#ea580c", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -4854,6 +5193,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Integrating AI into the secure development lifecycle
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Security by Default
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          AI can lower the barrier to secure coding, but only if its guidance is contextual and verified. The best
+          outcomes happen when AI suggestions are paired with secure defaults, code review standards, and clear
+          ownership of risk.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Treat AI as a collaborator rather than an authority. Encourage developers to inspect, test, and explain
+          changes before merging, especially when security is involved.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#7c3aed", 0.03), border: `1px solid ${alpha("#7c3aed", 0.1)}` }}>
@@ -5002,6 +5353,17 @@ export default function ArtificialIntelligencePage() {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Responsible AI development, deployment, and oversight
         </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          Governance is Operational
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          Ethics becomes real when it is embedded into process: review gates, documented decisions, and measurable
+          accountability. Governance is not just policy language; it is how teams build, test, and ship AI systems.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Mature governance helps teams avoid reputational harm and compliance risk. It also improves trust with
+          users and stakeholders by making trade-offs transparent and auditable.
+        </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#be185d", 0.03), border: `1px solid ${alpha("#be185d", 0.1)}` }}>
           <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
@@ -5148,6 +5510,18 @@ export default function ArtificialIntelligencePage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Applying AI knowledge in real-world roles and building your career
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+          From Skills to Impact
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+          AI work is collaborative. It requires clear communication, alignment on goals, and the ability to
+          explain model behavior to non-technical stakeholders. The ability to translate between technical and
+          business language is a career accelerator.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+          Focus on outcomes and evidence. Demonstrate how your work improves reliability, reduces risk, or
+          accelerates decision making, and document those results in a way others can verify.
         </Typography>
 
         <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#0d9488", 0.03), border: `1px solid ${alpha("#0d9488", 0.1)}` }}>

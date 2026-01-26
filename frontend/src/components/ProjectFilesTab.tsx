@@ -36,6 +36,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  MenuItem,
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -43,6 +44,7 @@ import {
   ProjectFile,
   DocumentAnalysisReport,
   ReportChatMessage,
+  DocumentTranslation,
 } from "../api/client";
 
 // Icons
@@ -72,6 +74,7 @@ import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import TuneIcon from "@mui/icons-material/Tune";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
+import TranslateIcon from "@mui/icons-material/Translate";
 
 interface ProjectFilesTabProps {
   projectId: number;
@@ -137,20 +140,26 @@ const getStatusColor = (status: string): "success" | "error" | "warning" | "info
 export default function ProjectFilesTab({ projectId, projectName, canEdit }: ProjectFilesTabProps) {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"files" | "documents">("files");
+  const [activeTab, setActiveTab] = useState<"files" | "documents" | "translations">("files");
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [selectedReport, setSelectedReport] = useState<DocumentAnalysisReport | null>(null);
   const [chatMessage, setChatMessage] = useState("");
-  const [deleteDialog, setDeleteDialog] = useState<{ type: "file" | "report"; id: number; name: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ type: "file" | "report" | "translation"; id: number; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const translationInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
   // New states for multi-file upload
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [customPrompt, setCustomPrompt] = useState("");
   const [showPromptField, setShowPromptField] = useState(false);
+  const [analysisDepth, setAnalysisDepth] = useState<"standard" | "deep">("deep");
+  const [translationProgress, setTranslationProgress] = useState<number | null>(null);
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState("English");
+  const [translationSourceLanguage, setTranslationSourceLanguage] = useState("");
+  const [translationOcrLanguages, setTranslationOcrLanguages] = useState("");
 
   // Queries
   const filesQuery = useQuery<ProjectFile[]>({
@@ -163,9 +172,18 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
     queryFn: () => apiClient.getAnalysisReports(projectId),
   });
 
+  const translationsQuery = useQuery<DocumentTranslation[]>({
+    queryKey: ["project-translations", projectId],
+    queryFn: () => apiClient.getDocumentTranslations(projectId),
+  });
+
   // Check if any reports are processing - refetch if so
   const hasProcessingReports = reportsQuery.data?.some(
     (r) => r.status === "pending" || r.status === "processing"
+  );
+
+  const hasProcessingTranslations = translationsQuery.data?.some(
+    (t) => t.status === "pending" || t.status === "processing"
   );
 
   // Use effect to trigger refetch while processing
@@ -176,6 +194,14 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
     }, 3000);
     return () => clearInterval(interval);
   }, [hasProcessingReports, reportsQuery]);
+
+  useEffect(() => {
+    if (!hasProcessingTranslations) return;
+    const interval = setInterval(() => {
+      translationsQuery.refetch();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasProcessingTranslations, translationsQuery]);
 
   const chatQuery = useQuery<ReportChatMessage[]>({
     queryKey: ["report-chat", selectedReport?.id],
@@ -203,8 +229,8 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
   });
 
   const createReportMutation = useMutation({
-    mutationFn: async ({ files, prompt }: { files: File[]; prompt: string }) => {
-      return apiClient.createAnalysisReport(projectId, files, prompt || undefined, (progress) => {
+    mutationFn: async ({ files, prompt, depth }: { files: File[]; prompt: string; depth: string }) => {
+      return apiClient.createAnalysisReport(projectId, files, prompt || undefined, depth, (progress) => {
         setUploadProgress(progress);
       });
     },
@@ -236,6 +262,43 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
       if (selectedReport?.id === deleteDialog?.id) {
         setSelectedReport(null);
       }
+    },
+  });
+
+  const createTranslationMutation = useMutation({
+    mutationFn: async ({ file }: { file: File }) => {
+      return apiClient.createDocumentTranslation(
+        projectId,
+        file,
+        {
+          targetLanguage: translationTargetLanguage || "English",
+          sourceLanguage: translationSourceLanguage || undefined,
+          ocrLanguages: translationOcrLanguages || undefined,
+        },
+        (progress) => setTranslationProgress(progress)
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-translations", projectId] });
+      setTranslationProgress(null);
+    },
+    onError: () => {
+      setTranslationProgress(null);
+    },
+  });
+
+  const deleteTranslationMutation = useMutation({
+    mutationFn: (translationId: number) => apiClient.deleteDocumentTranslation(projectId, translationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-translations", projectId] });
+      setDeleteDialog(null);
+    },
+  });
+
+  const reprocessTranslationMutation = useMutation({
+    mutationFn: (translationId: number) => apiClient.reprocessDocumentTranslation(projectId, translationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-translations", projectId] });
     },
   });
 
@@ -285,13 +348,17 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
       files.forEach((file) => {
         uploadFileMutation.mutate(file);
       });
-    } else {
+    } else if (activeTab === "documents") {
       // For documents, add to selected files
       setSelectedFiles((prev) => [...prev, ...files]);
+    } else {
+      files.forEach((file) => {
+        createTranslationMutation.mutate({ file });
+      });
     }
-  }, [activeTab, uploadFileMutation]);
+  }, [activeTab, uploadFileMutation, createTranslationMutation]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "file" | "document") => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "file" | "document" | "translation") => {
     const files = e.target.files;
     if (!files) return;
     
@@ -299,9 +366,13 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
       Array.from(files).forEach((file) => {
         uploadFileMutation.mutate(file);
       });
-    } else {
+    } else if (type === "document") {
       // For documents, add to selected files
       setSelectedFiles((prev) => [...prev, ...Array.from(files)]);
+    } else {
+      Array.from(files).forEach((file) => {
+        createTranslationMutation.mutate({ file });
+      });
     }
     
     // Reset input
@@ -314,7 +385,7 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
 
   const handleStartAnalysis = () => {
     if (selectedFiles.length === 0) return;
-    createReportMutation.mutate({ files: selectedFiles, prompt: customPrompt });
+    createReportMutation.mutate({ files: selectedFiles, prompt: customPrompt, depth: analysisDepth });
   };
 
   const handleAskQuestion = () => {
@@ -401,6 +472,12 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
             icon={<AutoAwesomeIcon />}
             iconPosition="start"
             label={`AI Analysis (${reportsQuery.data?.length || 0})`}
+          />
+          <Tab
+            value="translations"
+            icon={<TranslateIcon />}
+            iconPosition="start"
+            label={`Document Translation (${translationsQuery.data?.length || 0})`}
           />
         </Tabs>
       </Paper>
@@ -652,6 +729,21 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
                       }}
                     />
                   </Collapse>
+
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
+                    <TextField
+                      select
+                      label="Analysis Depth"
+                      value={analysisDepth}
+                      onChange={(e) => setAnalysisDepth(e.target.value as "standard" | "deep")}
+                      size="small"
+                      sx={{ minWidth: 220 }}
+                      helperText={analysisDepth === "deep" ? "More detailed, slower" : "Faster, shorter"}
+                    >
+                      <MenuItem value="standard">Standard</MenuItem>
+                      <MenuItem value="deep">Deep</MenuItem>
+                    </TextField>
+                  </Stack>
 
                   {/* Upload/Analyze Button */}
                   <Button
@@ -1052,9 +1144,231 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
         </Box>
       )}
 
+      {/* Document Translation Tab */}
+      {activeTab === "translations" && (
+        <Box>
+          {canEdit && (
+            <Paper
+              sx={{
+                p: 3,
+                mb: 3,
+                border: `2px dashed ${isDragging ? theme.palette.info.main : alpha(theme.palette.divider, 0.3)}`,
+                borderRadius: 2,
+                background: isDragging
+                  ? alpha(theme.palette.info.main, 0.05)
+                  : `linear-gradient(135deg, ${alpha("#0ea5e9", 0.04)} 0%, ${alpha("#22c55e", 0.03)} 100%)`,
+              }}
+            >
+              <Stack spacing={2}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <TextField
+                    label="Target Language"
+                    size="small"
+                    value={translationTargetLanguage}
+                    onChange={(e) => setTranslationTargetLanguage(e.target.value)}
+                    placeholder="English"
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    label="Source Language (optional)"
+                    size="small"
+                    value={translationSourceLanguage}
+                    onChange={(e) => setTranslationSourceLanguage(e.target.value)}
+                    placeholder="Auto-detect"
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    label="OCR Languages (tesseract)"
+                    size="small"
+                    value={translationOcrLanguages}
+                    onChange={(e) => setTranslationOcrLanguages(e.target.value)}
+                    placeholder="rus+eng"
+                    helperText="Use tesseract codes for OCR"
+                    sx={{ flex: 1 }}
+                  />
+                </Stack>
+
+                <Box
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => translationInputRef.current?.click()}
+                  sx={{
+                    textAlign: "center",
+                    cursor: "pointer",
+                    py: 2,
+                  }}
+                >
+                  <input
+                    ref={translationInputRef}
+                    type="file"
+                    multiple
+                    hidden
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.tiff,.bmp"
+                    onChange={(e) => handleFileSelect(e, "translation")}
+                  />
+                  <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ mb: 1 }}>
+                    <TranslateIcon sx={{ color: "#0ea5e9" }} />
+                    <Typography variant="h6" fontWeight={600}>
+                      Upload Documents for Translation
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    PDF, Word, images • OCR supported with tesseract
+                  </Typography>
+                </Box>
+
+                {translationProgress !== null && (
+                  <Box sx={{ mt: 1 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={translationProgress}
+                      sx={{
+                        borderRadius: 1,
+                        bgcolor: alpha("#0ea5e9", 0.2),
+                        "& .MuiLinearProgress-bar": {
+                          background: `linear-gradient(90deg, #0ea5e9, #22c55e)`,
+                        },
+                      }}
+                    />
+                    <Typography variant="caption" sx={{ mt: 0.5 }}>
+                      Uploading... {translationProgress}%
+                    </Typography>
+                  </Box>
+                )}
+              </Stack>
+            </Paper>
+          )}
+
+          {translationsQuery.isLoading && (
+            <Stack spacing={2}>
+              {[1, 2].map((i) => (
+                <Skeleton key={i} variant="rectangular" height={120} sx={{ borderRadius: 2 }} />
+              ))}
+            </Stack>
+          )}
+
+          {translationsQuery.data && translationsQuery.data.length === 0 && (
+            <Paper
+              sx={{
+                p: 6,
+                textAlign: "center",
+                border: `1px dashed ${alpha(theme.palette.divider, 0.3)}`,
+              }}
+            >
+              <TranslateIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                No translations yet
+              </Typography>
+              <Typography variant="body2" color="text.disabled">
+                Upload a document to generate a translation
+              </Typography>
+            </Paper>
+          )}
+
+          {translationsQuery.data && translationsQuery.data.length > 0 && (
+            <Stack spacing={2}>
+              {translationsQuery.data.map((tr) => (
+                <Paper
+                  key={tr.id}
+                  sx={{
+                    p: 2,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  }}
+                >
+                  <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 1.5,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          bgcolor: alpha(theme.palette.info.main, 0.1),
+                          color: theme.palette.info.main,
+                        }}
+                      >
+                        <TranslateIcon />
+                      </Box>
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography fontWeight={600}>
+                            {tr.original_filename}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            icon={getStatusIcon(tr.status)}
+                            label={tr.status}
+                            color={getStatusColor(tr.status)}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem" }}
+                          />
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          Target: {tr.target_language}
+                          {tr.ocr_used ? " • OCR used" : ""}
+                          {tr.page_count ? ` • ${tr.page_count} pages` : ""}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatFileSize(tr.file_size)} • {new Date(tr.created_at).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5}>
+                      {tr.status === "failed" && canEdit && (
+                        <Tooltip title="Retry Translation">
+                          <IconButton
+                            size="small"
+                            onClick={() => reprocessTranslationMutation.mutate(tr.id)}
+                          >
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {tr.output_url && (
+                        <Tooltip title="Download Translation">
+                          <IconButton
+                            size="small"
+                            href={tr.output_url}
+                            download={tr.output_filename || undefined}
+                          >
+                            <DownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {canEdit && (
+                        <Tooltip title="Delete Translation">
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              setDeleteDialog({ type: "translation", id: tr.id, name: "this translation" })
+                            }
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </Stack>
+                  {tr.status === "failed" && tr.error_message && (
+                    <Alert severity="error" sx={{ mt: 2 }}>
+                      Translation failed: {tr.error_message}
+                    </Alert>
+                  )}
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteDialog} onClose={() => setDeleteDialog(null)}>
-        <DialogTitle>Delete {deleteDialog?.type === "file" ? "File" : "Analysis Report"}?</DialogTitle>
+        <DialogTitle>
+          Delete {deleteDialog?.type === "file" ? "File" : deleteDialog?.type === "translation" ? "Translation" : "Analysis Report"}?
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>
             Are you sure you want to delete <strong>{deleteDialog?.name}</strong>?
@@ -1072,11 +1386,19 @@ export default function ProjectFilesTab({ projectId, projectName, canEdit }: Pro
                 deleteFileMutation.mutate(deleteDialog.id);
               } else if (deleteDialog?.type === "report") {
                 deleteReportMutation.mutate(deleteDialog.id);
+              } else if (deleteDialog?.type === "translation") {
+                deleteTranslationMutation.mutate(deleteDialog.id);
               }
             }}
-            disabled={deleteFileMutation.isPending || deleteReportMutation.isPending}
+            disabled={
+              deleteFileMutation.isPending
+              || deleteReportMutation.isPending
+              || deleteTranslationMutation.isPending
+            }
           >
-            {deleteFileMutation.isPending || deleteReportMutation.isPending ? "Deleting..." : "Delete"}
+            {deleteFileMutation.isPending || deleteReportMutation.isPending || deleteTranslationMutation.isPending
+              ? "Deleting..."
+              : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

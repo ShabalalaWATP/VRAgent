@@ -7,6 +7,8 @@ Provides endpoints for analyzing:
 - Docker image layers
 """
 
+import os
+import time
 import shutil
 import tempfile
 from pathlib import Path
@@ -25,6 +27,9 @@ from sqlalchemy.orm import Session
 from backend.core.logging import get_logger
 from backend.core.database import get_db
 from backend.core.config import settings
+from backend.core.file_validator import sanitize_filename
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 from backend.services import reverse_engineering_service as re_service
 from backend.services import deduplication_service
 
@@ -32,7 +37,7 @@ router = APIRouter(prefix="/reverse", tags=["reverse-engineering"])
 logger = get_logger(__name__)
 
 # Constants
-MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB - increased for real-world APKs
+MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024  # 5GB - supports large APKs, firmware images, binaries (was 500MB)
 MAX_SCAN_TIMEOUT = 3600  # 60 minutes global timeout for unified scans
 ALLOWED_BINARY_EXTENSIONS = {".exe", ".dll", ".so", ".elf", ".bin", ".o", ".dylib", ".mach"}
 ALLOWED_APK_EXTENSIONS = {".apk", ".aab"}
@@ -309,6 +314,52 @@ class LayerSecretResponse(BaseModel):
     attack_vector: str = ""
 
 
+class DockerCVEVulnerabilityResponse(BaseModel):
+    """A CVE vulnerability found in a Docker image package."""
+    external_id: str  # CVE ID (e.g., CVE-2021-44228)
+    title: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    cvss_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    source: str = "osv"  # osv, nvd, etc.
+    # Package context
+    package_name: Optional[str] = None
+    package_version: Optional[str] = None
+    package_ecosystem: Optional[str] = None
+    package_type: Optional[str] = None
+    # Enrichment data
+    in_kev: bool = False  # In CISA Known Exploited Vulnerabilities
+    epss_score: Optional[float] = None  # Exploit Prediction Scoring System
+    epss_percentile: Optional[float] = None
+    epss_priority: Optional[str] = None
+    combined_priority: Optional[float] = None
+    priority_label: Optional[str] = None
+    # NVD enrichment
+    nvd_enrichment: Optional[Dict[str, Any]] = None
+
+
+class DockerCVEScanResponse(BaseModel):
+    """CVE scan results for a Docker image."""
+    image_name: str
+    packages_scanned: int
+    packages_with_vulns: int
+    vulnerabilities: List[DockerCVEVulnerabilityResponse]
+    # Severity counts
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    # Special indicators
+    kev_count: int = 0  # CVEs in CISA KEV catalog
+    high_epss_count: int = 0  # CVEs with EPSS > 0.5
+    # Metadata
+    scan_duration_seconds: float = 0.0
+    trivy_available: bool = False
+    enrichment_applied: bool = False
+    error: Optional[str] = None
+
+
 class DockerAnalysisResponse(BaseModel):
     """Complete Docker image analysis response."""
     image_name: str
@@ -334,6 +385,8 @@ class DockerAnalysisResponse(BaseModel):
     layer_secrets: List[LayerSecretResponse] = []
     layer_scan_metadata: Optional[Dict[str, Any]] = None
     deleted_secrets_count: int = 0
+    # CVE Scanning (NEW)
+    cve_scan: Optional[DockerCVEScanResponse] = None
 
 
 class StatusResponse(BaseModel):
@@ -368,7 +421,8 @@ def check_docker_available() -> bool:
     try:
         result = subprocess.run(["docker", "--version"], capture_output=True, timeout=5)
         return result.returncode == 0
-    except:
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.debug(f"Docker check failed: {e}")
         return False
 
 
@@ -378,7 +432,8 @@ def check_jadx_available() -> bool:
     try:
         result = subprocess.run(["jadx", "--version"], capture_output=True, timeout=5)
         return result.returncode == 0
-    except:
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.debug(f"JADX check failed: {e}")
         return False
 
 
@@ -387,7 +442,9 @@ def check_jadx_available() -> bool:
 # ============================================================================
 
 @router.get("/status", response_model=StatusResponse)
-def get_status():
+def get_status(
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Check status of reverse engineering capabilities.
     """
@@ -420,6 +477,7 @@ async def analyze_binary(
     ghidra_decomp_limit: int = Query(10000, ge=200, le=50000, description="Max decompilation chars per function"),
     include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
     ghidra_ai_max_functions: int = Query(30, ge=1, le=200, description="Max functions to summarize with Gemini"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze a binary executable file.
@@ -444,9 +502,10 @@ async def analyze_binary(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_binary_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -624,6 +683,7 @@ async def unified_binary_scan(
     include_cve_lookup: bool = Query(True, description="Include CVE lookup for libraries"),
     include_sensitive_scan: bool = Query(True, description="Include sensitive data discovery"),
     include_unified_verification: bool = Query(True, description="Include unified AI verification of all findings"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Perform a complete binary analysis with streaming progress updates.
@@ -648,7 +708,8 @@ async def unified_binary_scan(
         pass
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_binary_unified_"))
-    tmp_path = tmp_dir / filename
+    safe_filename = sanitize_filename(filename)
+    tmp_path = tmp_dir / safe_filename
     file_size = 0
 
     try:
@@ -664,6 +725,7 @@ async def unified_binary_scan(
 
         scan_id = str(uuid.uuid4())
         _unified_binary_scan_sessions[scan_id] = {"cancelled": False, "tmp_dir": str(tmp_dir)}
+        _unified_binary_scan_timestamps[scan_id] = datetime.now()
 
         # Build phases list based on enabled options (up to 11 phases)
         phases: List[UnifiedBinaryScanPhase] = [
@@ -1819,7 +1881,10 @@ async def unified_binary_scan(
 
 
 @router.post("/binary/unified-scan/{scan_id}/cancel")
-async def cancel_unified_binary_scan(scan_id: str):
+async def cancel_unified_binary_scan(
+    scan_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Cancel an in-progress unified binary scan."""
     if scan_id in _unified_binary_scan_sessions:
         _unified_binary_scan_sessions[scan_id]["cancelled"] = True
@@ -1897,13 +1962,14 @@ class VulnerabilityHuntResultResponse(BaseModel):
 async def vulnerability_hunt(
     file: UploadFile = File(..., description="Binary file to analyze (EXE, ELF, DLL, SO)"),
     focus_categories: Optional[str] = Query(
-        None, 
+        None,
         description="Comma-separated vulnerability categories to focus on (buffer_overflow,format_string,integer_overflow,use_after_free,command_injection,path_traversal,race_condition,crypto_weakness)"
     ),
     max_passes: int = Query(3, ge=1, le=5, description="Maximum analysis passes"),
     max_targets_per_pass: int = Query(20, ge=5, le=50, description="Max targets to analyze per pass"),
     ghidra_max_functions: int = Query(500, ge=100, le=2000, description="Max functions for Ghidra to export"),
     ghidra_decomp_limit: int = Query(8000, ge=2000, le=20000, description="Max decompilation chars per function"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     AI-powered autonomous vulnerability hunting.
@@ -1932,7 +1998,8 @@ async def vulnerability_hunt(
         pass  # Allow any file for analysis
     
     tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_vuln_hunt_"))
-    tmp_path = tmp_dir / filename
+    safe_filename = sanitize_filename(filename)
+    tmp_path = tmp_dir / safe_filename
     file_size = 0
     
     try:
@@ -2087,8 +2154,8 @@ async def vulnerability_hunt(
                     if scan_id in _vulnerability_hunt_sessions:
                         del _vulnerability_hunt_sessions[scan_id]
                     shutil.rmtree(tmp_dir, ignore_errors=True)
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Cleanup failed (non-critical): {e}")
         
         return StreamingResponse(
             run_vulnerability_hunt(),
@@ -2110,7 +2177,10 @@ async def vulnerability_hunt(
 
 
 @router.post("/binary/vulnerability-hunt/{scan_id}/cancel")
-async def cancel_vulnerability_hunt(scan_id: str):
+async def cancel_vulnerability_hunt(
+    scan_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Cancel an in-progress vulnerability hunt."""
     if scan_id in _vulnerability_hunt_sessions:
         _vulnerability_hunt_sessions[scan_id]["cancelled"] = True
@@ -2160,6 +2230,7 @@ class BinaryPurposeResponse(BaseModel):
 async def analyze_binary_purpose(
     file: UploadFile = File(..., description="Binary file to analyze"),
     use_ghidra: bool = Query(True, description="Use Ghidra for deeper analysis"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze a binary to understand what it does.
@@ -2180,7 +2251,8 @@ async def analyze_binary_purpose(
     suffix = Path(filename).suffix.lower()
     
     tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_purpose_"))
-    tmp_path = tmp_dir / filename
+    safe_filename = sanitize_filename(filename)
+    tmp_path = tmp_dir / safe_filename
     
     try:
         # Save file
@@ -2298,7 +2370,10 @@ class MultiplePoCResponse(BaseModel):
 
 
 @router.post("/binary/generate-poc", response_model=PoCExploitResponse)
-async def generate_poc_exploit(request: PoCExploitRequest):
+async def generate_poc_exploit(
+    request: PoCExploitRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate a proof-of-concept exploit for a vulnerability.
     
@@ -2350,7 +2425,10 @@ async def generate_poc_exploit(request: PoCExploitRequest):
 
 
 @router.post("/binary/generate-pocs", response_model=MultiplePoCResponse)
-async def generate_multiple_pocs(request: MultiplePoCRequest):
+async def generate_multiple_pocs(
+    request: MultiplePoCRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate proof-of-concept exploits for multiple vulnerabilities.
     
@@ -2418,7 +2496,10 @@ class AnalysisChatResponse(BaseModel):
     error: Optional[str] = None
 
 @router.post("/chat", response_model=AnalysisChatResponse)
-async def chat_about_analysis(request: AnalysisChatRequest):
+async def chat_about_analysis(
+    request: AnalysisChatRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Chat with AI about vulnerability analysis results.
     
@@ -2573,9 +2654,150 @@ class ExportNotesRequest(BaseModel):
 
 # In-memory storage for notes (in production, use database)
 _notes_storage: Dict[str, NotesStore] = {}
+_notes_storage_timestamps: Dict[str, datetime] = {}
+NOTES_STORAGE_TTL_HOURS = 24  # Clean up notes after 24 hours of inactivity
+
+
+async def cleanup_old_notes_storage():
+    """Background task to clean up old notes storage entries."""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Run every hour
+            now = datetime.now()
+            expired_sessions = []
+            
+            for session_id, timestamp in list(_notes_storage_timestamps.items()):
+                age_hours = (now - timestamp).total_seconds() / 3600
+                if age_hours > NOTES_STORAGE_TTL_HOURS:
+                    expired_sessions.append(session_id)
+            
+            for session_id in expired_sessions:
+                if session_id in _notes_storage:
+                    del _notes_storage[session_id]
+                    logger.info(f"Cleaned up notes storage: {session_id}")
+                if session_id in _notes_storage_timestamps:
+                    del _notes_storage_timestamps[session_id]
+            
+            if expired_sessions:
+                logger.info(f"Cleaned up {len(expired_sessions)} old notes storage entries")
+        except Exception as e:
+            logger.error(f"Notes storage cleanup error: {e}")
+
+
+# Session timestamps for scan session cleanup
+_unified_scan_timestamps: Dict[str, datetime] = {}
+_unified_binary_scan_timestamps: Dict[str, datetime] = {}
+SCAN_SESSION_TTL_SECONDS = MAX_SCAN_TIMEOUT + 600  # Scan timeout + 10 minute buffer
+
+
+async def cleanup_stale_scan_sessions():
+    """Background task to clean up stale scan sessions that timed out or had disconnected clients."""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            now = datetime.now()
+            
+            # Clean unified APK scan sessions
+            expired_apk_sessions = []
+            for session_id, timestamp in list(_unified_scan_timestamps.items()):
+                age_seconds = (now - timestamp).total_seconds()
+                if age_seconds > SCAN_SESSION_TTL_SECONDS:
+                    expired_apk_sessions.append(session_id)
+            
+            for session_id in expired_apk_sessions:
+                if session_id in _unified_scan_sessions:
+                    session = _unified_scan_sessions[session_id]
+                    # Clean up temp directory if exists
+                    if "temp_dir" in session and session["temp_dir"]:
+                        try:
+                            temp_path = Path(session["temp_dir"])
+                            if temp_path.exists():
+                                shutil.rmtree(temp_path, ignore_errors=True)
+                                logger.info(f"Cleaned up temp dir for session {session_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to cleanup temp dir for {session_id}: {e}")
+                    # Cancel any running task
+                    if "task" in session and session["task"] and not session["task"].done():
+                        session["task"].cancel()
+                    del _unified_scan_sessions[session_id]
+                    logger.info(f"Cleaned up stale APK scan session: {session_id}")
+                if session_id in _unified_scan_timestamps:
+                    del _unified_scan_timestamps[session_id]
+            
+            # Clean unified binary scan sessions
+            expired_binary_sessions = []
+            for session_id, timestamp in list(_unified_binary_scan_timestamps.items()):
+                age_seconds = (now - timestamp).total_seconds()
+                if age_seconds > SCAN_SESSION_TTL_SECONDS:
+                    expired_binary_sessions.append(session_id)
+            
+            for session_id in expired_binary_sessions:
+                if session_id in _unified_binary_scan_sessions:
+                    session = _unified_binary_scan_sessions[session_id]
+                    # Clean up temp directory if exists
+                    if "temp_dir" in session and session["temp_dir"]:
+                        try:
+                            temp_path = Path(session["temp_dir"])
+                            if temp_path.exists():
+                                shutil.rmtree(temp_path, ignore_errors=True)
+                                logger.info(f"Cleaned up temp dir for binary session {session_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to cleanup temp dir for binary {session_id}: {e}")
+                    # Cancel any running task
+                    if "task" in session and session["task"] and not session["task"].done():
+                        session["task"].cancel()
+                    del _unified_binary_scan_sessions[session_id]
+                    logger.info(f"Cleaned up stale binary scan session: {session_id}")
+                if session_id in _unified_binary_scan_timestamps:
+                    del _unified_binary_scan_timestamps[session_id]
+            
+            total_cleaned = len(expired_apk_sessions) + len(expired_binary_sessions)
+            if total_cleaned:
+                logger.info(f"Cleaned up {total_cleaned} stale scan sessions")
+        except Exception as e:
+            logger.error(f"Scan session cleanup error: {e}")
+
+
+async def cleanup_orphaned_temp_dirs():
+    """Startup task to clean up orphaned temp directories from crashed/restarted sessions."""
+    try:
+        import glob
+        temp_dir = tempfile.gettempdir()
+        patterns = [
+            "vragent_binary_*",
+            "vragent_vuln_hunt_*", 
+            "vragent_binary_unified_*",
+            "vragent_jadx_*",
+            "jadx_*",
+            "vragent_apk_*",
+        ]
+        
+        total_cleaned = 0
+        for pattern in patterns:
+            full_pattern = os.path.join(temp_dir, pattern)
+            for dir_path in glob.glob(full_pattern):
+                try:
+                    if os.path.isdir(dir_path):
+                        # Only clean directories older than 2 hours to avoid race conditions
+                        dir_age = time.time() - os.path.getmtime(dir_path)
+                        if dir_age > 7200:  # 2 hours
+                            shutil.rmtree(dir_path, ignore_errors=True)
+                            total_cleaned += 1
+                            logger.debug(f"Cleaned orphaned temp dir: {dir_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean temp dir {dir_path}: {e}")
+        
+        if total_cleaned:
+            logger.info(f"Cleaned up {total_cleaned} orphaned temp directories on startup")
+    except Exception as e:
+        logger.error(f"Orphaned temp dir cleanup error: {e}")
+
 
 @router.post("/notes/create", response_model=AnalysisNote)
-async def create_note(request: CreateNoteRequest):
+async def create_note(
+    request: CreateNoteRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """Create a new note for the analysis session."""
     session_id = request.session_id
     
@@ -2585,6 +2807,9 @@ async def create_note(request: CreateNoteRequest):
             session_id=session_id,
             binary_name=request.binary_name
         )
+    
+    # Update timestamp on any note activity
+    _notes_storage_timestamps[session_id] = datetime.now()
     
     # Create new note
     note = AnalysisNote(
@@ -2600,19 +2825,31 @@ async def create_note(request: CreateNoteRequest):
 
 
 @router.post("/notes/list", response_model=NotesStore)
-async def list_notes(session_id: str):
+async def list_notes(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """List all notes for an analysis session."""
     if session_id not in _notes_storage:
         return NotesStore(session_id=session_id, binary_name="Unknown")
+    
+    # Update timestamp on access
+    _notes_storage_timestamps[session_id] = datetime.now()
     
     return _notes_storage[session_id]
 
 
 @router.post("/notes/update", response_model=AnalysisNote)
-async def update_note(request: UpdateNoteRequest):
+async def update_note(
+    request: UpdateNoteRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """Update an existing note."""
     if request.session_id not in _notes_storage:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update timestamp on any note activity
+    _notes_storage_timestamps[request.session_id] = datetime.now()
     
     store = _notes_storage[request.session_id]
     for note in store.notes:
@@ -2626,7 +2863,10 @@ async def update_note(request: UpdateNoteRequest):
 
 
 @router.delete("/notes/delete")
-async def delete_note(request: DeleteNoteRequest):
+async def delete_note(
+    request: DeleteNoteRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """Delete a note."""
     if request.session_id not in _notes_storage:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2643,7 +2883,10 @@ async def delete_note(request: DeleteNoteRequest):
 
 
 @router.post("/notes/export")
-async def export_notes(request: ExportNotesRequest):
+async def export_notes(
+    request: ExportNotesRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """Export notes in the specified format."""
     if request.session_id not in _notes_storage:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2769,7 +3012,10 @@ class EnhanceCodeResponse(BaseModel):
 
 
 @router.post("/binary/enhance-code", response_model=EnhanceCodeResponse)
-async def enhance_decompiled_code(request: EnhanceCodeRequest):
+async def enhance_decompiled_code(
+    request: EnhanceCodeRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     AI-powered decompiled code enhancement.
     
@@ -2787,13 +3033,14 @@ async def enhance_decompiled_code(request: EnhanceCodeRequest):
     - full: Everything including security analysis
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     # Build context
     context_info = ""
@@ -2883,10 +3130,11 @@ Return ONLY valid JSON, no markdown formatting."""
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=8000,
                 )
             )
@@ -2978,7 +3226,10 @@ class NaturalLanguageSearchResponse(BaseModel):
 
 
 @router.post("/binary/nl-search", response_model=NaturalLanguageSearchResponse)
-async def natural_language_search(request: NaturalLanguageSearchRequest):
+async def natural_language_search(
+    request: NaturalLanguageSearchRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Natural language search across decompiled binary functions.
     
@@ -2993,16 +3244,17 @@ async def natural_language_search(request: NaturalLanguageSearchRequest):
     and returns the most relevant matches with explanations.
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
+
     if not request.functions:
         raise HTTPException(status_code=400, detail="No functions provided to search")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     # Build function summaries for the AI to search
     # Limit to prevent token overflow
@@ -3082,10 +3334,11 @@ Return ONLY valid JSON, no markdown."""
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.2,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=4000,
                 )
             )
@@ -3150,6 +3403,7 @@ async def smart_rename_function(
     function_code: str = Query(..., description="Decompiled function code"),
     current_name: str = Query(default="FUN_00401000", description="Current function name"),
     context_hints: Optional[str] = Query(default=None, description="Additional context about the binary"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     AI-powered function renaming suggestion.
@@ -3158,13 +3412,14 @@ async def smart_rename_function(
     based on the function's behavior, API calls, and data flow.
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     prompt = f"""Analyze this decompiled function and suggest a meaningful name.
 
@@ -3195,10 +3450,11 @@ Return ONLY valid JSON."""
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.2,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=500,
                 )
             )
@@ -3316,7 +3572,10 @@ class AttackSimulationResponse(BaseModel):
 
 
 @router.post("/binary/simulate-attack", response_model=AttackSimulationResponse)
-async def simulate_attack(request: AttackSimulationRequest):
+async def simulate_attack(
+    request: AttackSimulationRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Live Attack Simulation Mode.
     
@@ -3333,13 +3592,14 @@ async def simulate_attack(request: AttackSimulationRequest):
     and prioritize fixes based on exploitability.
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     # Extract vulnerability details
     vuln = request.vulnerability
@@ -3592,10 +3852,11 @@ IMPORTANT:
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=8000,
                 )
             )
@@ -3795,7 +4056,10 @@ class SymbolicTraceResponse(BaseModel):
 
 
 @router.post("/binary/symbolic-trace", response_model=SymbolicTraceResponse)
-async def analyze_symbolic_trace(request: SymbolicTraceRequest):
+async def analyze_symbolic_trace(
+    request: SymbolicTraceRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     AI-powered Symbolic Execution Trace Analysis.
     
@@ -3827,13 +4091,14 @@ async def analyze_symbolic_trace(request: SymbolicTraceRequest):
     - "Which variables are attacker-controlled?"
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     # Build context
     context_parts = []
@@ -4050,10 +4315,11 @@ Return ONLY valid JSON."""
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.2,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=12000,
                 )
             )
@@ -4178,7 +4444,10 @@ class SymbolicEnhancedCodeResponse(BaseModel):
 
 
 @router.post("/binary/enhance-code-symbolic", response_model=SymbolicEnhancedCodeResponse)
-async def enhance_code_with_symbolic(request: EnhanceCodeWithSymbolicRequest):
+async def enhance_code_with_symbolic(
+    request: EnhanceCodeWithSymbolicRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     AI-powered code enhancement with symbolic execution integration.
     
@@ -4200,13 +4469,14 @@ async def enhance_code_with_symbolic(request: EnhanceCodeWithSymbolicRequest):
     - WHERE vulnerabilities exist (sink annotations)
     """
     from backend.core.config import settings
-    import google.generativeai as genai
-    
+    from google import genai
+    from google.genai import types
+
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
-    
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(settings.gemini_model_id)
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model_id = "gemini-3-flash-preview"
     
     # Build symbolic context
     symbolic_context = ""
@@ -4432,10 +4702,11 @@ Return ONLY valid JSON."""
 
     try:
         response = await asyncio.to_thread(
-            lambda: model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
+            lambda: client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=10000,
                 )
             )
@@ -4514,9 +4785,10 @@ async def analyze_apk(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_apk_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -4616,6 +4888,12 @@ async def analyze_docker_image(
     skepticism_level: str = Query("high", description="How aggressively to filter: 'high' (default), 'medium', or 'low'"),
     deep_layer_scan: bool = Query(True, description="Extract and scan image layers for recoverable secrets"),
     check_base_image: bool = Query(True, description="Check base image against intelligence database (EOL, compromised, etc.)"),
+    # CVE Scanning parameters (NEW)
+    scan_cves: bool = Query(True, description="Scan image packages for CVEs using OSV/NVD"),
+    include_nvd_enrichment: bool = Query(True, description="Enrich CVEs with NVD data (CVSS vectors, CWEs)"),
+    include_kev: bool = Query(True, description="Check CISA Known Exploited Vulnerabilities catalog"),
+    include_epss: bool = Query(True, description="Include EPSS exploit probability scores"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze Docker image layers for secrets and security issues.
@@ -4634,6 +4912,7 @@ async def analyze_docker_image(
     - AI False Positive Adjudicator (filters out noise with high skepticism)
     - **Layer Deep Scan**: Extract layers and find secrets in "deleted" files
     - **Base Image Intelligence**: Check for EOL, compromised, typosquatting images
+    - **CVE Scanning**: Scan packages for known vulnerabilities with OSV/NVD/EPSS/KEV enrichment
 
     Note: Requires Docker to be installed and the image must be pulled locally.
     """
@@ -4652,10 +4931,6 @@ async def analyze_docker_image(
         if result.error:
             raise HTTPException(status_code=400, detail=result.error)
 
-        # Run AI analysis if requested
-        if include_ai:
-            result.ai_analysis = await re_service.analyze_docker_with_ai(result)
-
         # Prepare security issues for potential adjudication
         security_issues = result.security_issues.copy()
         adjudication_summary = None
@@ -4670,13 +4945,14 @@ async def analyze_docker_image(
                 # Convert security issues to dict format for adjudicator
                 issues_as_dicts = [
                     {
+                        "finding_index": idx,
                         "rule_id": issue.get("rule_id", "N/A"),
                         "severity": issue.get("severity", "unknown"),
                         "message": issue.get("description", ""),
                         "category": issue.get("category", ""),
                         "command": issue.get("command", ""),
                     }
-                    for issue in security_issues
+                    for idx, issue in enumerate(security_issues)
                 ]
 
                 # Build context for adjudicator (reconstruct from layers)
@@ -4691,12 +4967,22 @@ async def analyze_docker_image(
                     skepticism_level=skepticism_level,
                 )
 
-                # Filter security_issues to only confirmed
-                confirmed_rules = {f.get("message") for f in confirmed}
-                security_issues = [
-                    issue for issue in security_issues
-                    if issue.get("description") in confirmed_rules
-                ]
+                # Filter security_issues to only confirmed (by index when available)
+                confirmed_indices = {
+                    f.get("finding_index") for f in confirmed
+                    if f.get("finding_index") is not None
+                }
+                if confirmed_indices:
+                    security_issues = [
+                        issue for idx, issue in enumerate(security_issues)
+                        if idx in confirmed_indices
+                    ]
+                else:
+                    confirmed_messages = {f.get("message") for f in confirmed}
+                    security_issues = [
+                        issue for issue in security_issues
+                        if issue.get("description") in confirmed_messages
+                    ]
 
                 adjudication_summary = summary
                 rejected_findings = rejected
@@ -4711,6 +4997,9 @@ async def analyze_docker_image(
             except Exception as e:
                 logger.warning(f"Adjudication failed, returning all findings: {e}")
                 adjudication_summary = f"Adjudication failed: {e}"
+
+        # Keep result in sync for AI analysis
+        result.security_issues = security_issues
 
         # Base Image Intelligence check
         base_image_intel = []
@@ -4738,6 +5027,7 @@ async def analyze_docker_image(
         layer_secrets = []
         layer_scan_metadata = None
         deleted_secrets_count = 0
+        deleted_files = result.deleted_files or []
         if deep_layer_scan:
             try:
                 from backend.services.docker_scan_service import extract_and_scan_layers
@@ -4759,11 +5049,101 @@ async def analyze_docker_image(
                 ]
                 layer_scan_metadata = scan_meta
                 deleted_secrets_count = scan_meta.get("deleted_secrets_found", 0)
+                if isinstance(scan_meta, dict) and scan_meta.get("deleted_files") is not None:
+                    deleted_files = scan_meta.get("deleted_files", deleted_files)
                 if secrets_found:
                     logger.info(f"Layer deep scan: {len(secrets_found)} secrets found, {deleted_secrets_count} in 'deleted' files")
             except Exception as e:
                 logger.warning(f"Layer deep scan failed: {e}")
                 layer_scan_metadata = {"error": str(e)}
+
+        # CVE Scanning - scan image packages for known vulnerabilities
+        cve_scan_result = None
+        if scan_cves:
+            try:
+                from backend.services.docker_scan_service import scan_image_packages_for_cves
+
+                cve_result = await scan_image_packages_for_cves(
+                    image_name,
+                    include_nvd_enrichment=include_nvd_enrichment,
+                    include_kev=include_kev,
+                    include_epss=include_epss,
+                )
+
+                if cve_result.vulnerabilities or cve_result.packages_scanned > 0:
+                    # Convert vulnerabilities to response format
+                    vuln_responses = []
+                    for vuln in cve_result.vulnerabilities:
+                        vuln_responses.append(DockerCVEVulnerabilityResponse(
+                            external_id=vuln.get("external_id", ""),
+                            title=vuln.get("title"),
+                            description=vuln.get("description"),
+                            severity=vuln.get("severity"),
+                            cvss_score=vuln.get("cvss_score"),
+                            cvss_vector=vuln.get("cvss_vector"),
+                            source=vuln.get("source", "osv"),
+                            package_name=vuln.get("package_name"),
+                            package_version=vuln.get("package_version"),
+                            package_ecosystem=vuln.get("package_ecosystem"),
+                            package_type=vuln.get("package_type"),
+                            in_kev=vuln.get("in_kev", False),
+                            epss_score=vuln.get("epss_score"),
+                            epss_percentile=vuln.get("epss_percentile"),
+                            epss_priority=vuln.get("epss_priority"),
+                            combined_priority=vuln.get("combined_priority"),
+                            priority_label=vuln.get("priority_label"),
+                            nvd_enrichment=vuln.get("nvd_enrichment"),
+                        ))
+
+                    cve_scan_result = DockerCVEScanResponse(
+                        image_name=cve_result.image_name,
+                        packages_scanned=cve_result.packages_scanned,
+                        packages_with_vulns=cve_result.packages_with_vulns,
+                        vulnerabilities=vuln_responses,
+                        critical_count=cve_result.critical_count,
+                        high_count=cve_result.high_count,
+                        medium_count=cve_result.medium_count,
+                        low_count=cve_result.low_count,
+                        kev_count=cve_result.kev_count,
+                        high_epss_count=cve_result.high_epss_count,
+                        scan_duration_seconds=cve_result.scan_duration_seconds,
+                        trivy_available=cve_result.trivy_available,
+                        enrichment_applied=cve_result.enrichment_applied,
+                        error=cve_result.error,
+                    )
+
+                    logger.info(
+                        f"CVE scan: {len(vuln_responses)} CVEs found in {cve_result.packages_scanned} packages "
+                        f"({cve_result.critical_count} critical, {cve_result.high_count} high, "
+                        f"{cve_result.kev_count} in KEV)"
+                    )
+
+            except Exception as e:
+                logger.warning(f"CVE scanning failed: {e}")
+                cve_scan_result = DockerCVEScanResponse(
+                    image_name=image_name,
+                    packages_scanned=0,
+                    packages_with_vulns=0,
+                    vulnerabilities=[],
+                    error=str(e),
+                )
+
+        # Run AI analysis if requested
+        if include_ai:
+            base_image_intel_payload = [
+                intel.dict() if hasattr(intel, "dict") else intel
+                for intel in base_image_intel
+            ]
+            layer_secrets_payload = [
+                secret.dict() if hasattr(secret, "dict") else secret
+                for secret in layer_secrets
+            ]
+            result.ai_analysis = await re_service.analyze_docker_with_ai(
+                result,
+                base_image_intel=base_image_intel_payload,
+                layer_secrets=layer_secrets_payload,
+                layer_scan_metadata=layer_scan_metadata,
+            )
 
         # Convert to response model
         return DockerAnalysisResponse(
@@ -4793,7 +5173,7 @@ async def analyze_docker_image(
                 )
                 for s in result.secrets
             ],
-            deleted_files=result.deleted_files,
+            deleted_files=deleted_files,
             security_issues=[
                 DockerSecurityIssueResponse(
                     category=issue["category"],
@@ -4816,6 +5196,8 @@ async def analyze_docker_image(
             layer_secrets=layer_secrets,
             layer_scan_metadata=layer_scan_metadata,
             deleted_secrets_count=deleted_secrets_count,
+            # CVE scanning
+            cve_scan=cve_scan_result,
         )
 
     except HTTPException:
@@ -4856,6 +5238,7 @@ class DockerExportRequest(BaseModel):
 async def export_docker_analysis(
     request: DockerExportRequest,
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Export Docker analysis results to Markdown, PDF, or Word format.
@@ -5387,7 +5770,9 @@ def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> byte
 
 
 @router.get("/docker-images")
-async def list_local_docker_images():
+async def list_local_docker_images(
+    current_user: User = Depends(get_current_active_user),
+):
     """
     List locally available Docker images for analysis.
     """
@@ -5643,6 +6028,7 @@ class ReportDetailResponse(BaseModel):
 def save_report(
     request: SaveReportRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Save a reverse engineering analysis report.
@@ -5797,6 +6183,7 @@ def list_reports(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     List saved reverse engineering reports.
@@ -5835,6 +6222,7 @@ def list_reports(
 def get_report(
     report_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get full details of a saved reverse engineering report.
@@ -5941,6 +6329,7 @@ def export_saved_report(
     report_id: int,
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Export a saved reverse engineering report to Markdown, PDF, or Word format.
@@ -5992,6 +6381,7 @@ def export_saved_report(
 async def export_binary_report_from_result(
     result: BinaryAnalysisResponse,
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Export a binary analysis result to Markdown, PDF, or Word format.
@@ -7752,6 +8142,7 @@ def _add_formatted_text(paragraph, text: str):
 def delete_report(
     report_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Delete a saved reverse engineering report.
@@ -7778,6 +8169,7 @@ def update_report(
     tags: Optional[List[str]] = None,
     title: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Update notes, tags, or title of a saved report.
@@ -7889,7 +8281,10 @@ class AnalysisWalkthroughResponse(BaseModel):
 
 
 @router.post("/apk/chat", response_model=ApkChatResponse)
-async def chat_about_apk(request: ApkChatRequest):
+async def chat_about_apk(
+    request: ApkChatRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Interactive AI chat about APK analysis findings.
     
@@ -8024,7 +8419,10 @@ Guidelines:
 
 
 @router.post("/apk/threat-model", response_model=ThreatModelResponse)
-async def generate_threat_model(request: ThreatModelRequest):
+async def generate_threat_model(
+    request: ThreatModelRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate AI-powered threat model for the APK.
     
@@ -8197,7 +8595,10 @@ Be thorough and realistic. Consider the specific findings from this APK."""
 
 
 @router.post("/apk/exploit-suggestions", response_model=ExploitSuggestionResponse)
-async def get_exploit_suggestions(request: ExploitSuggestionRequest):
+async def get_exploit_suggestions(
+    request: ExploitSuggestionRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate AI-powered exploit suggestions for identified vulnerabilities.
     
@@ -8375,7 +8776,10 @@ IMPORTANT: This is for DEFENSIVE purposes - helping developers understand how at
 
 
 @router.post("/apk/walkthrough", response_model=AnalysisWalkthroughResponse)
-async def generate_walkthrough(analysis_context: Dict[str, Any]):
+async def generate_walkthrough(
+    analysis_context: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate a beginner-friendly walkthrough of the APK analysis.
     
@@ -8805,6 +9209,7 @@ async def unified_apk_scan(
     include_vuln_hunt: bool = Form(True, description="Enable multi-pass AI vulnerability hunting (default: enabled)"),
     vuln_hunt_max_passes: int = Form(5, description="Maximum passes for vulnerability hunt (2-8)", ge=2, le=8),
     vuln_hunt_max_targets: int = Form(50, description="Max targets per pass (10-100)", ge=10, le=100),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Perform a complete APK analysis with streaming progress updates.
@@ -8838,9 +9243,10 @@ async def unified_apk_scan(
             detail="JADX is not available. Full analysis requires JADX."
         )
     
-    # Save file to temp location
+    # Save file to temp location with sanitized filename to prevent path traversal
     tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_unified_"))
-    tmp_path = tmp_dir / filename
+    safe_filename = sanitize_filename(filename)
+    tmp_path = tmp_dir / safe_filename
     
     file_size = 0
     try:
@@ -8860,12 +9266,13 @@ async def unified_apk_scan(
     
     logger.info(f"Starting unified APK scan: {filename} ({file_size:,} bytes)")
     
-    # Initialize scan session
+    # Initialize scan session with timestamp for cleanup tracking
     _unified_scan_sessions[scan_id] = {
         "cancelled": False,
         "tmp_dir": tmp_dir,
         "file_path": tmp_path,
     }
+    _unified_scan_timestamps[scan_id] = datetime.now()
     
     # Define phases (vuln_hunt is optional, inserted before ai_reports)
     phases = [
@@ -9250,8 +9657,8 @@ async def unified_apk_scan(
                                 rel_path = java_file.relative_to(sources_dir)
                                 class_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".java", "")
                                 class_names.append(class_name)
-                            except:
-                                pass
+                            except (ValueError, OSError) as e:
+                                logger.debug(f"Failed to process Java file {java_file}: {e}")
                         
                         # Extract dependencies and lookup CVEs
                         libraries = re_service.extract_apk_dependencies(class_names, None)
@@ -9775,7 +10182,10 @@ async def unified_apk_scan(
 
 
 @router.post("/apk/unified-scan/{scan_id}/cancel")
-async def cancel_unified_scan(scan_id: str):
+async def cancel_unified_scan(
+    scan_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Cancel an in-progress unified scan."""
     if scan_id in _unified_scan_sessions:
         _unified_scan_sessions[scan_id]["cancelled"] = True
@@ -9901,6 +10311,7 @@ def _resolve_jadx_output_dir(output_directory: str) -> Path:
 @router.post("/apk/decompile", response_model=JadxDecompilationResponse)
 async def decompile_apk(
     file: UploadFile = File(..., description="APK file to decompile"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Decompile an APK to Java source code using JADX.
@@ -9929,9 +10340,10 @@ async def decompile_apk(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_jadx_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -10001,6 +10413,7 @@ async def decompile_apk(
 async def get_decompiled_source(
     session_id: str,
     class_path: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get the decompiled Java source code for a specific class.
@@ -10044,6 +10457,7 @@ async def search_decompiled_sources(
     session_id: str,
     query: str = Query(..., min_length=2, max_length=100, description="Search string"),
     max_results: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Search for a string in decompiled Java sources.
@@ -10069,7 +10483,10 @@ async def search_decompiled_sources(
 
 
 @router.delete("/apk/decompile/{session_id}")
-async def cleanup_decompilation(session_id: str):
+async def cleanup_decompilation(
+    session_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Clean up decompiled sources to free disk space."""
     if session_id not in _jadx_cache:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -10100,6 +10517,7 @@ async def generate_ai_diagrams_from_decompilation(
     session_id: str,
     include_architecture: bool = Query(True, description="Generate architecture diagram"),
     include_data_flow: bool = Query(True, description="Generate data flow diagram"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Generate AI-powered Mermaid diagrams from decompiled APK sources.
@@ -10227,7 +10645,10 @@ class AIVulnerabilityAnalysisResponse(BaseModel):
 
 
 @router.post("/apk/decompile/ai/explain", response_model=AICodeExplanationResponse)
-async def explain_code_with_ai(request: AICodeExplanationRequest):
+async def explain_code_with_ai(
+    request: AICodeExplanationRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Use AI to explain decompiled Java/Kotlin code.
     
@@ -10253,7 +10674,10 @@ async def explain_code_with_ai(request: AICodeExplanationRequest):
 
 
 @router.post("/apk/decompile/ai/vulnerabilities", response_model=AIVulnerabilityAnalysisResponse)
-async def analyze_vulnerabilities_with_ai(request: AIVulnerabilityAnalysisRequest):
+async def analyze_vulnerabilities_with_ai(
+    request: AIVulnerabilityAnalysisRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Use AI to perform deep vulnerability analysis on decompiled code.
     
@@ -10321,7 +10745,10 @@ class DataFlowAnalysisResponse(BaseModel):
 
 
 @router.post("/apk/decompile/dataflow", response_model=DataFlowAnalysisResponse)
-async def analyze_data_flow(request: DataFlowAnalysisRequest):
+async def analyze_data_flow(
+    request: DataFlowAnalysisRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Analyze data flow in decompiled Java/Kotlin code.
     
@@ -10414,7 +10841,10 @@ class CallGraphResponse(BaseModel):
 
 
 @router.post("/apk/decompile/callgraph", response_model=CallGraphResponse)
-async def build_call_graph(request: CallGraphRequest):
+async def build_call_graph(
+    request: CallGraphRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Build a method call graph from decompiled Java/Kotlin code.
     
@@ -10481,7 +10911,10 @@ class SmartSearchResponse(BaseModel):
 
 
 @router.post("/apk/decompile/smart-search", response_model=SmartSearchResponse)
-async def smart_search(request: SmartSearchRequest):
+async def smart_search(
+    request: SmartSearchRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Perform smart/semantic search across decompiled sources.
     
@@ -10567,7 +11000,10 @@ class AIVulnScanResponse(BaseModel):
 
 
 @router.post("/apk/decompile/ai-vulnscan", response_model=AIVulnScanResponse)
-async def ai_vulnerability_scan(request: AIVulnScanRequest):
+async def ai_vulnerability_scan(
+    request: AIVulnScanRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Perform AI-powered vulnerability scan across multiple classes.
     
@@ -10649,7 +11085,10 @@ class LibraryCVEScanResponse(BaseModel):
 
 
 @router.post("/apk/decompile/library-cve-scan", response_model=LibraryCVEScanResponse)
-async def library_cve_scan(request: LibraryCVEScanRequest):
+async def library_cve_scan(
+    request: LibraryCVEScanRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Scan decompiled APK for third-party libraries and look up known CVEs.
     
@@ -10836,7 +11275,10 @@ class EnhancedSecurityResponse(BaseModel):
 
 
 @router.post("/apk/decompile/enhanced-security", response_model=EnhancedSecurityResponse)
-async def enhanced_security_scan(request: EnhancedSecurityRequest):
+async def enhanced_security_scan(
+    request: EnhancedSecurityRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Perform comprehensive security analysis combining multiple detection methods.
     
@@ -10928,7 +11370,10 @@ class SmaliViewResponse(BaseModel):
 
 
 @router.post("/apk/decompile/smali", response_model=SmaliViewResponse)
-async def get_smali_view(request: SmaliViewRequest):
+async def get_smali_view(
+    request: SmaliViewRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get Smali bytecode view for a class.
     
@@ -11002,7 +11447,10 @@ class StringExtractionResponse(BaseModel):
 
 
 @router.post("/apk/decompile/strings", response_model=StringExtractionResponse)
-async def extract_strings(request: StringExtractionRequest):
+async def extract_strings(
+    request: StringExtractionRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Extract and categorize all strings from decompiled sources.
     
@@ -11126,7 +11574,10 @@ class CrossReferenceResponse(BaseModel):
 
 
 @router.post("/apk/decompile/xref", response_model=CrossReferenceResponse)
-async def get_cross_references(request: CrossReferenceRequest):
+async def get_cross_references(
+    request: CrossReferenceRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Build cross-references for a class.
     
@@ -11205,7 +11656,10 @@ class DownloadProjectRequest(BaseModel):
 
 
 @router.post("/apk/decompile/zip-info", response_model=ProjectZipInfoResponse)
-async def get_project_zip_info(request: DownloadProjectRequest):
+async def get_project_zip_info(
+    request: DownloadProjectRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get information about what would be in the project ZIP.
     
@@ -11228,7 +11682,10 @@ async def get_project_zip_info(request: DownloadProjectRequest):
 
 
 @router.post("/apk/decompile/download-zip")
-async def download_project_zip(request: DownloadProjectRequest):
+async def download_project_zip(
+    request: DownloadProjectRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Create and download the decompiled project as a ZIP file.
     
@@ -11295,7 +11752,10 @@ class PermissionAnalysisRequest(BaseModel):
 
 
 @router.post("/apk/decompile/permissions", response_model=PermissionAnalysisResponse)
-async def analyze_permissions(request: PermissionAnalysisRequest):
+async def analyze_permissions(
+    request: PermissionAnalysisRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Analyze permissions from AndroidManifest.xml.
     
@@ -11369,7 +11829,10 @@ class NetworkEndpointRequest(BaseModel):
 
 
 @router.post("/apk/decompile/network-endpoints", response_model=NetworkEndpointResponse)
-async def extract_network_endpoints(request: NetworkEndpointRequest):
+async def extract_network_endpoints(
+    request: NetworkEndpointRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Extract all network endpoints from decompiled sources.
     
@@ -11465,6 +11928,7 @@ class ManifestVisualizationResponse(BaseModel):
 @router.post("/apk/manifest-visualization", response_model=ManifestVisualizationResponse)
 async def get_manifest_visualization(
     file: UploadFile = File(..., description="APK file to visualize"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Generate visualization data for an APK's AndroidManifest.
@@ -11488,9 +11952,10 @@ async def get_manifest_visualization(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_manifest_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -11617,6 +12082,7 @@ class AttackSurfaceMapResponse(BaseModel):
 async def get_attack_surface_map(
     file: UploadFile = File(..., description="APK file to analyze"),
     include_ai_analysis: bool = Query(False, description="Include AI analysis of decompiled source code (slower but more accurate)"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Generate a comprehensive attack surface map for an APK.
@@ -11645,9 +12111,10 @@ async def get_attack_surface_map(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_attack_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -11754,7 +12221,10 @@ class AIAttackSurfaceRequest(BaseModel):
 
 
 @router.post("/apk/decompile/attack-surface-ai", response_model=AttackSurfaceMapResponse)
-async def get_ai_attack_surface_map(request: AIAttackSurfaceRequest):
+async def get_ai_attack_surface_map(
+    request: AIAttackSurfaceRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate AI-enhanced attack surface map using an existing JADX session.
     
@@ -11982,6 +12452,7 @@ class ObfuscationAnalysisResponse(BaseModel):
 @router.post("/apk/obfuscation-analysis", response_model=ObfuscationAnalysisResponse)
 async def analyze_apk_obfuscation(
     file: UploadFile = File(..., description="APK file to analyze for obfuscation"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze an APK for obfuscation techniques.
@@ -12010,9 +12481,10 @@ async def analyze_apk_obfuscation(
         if not filename.endswith(('.apk', '.aab')):
             raise HTTPException(status_code=400, detail="Only APK/AAB files are supported")
         
-        # Save file temporarily
+        # Save file temporarily with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_obfusc_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -12105,6 +12577,7 @@ async def analyze_apk_obfuscation(
 @router.post("/apk/obfuscation-analysis/ai-enhanced", response_model=ObfuscationAnalysisResponse)
 async def analyze_apk_obfuscation_ai_enhanced(
     file: UploadFile = File(..., description="APK file to analyze for obfuscation"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     AI-ENHANCED obfuscation analysis with deep code pattern recognition.
@@ -12128,9 +12601,10 @@ async def analyze_apk_obfuscation_ai_enhanced(
         if not filename.endswith(('.apk', '.aab')):
             raise HTTPException(status_code=400, detail="Only APK/AAB files are supported")
         
-        # Save file temporarily
+        # Save file temporarily with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_obfusc_ai_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -12236,6 +12710,7 @@ async def analyze_apk_obfuscation_ai_enhanced(
 @router.post("/apk/manifest-visualization/ai-enhanced", response_model=ManifestVisualizationResponse)
 async def get_manifest_visualization_ai_enhanced(
     file: UploadFile = File(..., description="APK file to visualize"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     AI-ENHANCED manifest visualization with deep component analysis.
@@ -12260,9 +12735,10 @@ async def get_manifest_visualization_ai_enhanced(
     
     tmp_dir = None
     try:
-        # Save file to temp location
+        # Save file to temp location with sanitized filename to prevent path traversal
         tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_manifest_ai_"))
-        tmp_path = tmp_dir / filename
+        safe_filename = sanitize_filename(filename)
+        tmp_path = tmp_dir / safe_filename
         
         file_size = 0
         with tmp_path.open("wb") as f:
@@ -12385,6 +12861,7 @@ async def analyze_binary_entropy(
     file: UploadFile = File(..., description="Binary file to analyze"),
     window_size: int = Query(256, ge=64, le=4096, description="Entropy calculation window size"),
     step_size: int = Query(128, ge=32, le=2048, description="Step size between measurements"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze entropy distribution across a binary file.
@@ -12476,6 +12953,7 @@ async def export_apk_report(
     file: UploadFile = File(...),
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
     report_type: str = Query("both", description="Report type: functionality, security, both"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Analyze an APK and export the report to Markdown, PDF, or Word format.
@@ -12561,6 +13039,7 @@ async def export_apk_report_from_result(
     result_data: Dict[str, Any],
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
     report_type: str = Query("both", description="Report type: functionality, security, both"),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Export an existing APK analysis result to Markdown, PDF, or Word format.
@@ -12718,7 +13197,10 @@ class FridaScriptExportRequest(BaseModel):
 
 
 @router.post("/apk/frida-scripts/export")
-async def export_frida_scripts(request: FridaScriptExportRequest):
+async def export_frida_scripts(
+    request: FridaScriptExportRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Export generated Frida scripts as downloadable files.
     
@@ -12835,7 +13317,8 @@ async def combine_frida_scripts_endpoint(
     package_name: str,
     scripts: List[Dict[str, Any]],
     selected_categories: Optional[List[str]] = None,
-    vuln_scripts: Optional[List[Dict[str, Any]]] = None
+    vuln_scripts: Optional[List[Dict[str, Any]]] = None,
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Combine multiple Frida scripts into a single all-in-one script.
@@ -12889,7 +13372,10 @@ class ChatExportResponse(BaseModel):
 
 
 @router.post("/apk/chat/export")
-async def export_apk_chat(request: ChatExportRequest):
+async def export_apk_chat(
+    request: ChatExportRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Export APK AI chat conversation to various formats.
     
@@ -13091,7 +13577,10 @@ class CodeExplanationResponse(BaseModel):
 
 
 @router.post("/apk/code/explain", response_model=CodeExplanationResponse)
-async def explain_decompiled_code(request: CodeExplanationRequest):
+async def explain_decompiled_code(
+    request: CodeExplanationRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     AI-powered explanation of decompiled code.
     
@@ -13253,7 +13742,10 @@ class CodeSearchAIResponse(BaseModel):
 
 
 @router.post("/apk/code/search-ai", response_model=CodeSearchAIResponse)
-async def ai_code_search(request: CodeSearchAIRequest):
+async def ai_code_search(
+    request: CodeSearchAIRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     AI-powered semantic code search in decompiled sources.
     
@@ -13419,7 +13911,10 @@ class CryptoAuditResponse(BaseModel):
 
 
 @router.post("/apk/decompile/crypto-audit", response_model=CryptoAuditResponse)
-async def crypto_audit(request: CryptoAuditRequest):
+async def crypto_audit(
+    request: CryptoAuditRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Perform comprehensive cryptographic audit on decompiled APK sources.
     
@@ -13558,7 +14053,10 @@ class ComponentMapResponse(BaseModel):
 
 
 @router.post("/apk/decompile/component-map", response_model=ComponentMapResponse)
-async def get_component_map(request: ComponentMapRequest):
+async def get_component_map(
+    request: ComponentMapRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate visual component map showing activities, services, receivers,
     providers and their relationships.
@@ -13662,7 +14160,10 @@ class DependencyGraphResponse(BaseModel):
 
 
 @router.post("/apk/decompile/dependency-graph")
-async def get_dependency_graph(request: DependencyGraphRequest):
+async def get_dependency_graph(
+    request: DependencyGraphRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Generate a class dependency graph showing how classes are interconnected.
     
@@ -13733,7 +14234,10 @@ class SymbolLookupResponse(BaseModel):
 
 
 @router.post("/apk/decompile/symbol-lookup", response_model=SymbolLookupResponse)
-async def lookup_symbol(request: SymbolLookupRequest):
+async def lookup_symbol(
+    request: SymbolLookupRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Look up a symbol (class, method, or field) and return its definition location.
     
@@ -13785,7 +14289,10 @@ class ExportEnhancedSecurityRequest(BaseModel):
 
 
 @router.post("/apk/decompile/enhanced-security/export")
-async def export_enhanced_security(request: ExportEnhancedSecurityRequest):
+async def export_enhanced_security(
+    request: ExportEnhancedSecurityRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Export enhanced security analysis results to Markdown, PDF, or Word format.
     
@@ -14142,3 +14649,520 @@ async def export_enhanced_security(request: ExportEnhancedSecurityRequest):
     except Exception as e:
         logger.error(f"Enhanced security export failed: {e}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+# ============================================================================
+# ADVANCED BINARY ANALYSIS ENDPOINTS
+# Symbolic Execution, Binary Diffing, ROP Gadget Finding
+# ============================================================================
+
+class SymbolicInputResponse(BaseModel):
+    name: str
+    type: str
+    size_bits: int
+    constraints: List[str] = []
+    concrete_examples: List[str] = []
+
+
+class CrashInputResponse(BaseModel):
+    input_type: str
+    input_value: str
+    crash_address: int
+    crash_type: str
+    vulnerability_type: str
+    cwe_id: Optional[str] = None
+    exploitability: str
+
+
+class TargetReachResponse(BaseModel):
+    target_address: int
+    target_name: Optional[str] = None
+    reached: bool
+    input_to_reach: Optional[str] = None
+    path_length: int
+    constraints_solved: int
+
+
+class VulnFoundResponse(BaseModel):
+    type: str
+    function: Optional[str] = None
+    address: int
+    cwe: Optional[str] = None
+    input_sample: Optional[str] = None
+    description: str
+
+
+class SymbolicExecutionResponse(BaseModel):
+    paths_explored: int
+    paths_deadended: int
+    paths_errored: int
+    max_depth_reached: int
+    symbolic_inputs: List[SymbolicInputResponse] = []
+    crash_inputs: List[CrashInputResponse] = []
+    target_reaches: List[TargetReachResponse] = []
+    vulnerabilities_found: List[VulnFoundResponse] = []
+    execution_time_seconds: float
+    memory_used_mb: float
+    timeout_reached: bool = False
+    error: Optional[str] = None
+
+
+@router.post("/binary/symbolic-execution", response_model=SymbolicExecutionResponse)
+async def perform_symbolic_execution_endpoint(
+    file: UploadFile = File(..., description="Binary file to analyze"),
+    target_addresses: str = Query("", description="Comma-separated hex addresses to target (e.g., '0x401000,0x402000')"),
+    max_time_seconds: int = Query(120, ge=10, le=600, description="Maximum execution time"),
+    max_paths: int = Query(100, ge=10, le=1000, description="Maximum paths to explore"),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Perform symbolic execution on a binary to discover vulnerabilities.
+    
+    Symbolic execution explores all possible program paths by treating inputs
+    as symbolic values and using constraint solving to find inputs that:
+    - Reach specific code addresses (like dangerous functions)
+    - Trigger crashes or undefined behavior
+    - Satisfy complex conditions
+    
+    This is a powerful technique for automatic vulnerability discovery.
+    """
+    tmp_dir = None
+    
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        # Parse target addresses
+        targets = []
+        if target_addresses.strip():
+            for addr_str in target_addresses.split(','):
+                addr_str = addr_str.strip()
+                if addr_str:
+                    try:
+                        targets.append(int(addr_str, 16) if addr_str.startswith('0x') else int(addr_str))
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail=f"Invalid address: {addr_str}")
+        
+        # Save file temporarily
+        tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_symbolic_"))
+        tmp_path = tmp_dir / file.filename
+        
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        logger.info(f"Performing symbolic execution on: {file.filename}")
+        
+        # Perform symbolic execution
+        result = re_service.perform_symbolic_execution(
+            tmp_path,
+            target_addresses=targets if targets else None,
+            max_time_seconds=max_time_seconds,
+            max_paths=max_paths
+        )
+        
+        return SymbolicExecutionResponse(
+            paths_explored=result.paths_explored,
+            paths_deadended=result.paths_deadended,
+            paths_errored=result.paths_errored,
+            max_depth_reached=result.max_depth_reached,
+            symbolic_inputs=[
+                SymbolicInputResponse(
+                    name=si.name,
+                    type=si.type,
+                    size_bits=si.size_bits,
+                    constraints=si.constraints,
+                    concrete_examples=si.concrete_examples
+                )
+                for si in result.symbolic_inputs
+            ],
+            crash_inputs=[
+                CrashInputResponse(
+                    input_type=ci.input_type,
+                    input_value=ci.input_value,
+                    crash_address=ci.crash_address,
+                    crash_type=ci.crash_type,
+                    vulnerability_type=ci.vulnerability_type,
+                    cwe_id=ci.cwe_id,
+                    exploitability=ci.exploitability
+                )
+                for ci in result.crash_inputs
+            ],
+            target_reaches=[
+                TargetReachResponse(
+                    target_address=tr.target_address,
+                    target_name=tr.target_name,
+                    reached=tr.reached,
+                    input_to_reach=tr.input_to_reach,
+                    path_length=tr.path_length,
+                    constraints_solved=tr.constraints_solved
+                )
+                for tr in result.target_reaches
+            ],
+            vulnerabilities_found=[
+                VulnFoundResponse(
+                    type=vf["type"],
+                    function=vf.get("function"),
+                    address=vf["address"],
+                    cwe=vf.get("cwe"),
+                    input_sample=vf.get("input_sample"),
+                    description=vf["description"]
+                )
+                for vf in result.vulnerabilities_found
+            ],
+            execution_time_seconds=result.execution_time_seconds,
+            memory_used_mb=result.memory_used_mb,
+            timeout_reached=result.timeout_reached,
+            error=result.error
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Symbolic execution failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Symbolic execution failed: {str(e)}")
+    finally:
+        if tmp_dir and tmp_dir.exists():
+            try:
+                shutil.rmtree(tmp_dir)
+            except Exception:
+                pass
+
+
+class FunctionDiffResponse(BaseModel):
+    address_a: int
+    address_b: Optional[int] = None
+    name: str
+    match_type: str
+    similarity_score: float
+    size_a: int
+    size_b: Optional[int] = None
+    instructions_changed: int
+    blocks_changed: int
+    calls_added: List[str] = []
+    calls_removed: List[str] = []
+    is_security_relevant: bool
+    diff_summary: Optional[str] = None
+
+
+class StringDiffResponse(BaseModel):
+    value: str
+    status: str
+    address_a: Optional[int] = None
+    address_b: Optional[int] = None
+    is_security_relevant: bool
+
+
+class ImportDiffResponse(BaseModel):
+    name: str
+    library: str
+    status: str
+    is_security_relevant: bool
+
+
+class SecurityChangeResponse(BaseModel):
+    type: str
+    function: Optional[str] = None
+    value: Optional[str] = None
+    description: str
+
+
+class BinaryDiffResponse(BaseModel):
+    file_a: str
+    file_b: str
+    architecture_a: str
+    architecture_b: str
+    functions_identical: int
+    functions_modified: int
+    functions_added: int
+    functions_removed: int
+    overall_similarity: float
+    function_diffs: List[FunctionDiffResponse] = []
+    string_diffs: List[StringDiffResponse] = []
+    import_diffs: List[ImportDiffResponse] = []
+    security_relevant_changes: List[SecurityChangeResponse] = []
+    patch_analysis: Optional[str] = None
+    is_same_binary: bool
+    error: Optional[str] = None
+
+
+@router.post("/binary/diff", response_model=BinaryDiffResponse)
+async def diff_binaries_endpoint(
+    file_a: UploadFile = File(..., description="First binary file (original/old version)"),
+    file_b: UploadFile = File(..., description="Second binary file (patched/new version)"),
+    detailed: bool = Query(True, description="Include detailed block-level diffs"),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Compare two binary files to identify differences.
+    
+    Binary diffing is essential for:
+    - Patch analysis (understanding what a security patch fixes)
+    - Vulnerability research (1-day exploit development)
+    - Malware analysis (comparing variants)
+    - Software forensics (detecting unauthorized modifications)
+    
+    Identifies function-level, string-level, and import-level differences
+    with automatic security-relevance detection.
+    """
+    tmp_dir = None
+    
+    try:
+        if not file_a.filename or not file_b.filename:
+            raise HTTPException(status_code=400, detail="Both files are required")
+        
+        # Save files temporarily
+        tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_bindiff_"))
+        tmp_path_a = tmp_dir / f"a_{file_a.filename}"
+        tmp_path_b = tmp_dir / f"b_{file_b.filename}"
+        
+        # Save file A
+        file_size = 0
+        with tmp_path_a.open("wb") as f:
+            while chunk := await file_a.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File A too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        # Save file B
+        file_size = 0
+        with tmp_path_b.open("wb") as f:
+            while chunk := await file_b.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File B too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        logger.info(f"Diffing binaries: {file_a.filename} vs {file_b.filename}")
+        
+        # Perform binary diff
+        result = re_service.diff_binaries(tmp_path_a, tmp_path_b, detailed=detailed)
+        
+        return BinaryDiffResponse(
+            file_a=result.file_a,
+            file_b=result.file_b,
+            architecture_a=result.architecture_a,
+            architecture_b=result.architecture_b,
+            functions_identical=result.functions_identical,
+            functions_modified=result.functions_modified,
+            functions_added=result.functions_added,
+            functions_removed=result.functions_removed,
+            overall_similarity=result.overall_similarity,
+            function_diffs=[
+                FunctionDiffResponse(
+                    address_a=fd.address_a,
+                    address_b=fd.address_b,
+                    name=fd.name,
+                    match_type=fd.match_type,
+                    similarity_score=fd.similarity_score,
+                    size_a=fd.size_a,
+                    size_b=fd.size_b,
+                    instructions_changed=fd.instructions_changed,
+                    blocks_changed=fd.blocks_changed,
+                    calls_added=fd.calls_added,
+                    calls_removed=fd.calls_removed,
+                    is_security_relevant=fd.is_security_relevant,
+                    diff_summary=fd.diff_summary
+                )
+                for fd in result.function_diffs
+            ],
+            string_diffs=[
+                StringDiffResponse(
+                    value=sd.value,
+                    status=sd.status,
+                    address_a=sd.address_a,
+                    address_b=sd.address_b,
+                    is_security_relevant=sd.is_security_relevant
+                )
+                for sd in result.string_diffs
+            ],
+            import_diffs=[
+                ImportDiffResponse(
+                    name=id.name,
+                    library=id.library,
+                    status=id.status,
+                    is_security_relevant=id.is_security_relevant
+                )
+                for id in result.import_diffs
+            ],
+            security_relevant_changes=[
+                SecurityChangeResponse(
+                    type=sc["type"],
+                    function=sc.get("function"),
+                    value=sc.get("value"),
+                    description=sc["description"]
+                )
+                for sc in result.security_relevant_changes
+            ],
+            patch_analysis=result.patch_analysis,
+            is_same_binary=result.is_same_binary,
+            error=result.error
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Binary diffing failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Binary diffing failed: {str(e)}")
+    finally:
+        if tmp_dir and tmp_dir.exists():
+            try:
+                shutil.rmtree(tmp_dir)
+            except Exception:
+                pass
+
+
+class ROPGadgetResponse(BaseModel):
+    address: int
+    instructions: List[str]
+    gadget_string: str
+    gadget_type: str
+    size_bytes: int
+    registers_controlled: List[str] = []
+    is_useful: bool
+    quality_score: float
+
+
+class ROPChainTemplateResponse(BaseModel):
+    name: str
+    description: str
+    required_gadgets: List[str]
+    available_gadgets: List[ROPGadgetResponse] = []
+    is_buildable: bool
+    chain_addresses: List[int] = []
+    payload_template: Optional[str] = None
+
+
+class ROPGadgetAnalysisResponse(BaseModel):
+    total_gadgets: int
+    unique_gadgets: int
+    gadgets_by_type: Dict[str, int] = {}
+    gadgets: List[ROPGadgetResponse] = []
+    useful_gadgets: List[ROPGadgetResponse] = []
+    pop_gadgets: List[ROPGadgetResponse] = []
+    syscall_gadgets: List[ROPGadgetResponse] = []
+    write_gadgets: List[ROPGadgetResponse] = []
+    pivot_gadgets: List[ROPGadgetResponse] = []
+    chain_templates: List[ROPChainTemplateResponse] = []
+    nx_bypass_possible: bool
+    execve_chain_buildable: bool
+    mprotect_chain_buildable: bool
+    rop_difficulty: str
+    error: Optional[str] = None
+
+
+@router.post("/binary/rop-gadgets", response_model=ROPGadgetAnalysisResponse)
+async def find_rop_gadgets_endpoint(
+    file: UploadFile = File(..., description="Binary file to analyze"),
+    max_gadgets: int = Query(1000, ge=100, le=10000, description="Maximum gadgets to find"),
+    max_gadget_length: int = Query(10, ge=2, le=20, description="Maximum instructions per gadget"),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Find ROP (Return-Oriented Programming) gadgets in a binary.
+    
+    ROP gadgets are small instruction sequences ending in 'ret' that can be
+    chained together to bypass DEP/NX protections. This analysis:
+    - Finds all usable gadgets
+    - Classifies gadgets by type (pop, mov, syscall, etc.)
+    - Evaluates which common exploit chains can be built
+    - Assesses overall ROP-based exploitability
+    
+    Essential for exploit development and security assessment.
+    """
+    tmp_dir = None
+    
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        # Save file temporarily
+        tmp_dir = Path(tempfile.mkdtemp(prefix="vragent_rop_"))
+        tmp_path = tmp_dir / file.filename
+        
+        file_size = 0
+        with tmp_path.open("wb") as f:
+            while chunk := await file.read(65536):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                f.write(chunk)
+        
+        logger.info(f"Finding ROP gadgets in: {file.filename}")
+        
+        # Find ROP gadgets
+        result = re_service.find_rop_gadgets(
+            tmp_path,
+            max_gadgets=max_gadgets,
+            max_gadget_length=max_gadget_length
+        )
+        
+        def convert_gadget(g) -> ROPGadgetResponse:
+            return ROPGadgetResponse(
+                address=g.address,
+                instructions=g.instructions,
+                gadget_string=g.gadget_string,
+                gadget_type=g.gadget_type,
+                size_bytes=g.size_bytes,
+                registers_controlled=g.registers_controlled,
+                is_useful=g.is_useful,
+                quality_score=g.quality_score
+            )
+        
+        return ROPGadgetAnalysisResponse(
+            total_gadgets=result.total_gadgets,
+            unique_gadgets=result.unique_gadgets,
+            gadgets_by_type=result.gadgets_by_type,
+            gadgets=[convert_gadget(g) for g in result.gadgets[:200]],  # Limit response size
+            useful_gadgets=[convert_gadget(g) for g in result.useful_gadgets],
+            pop_gadgets=[convert_gadget(g) for g in result.pop_gadgets],
+            syscall_gadgets=[convert_gadget(g) for g in result.syscall_gadgets],
+            write_gadgets=[convert_gadget(g) for g in result.write_gadgets],
+            pivot_gadgets=[convert_gadget(g) for g in result.pivot_gadgets],
+            chain_templates=[
+                ROPChainTemplateResponse(
+                    name=ct.name,
+                    description=ct.description,
+                    required_gadgets=ct.required_gadgets,
+                    available_gadgets=[convert_gadget(g) for g in ct.available_gadgets],
+                    is_buildable=ct.is_buildable,
+                    chain_addresses=ct.chain_addresses,
+                    payload_template=ct.payload_template
+                )
+                for ct in result.chain_templates
+            ],
+            nx_bypass_possible=result.nx_bypass_possible,
+            execve_chain_buildable=result.execve_chain_buildable,
+            mprotect_chain_buildable=result.mprotect_chain_buildable,
+            rop_difficulty=result.rop_difficulty,
+            error=result.error
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ROP gadget finding failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"ROP gadget finding failed: {str(e)}")
+    finally:
+        if tmp_dir and tmp_dir.exists():
+            try:
+                shutil.rmtree(tmp_dir)
+            except Exception:
+                pass

@@ -168,7 +168,7 @@ const careerPaths: CareerPath[] = [
     ],
     skills: ["Network pentesting", "Web app testing", "Social engineering", "Exploit development", "Report writing", "Active Directory attacks", "Cloud pentesting", "Mobile app testing"],
     certifications: ["CEH", "OSCP", "OSWE", "OSED", "GPEN", "CRTO", "CRTP", "GXPN"],
-    salaryRange: "$75K - $250K+",
+    salaryRange: "£40K - £130K+",
     demand: 92,
     dayInLife: [
       "Scope and plan engagement with client stakeholders",
@@ -255,7 +255,7 @@ const careerPaths: CareerPath[] = [
     ],
     skills: ["SIEM administration", "Log analysis", "Threat intelligence", "Malware analysis", "Forensics", "Detection engineering", "SOAR automation", "Threat hunting"],
     certifications: ["Security+", "CySA+", "GCIH", "GCFA", "BTL1", "BTL2", "GCIA", "GNFA"],
-    salaryRange: "$60K - $200K+",
+    salaryRange: "£32K - £110K+",
     demand: 95,
     dayInLife: [
       "Monitor SIEM dashboards and triage alerts",
@@ -344,7 +344,7 @@ const careerPaths: CareerPath[] = [
     ],
     skills: ["Infrastructure as Code", "CI/CD security", "Cloud platforms (AWS/Azure/GCP)", "Container security", "Zero trust architecture", "Secure coding", "Automation", "Security tooling development"],
     certifications: ["AWS Security Specialty", "AZ-500", "GCP Security", "CCSP", "CISSP", "TOGAF", "CKS"],
-    salaryRange: "$90K - $300K+",
+    salaryRange: "£50K - £160K+",
     demand: 98,
     dayInLife: [
       "Design and implement security controls and guardrails",
@@ -434,7 +434,7 @@ const careerPaths: CareerPath[] = [
     ],
     skills: ["Risk frameworks (NIST, ISO)", "Policy writing", "Audit management", "Vendor assessment", "Executive communication", "Security metrics", "Program management", "Regulatory compliance"],
     certifications: ["CISM", "CRISC", "CISA", "CISSP", "ISO 27001 Lead Auditor", "CGEIT", "CDPSE"],
-    salaryRange: "$70K - $450K+",
+    salaryRange: "£35K - £250K+",
     demand: 88,
     dayInLife: [
       "Conduct risk assessments and gap analyses",
@@ -512,7 +512,7 @@ const careerPaths: CareerPath[] = [
     title: "Vulnerability Research",
     icon: <BiotechIcon sx={{ fontSize: 40 }} />,
     color: "#7c3aed",
-    description: "Discover new vulnerabilities, develop exploits, and advance the state of security knowledge. This elite track requires deep technical skills, patience, and creativity to find what others miss.",
+    description: "Discover new vulnerabilities, develop exploits, and advance the state of security knowledge. This elite track requires deep technical skills, patience, creativity, and systematic methodology to find what others miss. Vulnerability researchers work at organizations like Google Project Zero, Microsoft MSRC, Trail of Bits, or vendor security teams, and their work directly improves software security worldwide.",
     roles: [
       "Junior Security Researcher",
       "Vulnerability Researcher",
@@ -520,83 +520,130 @@ const careerPaths: CareerPath[] = [
       "Principal Researcher",
       "Research Team Lead",
       "Distinguished Researcher",
+      "Exploit Developer",
+      "Fuzzing Engineer",
+      "Offensive Security Researcher",
     ],
-    skills: ["Reverse engineering", "Fuzzing (AFL, LibFuzzer)", "Binary exploitation", "Protocol analysis", "Source code auditing", "CVE disclosure process", "Exploit development", "Assembly (x86/x64/ARM)", "Debugging (GDB, WinDbg)", "Symbolic execution"],
-    certifications: ["OSCP", "OSED", "OSEE", "GXPN", "GREM", "Advanced degrees (MS/PhD)"],
-    salaryRange: "$120K - $400K+",
-    demand: 75,
+    skills: [
+      "Reverse engineering (IDA Pro, Ghidra, Binary Ninja)",
+      "Fuzzing (AFL++, LibFuzzer, Honggfuzz, WinAFL)",
+      "Binary exploitation (stack, heap, kernel)",
+      "Exploitation mitigations bypass (ASLR, DEP, CFI, CET, SMAP/SMEP)",
+      "Protocol analysis and reversing",
+      "Source code auditing (C/C++, Rust, Go)",
+      "CVE disclosure and coordination",
+      "Exploit development (Windows, Linux, macOS)",
+      "Assembly (x86/x64, ARM, RISC-V)",
+      "Debugging (GDB, WinDbg, LLDB, x64dbg)",
+      "Symbolic/concolic execution (angr, Manticore, KLEE)",
+      "Taint analysis and dataflow tracking",
+      "Patch diffing and variant analysis",
+      "Root cause analysis",
+      "Memory corruption primitives",
+      "Type confusion and object lifecycle bugs",
+    ],
+    certifications: ["OSCP", "OSED", "OSEE", "GXPN", "GREM", "OSCE3", "Advanced degrees (MS/PhD in Security/CS)"],
+    salaryRange: "£65K - £250K+",
+    demand: 80,
     dayInLife: [
-      "Review target software/firmware for attack surface",
-      "Develop and refine fuzzing harnesses",
-      "Analyze crash dumps and triage for exploitability",
-      "Reverse engineer binaries to understand logic",
-      "Develop proof-of-concept exploits",
-      "Write detailed vulnerability reports",
-      "Coordinate responsible disclosure with vendors",
-      "Present research at conferences or internal meetings",
-      "Stay current with latest exploitation techniques",
-      "Mentor junior researchers on methodology",
+      "Review target software/firmware for attack surface mapping",
+      "Develop, refine, and scale fuzzing harnesses for coverage",
+      "Analyze crash dumps and triage crashes for exploitability",
+      "Reverse engineer binaries to understand program logic and state",
+      "Develop proof-of-concept exploits demonstrating impact",
+      "Bypass modern exploitation mitigations (CFI, CET, PAC)",
+      "Write detailed vulnerability reports with root cause analysis",
+      "Coordinate responsible disclosure with vendors (90-day timeline)",
+      "Perform patch diffing to find incomplete fixes",
+      "Present research at conferences (Black Hat, DEF CON, OffensiveCon)",
+      "Stay current with latest exploitation techniques and mitigations",
+      "Mentor junior researchers on methodology and tooling",
+      "Collaborate with detection teams on IOCs and signatures",
+      "Review and improve internal research tooling",
     ],
     certPathType: "vulnresearch",
     learningPath: {
       beginner: [
-        { course: "C Programming Fundamentals", provider: "Various", description: "Essential for understanding memory corruption", duration: "2-3 months", link: "/learn/certifications" },
-        { course: "x86/x64 Assembly Basics", provider: "pwn.college/OpenSecurityTraining", description: "Understanding low-level code execution", duration: "2-3 months", link: "/learn/certifications" },
-        { course: "ROP Emporium", provider: "ROP Emporium", description: "Return-oriented programming fundamentals", duration: "1-2 months", link: "/learn/certifications" },
-        { course: "pwn.college Intro Challenges", provider: "pwn.college", description: "Binary exploitation fundamentals", duration: "3-4 months", link: "/learn/certifications" },
-        { course: "Nightmare Binary Exploitation", provider: "GitHub/Nightmare", description: "Comprehensive binary exploitation course", duration: "3-4 months", link: "/learn/certifications" },
-        { course: "OSCP", provider: "Offensive Security", description: "Foundation before specializing in research", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "C Programming Fundamentals (K&R)", provider: "Self-study", description: "Essential for understanding memory corruption vulnerabilities", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "x86/x64 Assembly Language", provider: "pwn.college/OpenSecurityTraining2", description: "Understanding low-level code execution and calling conventions", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Intro to Binary Exploitation", provider: "pwn.college (ASU)", description: "Comprehensive binary exploitation from basics to advanced", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "ROP Emporium", provider: "ROP Emporium (Free)", description: "Return-oriented programming techniques progressively", duration: "1-2 months", link: "/learn/certifications" },
+        { course: "Nightmare Binary Exploitation", provider: "GitHub/guyinatuxedo", description: "Real CTF challenges with detailed walkthroughs", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Computer Systems: A Programmer's Perspective", provider: "CS:APP (Book)", description: "Deep understanding of how programs execute", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "OSCP (PEN-200)", provider: "Offensive Security", description: "Foundation in penetration testing before specializing", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Exploit Education Phoenix/Nebula", provider: "Exploit Education (Free)", description: "Progressive exploitation challenges", duration: "2-3 months", link: "/learn/certifications" },
       ],
       intermediate: [
-        { course: "OSED (EXP-301)", provider: "Offensive Security", description: "Windows exploit development fundamentals", duration: "4-6 months", link: "/learn/certifications" },
-        { course: "GXPN (GIAC Exploit Researcher)", provider: "SANS SEC660", description: "Advanced penetration testing and exploit writing", duration: "3-4 months", link: "/learn/certifications" },
-        { course: "GREM (GIAC Reverse Engineering Malware)", provider: "SANS FOR610", description: "Reverse engineering and malware analysis", duration: "3-4 months", link: "/learn/certifications" },
-        { course: "Corelan Exploit Development", provider: "Corelan", description: "Classic Windows exploitation tutorials", duration: "2-3 months", link: "/learn/certifications" },
-        { course: "Fuzzing with AFL++", provider: "AFL++/Self-study", description: "Modern fuzzing techniques and automation", duration: "2-3 months", link: "/learn/certifications" },
-        { course: "Ghidra/IDA Pro Mastery", provider: "Various", description: "Advanced reverse engineering with disassemblers", duration: "2-3 months", link: "/learn/certifications" },
-        { course: "HeapLAB", provider: "Max Kamper", description: "Linux heap exploitation techniques", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "OSED (EXP-301)", provider: "Offensive Security", description: "Windows user-mode exploit development (SEH, ROP, egghunters)", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "GXPN (GIAC Exploit Researcher)", provider: "SANS SEC660", description: "Advanced penetration testing and exploit development", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "GREM (GIAC Reverse Engineering Malware)", provider: "SANS FOR610", description: "Reverse engineering methodology and malware analysis", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "HeapLAB", provider: "Max Kamper (7asecurity)", description: "Linux heap exploitation - ptmalloc2 internals", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Windows Heap Exploitation", provider: "Corelan/Self-study", description: "Windows heap internals and exploitation", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Fuzzing with AFL++", provider: "AFL++/Google Fuzzing", description: "Modern coverage-guided fuzzing at scale", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Ghidra/IDA Pro Mastery", provider: "Various/Official Courses", description: "Advanced static analysis with disassemblers", duration: "2-3 months", link: "/learn/certifications" },
+        { course: "Windows Internals (Book)", provider: "Microsoft Press", description: "Deep Windows OS knowledge for exploitation", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Linux Kernel Development (Book)", provider: "Robert Love", description: "Understanding Linux internals for kernel research", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "Format String Exploitation", provider: "LiveOverflow/Self-study", description: "Format string vulnerabilities in depth", duration: "1-2 months", link: "/learn/certifications" },
       ],
       advanced: [
-        { course: "OSEE (EXP-401)", provider: "Offensive Security", description: "Advanced Windows exploitation (elite cert)", duration: "6-12 months", link: "/learn/certifications" },
-        { course: "SANS SEC760", provider: "SANS", description: "Advanced exploit development for pentesters", duration: "4-6 months", link: "/learn/certifications" },
-        { course: "Browser Exploitation", provider: "Self-study/Conferences", description: "JavaScript engine and browser security", duration: "6-12 months", link: "/learn/certifications" },
-        { course: "Kernel Exploitation", provider: "Self-study/Courses", description: "Operating system kernel vulnerabilities", duration: "6-12 months", link: "/learn/certifications" },
-        { course: "Symbolic Execution (angr, Manticore)", provider: "Self-study", description: "Automated vulnerability discovery", duration: "3-4 months", link: "/learn/certifications" },
-        { course: "iOS/Android Security Research", provider: "Various", description: "Mobile platform vulnerability research", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "OSEE (EXP-401)", provider: "Offensive Security", description: "Elite Windows kernel and advanced exploitation", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "SANS SEC760", provider: "SANS", description: "Advanced exploit development for security professionals", duration: "4-6 months", link: "/learn/certifications" },
+        { course: "Browser Exploitation", provider: "Self-study/Conferences", description: "JavaScript engine internals (V8, SpiderMonkey, JSC)", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Windows Kernel Exploitation", provider: "HackSys Extreme Vulnerable Driver/Courses", description: "Ring-0 exploitation techniques", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Linux Kernel Exploitation", provider: "pawnyable/Self-study", description: "Linux kernel vulnerability research and exploitation", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Symbolic Execution (angr, Manticore)", provider: "Academic/Self-study", description: "Automated vulnerability discovery techniques", duration: "3-4 months", link: "/learn/certifications" },
+        { course: "iOS Security Research", provider: "Various/Conferences", description: "iOS kernel and userland exploitation", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Android Security Research", provider: "Google/Various", description: "Android kernel and framework vulnerabilities", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Hypervisor/VMM Exploitation", provider: "Academic/Self-study", description: "Virtual machine escape research", duration: "6-12 months", link: "/learn/certifications" },
+        { course: "Hardware Security Research", provider: "Various/Academic", description: "Side-channels, fault injection, chip security", duration: "6-12 months", link: "/learn/certifications" },
       ],
     },
     careerAdvice: {
       gettingStarted: [
-        "Master C programming and understand memory management",
-        "Learn x86/x64 assembly language thoroughly",
-        "Practice on pwn.college and ROP Emporium challenges",
-        "Set up a debugging environment (GDB with pwndbg/peda)",
-        "Study classic vulnerability types (buffer overflow, use-after-free)",
-        "Read past CVE writeups and exploit techniques",
+        "Master C programming completely - read K&R, then 'Expert C Programming'",
+        "Learn x86/x64 assembly thoroughly - understand calling conventions, stack frames",
+        "Complete pwn.college from start to finish - it's the best free resource",
+        "Set up a proper debugging environment (GDB + pwndbg/peda + pwntools)",
+        "Study classic vulnerability types: buffer overflow, format string, use-after-free, double-free, integer overflow, type confusion",
+        "Read Project Zero blog posts and CVE writeups religiously",
+        "Understand modern mitigations: ASLR, DEP/NX, stack canaries, CFI, SMAP/SMEP, CET",
+        "Build a vulnerable target and exploit it yourself from scratch",
       ],
       commonMistakes: [
-        "Skipping fundamentals (C, assembly) to jump to advanced topics",
-        "Not understanding exploitation mitigations (ASLR, DEP, stack canaries)",
-        "Giving up too early on difficult problems",
-        "Not documenting your research process and findings",
-        "Working in isolation instead of engaging with the community",
+        "Skipping fundamentals (C, assembly, OS internals) to jump to advanced topics",
+        "Not understanding exploitation mitigations before trying to bypass them",
+        "Giving up too early - finding vulnerabilities takes weeks/months of effort",
+        "Not documenting your research process, methodology, and dead ends",
+        "Working in isolation instead of engaging with the research community",
+        "Focusing only on one platform/target type instead of building breadth",
+        "Not reading source code when available - static analysis beats blind fuzzing",
+        "Ignoring root cause analysis - understanding 'why' is more valuable than 'how'",
+        "Not studying existing CVEs and exploit techniques systematically",
       ],
       successTips: [
-        "Be patient - finding vulnerabilities takes time and persistence",
-        "Develop a systematic methodology for target analysis",
-        "Follow security researchers on Twitter and read their blogs",
-        "Attend and speak at conferences (even small ones)",
-        "Participate in bug bounty programs for real-world experience",
-        "Contribute to open-source security tools and research",
-        "Build relationships with vendor security teams",
+        "Be patient and persistent - world-class researchers spend months on single targets",
+        "Develop a systematic methodology: attack surface analysis → variant analysis → fuzzing → manual review",
+        "Follow elite researchers: Google P0, Microsoft MSRC, Trail of Bits, Pwn2Own winners",
+        "Read academic papers from top security conferences (IEEE S&P, USENIX Security, CCS, NDSS)",
+        "Attend and speak at conferences - start with local BSides, aim for OffensiveCon/Black Hat",
+        "Participate in bug bounty programs (Google VRP, Microsoft MSRC, Apple Security Research)",
+        "Contribute to open-source security tools (AFL++, Ghidra plugins, pwntools)",
+        "Build relationships with vendor security teams for coordinated disclosure",
+        "Consider specialization: browsers, kernels, mobile, embedded, virtualization",
+        "Write detailed blog posts explaining your research methodology",
+        "Collaborate with others - pair research accelerates learning significantly",
       ],
       dayOneActionPlan: [
-        "Start learning C with 'The C Programming Language' book",
-        "Sign up for pwn.college and complete intro challenges",
-        "Install a Linux VM with GDB, pwntools, and pwndbg",
-        "Practice basic buffer overflow on simple challenges",
-        "Read 'Hacking: The Art of Exploitation' by Jon Erickson",
-        "Follow LiveOverflow on YouTube for binary exploitation content",
+        "Start 'The C Programming Language' by K&R - complete all exercises",
+        "Sign up for pwn.college and complete the first 'Program Misuse' module",
+        "Install a Linux VM with: GDB, pwndbg, pwntools, Ghidra, ropper, one_gadget",
+        "Exploit your first buffer overflow on a simple vulnerable program",
+        "Read 'Hacking: The Art of Exploitation' by Jon Erickson chapter 1-3",
+        "Watch LiveOverflow 'Binary Exploitation' playlist on YouTube",
+        "Join the pwn.college Discord and engage with the community",
+        "Set up a fuzzing environment with AFL++ and fuzz a simple target",
+        "Read one Google Project Zero blog post and take detailed notes",
+        "Subscribe to security mailing lists: oss-security, Full Disclosure",
       ],
     },
   },
@@ -615,7 +662,7 @@ const careerPaths: CareerPath[] = [
     ],
     skills: ["Firewall management (Palo Alto, Fortinet, Cisco)", "IDS/IPS deployment", "Network segmentation", "Zero Trust networking", "VPN technologies", "SD-WAN security", "Network traffic analysis", "DDoS mitigation", "DNS security", "802.1X/NAC", "BGP security"],
     certifications: ["CCNA/CCNP Security", "PCNSE", "Fortinet NSE", "CISSP", "Network+", "JNCIS-SEC"],
-    salaryRange: "$85K - $220K+",
+    salaryRange: "£45K - £120K+",
     demand: 90,
     dayInLife: [
       "Review and approve firewall rule change requests",
@@ -729,7 +776,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Secure software development lifecycle, code review, threat modeling, and application vulnerability management.",
     skills: ["SAST/DAST tools", "Secure code review", "Threat modeling", "API security", "OWASP Top 10", "Dependency scanning", "Security champions programs"],
     certs: ["CSSLP", "GWEB", "OSWE", "CASE", "GWAPT"],
-    salary: "$100K - $250K+",
+    salary: "£55K - £130K+",
     growth: "Very High",
     certPathType: "appsec",
     learningPath: {
@@ -787,7 +834,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Secure cloud infrastructure across AWS, Azure, GCP. Identity, networking, workload protection, and cloud-native security.",
     skills: ["IAM policies", "VPC security", "Container security", "Serverless security", "Cloud-native tools", "CSPM", "CWPP", "Infrastructure as Code"],
     certs: ["AWS Security Specialty", "AZ-500", "GCP Security", "CCSP", "CKS"],
-    salary: "$110K - $280K+",
+    salary: "£60K - £150K+",
     growth: "Very High",
     certPathType: "cloud-security",
     learningPath: {
@@ -845,7 +892,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Analyze threat actors, campaigns, and TTPs. Produce actionable intelligence for defensive operations and strategic planning.",
     skills: ["OSINT", "Malware analysis", "MITRE ATT&CK", "Dark web monitoring", "Intel reporting", "Attribution", "Threat actor tracking", "Intelligence platforms"],
     certs: ["GCTI", "CTIA", "FOR578", "GOSI", "GREM"],
-    salary: "$85K - $200K+",
+    salary: "£45K - £110K+",
     growth: "High",
     certPathType: "threat-intel",
     learningPath: {
@@ -902,7 +949,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Investigate security incidents, collect and analyze evidence, and support legal proceedings with expert testimony.",
     skills: ["Disk forensics", "Memory analysis", "Network forensics", "Mobile forensics", "Chain of custody", "Timeline analysis", "Artifact analysis", "Expert testimony"],
     certs: ["GCFE", "GCFA", "EnCE", "CCE", "CHFI", "GNFA"],
-    salary: "$75K - $180K+",
+    salary: "£40K - £95K+",
     growth: "Moderate",
     certPathType: "forensics",
     learningPath: {
@@ -953,59 +1000,89 @@ const specializedTracks: SpecializedTrack[] = [
     },
   },
   {
-    title: "Malware Analysis",
+    title: "Malware Analysis & Reverse Engineering",
     icon: <BugReportIcon />,
     color: "#dc2626",
-    description: "Reverse engineer malware, understand attacker tools and techniques, and develop detection signatures and countermeasures.",
-    skills: ["Static analysis", "Dynamic analysis", "Assembly/x86/x64", "Sandbox analysis", "Yara rules", "Unpacking", "Debugging", "C2 analysis"],
-    certs: ["GREM", "GCTI", "FOR610", "eCMAP", "OSED"],
-    salary: "$90K - $220K+",
+    description: "Reverse engineer malware, understand attacker tools and techniques, develop detection signatures and countermeasures, and support incident response with deep technical analysis. Malware analysts work at threat intelligence firms, security vendors, government agencies, and corporate security teams.",
+    skills: [
+      "Static analysis (disassembly, decompilation)",
+      "Dynamic analysis (debugging, sandboxing)",
+      "x86/x64/ARM assembly language",
+      "Sandbox analysis (Any.Run, Cuckoo, Joe Sandbox)",
+      "YARA rule development",
+      "Packer/crypter identification and unpacking",
+      "Debugging (x64dbg, OllyDbg, WinDbg, GDB)",
+      "C2 protocol analysis and extraction",
+      "Behavioral analysis and IOC extraction",
+      "Memory forensics (Volatility, Rekall)",
+      "Network traffic analysis of malware communications",
+      "Anti-analysis technique identification",
+      "Code emulation (Unicorn, Qiling)",
+      "Ghidra/IDA Pro scripting and automation",
+    ],
+    certs: ["GREM", "GCTI", "FOR610", "FOR710", "eCMAP", "OSED", "GCFA"],
+    salary: "£50K - £140K+",
     growth: "High",
     certPathType: "malware-analysis",
     learningPath: {
       beginner: [
         { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
-        { course: "x86 Assembly Basics", provider: "OpenSecurityTraining2", duration: "2-3 months" },
-        { course: "Malware Analysis Basics", provider: "Malware Unicorn (Free)", duration: "1-2 months" },
+        { course: "x86/x64 Assembly Language", provider: "OpenSecurityTraining2 (Free)", duration: "2-3 months" },
+        { course: "Malware Analysis Basics (RE101)", provider: "Malware Unicorn (Free)", duration: "1-2 months" },
+        { course: "Practical Malware Analysis (Book)", provider: "No Starch Press", duration: "3-4 months" },
         { course: "Any.Run Sandbox Training", provider: "Any.Run (Free)", duration: "1 month" },
-        { course: "TryHackMe Malware Analysis", provider: "TryHackMe", duration: "2-3 months" },
+        { course: "TryHackMe Malware Analysis Path", provider: "TryHackMe", duration: "2-3 months" },
+        { course: "Ghidra Fundamentals", provider: "NSA/Ghidra Ninja (Free)", duration: "1-2 months" },
       ],
       intermediate: [
         { course: "GREM (Reverse Engineering Malware)", provider: "SANS FOR610", duration: "4-6 months" },
-        { course: "eCMAP (Certified Malware Analysis Professional)", provider: "INE", duration: "3-4 months" },
-        { course: "Practical Malware Analysis (book)", provider: "Self-study", duration: "3-4 months" },
-        { course: "YARA Rule Development", provider: "Various", duration: "1-2 months" },
-        { course: "IDA Pro/Ghidra Mastery", provider: "Various", duration: "2-3 months" },
+        { course: "eCMAP (Certified Malware Analysis Professional)", provider: "INE/eLearnSecurity", duration: "3-4 months" },
+        { course: "YARA Rule Development Mastery", provider: "Various/Self-study", duration: "1-2 months" },
+        { course: "IDA Pro Advanced Analysis", provider: "Hex-Rays/Courses", duration: "2-3 months" },
+        { course: "Windows Internals for Malware Analysis", provider: "Microsoft Press/Self-study", duration: "3-4 months" },
+        { course: "Unpacking Techniques Workshop", provider: "OALabs/Various", duration: "1-2 months" },
+        { course: "Memory Forensics with Volatility", provider: "Volatility Foundation/SANS", duration: "2-3 months" },
       ],
       advanced: [
-        { course: "FOR710 Reverse Engineering", provider: "SANS", duration: "4-6 months" },
+        { course: "FOR710 Reverse Engineering Malware", provider: "SANS", duration: "4-6 months" },
         { course: "OSED (Exploit Developer)", provider: "Offensive Security", duration: "4-6 months" },
-        { course: "Advanced Malware Traffic Analysis", provider: "Various", duration: "2-3 months" },
-        { course: "Threat Hunting with Malware Analysis", provider: "Various", duration: "2-3 months" },
-        { course: "C2 Framework Analysis", provider: "Self-study", duration: "2-3 months" },
+        { course: "Advanced Malware Traffic Analysis", provider: "SANS FOR572/Self-study", duration: "2-3 months" },
+        { course: "Anti-Analysis and Evasion Techniques", provider: "Self-study/Conferences", duration: "2-3 months" },
+        { course: "C2 Framework Analysis (Cobalt Strike, etc.)", provider: "Self-study/OALabs", duration: "2-3 months" },
+        { course: "Kernel-mode Rootkit Analysis", provider: "Self-study/Courses", duration: "3-4 months" },
+        { course: "Mobile Malware Analysis (Android/iOS)", provider: "Various", duration: "3-4 months" },
+        { course: "Malware Development (Red Team)", provider: "Sektor7/MalDev Academy", duration: "3-4 months" },
       ],
     },
     careerAdvice: {
       gettingStarted: [
-        "Set up an isolated malware analysis VM environment",
-        "Learn x86/x64 assembly language fundamentals",
-        "Practice with safe malware samples from MalwareBazaar",
-        "Master Ghidra (free) before investing in IDA Pro",
-        "Learn to write YARA rules for malware detection",
+        "Set up an isolated malware analysis environment (VMware/VirtualBox with snapshots)",
+        "Install FlareVM or REMnux for pre-configured analysis tooling",
+        "Learn x86/x64 assembly language - it's absolutely essential",
+        "Practice with safe malware samples from MalwareBazaar or theZoo",
+        "Master Ghidra (free) before investing $2000+ in IDA Pro",
+        "Learn to write YARA rules for malware detection and classification",
+        "Understand common malware techniques: process injection, persistence, C2",
+        "Read malware analysis reports from vendors (Mandiant, CrowdStrike, etc.)",
       ],
       dayOneActions: [
-        "Set up a Windows analysis VM with FlareVM",
-        "Install Ghidra and complete the intro tutorials",
-        "Download samples from MalwareBazaar for practice",
-        "Complete Malware Unicorn's free RE101 course",
-        "Set up Any.Run free account for dynamic analysis",
+        "Set up a Windows 10 analysis VM with FlareVM toolkit",
+        "Install Ghidra and analyze a simple crackme challenge",
+        "Download safe samples from MalwareBazaar for practice",
+        "Complete Malware Unicorn's free RE101 and RE102 courses",
+        "Set up Any.Run free account and analyze your first sample",
+        "Join the OALabs Discord community for malware analysis",
+        "Start documenting your analysis process in a research blog",
       ],
       successTips: [
-        "Build a personal malware sample library (safely stored)",
-        "Share your YARA rules and analysis with the community",
-        "Develop expertise in specific malware families or regions",
-        "Build relationships with threat intel teams for collaboration",
-        "Stay current with new obfuscation and evasion techniques",
+        "Build a personal malware sample library (encrypted, isolated storage)",
+        "Share your YARA rules and analysis reports with the community",
+        "Develop deep expertise in specific malware families or threat actors",
+        "Build relationships with threat intel and IR teams",
+        "Stay current with new obfuscation, packing, and evasion techniques",
+        "Learn to automate repetitive analysis tasks with Python/IDAPython/Ghidrathon",
+        "Contribute to open-source malware analysis tools",
+        "Follow malware researchers: @hasherezade, @0xToxin, @malaboratory",
       ],
     },
   },
@@ -1016,7 +1093,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Design and manage identity systems, SSO, MFA, privileged access management, and zero trust identity architectures.",
     skills: ["Active Directory", "Azure AD/Entra ID", "Okta/Auth0", "PAM solutions", "Zero trust identity", "Federation", "RBAC/ABAC", "Identity governance"],
     certs: ["SC-300", "Okta Certified", "CyberArk Defender", "CISSP", "CIAM"],
-    salary: "$95K - $220K+",
+    salary: "£52K - £120K+",
     growth: "Very High",
     certPathType: "iam",
     learningPath: {
@@ -1070,56 +1147,80 @@ const specializedTracks: SpecializedTrack[] = [
     title: "Security Research",
     icon: <ScienceIcon />,
     color: "#7c3aed",
-    description: "Discover new vulnerabilities, develop exploits, publish research, and advance the state of security knowledge.",
-    skills: ["Vulnerability research", "Fuzzing", "Exploit development", "Reverse engineering", "Protocol analysis", "CVE disclosure", "Academic writing", "Conference speaking"],
-    certs: ["OSCP", "OSED", "OSEE", "GXPN", "Advanced degrees"],
-    salary: "$120K - $350K+",
-    growth: "Moderate",
+    description: "Discover new vulnerabilities, develop exploits, publish groundbreaking research, and advance the state of security knowledge. Security researchers work at elite organizations like Google Project Zero, Microsoft MSRC, Trail of Bits, NCC Group, or as independent researchers, directly improving software security through their discoveries.",
+    skills: [
+      "Vulnerability research methodology",
+      "Coverage-guided fuzzing (AFL++, LibFuzzer, Honggfuzz)",
+      "Exploit development (user-mode, kernel)",
+      "Reverse engineering (static and dynamic analysis)",
+      "Protocol analysis and specification review",
+      "CVE disclosure and vendor coordination",
+      "Academic writing and conference presentations",
+      "Root cause analysis and variant hunting",
+      "Patch diffing and binary comparison",
+      "Symbolic execution and program analysis",
+      "Attack surface mapping and threat modeling",
+      "Mitigation bypass techniques",
+    ],
+    certs: ["OSCP", "OSED", "OSEE", "GXPN", "OSCE3", "Advanced degrees (MS/PhD)"],
+    salary: "£65K - £250K+",
+    growth: "High",
     certPathType: "vuln-research",
     learningPath: {
       beginner: [
         { course: "CompTIA Security+", provider: "CompTIA", duration: "2-3 months" },
         { course: "OSCP (Penetration Testing)", provider: "Offensive Security", duration: "4-6 months" },
-        { course: "C/C++ Programming Fundamentals", provider: "Various", duration: "3-4 months" },
+        { course: "C/C++ Programming Deep Dive", provider: "K&R + CS:APP Book", duration: "3-4 months" },
         { course: "x86/x64 Assembly", provider: "OpenSecurityTraining2", duration: "2-3 months" },
-        { course: "Reverse Engineering Fundamentals", provider: "Various", duration: "2-3 months" },
+        { course: "pwn.college Binary Exploitation", provider: "Arizona State University (Free)", duration: "4-6 months" },
+        { course: "Nightmare Binary Exploitation", provider: "guyinatuxedo GitHub (Free)", duration: "3-4 months" },
       ],
       intermediate: [
         { course: "OSED (Exploit Developer)", provider: "Offensive Security", duration: "4-6 months" },
         { course: "GXPN (Exploit Researcher)", provider: "SANS SEC660", duration: "3-4 months" },
-        { course: "Fuzzing Fundamentals", provider: "Various", duration: "2-3 months" },
-        { course: "Binary Exploitation", provider: "pwn.college/Various", duration: "3-4 months" },
-        { course: "Protocol Analysis & Reversing", provider: "Various", duration: "2-3 months" },
+        { course: "HeapLAB (Linux Heap Exploitation)", provider: "7asecurity/Max Kamper", duration: "2-3 months" },
+        { course: "Fuzzing Fundamentals (AFL++, LibFuzzer)", provider: "Google/Self-study", duration: "2-3 months" },
+        { course: "Binary Exploitation (CTF Practice)", provider: "pwn.college/Various", duration: "3-4 months" },
+        { course: "Ghidra/IDA Pro Reverse Engineering", provider: "Official Courses/Self-study", duration: "2-3 months" },
+        { course: "Windows Internals (Book)", provider: "Microsoft Press", duration: "3-4 months" },
       ],
       advanced: [
         { course: "OSEE (Exploitation Expert)", provider: "Offensive Security", duration: "6-12 months" },
-        { course: "Advanced Windows Exploitation", provider: "SANS/OffSec", duration: "4-6 months" },
-        { course: "Kernel Exploitation", provider: "Various", duration: "4-6 months" },
-        { course: "Browser/Hypervisor Exploitation", provider: "Self-study/Conferences", duration: "6-12 months" },
-        { course: "Graduate Research Program", provider: "University", duration: "2-4 years" },
+        { course: "SEC760 Advanced Exploit Development", provider: "SANS", duration: "4-6 months" },
+        { course: "Kernel Exploitation (Windows/Linux)", provider: "HackSys/pawnyable/Self-study", duration: "6-12 months" },
+        { course: "Browser/JS Engine Exploitation", provider: "Self-study/Conferences", duration: "6-12 months" },
+        { course: "Hypervisor/VMM Security Research", provider: "Academic/Self-study", duration: "6-12 months" },
+        { course: "Graduate Research Program (MS/PhD)", provider: "University", duration: "2-6 years" },
       ],
     },
     careerAdvice: {
       gettingStarted: [
-        "Master programming in C/C++ and understand memory management",
-        "Learn assembly language and binary analysis deeply",
-        "Start with CTF competitions to build practical skills",
-        "Read published CVEs and understand how vulnerabilities were found",
-        "Follow security researchers on Twitter and read their blog posts",
+        "Master C programming completely - it's foundational for memory corruption",
+        "Learn assembly and understand CPU execution at the lowest level",
+        "Complete pwn.college end-to-end - best free resource available",
+        "Read Google Project Zero blog posts and study their methodology",
+        "Follow elite researchers: @halvarflake, @5aelo, @natashenka, @ifsec",
+        "Study existing CVEs and understand the root cause of each vulnerability",
+        "Build your own fuzzing harnesses and discover crashes in real software",
       ],
       dayOneActions: [
-        "Sign up for pwn.college and start the binary exploitation modules",
-        "Set up a fuzzing environment with AFL or libFuzzer",
-        "Pick an open source project and start reading its code",
-        "Join the 0x00sec or OpenSecurityTraining2 Discord communities",
+        "Sign up for pwn.college and complete the first challenge",
+        "Install Ghidra and reverse engineer a simple binary",
+        "Set up AFL++ and fuzz a simple target (e.g., libxml2, libjpeg)",
+        "Read one Project Zero blog post and take detailed notes",
+        "Join security research Discord communities (pwn.college, CTF teams)",
         "Start a research blog to document your learning journey",
+        "Pick a target application and map its attack surface",
       ],
       successTips: [
-        "Specialize in a specific area (browser, kernel, mobile, IoT)",
-        "Build relationships with vendors for responsible disclosure",
-        "Publish your research at conferences (start with local ones)",
-        "Contribute to open source security tools",
-        "Consider a Master's or PhD for advanced research roles",
+        "Be patient - world-class research takes months of dedicated effort",
+        "Specialize in a specific area (browsers, kernels, mobile, embedded)",
+        "Publish your research - blog posts, conference talks, or academic papers",
+        "Build relationships with vendor security teams for coordinated disclosure",
+        "Follow the responsible disclosure process (90-day timeline standard)",
+        "Attend conferences: OffensiveCon, REcon, Black Hat, DEF CON",
+        "Consider bug bounty programs for real-world targets and income",
+        "Collaborate with other researchers - pair research accelerates learning",
       ],
     },
   },
@@ -1130,7 +1231,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Secure industrial control systems, SCADA, and operational technology in critical infrastructure environments.",
     skills: ["PLC programming", "SCADA systems", "Network segmentation", "OT protocols (Modbus, DNP3)", "Safety systems", "Purdue Model", "Asset inventory", "OT monitoring"],
     certs: ["GICSP", "GRID", "CSSA", "ISA/IEC 62443"],
-    salary: "$100K - $250K+",
+    salary: "£55K - £130K+",
     growth: "Very High",
     certPathType: "ot-ics",
     learningPath: {
@@ -1187,7 +1288,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Implement privacy by design, data protection controls, and regulatory compliance (GDPR, CCPA, HIPAA).",
     skills: ["Privacy by design", "Data mapping", "DPIA", "Consent management", "Data minimization", "Anonymization", "GDPR/CCPA/HIPAA", "Privacy-enhancing technologies"],
     certs: ["CIPM", "CIPT", "CIPP", "CDPSE", "FIP"],
-    salary: "$100K - $240K+",
+    salary: "£55K - £130K+",
     growth: "Very High",
     certPathType: "privacy",
     learningPath: {
@@ -1244,7 +1345,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Independent security researcher finding vulnerabilities in organizations' systems for financial rewards.",
     skills: ["Web app testing", "API testing", "Mobile testing", "Recon automation", "Report writing", "Chaining vulnerabilities", "Business logic flaws", "Persistence"],
     certs: ["OSCP", "OSWE", "BSCP", "eWPT"],
-    salary: "$50K - $500K+ (variable)",
+    salary: "£30K - £300K+ (variable)",
     growth: "High",
     certPathType: "bug-bounty",
     learningPath: {
@@ -1301,7 +1402,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Apply ML/AI techniques to detect threats, analyze patterns, and build predictive security models.",
     skills: ["Python/R", "Machine learning", "Anomaly detection", "Data pipelines", "Statistical analysis", "NLP for security", "Feature engineering", "Model deployment"],
     certs: ["AWS ML Specialty", "Google ML Engineer", "Data Science certs", "Security background"],
-    salary: "$110K - $280K+",
+    salary: "£60K - £150K+",
     growth: "Explosive",
     certPathType: "data-science",
     learningPath: {
@@ -1358,7 +1459,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Build internal security tools, SIEM integrations, and automation for security operations.",
     skills: ["Python/Go/Rust", "API development", "Database design", "DevOps", "Security domain knowledge", "UI/UX for security tools", "Testing", "Documentation"],
     certs: ["Software development certs", "Cloud certs", "Security+/OSCP"],
-    salary: "$100K - $230K+",
+    salary: "£55K - £125K+",
     growth: "Very High",
     certPathType: "tool-dev",
     learningPath: {
@@ -1415,7 +1516,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Implement cryptographic solutions, PKI infrastructure, and secure communications systems.",
     skills: ["Cryptographic protocols", "PKI/Certificate management", "HSM management", "TLS/mTLS", "Key management", "Post-quantum crypto", "Code signing", "Encryption at rest/transit"],
     certs: ["Cryptography courses", "CISSP", "Vendor-specific (Thales, etc.)"],
-    salary: "$120K - $280K+",
+    salary: "£65K - £150K+",
     growth: "High",
     certPathType: "crypto",
     learningPath: {
@@ -1472,7 +1573,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Integrate security into CI/CD pipelines, automate security testing, and build secure infrastructure as code.",
     skills: ["CI/CD security", "SAST/DAST integration", "Container security", "IaC (Terraform/Pulumi)", "Secret management", "GitOps", "Policy as Code", "Security automation"],
     certs: ["AWS DevOps", "AZ-400", "CKS", "Terraform Associate", "GitLab Security"],
-    salary: "$110K - $250K+",
+    salary: "£60K - £135K+",
     growth: "Explosive",
     certPathType: "devsecops",
     learningPath: {
@@ -1529,7 +1630,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Secure iOS and Android applications, perform mobile pentesting, and implement mobile threat defense.",
     skills: ["iOS/Android internals", "Mobile pentesting", "Reverse engineering (APK/IPA)", "OWASP Mobile Top 10", "MDM/EMM", "App store security", "Runtime protection", "Jailbreak/Root detection"],
     certs: ["GMOB", "eMAPT", "OWASP MSTG", "Mobile app pentesting courses"],
-    salary: "$100K - $230K+",
+    salary: "£55K - £125K+",
     growth: "High",
     certPathType: "appsec",
     learningPath: {
@@ -1586,7 +1687,7 @@ const specializedTracks: SpecializedTrack[] = [
     description: "Secure connected vehicles, ECUs, CAN bus, and automotive systems against cyber threats.",
     skills: ["CAN bus security", "ECU pentesting", "V2X security", "ISO 21434/UNECE R155", "Automotive protocols", "Hardware hacking", "Firmware analysis", "Telematics security"],
     certs: ["Automotive cybersecurity training", "Hardware hacking courses", "Embedded security certs"],
-    salary: "$110K - $260K+",
+    salary: "£60K - £140K+",
     growth: "Very High",
     certPathType: "ot-ics",
     learningPath: {
@@ -1636,60 +1737,203 @@ const specializedTracks: SpecializedTrack[] = [
       ],
     },
   },
+  {
+    title: "Exploit Developer",
+    icon: <TerminalIcon />,
+    color: "#b91c1c",
+    description: "Create working exploits for discovered vulnerabilities, develop bypass techniques for modern mitigations, and build offensive capabilities for red teams or security research. Exploit developers are among the most technically skilled security professionals, working at offensive security firms, government agencies, or as researchers.",
+    skills: [
+      "Memory corruption exploitation (stack, heap, kernel)",
+      "ROP/JOP chain development",
+      "Mitigation bypass (ASLR, DEP, CFI, CET, PAC, SMAP/SMEP)",
+      "Shellcode development (Windows, Linux, macOS)",
+      "Heap spray and grooming techniques",
+      "Type confusion and object lifetime exploitation",
+      "Integer overflow and signedness issues",
+      "Race condition exploitation",
+      "Kernel exploitation (Windows, Linux)",
+      "Browser exploitation (V8, SpiderMonkey, JavaScriptCore)",
+      "Sandbox escape techniques",
+      "Weaponization and reliability engineering",
+    ],
+    certs: ["OSED", "OSEE", "GXPN", "OSCE3", "SEC760"],
+    salary: "£70K - £250K+",
+    growth: "High",
+    certPathType: "vuln-research",
+    learningPath: {
+      beginner: [
+        { course: "C Programming Mastery", provider: "K&R + Expert C Programming", duration: "3-4 months" },
+        { course: "x86/x64 Assembly Deep Dive", provider: "OpenSecurityTraining2 (Free)", duration: "2-3 months" },
+        { course: "Computer Systems (CS:APP)", provider: "CMU Book/Course", duration: "3-4 months" },
+        { course: "pwn.college Binary Exploitation", provider: "Arizona State (Free)", duration: "4-6 months" },
+        { course: "ROP Emporium", provider: "ROP Emporium (Free)", duration: "1-2 months" },
+        { course: "Nightmare Binary Exploitation", provider: "guyinatuxedo (Free)", duration: "3-4 months" },
+      ],
+      intermediate: [
+        { course: "OSED (Windows User-Mode Exploitation)", provider: "Offensive Security", duration: "4-6 months" },
+        { course: "GXPN (Exploit Researcher)", provider: "SANS SEC660", duration: "3-4 months" },
+        { course: "HeapLAB (Linux Heap Exploitation)", provider: "7asecurity/Max Kamper", duration: "2-3 months" },
+        { course: "Windows Heap Exploitation", provider: "Corelan/Self-study", duration: "2-3 months" },
+        { course: "Modern Mitigation Bypass", provider: "Conference Talks/Papers", duration: "Ongoing" },
+        { course: "Shellcode Development", provider: "SLAE/Self-study", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "OSEE (Advanced Windows Exploitation)", provider: "Offensive Security", duration: "6-12 months" },
+        { course: "SEC760 Advanced Exploit Dev", provider: "SANS", duration: "4-6 months" },
+        { course: "Windows Kernel Exploitation", provider: "HackSys Extreme Vulnerable Driver", duration: "6-12 months" },
+        { course: "Linux Kernel Exploitation", provider: "pawnyable/Self-study", duration: "6-12 months" },
+        { course: "Browser/JS Engine Exploitation", provider: "Conferences/Academic Papers", duration: "6-12 months" },
+        { course: "Hypervisor Escape Techniques", provider: "Academic/Self-study", duration: "6-12 months" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Master C programming - understand every memory operation intimately",
+        "Learn x86/x64 assembly until you can read it like prose",
+        "Complete pwn.college binary exploitation modules end-to-end",
+        "Study every exploitation mitigation and how each was bypassed historically",
+        "Read writeups from Pwn2Own, Project Zero, and major exploit developers",
+        "Understand the vulnerability lifecycle from discovery to working exploit",
+        "Practice turning crashes into controlled code execution",
+      ],
+      dayOneActions: [
+        "Start pwn.college 'Program Exploitation' module",
+        "Set up a debugging environment (GDB + pwndbg + pwntools)",
+        "Write a simple buffer overflow exploit from scratch",
+        "Study how ASLR and DEP work at the implementation level",
+        "Read one Google Project Zero exploit writeup in detail",
+        "Join exploit development Discord communities",
+      ],
+      successTips: [
+        "Reliability matters - a 50% successful exploit is often unusable",
+        "Study mitigations deeper than most - understand implementation details",
+        "Build exploit primitives and reusable techniques library",
+        "Learn to turn any memory corruption into arbitrary read/write",
+        "Understand target-specific quirks (allocator behavior, OS specifics)",
+        "Consider the ethics and legal implications of your work",
+        "Build relationships with vulnerability researchers for collaboration",
+        "Present at conferences to build reputation (even local ones)",
+      ],
+    },
+  },
+  {
+    title: "Reverse Engineering Specialist",
+    icon: <MemoryIcon />,
+    color: "#4c1d95",
+    description: "Analyze binary code without source access to understand functionality, find vulnerabilities, unpack protections, and extract intelligence. Reverse engineers work in malware analysis, vulnerability research, competitive intelligence, and software security assessment roles.",
+    skills: [
+      "Static analysis (IDA Pro, Ghidra, Binary Ninja, radare2)",
+      "Dynamic analysis (debuggers, emulators, instrumentation)",
+      "x86/x64/ARM/MIPS assembly language",
+      "Decompiler interpretation and limitation awareness",
+      "Anti-analysis and anti-debugging bypass",
+      "Packer/protector identification and unpacking",
+      "Protocol reverse engineering",
+      "Firmware extraction and analysis",
+      "Binary patching and modification",
+      "Code emulation (Unicorn, Qiling, QEMU)",
+      "Scripting (Python, IDAPython, Ghidrathon)",
+      "Cryptographic algorithm identification",
+    ],
+    certs: ["GREM", "OSED", "FOR610", "FOR710", "eCRE", "eCMAP"],
+    salary: "£55K - £150K+",
+    growth: "High",
+    certPathType: "malware-analysis",
+    learningPath: {
+      beginner: [
+        { course: "x86/x64 Assembly Language", provider: "OpenSecurityTraining2 (Free)", duration: "2-3 months" },
+        { course: "Reverse Engineering Fundamentals (RE101)", provider: "Malware Unicorn (Free)", duration: "1-2 months" },
+        { course: "Ghidra Basics", provider: "NSA/Ghidra Ninja (Free)", duration: "1-2 months" },
+        { course: "Crackmes.one Challenges", provider: "Crackmes.one (Free)", duration: "2-3 months" },
+        { course: "Practical Binary Analysis (Book)", provider: "No Starch Press", duration: "3-4 months" },
+        { course: "TryHackMe Reverse Engineering Path", provider: "TryHackMe", duration: "2-3 months" },
+      ],
+      intermediate: [
+        { course: "GREM (Reverse Engineering Malware)", provider: "SANS FOR610", duration: "4-6 months" },
+        { course: "IDA Pro Advanced Techniques", provider: "Hex-Rays/Courses", duration: "2-3 months" },
+        { course: "ARM Assembly & Reversing", provider: "Azeria Labs (Free)/Courses", duration: "2-3 months" },
+        { course: "Windows Internals", provider: "Microsoft Press", duration: "3-4 months" },
+        { course: "Unpacking Techniques", provider: "OALabs/Various", duration: "1-2 months" },
+        { course: "Binary Instrumentation (Frida, DBI)", provider: "Self-study", duration: "2-3 months" },
+      ],
+      advanced: [
+        { course: "FOR710 Reverse Engineering", provider: "SANS", duration: "4-6 months" },
+        { course: "Firmware Reverse Engineering", provider: "Various/Self-study", duration: "3-4 months" },
+        { course: "Kernel-mode Reverse Engineering", provider: "Self-study/Courses", duration: "4-6 months" },
+        { course: "Custom Decompiler Development", provider: "Academic/Self-study", duration: "6-12 months" },
+        { course: "Symbolic Execution for RE", provider: "Academic/Self-study", duration: "3-4 months" },
+        { course: "FLARE-ON Challenges (Annual)", provider: "Mandiant (Free)", duration: "Ongoing" },
+      ],
+    },
+    careerAdvice: {
+      gettingStarted: [
+        "Learn x86/x64 assembly until you can read disassembly fluently",
+        "Master Ghidra thoroughly (it's free and powerful)",
+        "Practice on crackmes and CTF reverse engineering challenges",
+        "Learn to recognize common patterns (loops, function calls, data structures)",
+        "Understand calling conventions and ABI details",
+        "Study how compilers generate code from C/C++ constructs",
+        "Practice documentation - reverse engineering is worthless without clear notes",
+      ],
+      dayOneActions: [
+        "Install Ghidra and complete the official tutorials",
+        "Download a simple crackme from crackmes.one and solve it",
+        "Learn to recognize function prologues and epilogues",
+        "Understand the difference between call, jmp, and ret instructions",
+        "Set up a debugging environment (x64dbg for Windows, GDB for Linux)",
+        "Join the OALabs Discord community",
+      ],
+      successTips: [
+        "Develop a systematic methodology for approaching new binaries",
+        "Build a library of identified patterns and structures",
+        "Learn to script your tools (IDAPython, Ghidrathon) for automation",
+        "Participate in CTFs and the annual FLARE-ON challenge",
+        "Specialize in specific areas (malware, firmware, mobile, games)",
+        "Document and share your techniques with the community",
+        "Learn multiple architectures (ARM is increasingly important)",
+        "Build relationships with exploit developers and malware analysts",
+      ],
+    },
+  },
 ];
 
-// Salary data by role and experience
+// Salary data by role and experience (UK-focused)
 const salaryData = [
-  { role: "SOC Analyst (Tier 1)", entry: "$55K-70K", mid: "$70K-90K", senior: "$90K-115K", location: "US Average", remote: "Moderate" },
-  { role: "SOC Analyst (Tier 2/3)", entry: "$70K-90K", mid: "$90K-120K", senior: "$120K-150K", location: "US Average", remote: "Moderate" },
-  { role: "Penetration Tester", entry: "$70K-90K", mid: "$90K-140K", senior: "$140K-200K", location: "US Average", remote: "High" },
-  { role: "Security Engineer", entry: "$85K-110K", mid: "$110K-160K", senior: "$160K-220K", location: "US Average", remote: "Very High" },
-  { role: "Network Security Engineer", entry: "$75K-100K", mid: "$100K-145K", senior: "$145K-200K", location: "US Average", remote: "Moderate" },
-  { role: "Cloud Security Engineer", entry: "$95K-125K", mid: "$125K-175K", senior: "$175K-280K", location: "US Average", remote: "Very High" },
-  { role: "DevSecOps Engineer", entry: "$90K-120K", mid: "$120K-165K", senior: "$165K-230K", location: "US Average", remote: "Very High" },
-  { role: "Application Security Engineer", entry: "$95K-120K", mid: "$120K-165K", senior: "$165K-250K", location: "US Average", remote: "Very High" },
-  { role: "Vulnerability Researcher", entry: "$100K-130K", mid: "$130K-200K", senior: "$200K-350K+", location: "US Average", remote: "High" },
-  { role: "Security Architect", entry: "$130K-160K", mid: "$160K-210K", senior: "$210K-300K", location: "US Average", remote: "High" },
-  { role: "GRC Analyst", entry: "$60K-80K", mid: "$80K-115K", senior: "$115K-160K", location: "US Average", remote: "Very High" },
-  { role: "Threat Hunter", entry: "$85K-110K", mid: "$110K-150K", senior: "$150K-200K", location: "US Average", remote: "High" },
-  { role: "Malware Analyst", entry: "$80K-100K", mid: "$100K-145K", senior: "$145K-220K", location: "US Average", remote: "Moderate" },
-  { role: "Security Data Scientist", entry: "$95K-120K", mid: "$120K-170K", senior: "$170K-250K", location: "US Average", remote: "Very High" },
-  { role: "Cryptographic Engineer", entry: "$100K-130K", mid: "$130K-180K", senior: "$180K-280K", location: "US Average", remote: "High" },
-  { role: "Security Manager", entry: "$110K-140K", mid: "$140K-175K", senior: "$175K-225K", location: "US Average", remote: "Moderate" },
-  { role: "Director of Security", entry: "N/A", mid: "$175K-225K", senior: "$225K-300K", location: "US Average", remote: "Low" },
-  { role: "CISO", entry: "N/A", mid: "$200K-300K", senior: "$300K-500K+", location: "US Average", remote: "Low" },
+  { role: "SOC Analyst (Tier 1)", entry: "£28K-38K", mid: "£38K-50K", senior: "£50K-65K", location: "UK Average", remote: "Moderate" },
+  { role: "SOC Analyst (Tier 2/3)", entry: "£38K-48K", mid: "£48K-65K", senior: "£65K-85K", location: "UK Average", remote: "Moderate" },
+  { role: "Penetration Tester", entry: "£35K-50K", mid: "£50K-75K", senior: "£75K-110K", location: "UK Average", remote: "High" },
+  { role: "Security Engineer", entry: "£45K-60K", mid: "£60K-85K", senior: "£85K-120K", location: "UK Average", remote: "Very High" },
+  { role: "Network Security Engineer", entry: "£40K-55K", mid: "£55K-75K", senior: "£75K-100K", location: "UK Average", remote: "Moderate" },
+  { role: "Cloud Security Engineer", entry: "£50K-65K", mid: "£65K-95K", senior: "£95K-140K", location: "UK Average", remote: "Very High" },
+  { role: "DevSecOps Engineer", entry: "£48K-62K", mid: "£62K-90K", senior: "£90K-130K", location: "UK Average", remote: "Very High" },
+  { role: "Application Security Engineer", entry: "£50K-65K", mid: "£65K-90K", senior: "£90K-130K", location: "UK Average", remote: "Very High" },
+  { role: "Vulnerability Researcher", entry: "£55K-70K", mid: "£70K-100K", senior: "£100K-180K", location: "UK Average", remote: "High" },
+  { role: "Security Architect", entry: "£70K-90K", mid: "£90K-120K", senior: "£120K-160K", location: "UK Average", remote: "High" },
+  { role: "GRC Analyst", entry: "£32K-45K", mid: "£45K-65K", senior: "£65K-95K", location: "UK Average", remote: "Very High" },
+  { role: "Threat Hunter", entry: "£45K-60K", mid: "£60K-80K", senior: "£80K-110K", location: "UK Average", remote: "High" },
+  { role: "Malware Analyst", entry: "£42K-55K", mid: "£55K-75K", senior: "£75K-115K", location: "UK Average", remote: "Moderate" },
+  { role: "Security Data Scientist", entry: "£50K-65K", mid: "£65K-90K", senior: "£90K-135K", location: "UK Average", remote: "Very High" },
+  { role: "Cryptographic Engineer", entry: "£55K-70K", mid: "£70K-95K", senior: "£95K-150K", location: "UK Average", remote: "High" },
+  { role: "Security Manager", entry: "£60K-75K", mid: "£75K-95K", senior: "£95K-125K", location: "UK Average", remote: "Moderate" },
+  { role: "Director of Security", entry: "N/A", mid: "£95K-130K", senior: "£130K-180K", location: "UK Average", remote: "Low" },
+  { role: "CISO", entry: "N/A", mid: "£120K-180K", senior: "£180K-300K+", location: "UK Average", remote: "Low" },
 ];
 
-// Regional salary multipliers
+// Regional salary multipliers (UK regions)
 const regionalMultipliers = [
-  { region: "San Francisco Bay Area", multiplier: "1.4-1.6x", notes: "Highest salaries, high COL" },
-  { region: "New York City", multiplier: "1.3-1.5x", notes: "Finance sector premiums" },
-  { region: "Seattle", multiplier: "1.25-1.4x", notes: "Big tech presence" },
-  { region: "Washington D.C.", multiplier: "1.2-1.4x", notes: "Government/defense premiums" },
-  { region: "Boston", multiplier: "1.15-1.3x", notes: "Healthcare, education sectors" },
-  { region: "Austin/Denver", multiplier: "1.1-1.25x", notes: "Growing tech hubs" },
-  { region: "Remote (US-based)", multiplier: "0.9-1.1x", notes: "Location-adjusted or full pay" },
-  { region: "UK (London)", multiplier: "£60K-£150K", notes: "Varies significantly by role" },
-  { region: "Germany", multiplier: "€55K-€130K", notes: "Strong job protection" },
-  { region: "Australia", multiplier: "A$80K-A$200K", notes: "Mining/finance pay well" },
-  { region: "UK (Outside London)", multiplier: "£45K-£110K", notes: "Lower COL, growing remote options" },
-  { region: "Netherlands", multiplier: "€50K-€120K", notes: "Strong tech sector, English-friendly" },
-  { region: "Singapore", multiplier: "S$70K-S$180K", notes: "APAC hub, finance and tech" },
-  { region: "Canada (Toronto)", multiplier: "C$80K-C$180K", notes: "Growing tech hub, finance sector" },
-  { region: "Ireland (Dublin)", multiplier: "€55K-€130K", notes: "Big tech EMEA HQs" },
-];
-
-// UK-specific salary data
-const ukSalaryData = [
-  { role: "SOC Analyst (Tier 1)", junior: "£28K-38K", mid: "£38K-50K", senior: "£50K-65K", london: "+20-30%" },
-  { role: "SOC Analyst (Tier 2/3)", junior: "£38K-48K", mid: "£48K-65K", senior: "£65K-85K", london: "+20-30%" },
-  { role: "Penetration Tester", junior: "£35K-50K", mid: "£50K-75K", senior: "£75K-110K", london: "+15-25%" },
-  { role: "Security Engineer", junior: "£45K-60K", mid: "£60K-85K", senior: "£85K-120K", london: "+20-30%" },
-  { role: "Cloud Security Engineer", junior: "£50K-65K", mid: "£65K-95K", senior: "£95K-140K", london: "+20-30%" },
-  { role: "DevSecOps Engineer", junior: "£48K-62K", mid: "£62K-90K", senior: "£90K-130K", london: "+20-30%" },
-  { role: "GRC Analyst", junior: "£32K-45K", mid: "£45K-65K", senior: "£65K-95K", london: "+15-25%" },
-  { role: "Security Architect", junior: "£70K-90K", mid: "£90K-120K", senior: "£120K-160K", london: "+20-30%" },
-  { role: "CISO", junior: "N/A", mid: "£120K-180K", senior: "£180K-300K+", london: "+25-40%" },
+  { region: "London (City/Canary Wharf)", multiplier: "+25-40%", notes: "Finance sector premiums, highest UK salaries" },
+  { region: "London (Tech/West End)", multiplier: "+20-35%", notes: "Big tech companies and startups" },
+  { region: "Greater London", multiplier: "+15-25%", notes: "Good access, lower COL than central" },
+  { region: "South East (Reading/Cambridge)", multiplier: "+10-20%", notes: "Tech hubs, defence contractors" },
+  { region: "Manchester", multiplier: "Base-+10%", notes: "Growing tech hub, BBC/Media City" },
+  { region: "Edinburgh/Glasgow", multiplier: "Base-+10%", notes: "Finance and tech presence" },
+  { region: "Bristol", multiplier: "Base-+10%", notes: "Aerospace, defence, and tech sector" },
+  { region: "Birmingham", multiplier: "Base", notes: "Growing cyber sector, NCSC presence" },
+  { region: "Leeds/Newcastle", multiplier: "Base", notes: "Lower COL, remote work friendly" },
+  { region: "Remote UK", multiplier: "Base-+5%", notes: "Many roles now remote-first" },
+  { region: "Government/NCSC", multiplier: "+10-25%", notes: "Requires SC/DV clearance" },
+  { region: "Consultancy (Big 4)", multiplier: "+15-30%", notes: "Deloitte, EY, PwC, KPMG" },
+  { region: "Security Boutiques", multiplier: "+10-20%", notes: "NCC Group, WithSecure, Mandiant" },
 ];
 
 // Learning roadmaps - with links to /learn/certifications for detailed course info
@@ -1780,6 +2024,36 @@ const interviewQuestions = {
     { q: "Explain SBOM (Software Bill of Materials) and its security implications", level: "Mid", topic: "Supply Chain" },
     { q: "How would you implement a Zero Trust architecture step by step?", level: "Senior", topic: "Architecture" },
     { q: "What's the difference between EDR, XDR, and MDR? When would you use each?", level: "Mid", topic: "Detection" },
+    // Vulnerability Research & Exploit Development Questions
+    { q: "Explain the difference between use-after-free and double-free vulnerabilities", level: "Mid", topic: "VulnResearch" },
+    { q: "What is a type confusion vulnerability and how do you exploit it?", level: "Senior", topic: "VulnResearch" },
+    { q: "Describe the Windows heap (LFH, segment heap) and exploitation challenges", level: "Senior", topic: "ExploitDev" },
+    { q: "How does Control Flow Integrity (CFI) work and what are bypass techniques?", level: "Senior", topic: "ExploitDev" },
+    { q: "Explain Intel CET (Control-flow Enforcement Technology) and its impact on exploitation", level: "Senior", topic: "ExploitDev" },
+    { q: "What is Return-Oriented Programming (ROP) and how do you build a ROP chain?", level: "Mid", topic: "ExploitDev" },
+    { q: "Explain the difference between coverage-guided and generation-based fuzzing", level: "Mid", topic: "VulnResearch" },
+    { q: "How would you approach fuzzing a closed-source binary with no source code?", level: "Senior", topic: "VulnResearch" },
+    { q: "What is variant analysis and how do you use it after finding a vulnerability?", level: "Senior", topic: "VulnResearch" },
+    { q: "Explain kernel exploitation differences between Windows and Linux", level: "Senior", topic: "ExploitDev" },
+    { q: "What is SMAP/SMEP and how do they affect kernel exploitation?", level: "Senior", topic: "ExploitDev" },
+    { q: "How does ARM Pointer Authentication (PAC) work and what are potential bypasses?", level: "Senior", topic: "ExploitDev" },
+    // Reverse Engineering Questions
+    { q: "Explain the difference between static and dynamic analysis in reverse engineering", level: "Entry", topic: "ReverseEng" },
+    { q: "What are common anti-debugging techniques and how do you bypass them?", level: "Mid", topic: "ReverseEng" },
+    { q: "How do you identify and unpack a packed/protected binary?", level: "Mid", topic: "ReverseEng" },
+    { q: "Explain x86 calling conventions (cdecl, stdcall, fastcall) and why they matter", level: "Mid", topic: "ReverseEng" },
+    { q: "How would you approach reverse engineering an unknown network protocol?", level: "Senior", topic: "ReverseEng" },
+    { q: "What is symbolic execution and how is it used in vulnerability research?", level: "Senior", topic: "ReverseEng" },
+    { q: "Explain how you identify cryptographic algorithms in a binary without source", level: "Mid", topic: "ReverseEng" },
+    { q: "How do you reverse engineer firmware from an embedded device?", level: "Senior", topic: "ReverseEng" },
+    { q: "What are the differences between ARM and x86 assembly that affect RE?", level: "Mid", topic: "ReverseEng" },
+    // Malware Analysis Questions
+    { q: "What are the stages of malware analysis and when do you use each?", level: "Entry", topic: "MalwareAnalysis" },
+    { q: "Explain common persistence mechanisms used by malware on Windows", level: "Mid", topic: "MalwareAnalysis" },
+    { q: "How do you analyze malware that detects virtual machines?", level: "Mid", topic: "MalwareAnalysis" },
+    { q: "What is process injection and name several techniques", level: "Mid", topic: "MalwareAnalysis" },
+    { q: "How do you extract C2 configurations from malware samples?", level: "Senior", topic: "MalwareAnalysis" },
+    { q: "Explain how you would write a YARA rule for a specific malware family", level: "Mid", topic: "MalwareAnalysis" },
   ],
   behavioral: [
     { q: "Tell me about a time you handled a critical security incident under pressure", level: "All", topic: "IR" },
@@ -1792,6 +2066,11 @@ const interviewQuestions = {
     { q: "How do you balance security requirements with business needs and user experience?", level: "Senior", topic: "Strategy" },
     { q: "Tell me about a security program or initiative you built from the ground up", level: "Senior", topic: "Leadership" },
     { q: "How do you mentor junior team members and build a security culture?", level: "Senior", topic: "Leadership" },
+    // VulnResearch/RE Behavioral Questions
+    { q: "Tell me about a vulnerability you discovered and the process you used", level: "Mid", topic: "VulnResearch" },
+    { q: "Describe a time when you spent weeks on research without finding anything. How did you persist?", level: "Mid", topic: "VulnResearch" },
+    { q: "How do you decide when to stop researching a target and move on?", level: "Senior", topic: "VulnResearch" },
+    { q: "Tell me about a time you had to coordinate responsible disclosure with a difficult vendor", level: "Senior", topic: "VulnResearch" },
   ],
   scenario: [
     { q: "You receive an alert that a user's account is exfiltrating data to an unknown IP. Walk me through your response.", level: "Mid", topic: "IR" },
@@ -1807,6 +2086,13 @@ const interviewQuestions = {
     { q: "A misconfigured firewall rule is allowing unexpected traffic. How do you investigate and remediate?", level: "Mid", topic: "NetworkSec" },
     { q: "Design a network security architecture for a company acquiring another company.", level: "Senior", topic: "NetworkSec" },
     { q: "Your fuzzer found a crash. Walk through triaging it for exploitability.", level: "Senior", topic: "VulnResearch" },
+    // Additional VulnResearch/ExploitDev Scenarios
+    { q: "You found a heap overflow but ASLR and CFI are enabled. Describe your approach to exploitation.", level: "Senior", topic: "ExploitDev" },
+    { q: "A vendor released a patch. How do you analyze it to find what was fixed?", level: "Senior", topic: "VulnResearch" },
+    { q: "You have a UAF primitive. Walk through turning it into arbitrary code execution.", level: "Senior", topic: "ExploitDev" },
+    { q: "Your target is a JavaScript engine. Describe your fuzzing and analysis strategy.", level: "Senior", topic: "VulnResearch" },
+    { q: "You found a kernel vulnerability. How do you develop a reliable exploit?", level: "Senior", topic: "ExploitDev" },
+    { q: "A malware sample uses multiple layers of packing. Describe your unpacking approach.", level: "Senior", topic: "MalwareAnalysis" },
   ],
   handson: [
     { q: "Here's a PCAP file. Find evidence of malicious activity and explain what happened.", level: "Mid", topic: "Analysis" },
@@ -1819,6 +2105,15 @@ const interviewQuestions = {
     { q: "Review these firewall rules and identify security issues", level: "Mid", topic: "NetworkSec" },
     { q: "Set up a network segmentation design for this scenario (whiteboard)", level: "Senior", topic: "NetworkSec" },
     { q: "Analyze this crash dump and determine root cause", level: "Senior", topic: "VulnResearch" },
+    // Additional VulnResearch/RE/Exploit Hands-on
+    { q: "Here's a stripped binary. Reverse engineer it and explain its functionality.", level: "Mid", topic: "ReverseEng" },
+    { q: "Given this vulnerable program, develop a working exploit with ASLR bypass.", level: "Senior", topic: "ExploitDev" },
+    { q: "Write a fuzzing harness for this library function.", level: "Senior", topic: "VulnResearch" },
+    { q: "Here's a packed malware sample. Unpack it and extract the payload.", level: "Mid", topic: "MalwareAnalysis" },
+    { q: "Analyze this exploit and explain each stage of the exploitation chain.", level: "Senior", topic: "ExploitDev" },
+    { q: "Build a ROP chain for this vulnerable binary to achieve code execution.", level: "Senior", topic: "ExploitDev" },
+    { q: "Write a Ghidra/IDA script to automate identifying a specific pattern.", level: "Mid", topic: "ReverseEng" },
+    { q: "Given this crash, determine exploitability and write a root cause analysis.", level: "Senior", topic: "VulnResearch" },
   ],
 };
 
@@ -1922,6 +2217,21 @@ const careerTransitions = [
   { from: "AI/ML Engineer", to: "AI Security Specialist", path: "Adversarial ML, LLM security, model security, prompt injection defense", time: "6-12 months", difficulty: 3 },
   { from: "Hardware Engineer", to: "Hardware Security Researcher", path: "Side-channel attacks, fault injection, embedded security, chip security", time: "1-2 years", difficulty: 4 },
   { from: "Teacher/Trainer", to: "Security Awareness Lead", path: "Security fundamentals, phishing simulation tools, metrics and reporting", time: "1-2 years", difficulty: 2 },
+  // Vulnerability Research & Reverse Engineering Transitions
+  { from: "Malware Analyst", to: "Vulnerability Researcher", path: "Pivot from analysis to discovery - learn fuzzing, code auditing, and exploit primitives", time: "1-2 years", difficulty: 4 },
+  { from: "Vulnerability Researcher", to: "Exploit Developer", path: "Deep dive into exploitation - OSED/OSEE, mitigation bypasses, weaponization", time: "1-2 years", difficulty: 5 },
+  { from: "CTF Player", to: "Vulnerability Researcher", path: "Transition pwn skills to real-world targets - learn source auditing and fuzzing at scale", time: "1-2 years", difficulty: 4 },
+  { from: "Embedded Engineer", to: "Firmware Security Researcher", path: "Apply embedded knowledge to security - learn RE, firmware extraction, hardware hacking", time: "1-2 years", difficulty: 3 },
+  { from: "Game Developer", to: "Reverse Engineer", path: "Apply game engine knowledge to RE - anti-cheat analysis, game hacking to security research", time: "1-2 years", difficulty: 3 },
+  { from: "Vulnerability Researcher", to: "Fuzzing Engineer", path: "Specialize in fuzzing infrastructure - harness development, coverage optimization, triage automation", time: "6-12 months", difficulty: 3 },
+  { from: "Compiler Engineer", to: "Vulnerability Researcher", path: "Apply compiler knowledge - UB research, code generation bugs, interpreter vulnerabilities", time: "1-2 years", difficulty: 4 },
+  { from: "Reverse Engineer", to: "Malware Analyst", path: "Apply RE skills to malware - add threat intel knowledge, sandbox analysis, IOC extraction", time: "6-12 months", difficulty: 2 },
+  { from: "Security Engineer", to: "Vulnerability Researcher", path: "Shift from defense to discovery - learn RE, start with 1-day analysis, build to 0-day research", time: "2-3 years", difficulty: 5 },
+  { from: "Kernel Developer", to: "Kernel Security Researcher", path: "Apply kernel internals to security - learn exploitation, mitigations, and research methodology", time: "1-2 years", difficulty: 4 },
+  { from: "Browser Developer", to: "Browser Security Researcher", path: "Pivot to security research - JavaScript engine bugs, renderer vulnerabilities, sandbox escapes", time: "1-2 years", difficulty: 5 },
+  { from: "Mobile Developer", to: "Mobile Security Researcher", path: "Deep dive into iOS/Android internals - kernel exploitation, sandbox bypasses, jailbreaks", time: "2-3 years", difficulty: 5 },
+  { from: "Exploit Developer", to: "Offensive Security Lead", path: "Move to leadership - capability development strategy, team building, research program management", time: "2-3 years", difficulty: 3 },
+  { from: "Antivirus Engineer", to: "Exploit Researcher", path: "Pivot from defense to offense - leverage AV bypass knowledge for exploitation research", time: "1-2 years", difficulty: 4 },
 ];
 
 // Industry trends
@@ -2565,6 +2875,161 @@ const learningPlatforms = [
   { name: "Certified Secure", type: "UK Courses", level: "All Levels", cost: "££", focus: "UK-based, NCSC certified training provider", rating: 4 },
 ];
 
+// Alternative job titles - same role, different names companies use
+const alternativeJobTitles: { [key: string]: string[] } = {
+  "Penetration Tester": ["Ethical Hacker", "Offensive Security Consultant", "Security Assessor", "Red Team Operator", "Attack Simulation Specialist", "Intrusion Tester", "Security Auditor (Technical)"],
+  "SOC Analyst": ["Security Operations Analyst", "Cyber Defense Analyst", "Security Monitoring Analyst", "SIEM Analyst", "Threat Monitoring Specialist", "Cyber Security Analyst", "Information Security Analyst"],
+  "Security Engineer": ["Information Security Engineer", "Cyber Security Engineer", "SecOps Engineer", "Platform Security Engineer", "Infrastructure Security Engineer", "Security Automation Engineer"],
+  "Vulnerability Researcher": ["Security Researcher", "Exploit Developer", "0-day Researcher", "Bug Hunter", "Offensive Security Researcher", "Product Security Researcher", "Vulnerability Analyst"],
+  "Malware Analyst": ["Threat Researcher", "Reverse Engineer", "Malware Researcher", "Threat Intelligence Analyst", "DFIR Analyst", "Cyber Threat Analyst"],
+  "AppSec Engineer": ["Application Security Engineer", "Product Security Engineer", "Software Security Engineer", "Security Champion", "Secure Development Lead", "SAST/DAST Engineer"],
+  "Cloud Security Engineer": ["Cloud Security Architect", "AWS/Azure/GCP Security Engineer", "Cloud Security Analyst", "Cloud Infrastructure Security", "CSPM Engineer", "Cloud Native Security Engineer"],
+  "GRC Analyst": ["Security Compliance Analyst", "IT Risk Analyst", "Information Security Analyst (GRC)", "Compliance Officer", "Risk & Compliance Specialist", "Security Policy Analyst", "Audit Analyst"],
+  "Threat Intelligence Analyst": ["Cyber Threat Analyst", "CTI Analyst", "Threat Researcher", "Intelligence Analyst", "Dark Web Analyst", "Strategic Threat Analyst"],
+  "Digital Forensics Analyst": ["DFIR Analyst", "Incident Responder", "Forensic Investigator", "Computer Forensics Examiner", "Cyber Crime Investigator", "eDiscovery Analyst"],
+  "DevSecOps Engineer": ["Security DevOps Engineer", "DevOps Security Engineer", "Pipeline Security Engineer", "AppSec DevOps", "Shift-Left Security Engineer", "Platform Security Engineer"],
+  "Network Security Engineer": ["Firewall Engineer", "Network Security Analyst", "Perimeter Security Engineer", "Infrastructure Security Engineer", "Network Defense Engineer"],
+  "IAM Engineer": ["Identity Engineer", "Access Management Engineer", "IAM Analyst", "Identity Security Engineer", "Privileged Access Engineer", "Directory Services Engineer"],
+  "Privacy Engineer": ["Data Protection Engineer", "Privacy Analyst", "Data Privacy Specialist", "GDPR Specialist", "Privacy Program Manager"],
+  "Bug Bounty Hunter": ["Independent Security Researcher", "Freelance Penetration Tester", "Crowdsourced Security Researcher", "Vulnerability Hunter"],
+  "Reverse Engineer": ["Binary Analyst", "Firmware Analyst", "Software Reverse Engineer", "Malware Reverse Engineer", "Vulnerability Researcher", "Exploit Developer"],
+  "Security Architect": ["Enterprise Security Architect", "Cyber Security Architect", "Solutions Security Architect", "Cloud Security Architect", "Technical Security Architect"],
+};
+
+// Job posting red flags to watch out for
+const jobPostingRedFlags = [
+  { flag: "\"Must have 10+ years experience in technology that's 5 years old\"", severity: "High", explanation: "Unrealistic requirements suggest HR wrote the posting without technical input, or they don't understand the role" },
+  { flag: "\"Rockstar/Ninja/Guru/Wizard wanted\"", severity: "Medium", explanation: "Cringe terminology often indicates immature company culture or unrealistic expectations" },
+  { flag: "\"We're like a family here\"", severity: "Medium", explanation: "Often code for blurred work/life boundaries, expected unpaid overtime, and toxic dynamics" },
+  { flag: "\"Competitive salary\" with no range given", severity: "Medium", explanation: "Usually means below market rate. Transparent companies post salary ranges. In UK, increasingly required." },
+  { flag: "\"Wear multiple hats\" / \"Must do everything\"", severity: "High", explanation: "One person expected to do pentesting, SOC, compliance, IT support = burnout and no career growth" },
+  { flag: "\"Entry level role requiring 3-5 years experience\"", severity: "High", explanation: "Either badly written or attempting to underpay experienced workers" },
+  { flag: "\"Security team of one\"", severity: "High", explanation: "No mentorship, unrealistic expectations, you'll be blamed for all incidents, burnout guaranteed" },
+  { flag: "Listing 20+ required certifications", severity: "Medium", explanation: "No one has all these. Indicates HR doesn't understand security or they're fishing for perfect candidates" },
+  { flag: "\"On-call 24/7\" without compensation mentioned", severity: "High", explanation: "Unpaid on-call is exploitation. Should have clear rotation, compensation, and boundaries" },
+  { flag: "\"Fast-paced environment\" repeated multiple times", severity: "Medium", explanation: "Often means chaotic, understaffed, and reactive rather than proactive security" },
+  { flag: "No mention of training budget or professional development", severity: "Low", explanation: "Security requires continuous learning. No budget = stagnation" },
+  { flag: "\"Must be willing to relocate\" for a desk job", severity: "Medium", explanation: "In 2024+, most security roles can be remote. Mandatory office may indicate outdated culture" },
+  { flag: "Vague job description with buzzwords only", severity: "Medium", explanation: "\"Leverage synergies to optimize cyber posture\" = they don't know what they want" },
+  { flag: "\"Immediate start required\"", severity: "Low", explanation: "May indicate previous person quit suddenly (why?) or poor planning" },
+  { flag: "Interview process with 7+ rounds", severity: "Medium", explanation: "Excessive interviews waste time and often indicate indecisive leadership" },
+  { flag: "No information about team size or reporting structure", severity: "Low", explanation: "You should know who you'd work with and report to before applying" },
+  { flag: "\"Looking for a self-starter who needs no management\"", severity: "Medium", explanation: "Often means no support, no resources, sink or swim" },
+  { flag: "Requiring specific vendor certs for entry-level roles", severity: "Low", explanation: "CISSP for entry level? Shows misunderstanding of certification levels" },
+];
+
+// Portfolio project ideas by career track
+const portfolioProjectIdeas: { track: string; color: string; projects: { name: string; difficulty: string; description: string; skills: string[]; timeEstimate: string }[] }[] = [
+  {
+    track: "Offensive Security / Red Team",
+    color: "#ef4444",
+    projects: [
+      { name: "Custom Vulnerability Scanner", difficulty: "Intermediate", description: "Build a Python-based scanner that checks for common misconfigurations (default creds, open admin panels, version disclosure)", skills: ["Python", "Networking", "HTTP"], timeEstimate: "2-3 weeks" },
+      { name: "Phishing Toolkit", difficulty: "Intermediate", description: "Create a phishing framework with email templates, landing page cloning, and credential capture (for authorized testing only)", skills: ["Python", "HTML/CSS", "SMTP"], timeEstimate: "2-4 weeks" },
+      { name: "Active Directory Attack Lab Writeup", difficulty: "Beginner", description: "Document setting up an AD lab and performing common attacks (Kerberoasting, AS-REP roasting, DCSync)", skills: ["Windows", "AD", "Documentation"], timeEstimate: "1-2 weeks" },
+      { name: "Bug Bounty Writeups", difficulty: "Varies", description: "Document and publish your bug bounty findings (with permission) showing methodology and impact", skills: ["Web Security", "Writing", "Responsible Disclosure"], timeEstimate: "Ongoing" },
+      { name: "C2 Framework (Educational)", difficulty: "Advanced", description: "Build a simple command-and-control framework to understand how attackers operate (lab use only)", skills: ["Python/Go", "Networking", "Encryption"], timeEstimate: "4-8 weeks" },
+      { name: "Automated Recon Tool", difficulty: "Intermediate", description: "Chain together subdomain enumeration, port scanning, and screenshot capture into one workflow", skills: ["Python", "APIs", "Automation"], timeEstimate: "2-3 weeks" },
+    ],
+  },
+  {
+    track: "Defensive Security / Blue Team",
+    color: "#3b82f6",
+    projects: [
+      { name: "SIEM Home Lab with Detection Rules", difficulty: "Beginner", description: "Set up Elastic/Splunk, ingest Windows logs, create detection rules for MITRE ATT&CK techniques", skills: ["SIEM", "Log Analysis", "Detection Engineering"], timeEstimate: "2-3 weeks" },
+      { name: "Threat Hunting Playbook", difficulty: "Intermediate", description: "Document 10+ threat hunting hypotheses with queries, expected results, and response procedures", skills: ["KQL/SPL", "Threat Intel", "Documentation"], timeEstimate: "3-4 weeks" },
+      { name: "Sigma Rules Collection", difficulty: "Intermediate", description: "Write and publish 20+ Sigma detection rules with documentation and test cases", skills: ["Sigma", "YAML", "Detection Logic"], timeEstimate: "4-6 weeks" },
+      { name: "Incident Response Runbooks", difficulty: "Beginner", description: "Create detailed IR runbooks for common scenarios (ransomware, BEC, credential theft)", skills: ["IR", "Documentation", "Process"], timeEstimate: "2-3 weeks" },
+      { name: "Honeypot Network", difficulty: "Intermediate", description: "Deploy honeypots (Cowrie, Dionaea) and analyze attacker behavior patterns", skills: ["Linux", "Networking", "Analysis"], timeEstimate: "2-4 weeks" },
+      { name: "SOC Metrics Dashboard", difficulty: "Intermediate", description: "Build a dashboard tracking MTTD, MTTR, alert volumes, and analyst performance", skills: ["Data Viz", "Python", "SIEM"], timeEstimate: "2-3 weeks" },
+    ],
+  },
+  {
+    track: "Vulnerability Research / Exploit Development",
+    color: "#f59e0b",
+    projects: [
+      { name: "Custom Fuzzer", difficulty: "Advanced", description: "Build a mutation-based fuzzer for a file format (PDF, image) or protocol using Python or Rust", skills: ["Python/Rust", "Fuzzing", "Binary Analysis"], timeEstimate: "4-8 weeks" },
+      { name: "CVE Analysis & Reproduction", difficulty: "Intermediate", description: "Take 5 recent CVEs, reproduce them in a lab, and write detailed technical analyses", skills: ["RE", "Debugging", "Technical Writing"], timeEstimate: "4-6 weeks" },
+      { name: "Exploit Development CTF Writeups", difficulty: "Intermediate", description: "Solve and document pwn challenges from CTFs, explaining each exploitation technique", skills: ["Binary Exploitation", "GDB", "Writing"], timeEstimate: "Ongoing" },
+      { name: "Ghidra/IDA Scripts", difficulty: "Intermediate", description: "Write automation scripts for common RE tasks (string decryption, function identification)", skills: ["Python", "RE", "Scripting"], timeEstimate: "2-4 weeks" },
+      { name: "1-Day Exploit Development", difficulty: "Advanced", description: "Take a patched vulnerability, analyze the diff, and develop a working exploit", skills: ["RE", "Exploitation", "Patch Diffing"], timeEstimate: "2-4 weeks" },
+      { name: "Kernel Module Analysis", difficulty: "Advanced", description: "Reverse engineer a kernel module and document its functionality and potential vulnerabilities", skills: ["Kernel", "RE", "C"], timeEstimate: "4-8 weeks" },
+      { name: "Fuzzing Harness Collection", difficulty: "Intermediate", description: "Write AFL/LibFuzzer harnesses for popular open-source libraries", skills: ["C/C++", "Fuzzing", "Code Analysis"], timeEstimate: "4-6 weeks" },
+    ],
+  },
+  {
+    track: "Security Engineering / DevSecOps",
+    color: "#8b5cf6",
+    projects: [
+      { name: "Secure CI/CD Pipeline", difficulty: "Intermediate", description: "Build a GitHub Actions pipeline with SAST, DAST, secrets scanning, and container scanning", skills: ["GitHub Actions", "Security Tools", "YAML"], timeEstimate: "2-3 weeks" },
+      { name: "Infrastructure as Code Security", difficulty: "Intermediate", description: "Create Terraform modules with built-in security controls and compliance checks", skills: ["Terraform", "AWS/Azure", "Security"], timeEstimate: "3-4 weeks" },
+      { name: "Security Tool Integration", difficulty: "Intermediate", description: "Build integrations between security tools (SIEM → Slack, scanner → Jira)", skills: ["Python", "APIs", "Automation"], timeEstimate: "2-3 weeks" },
+      { name: "Container Security Scanner", difficulty: "Intermediate", description: "Build a tool that scans container images for vulnerabilities, misconfigs, and secrets", skills: ["Python/Go", "Docker", "Security"], timeEstimate: "3-4 weeks" },
+      { name: "Security Metrics Platform", difficulty: "Advanced", description: "Aggregate security data from multiple tools into a unified dashboard with trends", skills: ["Python", "Databases", "Visualization"], timeEstimate: "6-8 weeks" },
+      { name: "Policy-as-Code Library", difficulty: "Intermediate", description: "Create OPA/Rego policies for Kubernetes and cloud resources with tests", skills: ["OPA", "Kubernetes", "Cloud"], timeEstimate: "3-4 weeks" },
+    ],
+  },
+  {
+    track: "GRC / Compliance",
+    color: "#22c55e",
+    projects: [
+      { name: "Compliance Mapping Tool", difficulty: "Intermediate", description: "Build a tool/spreadsheet mapping controls across frameworks (NIST, ISO, SOC2, Cyber Essentials)", skills: ["Research", "Excel/Python", "Frameworks"], timeEstimate: "3-4 weeks" },
+      { name: "Risk Assessment Template", difficulty: "Beginner", description: "Create a comprehensive risk assessment methodology with templates and scoring", skills: ["Risk Management", "Documentation", "Excel"], timeEstimate: "2-3 weeks" },
+      { name: "Security Awareness Training", difficulty: "Beginner", description: "Develop a complete security awareness program with modules, quizzes, and metrics", skills: ["Training", "Communication", "Design"], timeEstimate: "4-6 weeks" },
+      { name: "Vendor Risk Assessment Process", difficulty: "Intermediate", description: "Create a third-party risk management program with questionnaires and scoring", skills: ["Risk", "Process", "Documentation"], timeEstimate: "3-4 weeks" },
+      { name: "Policy Template Library", difficulty: "Beginner", description: "Write 10+ security policies aligned to ISO 27001 with implementation guidance", skills: ["Policy Writing", "ISO 27001", "Documentation"], timeEstimate: "4-6 weeks" },
+    ],
+  },
+  {
+    track: "Malware Analysis / Reverse Engineering",
+    color: "#dc2626",
+    projects: [
+      { name: "Malware Analysis Reports", difficulty: "Intermediate", description: "Analyze 10+ malware samples and publish detailed technical reports with IOCs", skills: ["RE", "Malware Analysis", "Writing"], timeEstimate: "Ongoing" },
+      { name: "YARA Rules Collection", difficulty: "Intermediate", description: "Write and publish 50+ YARA rules for malware families with documentation", skills: ["YARA", "Pattern Recognition", "Research"], timeEstimate: "4-8 weeks" },
+      { name: "Automated Unpacker", difficulty: "Advanced", description: "Build a tool that automatically unpacks common packers (UPX, custom packers)", skills: ["Python", "RE", "PE Format"], timeEstimate: "4-6 weeks" },
+      { name: "Malware Config Extractor", difficulty: "Advanced", description: "Create extractors for malware C2 configs (for a specific family like Emotet, Qakbot)", skills: ["Python", "RE", "Crypto"], timeEstimate: "3-4 weeks" },
+      { name: "Sandbox Evasion Research", difficulty: "Intermediate", description: "Document sandbox/VM detection techniques and demonstrate detection methods", skills: ["RE", "Research", "Documentation"], timeEstimate: "2-3 weeks" },
+      { name: "Malware Traffic Analysis", difficulty: "Intermediate", description: "Analyze network captures from malware, document protocols, extract IOCs", skills: ["Wireshark", "Protocol Analysis", "Network"], timeEstimate: "2-4 weeks" },
+    ],
+  },
+];
+
+// Salary negotiation guide
+const salaryNegotiationGuide = {
+  preparation: [
+    { step: "Research market rates", details: "Use Glassdoor UK, Indeed, Reed, and LinkedIn Salary. Check levels.fyi for tech companies. Ask in Discord communities." },
+    { step: "Know your worth", details: "List your certifications, projects, unique skills. Quantify past impact (reduced incidents by X%, saved £Y)" },
+    { step: "Determine your range", details: "Set a minimum (walk away below this), target (realistic goal), and stretch (ambitious but possible)" },
+    { step: "Research the company", details: "Glassdoor reviews, financial health, recent funding. Well-funded startups and finance pay more." },
+    { step: "Prepare your pitch", details: "3-4 bullet points on why you're worth the premium. Specific examples, not generic claims." },
+  ],
+  scripts: [
+    { scenario: "Initial salary question", response: "\"I'm focused on finding the right fit. I'm flexible on compensation, but based on my research and experience, I'm targeting the £X-Y range. What range did you have in mind?\"" },
+    { scenario: "Offer received", response: "\"Thank you for the offer. I'm excited about this opportunity. Based on my [specific skills/certs/experience] and the market rate for this role, I was hoping for closer to £X. Is there flexibility?\"" },
+    { scenario: "They won't budge on salary", response: "\"I understand there's a budget constraint. Could we discuss other elements - signing bonus, extra annual leave, training budget, remote flexibility, or an accelerated review at 6 months?\"" },
+    { scenario: "Lowball offer", response: "\"I appreciate the offer, but it's significantly below market rate for this role and my experience level. The research I've done puts similar roles at £X-Y. Can you help me understand how this was determined?\"" },
+    { scenario: "Asked about current salary", response: "\"I'd prefer to focus on the value I can bring to this role rather than my current compensation. Based on this role's responsibilities and market rates, I'm targeting £X.\"" },
+    { scenario: "Counter-offer received", response: "Take 24-48 hours: \"Thank you, I'd like some time to consider this fully. When do you need a decision by?\"" },
+  ],
+  ukSpecific: [
+    "UK employers increasingly required to post salary ranges (transparency regulations)",
+    "Consider the full package: pension (5-10% employer contribution is good), private healthcare, training budget (£2-5K common in cyber)",
+    "London weighting is typically +15-25% over regional salaries",
+    "Government/NCSC roles: SC/DV clearance adds £10-25K to your market value",
+    "Big 4 consultancies (Deloitte, PwC, EY, KPMG) often have rigid bands but good benefits",
+    "Contract/day rates are typically 2x salary equivalent (£500/day ≈ £100K salary equivalent)",
+    "Don't forget: 25+ days holiday is standard UK, push for 30 if possible",
+  ],
+  commonMistakes: [
+    { mistake: "Accepting the first offer", fix: "Almost all offers have wiggle room. Always negotiate respectfully - it's expected." },
+    { mistake: "Giving a number first", fix: "Try to get them to state the range first. You might be asking for less than they'd offer." },
+    { mistake: "Only negotiating salary", fix: "Total compensation matters: bonus, equity, training, holidays, remote work, pension." },
+    { mistake: "Not having alternatives", fix: "Your BATNA (best alternative) gives you leverage. Apply broadly, interview widely." },
+    { mistake: "Being apologetic", fix: "Negotiation is professional, not confrontational. State your case confidently." },
+    { mistake: "Lying about other offers", fix: "Never lie. If caught, you lose the offer and reputation." },
+  ],
+};
+
 // Day in the life expanded scenarios
 const dayInLifeScenarios = [
   {
@@ -2737,7 +3202,6 @@ export default function CareerPathsPage() {
             <Chip label="Blue Team" size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
             <Chip label="Engineering" size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
             <Chip label="GRC" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.1), color: "#f59e0b" }} />
-            <Chip label="US Salaries" size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e" }} />
             <Chip label="UK Salaries" size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e" }} />
             <Chip label="Roadmaps" size="small" sx={{ bgcolor: alpha("#ec4899", 0.1), color: "#ec4899" }} />
             <Chip label="AI Security" size="small" sx={{ bgcolor: alpha("#6366f1", 0.1), color: "#6366f1" }} />
@@ -2748,9 +3212,9 @@ export default function CareerPathsPage() {
         {/* Key Stats */}
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {[
-            { label: "Unfilled Jobs (2024)", value: "3.5M+", icon: <WorkIcon />, color: "#ef4444" },
-            { label: "Avg US Salary", value: "$125K", icon: <AttachMoneyIcon />, color: "#22c55e" },
+            { label: "UK Unfilled Jobs", value: "100K+", icon: <WorkIcon />, color: "#ef4444" },
             { label: "Avg UK Salary", value: "£65K", icon: <AttachMoneyIcon />, color: "#22c55e" },
+            { label: "London Premium", value: "+25%", icon: <AttachMoneyIcon />, color: "#22c55e" },
             { label: "Career Tracks", value: "23+", icon: <TimelineIcon />, color: "#f59e0b" },
             { label: "Remote Roles", value: "70%+", icon: <HomeIcon />, color: "#8b5cf6" },
             { label: "Interview Q's", value: "65+", icon: <QuestionAnswerIcon />, color: "#ec4899" },
@@ -2945,6 +3409,9 @@ export default function CareerPathsPage() {
             <Tab label="Getting Started" icon={<SchoolIcon />} iconPosition="start" />
             <Tab label="Personal Guidance" icon={<PersonIcon />} iconPosition="start" />
             <Tab label="Home Lab" icon={<ComputerIcon />} iconPosition="start" />
+            <Tab label="Portfolio Projects" icon={<CodeIcon />} iconPosition="start" />
+            <Tab label="Job Search Tips" icon={<SearchIcon />} iconPosition="start" />
+            <Tab label="Salary Negotiation" icon={<MonetizationOnIcon />} iconPosition="start" />
           </Tabs>
 
           {/* Tab 0: Main Career Tracks */}
@@ -3383,7 +3850,7 @@ export default function CareerPathsPage() {
           <TabPanel value={tabValue} index={2}>
             <Box sx={{ p: 2 }}>
               <Alert severity="info" sx={{ mb: 3 }}>
-                Salaries vary significantly by location, company size, industry, and remote work policy. These figures represent US averages for 2024-2025. See regional multipliers below for location adjustments.
+                🇬🇧 <strong>UK Cybersecurity Salary Guide 2024-2025</strong> - Salaries vary significantly by location (London premium), company size, industry sector, and security clearance level. Finance sector (City of London) and government contractors (with SC/DV clearance) typically pay 20-40% above market rates.
               </Alert>
 
               <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
@@ -3430,14 +3897,14 @@ export default function CareerPathsPage() {
 
               {/* Regional Multipliers */}
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                <PublicIcon sx={{ color: "#3b82f6" }} /> Regional Salary Multipliers
+                <PublicIcon sx={{ color: "#3b82f6" }} /> 🇬🇧 UK Regional & Sector Salary Variations
               </Typography>
               <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
-                      <TableCell sx={{ fontWeight: 700 }}>Region</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Multiplier / Range</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Region / Sector</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Adjustment</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
                     </TableRow>
                   </TableHead>
@@ -3453,55 +3920,29 @@ export default function CareerPathsPage() {
                 </Table>
               </TableContainer>
 
-              {/* UK Salary Guide */}
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                🇬🇧 UK Salary Guide (2024-2025)
-              </Typography>
-              <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
-                      <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: "#22c55e" }}>Junior (0-2 yrs)</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: "#f59e0b" }}>Mid (2-5 yrs)</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: "#ef4444" }}>Senior (5+ yrs)</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: "#8b5cf6" }}>London Premium</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {ukSalaryData.map((row) => (
-                      <TableRow key={row.role} hover>
-                        <TableCell sx={{ fontWeight: 600 }}>{row.role}</TableCell>
-                        <TableCell sx={{ color: "#22c55e" }}>{row.junior}</TableCell>
-                        <TableCell sx={{ color: "#f59e0b" }}>{row.mid}</TableCell>
-                        <TableCell sx={{ color: "#ef4444" }}>{row.senior}</TableCell>
-                        <TableCell sx={{ color: "#8b5cf6", fontWeight: 600 }}>{row.london}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <Alert severity="info" sx={{ mb: 3 }}>
-                <strong>UK Market Note:</strong> UK cybersecurity salaries have grown 15-25% since 2022. Finance sector (City of London) and government contractors (with SC/DV clearance) typically pay 20-40% above market. Remote roles are increasingly common but some enterprise clients require UK-based with occasional office presence.
+              {/* UK Market Info - replaced duplicate UK salary table */}
+              <Alert severity="success" sx={{ mb: 3 }}>
+                <strong>UK Market Note:</strong> UK cybersecurity salaries have grown 15-25% since 2022. The UK has a strong cyber sector with employers including GCHQ, NCSC, major banks (Barclays, HSBC, Lloyds), Big 4 consultancies, and security specialists like NCC Group, BAE Systems, and Mandiant. Remote roles are increasingly common, though some enterprise clients require UK-based presence. Security clearance (SC/DV) significantly increases earning potential in government and defence sectors.
               </Alert>
 
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                      <AttachMoneyIcon sx={{ color: "#22c55e" }} /> Salary Boosters
+                      <AttachMoneyIcon sx={{ color: "#22c55e" }} /> 🇬🇧 UK Salary Boosters
                     </Typography>
                     <List dense>
                       {[
-                        "OSCP/OSWE certification (+$10-25K)",
+                        "SC/DV Security Clearance (+£10-25K)",
+                        "OSCP/OSWE certification (+£5-15K)",
                         "Cloud certifications (AWS/Azure Security)",
-                        "Security clearance (+$15-40K)",
+                        "CREST certifications (highly valued in UK)",
+                        "Cyber Essentials Assessor qualification",
+                        "CHECK Team Leader status",
+                        "City of London finance experience",
                         "Management/leadership experience",
-                        "Niche expertise (malware, cloud, OT/ICS)",
-                        "Big tech or finance industry",
-                        "Remote work from lower COL areas (arbitrage)",
+                        "Niche expertise (OT/ICS, malware, cloud)",
                         "On-call/incident response premium",
-                        "Strong track record with metrics",
                       ].map((item, i) => (
                         <ListItem key={i} sx={{ py: 0.25 }}>
                           <ListItemIcon sx={{ minWidth: 24 }}>
@@ -3516,19 +3957,19 @@ export default function CareerPathsPage() {
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                      <AssessmentIcon sx={{ color: "#3b82f6" }} /> Highest Paying Industries
+                      <AssessmentIcon sx={{ color: "#3b82f6" }} /> 🇬🇧 Highest Paying UK Employers
                     </Typography>
                     <List dense>
                       {[
-                        "Finance & Banking (+20-40%)",
-                        "Big Tech (FAANG/MAANG)",
-                        "Cryptocurrency/Web3/FinTech",
-                        "Defense & Government Contractors",
-                        "Healthcare (especially with clearance)",
-                        "Consulting (Big 4, boutique security)",
-                        "Critical Infrastructure/Energy",
-                        "Hedge Funds & Trading Firms",
-                        "Gaming (large studios)",
+                        "City of London Banks (Barclays, HSBC, Lloyds, NatWest)",
+                        "Investment Banks (Goldman Sachs, JP Morgan, Morgan Stanley)",
+                        "Government/GCHQ/NCSC (with clearance)",
+                        "Defence Contractors (BAE Systems, QinetiQ, Thales)",
+                        "Big 4 Consultancies (Deloitte, EY, PwC, KPMG)",
+                        "Security Boutiques (NCC Group, WithSecure, Context IS)",
+                        "Big Tech UK (Google, Microsoft, Meta, Amazon)",
+                        "FinTech (Revolut, Monzo, Wise, Checkout.com)",
+                        "Critical Infrastructure (National Grid, water utilities)",
                       ].map((item, i) => (
                         <ListItem key={i} sx={{ py: 0.25 }}>
                           <ListItemIcon sx={{ minWidth: 24 }}>
@@ -3543,7 +3984,7 @@ export default function CareerPathsPage() {
               </Grid>
 
               <Alert severity="success" sx={{ mt: 3 }}>
-                <strong>Negotiation Tip:</strong> Always research salary ranges before interviews. Use levels.fyi, Glassdoor, and Blind for data. Don't give a number first - let them make an offer. Most offers have 10-20% negotiation room.
+                <strong>UK Negotiation Tips:</strong> Research salary ranges on Glassdoor UK, Indeed, and Reed before interviews. Check the CyberSecurityJobsite for market rates. Many UK employers are open to negotiation - don't accept the first offer. Consider the full package: pension contributions (often 5-10%), private healthcare, training budgets (common in cyber), and flexible/remote working options.
               </Alert>
             </Box>
           </TabPanel>
@@ -5130,6 +5571,294 @@ export default function CareerPathsPage() {
 
               <Alert severity="success" sx={{ mt: 3 }}>
                 <strong>Start Today!</strong> You don't need a perfect setup to begin learning. Start with free tools and platforms, then expand your lab as your skills grow. The best lab is the one you actually use!
+              </Alert>
+            </Box>
+          </TabPanel>
+
+          {/* Tab 12: Portfolio Projects */}
+          <TabPanel value={tabValue} index={12}>
+            <Box sx={{ p: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <strong>Build Your Portfolio!</strong> Projects demonstrate real skills better than certifications alone. These project ideas are designed to showcase your abilities to potential employers and build practical experience.
+              </Alert>
+
+              {portfolioProjectIdeas.map((trackProjects) => (
+                <Accordion key={trackProjects.track} sx={{ mb: 2, "&:before": { display: "none" }, borderRadius: 2, border: `1px solid ${alpha(trackProjects.color, 0.2)}` }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(trackProjects.color, 0.05) }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: trackProjects.color }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{trackProjects.track}</Typography>
+                      <Chip label={`${trackProjects.projects.length} projects`} size="small" sx={{ bgcolor: alpha(trackProjects.color, 0.1) }} />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      {trackProjects.projects.map((project, idx) => (
+                        <Grid item xs={12} md={6} key={idx}>
+                          <Paper sx={{ p: 2, height: "100%", border: `1px solid ${alpha(trackProjects.color, 0.15)}`, borderRadius: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{project.name}</Typography>
+                              <Chip 
+                                label={project.difficulty} 
+                                size="small" 
+                                sx={{ 
+                                  fontSize: "0.65rem",
+                                  bgcolor: project.difficulty === "Beginner" ? alpha("#22c55e", 0.2) : 
+                                           project.difficulty === "Intermediate" ? alpha("#f59e0b", 0.2) : alpha("#ef4444", 0.2),
+                                  color: project.difficulty === "Beginner" ? "#22c55e" : 
+                                         project.difficulty === "Intermediate" ? "#f59e0b" : "#ef4444"
+                                }} 
+                              />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                              {project.description}
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                              {project.skills.map((skill) => (
+                                <Chip key={skill} label={skill} size="small" variant="outlined" sx={{ fontSize: "0.6rem", height: 20 }} />
+                              ))}
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              ⏱️ Estimated time: {project.timeEstimate}
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+
+              <Paper sx={{ p: 3, mt: 3, bgcolor: alpha("#22c55e", 0.05), borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  💡 Portfolio Best Practices
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { title: "Document Everything", desc: "Write READMEs, architecture diagrams, and lessons learned for every project" },
+                    { title: "Use Version Control", desc: "Push all projects to GitHub with meaningful commit messages" },
+                    { title: "Show Your Process", desc: "Include challenges you faced and how you solved them - this shows problem-solving skills" },
+                    { title: "Keep it Legal", desc: "Only include authorized work. For bug bounty, get permission before publishing" },
+                    { title: "Quality Over Quantity", desc: "3 well-documented projects beat 10 half-finished ones" },
+                    { title: "Make it Accessible", desc: "Add installation instructions, screenshots, and demo videos when possible" },
+                  ].map((tip, idx) => (
+                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                      <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>{tip.title}</Typography>
+                        <Typography variant="body2" color="text.secondary">{tip.desc}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Box>
+          </TabPanel>
+
+          {/* Tab 13: Job Search Tips */}
+          <TabPanel value={tabValue} index={13}>
+            <Box sx={{ p: 2 }}>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <strong>Job Search Strategy:</strong> Finding your first (or next) security role requires more than just applying. Learn to spot red flags, understand alternative job titles, and approach your search strategically.
+              </Alert>
+
+              {/* Alternative Job Titles */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <WorkIcon sx={{ color: "#3b82f6" }} /> Alternative Job Titles
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                The same role often has different names across companies. Search for all these variations to maximize opportunities:
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {Object.entries(alternativeJobTitles).slice(0, 12).map(([role, titles]) => (
+                  <Grid item xs={12} sm={6} md={4} key={role}>
+                    <Paper sx={{ p: 2, height: "100%", borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#3b82f6" }}>{role}</Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {titles.map((title) => (
+                          <Chip key={title} label={title} size="small" variant="outlined" sx={{ fontSize: "0.6rem", height: 22 }} />
+                        ))}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Job Posting Red Flags */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ color: "#ef4444" }} /> Job Posting Red Flags
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Learn to identify problematic job postings before wasting time on applications:
+              </Typography>
+              <TableContainer component={Paper} sx={{ mb: 4, borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha("#ef4444", 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Red Flag</TableCell>
+                      <TableCell sx={{ fontWeight: 700, width: 80 }}>Severity</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Why It's a Problem</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {jobPostingRedFlags.map((item, idx) => (
+                      <TableRow key={idx} sx={{ "&:hover": { bgcolor: alpha("#ef4444", 0.03) } }}>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontStyle: "italic" }}>{item.flag}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={item.severity} 
+                            size="small" 
+                            sx={{ 
+                              fontSize: "0.65rem",
+                              bgcolor: item.severity === "High" ? alpha("#ef4444", 0.2) : 
+                                       item.severity === "Medium" ? alpha("#f59e0b", 0.2) : alpha("#22c55e", 0.2),
+                              color: item.severity === "High" ? "#ef4444" : 
+                                     item.severity === "Medium" ? "#f59e0b" : "#22c55e"
+                            }} 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">{item.explanation}</Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Green Flags */}
+              <Paper sx={{ p: 3, bgcolor: alpha("#22c55e", 0.05), borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                  ✅ Green Flags - Signs of a Good Employer
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    "Transparent salary range posted",
+                    "Clear job responsibilities",
+                    "Mentions training/conference budget",
+                    "Realistic experience requirements",
+                    "Team size and structure mentioned",
+                    "Work-life balance emphasized",
+                    "Clear interview process outlined",
+                    "Company security certifications (ISO, SOC2)",
+                    "Employee testimonials or Glassdoor reviews",
+                    "Flexible/remote work options",
+                    "Career progression path mentioned",
+                    "Modern tech stack listed",
+                  ].map((flag, idx) => (
+                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} />
+                        <Typography variant="body2">{flag}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Box>
+          </TabPanel>
+
+          {/* Tab 14: Salary Negotiation */}
+          <TabPanel value={tabValue} index={14}>
+            <Box sx={{ p: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <strong>Salary Negotiation:</strong> Most offers have room for negotiation. Being prepared with research and scripts can add £5-20K to your compensation. Never accept the first offer without at least asking.
+              </Alert>
+
+              {/* Preparation Steps */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <ChecklistIcon sx={{ color: "#3b82f6" }} /> Preparation Checklist
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {salaryNegotiationGuide.preparation.map((item, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Box sx={{ 
+                          width: 24, 
+                          height: 24, 
+                          borderRadius: "50%", 
+                          bgcolor: alpha("#3b82f6", 0.2), 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          color: "#3b82f6"
+                        }}>
+                          {idx + 1}
+                        </Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.step}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">{item.details}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Negotiation Scripts */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <QuestionAnswerIcon sx={{ color: "#22c55e" }} /> Negotiation Scripts
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Proven responses for common negotiation scenarios. Adapt these to your situation:
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {salaryNegotiationGuide.scripts.map((item, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Paper sx={{ p: 2, height: "100%", borderRadius: 2, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
+                        📌 {item.scenario}
+                      </Typography>
+                      <Paper sx={{ p: 1.5, bgcolor: "background.paper", borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                          {item.response}
+                        </Typography>
+                      </Paper>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* UK Specific Tips */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}>
+                  🇬🇧 UK-Specific Negotiation Tips
+                </Typography>
+                <Grid container spacing={2}>
+                  {salaryNegotiationGuide.ukSpecific.map((tip, idx) => (
+                    <Grid item xs={12} sm={6} key={idx}>
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                        <StarIcon sx={{ color: "#8b5cf6", fontSize: 18, mt: 0.3 }} />
+                        <Typography variant="body2">{tip}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Common Mistakes */}
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <ErrorOutlineIcon sx={{ color: "#ef4444" }} /> Common Negotiation Mistakes
+              </Typography>
+              <Grid container spacing={2}>
+                {salaryNegotiationGuide.commonMistakes.map((item, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Paper sx={{ p: 2, height: "100%", borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 0.5 }}>
+                        ❌ {item.mistake}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        ✅ {item.fix}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Alert severity="success" sx={{ mt: 3 }}>
+                <strong>Remember:</strong> Negotiation is a normal part of the hiring process. Employers expect it. Being prepared and professional will never cost you an offer - but not negotiating might cost you thousands.
               </Alert>
             </Box>
           </TabPanel>

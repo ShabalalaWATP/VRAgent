@@ -1331,102 +1331,1250 @@ export default function SwiftProgrammingPage() {
             </Paper>
           </Paper>
 
-          {/* Remaining sections as placeholders */}
-          <TopicPlaceholder
-            id="operators"
-            title="Operators & Expressions"
-            icon={<SwapHorizIcon />}
-            color={accentColor}
-            description="Arithmetic, comparison, logical, range operators (..., ..<), nil coalescing (??), optional chaining (?.), and custom operator overloading."
-          />
+          {/* Operators & Expressions Section */}
+          <Paper id="operators" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#E53E3E", 0.15), color: "#E53E3E", width: 48, height: 48 }}>
+                <SwapHorizIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Operators & Expressions
+              </Typography>
+            </Box>
 
-          <TopicPlaceholder
-            id="functions"
-            title="Functions & Closures"
-            icon={<ExtensionIcon />}
-            color={accentColor}
-            description="Function syntax, argument labels, default values, variadic parameters, inout parameters, closures (trailing syntax, capturing values), and higher-order functions."
-          />
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide to Operators
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Operators</strong> are special symbols that perform operations on values. Think of them as verbs in a sentence—they describe what action to take. Swift has familiar operators like + and -, but also powerful unique ones like <code>??</code> (nil coalescing) and <code>...</code> (ranges) that make code more expressive and safe.
+              </Typography>
+            </Box>
 
-          <TopicPlaceholder
-            id="optionals"
-            title="Optionals"
-            icon={<SecurityIcon />}
-            color={accentColor}
-            description="Deep dive into optionals: optional binding (if let, guard let), optional chaining, nil coalescing, force unwrapping, implicitly unwrapped optionals, and best practices."
-          />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Arithmetic Operators
+            </Typography>
 
-          <TopicPlaceholder
-            id="collections"
-            title="Collections"
-            icon={<StorageIcon />}
-            color={accentColor}
-            description="Arrays, Sets, Dictionaries, collection operations (map, filter, reduce, compactMap, flatMap), subscripts, and iterating collections."
-          />
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>let</span> a = <span style={{ color: "#bd93f9" }}>10</span>, b = <span style={{ color: "#bd93f9" }}>3</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(a + b)  <span style={{ color: "#6272a4" }}>// 13 - Addition</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(a - b)  <span style={{ color: "#6272a4" }}>// 7  - Subtraction</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(a * b)  <span style={{ color: "#6272a4" }}>// 30 - Multiplication</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(a / b)  <span style={{ color: "#6272a4" }}>// 3  - Division (integer)</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(a % b)  <span style={{ color: "#6272a4" }}>// 1  - Remainder (modulo)</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Swift prevents overflow by default (crashes if overflow)</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// Use overflow operators for wrapping behavior:</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> max = <span style={{ color: "#8be9fd" }}>UInt8</span>.max  <span style={{ color: "#6272a4" }}>// 255</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// let overflow = max + 1  // Crash! Overflow</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> wrapped = max &amp;+ <span style={{ color: "#bd93f9" }}>1</span>  <span style={{ color: "#6272a4" }}>// 0 (wraps around)</span>
+              </Typography>
+            </Paper>
 
-          <TopicPlaceholder
-            id="structs"
-            title="Structs & Classes"
-            icon={<ClassIcon />}
-            color={accentColor}
-            description="Value types vs reference types, properties (stored, computed, lazy, observers), methods, initializers, deinit, inheritance, and when to use struct vs class."
-          />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Comparison & Logical Operators
+            </Typography>
 
-          <TopicPlaceholder
-            id="enums"
-            title="Enumerations"
-            icon={<ViewModuleIcon />}
-            color={accentColor}
-            description="Enum basics, raw values, associated values, recursive enums, pattern matching with enums, and using enums to model state."
-          />
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Comparison operators return Bool</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> == <span style={{ color: "#bd93f9" }}>5</span>   <span style={{ color: "#6272a4" }}>// true  - Equal</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> != <span style={{ color: "#bd93f9" }}>3</span>   <span style={{ color: "#6272a4" }}>// true  - Not equal</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> {">"} <span style={{ color: "#bd93f9" }}>3</span>    <span style={{ color: "#6272a4" }}>// true  - Greater than</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> {"<"} <span style={{ color: "#bd93f9" }}>3</span>    <span style={{ color: "#6272a4" }}>// false - Less than</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> {">"}= <span style={{ color: "#bd93f9" }}>5</span>   <span style={{ color: "#6272a4" }}>// true  - Greater or equal</span>{"\n"}
+                <span style={{ color: "#bd93f9" }}>5</span> {"<"}= <span style={{ color: "#bd93f9" }}>5</span>   <span style={{ color: "#6272a4" }}>// true  - Less or equal</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Logical operators (combine Bools)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> hasKey = <span style={{ color: "#ff79c6" }}>true</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> doorOpen = <span style={{ color: "#ff79c6" }}>false</span>{"\n"}
+                {"\n"}
+                !hasKey              <span style={{ color: "#6272a4" }}>// false - NOT (negation)</span>{"\n"}
+                hasKey && doorOpen   <span style={{ color: "#6272a4" }}>// false - AND (both must be true)</span>{"\n"}
+                hasKey || doorOpen   <span style={{ color: "#6272a4" }}>// true  - OR (at least one true)</span>
+              </Typography>
+            </Paper>
 
-          <TopicPlaceholder
-            id="protocols"
-            title="Protocols"
-            icon={<LayersIcon />}
-            color={accentColor}
-            description="Protocol declaration, protocol conformance, protocol extensions with default implementations, protocol-oriented programming, and common protocols (Equatable, Hashable, Codable)."
-          />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Range Operators (Swift's Special Power)
+            </Typography>
 
-          <TopicPlaceholder
-            id="error-handling"
-            title="Error Handling"
-            icon={<BugReportIcon />}
-            color={accentColor}
-            description="Throwing functions, do-catch, try/try?/try!, error propagation, defining custom errors, and Result type."
-          />
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Closed range: includes both endpoints</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>for</span> i <span style={{ color: "#ff79c6" }}>in</span> <span style={{ color: "#bd93f9" }}>1</span>...<span style={{ color: "#bd93f9" }}>5</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(i)  <span style={{ color: "#6272a4" }}>// 1, 2, 3, 4, 5</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Half-open range: excludes upper bound (great for arrays)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> names = [<span style={{ color: "#f1fa8c" }}>"A"</span>, <span style={{ color: "#f1fa8c" }}>"B"</span>, <span style={{ color: "#f1fa8c" }}>"C"</span>]{"\n"}
+                <span style={{ color: "#ff79c6" }}>for</span> i <span style={{ color: "#ff79c6" }}>in</span> <span style={{ color: "#bd93f9" }}>0</span>..{"<"}names.count {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(names[i])  <span style={{ color: "#6272a4" }}>// A, B, C (no out of bounds!)</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// One-sided ranges</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> items = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>, <span style={{ color: "#bd93f9" }}>5</span>]{"\n"}
+                items[<span style={{ color: "#bd93f9" }}>2</span>...]    <span style={{ color: "#6272a4" }}>// [3, 4, 5] - from index 2 to end</span>{"\n"}
+                items[..{"<"}<span style={{ color: "#bd93f9" }}>3</span>]    <span style={{ color: "#6272a4" }}>// [1, 2, 3] - from start to index 2</span>{"\n"}
+                items[...<span style={{ color: "#bd93f9" }}>2</span>]    <span style={{ color: "#6272a4" }}>// [1, 2, 3] - from start through index 2</span>
+              </Typography>
+            </Paper>
 
-          <TopicPlaceholder
-            id="generics"
-            title="Generics"
-            icon={<AutoFixHighIcon />}
-            color={accentColor}
-            description="Generic functions, generic types, type constraints, associated types, where clauses, and building reusable, type-safe code."
-          />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Nil Coalescing & Optional Chaining
+            </Typography>
 
-          <TopicPlaceholder
-            id="concurrency"
-            title="Concurrency"
-            icon={<SyncIcon />}
-            color={accentColor}
-            description="async/await, Task, TaskGroup, actors for data isolation, MainActor, Sendable protocol, structured concurrency, and migrating from GCD/completion handlers."
-          />
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Nil coalescing (??) provides default for nil</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> username: <span style={{ color: "#8be9fd" }}>String</span>? = <span style={{ color: "#ff79c6" }}>nil</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> displayName = username ?? <span style={{ color: "#f1fa8c" }}>"Anonymous"</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(displayName)  <span style={{ color: "#6272a4" }}>// "Anonymous"</span>{"\n"}
+                {"\n"}
+                username = <span style={{ color: "#f1fa8c" }}>"Alice"</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> name = username ?? <span style={{ color: "#f1fa8c" }}>"Anonymous"</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(name)  <span style={{ color: "#6272a4" }}>// "Alice"</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Optional chaining (?.) safely accesses properties/methods</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Person</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> address: <span style={{ color: "#8be9fd" }}>Address</span>?{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Address</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> city: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> person: <span style={{ color: "#8be9fd" }}>Person</span>? = Person(address: <span style={{ color: "#ff79c6" }}>nil</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> city = person?.address?.city  <span style={{ color: "#6272a4" }}>// nil (safely, no crash)</span>
+              </Typography>
+            </Paper>
+          </Paper>
 
-          <TopicPlaceholder
-            id="swiftui"
-            title="SwiftUI"
-            icon={<PhoneIphoneIcon />}
-            color={accentColor}
-            description="Declarative UI with SwiftUI: Views, @State, @Binding, @ObservedObject, @EnvironmentObject, navigation, animations, and building multi-platform apps."
-          />
+          {/* Functions & Closures Section */}
+          <Paper id="functions" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#9F7AEA", 0.15), color: "#9F7AEA", width: 48, height: 48 }}>
+                <ExtensionIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Functions & Closures
+              </Typography>
+            </Box>
 
-          <TopicPlaceholder
-            id="advanced"
-            title="Advanced Topics"
-            icon={<DeveloperBoardIcon />}
-            color={accentColor}
-            description="Memory management (ARC, strong/weak/unowned), opaque types (some), property wrappers, result builders, macros (Swift 5.9+), and interoperability with Objective-C."
-          />
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Functions</strong> are reusable blocks of code that perform a specific task. Think of them like recipes—you define the steps once, then use the recipe whenever you need it. <strong>Closures</strong> are like anonymous functions you can pass around—similar to JavaScript's arrow functions. They're essential for Swift's functional programming features.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#9F7AEA" }}>
+              Function Basics
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Basic function with parameters and return type</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>greet</span>(person: <span style={{ color: "#8be9fd" }}>String</span>) -{">"} <span style={{ color: "#8be9fd" }}>String</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#f1fa8c" }}>"Hello, </span>\(<span style={{ color: "#ff79c6" }}>person</span>)<span style={{ color: "#f1fa8c" }}>!"</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#50fa7b" }}>greet</span>(person: <span style={{ color: "#f1fa8c" }}>"Alice"</span>))  <span style={{ color: "#6272a4" }}>// "Hello, Alice!"</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Function with no parameters, no return value</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>sayHello</span>() {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Hello!"</span>){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Multiple return values with tuples</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>minMax</span>(array: [<span style={{ color: "#8be9fd" }}>Int</span>]) -{">"} (min: <span style={{ color: "#8be9fd" }}>Int</span>, max: <span style={{ color: "#8be9fd" }}>Int</span>)? {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>guard</span> !array.isEmpty <span style={{ color: "#ff79c6" }}>else</span> {"{"} <span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#ff79c6" }}>nil</span> {"}"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> (array.min()!, array.max()!){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>if let</span> result = <span style={{ color: "#50fa7b" }}>minMax</span>(array: [<span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>4</span>, <span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>5</span>]) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Min: </span>\(<span style={{ color: "#ff79c6" }}>result.min</span>)<span style={{ color: "#f1fa8c" }}>, Max: </span>\(<span style={{ color: "#ff79c6" }}>result.max</span>)<span style={{ color: "#f1fa8c" }}>"</span>)  <span style={{ color: "#6272a4" }}>// Min: 1, Max: 5</span>{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#9F7AEA" }}>
+              Argument Labels & Parameter Names
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Argument label (external) vs parameter name (internal)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>greet</span>(person name: <span style={{ color: "#8be9fd" }}>String</span>) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Hello, </span>\(<span style={{ color: "#ff79c6" }}>name</span>)<span style={{ color: "#f1fa8c" }}>!"</span>)  <span style={{ color: "#6272a4" }}>// Use 'name' inside</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>greet</span>(person: <span style={{ color: "#f1fa8c" }}>"Bob"</span>)  <span style={{ color: "#6272a4" }}>// Use 'person' when calling</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Omit argument label with underscore</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>double</span>(_ number: <span style={{ color: "#8be9fd" }}>Int</span>) -{">"} <span style={{ color: "#8be9fd" }}>Int</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> number * <span style={{ color: "#bd93f9" }}>2</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#50fa7b" }}>double</span>(<span style={{ color: "#bd93f9" }}>5</span>))  <span style={{ color: "#6272a4" }}>// 10 - cleaner call site</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Default parameter values</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>greet</span>(name: <span style={{ color: "#8be9fd" }}>String</span>, greeting: <span style={{ color: "#8be9fd" }}>String</span> = <span style={{ color: "#f1fa8c" }}>"Hello"</span>) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"\(greeting), \(name)!"</span>){"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>greet</span>(name: <span style={{ color: "#f1fa8c" }}>"Alice"</span>)                <span style={{ color: "#6272a4" }}>// "Hello, Alice!"</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>greet</span>(name: <span style={{ color: "#f1fa8c" }}>"Alice"</span>, greeting: <span style={{ color: "#f1fa8c" }}>"Hi"</span>)  <span style={{ color: "#6272a4" }}>// "Hi, Alice!"</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#9F7AEA" }}>
+              Closures (Anonymous Functions)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Full closure syntax</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> addClosure = {"{"} (a: <span style={{ color: "#8be9fd" }}>Int</span>, b: <span style={{ color: "#8be9fd" }}>Int</span>) -{">"} <span style={{ color: "#8be9fd" }}>Int</span> <span style={{ color: "#ff79c6" }}>in</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> a + b{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(addClosure(<span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>))  <span style={{ color: "#6272a4" }}>// 7</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Shortened versions (type inference)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> numbers = [<span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>4</span>, <span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>5</span>]{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Full form</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sorted1 = numbers.<span style={{ color: "#50fa7b" }}>sorted</span>(by: {"{"} (a: <span style={{ color: "#8be9fd" }}>Int</span>, b: <span style={{ color: "#8be9fd" }}>Int</span>) -{">"} <span style={{ color: "#8be9fd" }}>Bool</span> <span style={{ color: "#ff79c6" }}>in</span> a {"<"} b {"}"}){"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Inferred types</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sorted2 = numbers.<span style={{ color: "#50fa7b" }}>sorted</span>(by: {"{"} a, b <span style={{ color: "#ff79c6" }}>in</span> a {"<"} b {"}"}){"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Shorthand argument names ($0, $1, ...)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sorted3 = numbers.<span style={{ color: "#50fa7b" }}>sorted</span>(by: {"{"} $0 {"<"} $1 {"}"}){"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Operator as closure</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sorted4 = numbers.<span style={{ color: "#50fa7b" }}>sorted</span>(by: {"<"}){"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Trailing closure syntax (closure is last argument)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sorted5 = numbers.<span style={{ color: "#50fa7b" }}>sorted</span> {"{"} $0 {"<"} $1 {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#9F7AEA" }}>
+              Higher-Order Functions
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>let</span> numbers = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>, <span style={{ color: "#bd93f9" }}>5</span>]{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// map: transform each element</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> doubled = numbers.<span style={{ color: "#50fa7b" }}>map</span> {"{"} $0 * <span style={{ color: "#bd93f9" }}>2</span> {"}"}  <span style={{ color: "#6272a4" }}>// [2, 4, 6, 8, 10]</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// filter: keep elements matching condition</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> evens = numbers.<span style={{ color: "#50fa7b" }}>filter</span> {"{"} $0 % <span style={{ color: "#bd93f9" }}>2</span> == <span style={{ color: "#bd93f9" }}>0</span> {"}"}  <span style={{ color: "#6272a4" }}>// [2, 4]</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// reduce: combine into single value</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sum = numbers.<span style={{ color: "#50fa7b" }}>reduce</span>(<span style={{ color: "#bd93f9" }}>0</span>) {"{"} $0 + $1 {"}"}  <span style={{ color: "#6272a4" }}>// 15</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sum2 = numbers.<span style={{ color: "#50fa7b" }}>reduce</span>(<span style={{ color: "#bd93f9" }}>0</span>, +)           <span style={{ color: "#6272a4" }}>// 15 (same)</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Chaining</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> result = numbers{"\n"}
+                {"    "}.<span style={{ color: "#50fa7b" }}>filter</span> {"{"} $0 % <span style={{ color: "#bd93f9" }}>2</span> == <span style={{ color: "#bd93f9" }}>0</span> {"}"}  <span style={{ color: "#6272a4" }}>// [2, 4]</span>{"\n"}
+                {"    "}.<span style={{ color: "#50fa7b" }}>map</span> {"{"} $0 * <span style={{ color: "#bd93f9" }}>10</span> {"}"}         <span style={{ color: "#6272a4" }}>// [20, 40]</span>{"\n"}
+                {"    "}.<span style={{ color: "#50fa7b" }}>reduce</span>(<span style={{ color: "#bd93f9" }}>0</span>, +)            <span style={{ color: "#6272a4" }}>// 60</span>
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Optionals Deep Dive Section */}
+          <Paper id="optionals" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#ED8936", 0.15), color: "#ED8936", width: 48, height: 48 }}>
+                <SecurityIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Optionals Deep Dive
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                The Billion-Dollar Mistake—Solved!
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                Tony Hoare, inventor of null references, called them his "billion-dollar mistake" because they've caused countless crashes and bugs. Swift's <strong>optionals</strong> solve this elegantly: a value is either <em>present</em> or <em>absent (nil)</em>, and the type system forces you to handle both cases. This single feature eliminates an entire category of runtime crashes.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ED8936" }}>
+              What Are Optionals?
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// An optional can hold a value OR nil</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>? = <span style={{ color: "#f1fa8c" }}>"Alice"</span>   <span style={{ color: "#6272a4" }}>// Has a value</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> age: <span style={{ color: "#8be9fd" }}>Int</span>? = <span style={{ color: "#ff79c6" }}>nil</span>             <span style={{ color: "#6272a4" }}>// No value</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Think of optional as a box that might be empty:</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// String?  =  Box that contains String | empty box (nil)</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// String   =  Always contains a String (never empty)</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// You can't use an optional directly as its wrapped type</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// let greeting = "Hello, " + name   // Error!</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// You must "unwrap" it first to access the value inside</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ED8936" }}>
+              Safe Unwrapping: if let & guard let
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>var</span> username: <span style={{ color: "#8be9fd" }}>String</span>? = <span style={{ color: "#f1fa8c" }}>"Alice"</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// if let: unwrap and use in scope</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>if let</span> name = username {"{"}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// 'name' is String (not String?) - guaranteed not nil here</span>{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Hello, </span>\(<span style={{ color: "#ff79c6" }}>name</span>)<span style={{ color: "#f1fa8c" }}>!"</span>){"\n"}
+                {"}"} <span style={{ color: "#ff79c6" }}>else</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"No username"</span>){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Swift 5.7+: shorthand when variable name matches</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>if let</span> username {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Hello, </span>\(<span style={{ color: "#ff79c6" }}>username</span>)<span style={{ color: "#f1fa8c" }}>!"</span>)  <span style={{ color: "#6272a4" }}>// username is unwrapped</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// guard let: unwrap with early exit (great for functions)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>greetUser</span>(_ username: <span style={{ color: "#8be9fd" }}>String</span>?) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>guard let</span> name = username <span style={{ color: "#ff79c6" }}>else</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"No name provided"</span>){"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span>  <span style={{ color: "#6272a4" }}>// Must exit scope</span>{"\n"}
+                {"    }"}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// 'name' is available for rest of function</span>{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Hello, </span>\(<span style={{ color: "#ff79c6" }}>name</span>)<span style={{ color: "#f1fa8c" }}>!"</span>){"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ED8936" }}>
+              Nil Coalescing & Force Unwrapping
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>var</span> optionalName: <span style={{ color: "#8be9fd" }}>String</span>? = <span style={{ color: "#ff79c6" }}>nil</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Nil coalescing: provide default if nil</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> displayName = optionalName ?? <span style={{ color: "#f1fa8c" }}>"Guest"</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(displayName)  <span style={{ color: "#6272a4" }}>// "Guest"</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Force unwrapping with ! (DANGER: crashes if nil!)</span>{"\n"}
+                optionalName = <span style={{ color: "#f1fa8c" }}>"Alice"</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> forced = optionalName!  <span style={{ color: "#6272a4" }}>// "Alice" - but risky!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// optionalName = nil</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// let crash = optionalName!  // Fatal error: nil!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Only force unwrap when you're 100% certain it's not nil</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// Prefer if let, guard let, or ?? instead</span>
+              </Typography>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#f44336", 0.1), border: `1px solid ${alpha("#f44336", 0.3)}`, mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f44336", mb: 1 }}>
+                Warning: Force Unwrapping
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+                Using <code>!</code> to force unwrap is dangerous! If the value is nil, your app crashes. Use it only when you're absolutely certain the value exists (like immediately after assignment). Prefer <code>if let</code>, <code>guard let</code>, or <code>??</code> for safe handling.
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Collections Section */}
+          <Paper id="collections" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#4299E1", 0.15), color: "#4299E1", width: 48, height: 48 }}>
+                <StorageIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Collections
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                Swift has three primary collection types: <strong>Array</strong> (ordered list), <strong>Set</strong> (unordered unique values), and <strong>Dictionary</strong> (key-value pairs). All are generic, type-safe, and come with powerful functional methods like <code>map</code>, <code>filter</code>, and <code>reduce</code>.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#4299E1" }}>
+              Arrays
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Creating arrays</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> numbers: [<span style={{ color: "#8be9fd" }}>Int</span>] = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>]   <span style={{ color: "#6272a4" }}>// Explicit type</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> names = [<span style={{ color: "#f1fa8c" }}>"Alice"</span>, <span style={{ color: "#f1fa8c" }}>"Bob"</span>]        <span style={{ color: "#6272a4" }}>// Inferred [String]</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> empty: [<span style={{ color: "#8be9fd" }}>String</span>] = []                <span style={{ color: "#6272a4" }}>// Empty array</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> zeros = <span style={{ color: "#8be9fd" }}>Array</span>(repeating: <span style={{ color: "#bd93f9" }}>0</span>, count: <span style={{ color: "#bd93f9" }}>5</span>)  <span style={{ color: "#6272a4" }}>// [0,0,0,0,0]</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Accessing & modifying</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(numbers[<span style={{ color: "#bd93f9" }}>0</span>])         <span style={{ color: "#6272a4" }}>// 1 (first element)</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(numbers.first)       <span style={{ color: "#6272a4" }}>// Optional(1) - safe</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(numbers.count)       <span style={{ color: "#6272a4" }}>// 3</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(numbers.isEmpty)     <span style={{ color: "#6272a4" }}>// false</span>{"\n"}
+                {"\n"}
+                numbers.<span style={{ color: "#50fa7b" }}>append</span>(<span style={{ color: "#bd93f9" }}>4</span>)           <span style={{ color: "#6272a4" }}>// [1, 2, 3, 4]</span>{"\n"}
+                numbers += [<span style={{ color: "#bd93f9" }}>5</span>, <span style={{ color: "#bd93f9" }}>6</span>]           <span style={{ color: "#6272a4" }}>// [1, 2, 3, 4, 5, 6]</span>{"\n"}
+                numbers.<span style={{ color: "#50fa7b" }}>insert</span>(<span style={{ color: "#bd93f9" }}>0</span>, at: <span style={{ color: "#bd93f9" }}>0</span>)    <span style={{ color: "#6272a4" }}>// [0, 1, 2, 3, 4, 5, 6]</span>{"\n"}
+                numbers.<span style={{ color: "#50fa7b" }}>remove</span>(at: <span style={{ color: "#bd93f9" }}>0</span>)        <span style={{ color: "#6272a4" }}>// [1, 2, 3, 4, 5, 6]</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Slicing with ranges</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> slice = numbers[<span style={{ color: "#bd93f9" }}>1</span>...<span style={{ color: "#bd93f9" }}>3</span>]  <span style={{ color: "#6272a4" }}>// [2, 3, 4]</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#4299E1" }}>
+              Dictionaries
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Key-value pairs</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> scores: [<span style={{ color: "#8be9fd" }}>String</span>: <span style={{ color: "#8be9fd" }}>Int</span>] = [<span style={{ color: "#f1fa8c" }}>"Alice"</span>: <span style={{ color: "#bd93f9" }}>95</span>, <span style={{ color: "#f1fa8c" }}>"Bob"</span>: <span style={{ color: "#bd93f9" }}>87</span>]{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Access returns optional (key might not exist)</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(scores[<span style={{ color: "#f1fa8c" }}>"Alice"</span>])        <span style={{ color: "#6272a4" }}>// Optional(95)</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(scores[<span style={{ color: "#f1fa8c" }}>"Unknown"</span>])      <span style={{ color: "#6272a4" }}>// nil</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(scores[<span style={{ color: "#f1fa8c" }}>"Unknown"</span>, default: <span style={{ color: "#bd93f9" }}>0</span>])  <span style={{ color: "#6272a4" }}>// 0</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Adding/updating</span>{"\n"}
+                scores[<span style={{ color: "#f1fa8c" }}>"Charlie"</span>] = <span style={{ color: "#bd93f9" }}>92</span>       <span style={{ color: "#6272a4" }}>// Add new</span>{"\n"}
+                scores[<span style={{ color: "#f1fa8c" }}>"Alice"</span>] = <span style={{ color: "#bd93f9" }}>98</span>         <span style={{ color: "#6272a4" }}>// Update existing</span>{"\n"}
+                scores[<span style={{ color: "#f1fa8c" }}>"Bob"</span>] = <span style={{ color: "#ff79c6" }}>nil</span>           <span style={{ color: "#6272a4" }}>// Remove Bob</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Iterating</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>for</span> (name, score) <span style={{ color: "#ff79c6" }}>in</span> scores {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"\(name): \(score)"</span>){"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>for</span> name <span style={{ color: "#ff79c6" }}>in</span> scores.keys {"{"} <span style={{ color: "#50fa7b" }}>print</span>(name) {"}"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>for</span> score <span style={{ color: "#ff79c6" }}>in</span> scores.values {"{"} <span style={{ color: "#50fa7b" }}>print</span>(score) {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#4299E1" }}>
+              Sets
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Unordered collection of unique values</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> fruits: <span style={{ color: "#8be9fd" }}>Set</span>{"<"}<span style={{ color: "#8be9fd" }}>String</span>{">"} = [<span style={{ color: "#f1fa8c" }}>"Apple"</span>, <span style={{ color: "#f1fa8c" }}>"Banana"</span>]{"\n"}
+                fruits.<span style={{ color: "#50fa7b" }}>insert</span>(<span style={{ color: "#f1fa8c" }}>"Orange"</span>){"\n"}
+                fruits.<span style={{ color: "#50fa7b" }}>insert</span>(<span style={{ color: "#f1fa8c" }}>"Apple"</span>)   <span style={{ color: "#6272a4" }}>// Ignored - already exists</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(fruits.<span style={{ color: "#50fa7b" }}>contains</span>(<span style={{ color: "#f1fa8c" }}>"Apple"</span>))  <span style={{ color: "#6272a4" }}>// true - O(1) lookup!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Set operations</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> a: <span style={{ color: "#8be9fd" }}>Set</span> = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>]{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> b: <span style={{ color: "#8be9fd" }}>Set</span> = [<span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>]{"\n"}
+                {"\n"}
+                a.<span style={{ color: "#50fa7b" }}>union</span>(b)          <span style={{ color: "#6272a4" }}>// {1, 2, 3, 4}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>intersection</span>(b)   <span style={{ color: "#6272a4" }}>// {2, 3}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>subtracting</span>(b)    <span style={{ color: "#6272a4" }}>// {1}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>symmetricDifference</span>(b)  <span style={{ color: "#6272a4" }}>// {1, 4}</span>
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Structs & Classes Section */}
+          <Paper id="structs" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#38A169", 0.15), color: "#38A169", width: 48, height: 48 }}>
+                <ClassIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Structs & Classes
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Value Types vs Reference Types
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Structs</strong> are <em>value types</em>—when you assign or pass them, Swift makes a copy. Think of passing a photo (copy—original unchanged). <strong>Classes</strong> are <em>reference types</em>—variables share the same instance. Think of sharing a Google Doc link (everyone sees changes). Swift strongly prefers structs for most cases because they're safer and easier to reason about.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#38A169" }}>
+              Structs (Value Types)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Point</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> x: <span style={{ color: "#8be9fd" }}>Double</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> y: <span style={{ color: "#8be9fd" }}>Double</span>{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// Computed property</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> magnitude: <span style={{ color: "#8be9fd" }}>Double</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> (x*x + y*y).<span style={{ color: "#50fa7b" }}>squareRoot</span>(){"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// Method that modifies struct must be 'mutating'</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>mutating func</span> <span style={{ color: "#50fa7b" }}>moveBy</span>(dx: <span style={{ color: "#8be9fd" }}>Double</span>, dy: <span style={{ color: "#8be9fd" }}>Double</span>) {"{"}{"\n"}
+                {"        "}x += dx{"\n"}
+                {"        "}y += dy{"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Automatic memberwise initializer</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> point = <span style={{ color: "#8be9fd" }}>Point</span>(x: <span style={{ color: "#bd93f9" }}>3</span>, y: <span style={{ color: "#bd93f9" }}>4</span>){"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(point.magnitude)  <span style={{ color: "#6272a4" }}>// 5.0</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Value semantics - copying</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> copy = point{"\n"}
+                copy.x = <span style={{ color: "#bd93f9" }}>100</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(point.x)  <span style={{ color: "#6272a4" }}>// 3 - original unchanged!</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#38A169" }}>
+              Classes (Reference Types)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>class</span> <span style={{ color: "#8be9fd" }}>Person</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> age: <span style={{ color: "#8be9fd" }}>Int</span>{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// Classes need explicit initializers</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>init</span>(name: <span style={{ color: "#8be9fd" }}>String</span>, age: <span style={{ color: "#8be9fd" }}>Int</span>) {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>self</span>.name = name{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>self</span>.age = age{"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// deinit called when instance is deallocated</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>deinit</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"\(name) is being deallocated"</span>){"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> alice = <span style={{ color: "#8be9fd" }}>Person</span>(name: <span style={{ color: "#f1fa8c" }}>"Alice"</span>, age: <span style={{ color: "#bd93f9" }}>30</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> reference = alice  <span style={{ color: "#6272a4" }}>// Same instance, not a copy!</span>{"\n"}
+                reference.age = <span style={{ color: "#bd93f9" }}>31</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(alice.age)  <span style={{ color: "#6272a4" }}>// 31 - both point to same object!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Identity comparison</span>{"\n"}
+                alice === reference  <span style={{ color: "#6272a4" }}>// true - same instance</span>
+              </Typography>
+            </Paper>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#38A169", 0.08), height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#38A169", mb: 1 }}>
+                    When to Use Structs (Default Choice)
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    • Most data types (coordinates, colors, dates)<br/>
+                    • When you want independent copies<br/>
+                    • Value doesn't need identity<br/>
+                    • Thread-safe by default
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#E53E3E", 0.08), height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#E53E3E", mb: 1 }}>
+                    When to Use Classes
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    • Need inheritance (subclassing)<br/>
+                    • Need identity (=== comparison)<br/>
+                    • Interop with Objective-C<br/>
+                    • Shared mutable state (carefully!)
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Enumerations Section */}
+          <Paper id="enums" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#805AD5", 0.15), color: "#805AD5", width: 48, height: 48 }}>
+                <ViewModuleIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Enumerations
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Enums</strong> define a type with a fixed set of possible values. Think of a traffic light: it can only be red, yellow, or green—nothing else. Swift's enums are extremely powerful: they can have <em>associated values</em> (data attached to each case) and <em>raw values</em>. They're perfect for modeling states and making invalid states impossible.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#805AD5" }}>
+              Basic Enums & Raw Values
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Simple enum</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>enum</span> <span style={{ color: "#8be9fd" }}>Direction</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> north, south, east, west{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> heading = <span style={{ color: "#8be9fd" }}>Direction</span>.north{"\n"}
+                heading = .south  <span style={{ color: "#6272a4" }}>// Type inferred, shorthand</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Raw values (integers, strings, etc.)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>enum</span> <span style={{ color: "#8be9fd" }}>StatusCode</span>: <span style={{ color: "#8be9fd" }}>Int</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> ok = <span style={{ color: "#bd93f9" }}>200</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> notFound = <span style={{ color: "#bd93f9" }}>404</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> serverError = <span style={{ color: "#bd93f9" }}>500</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> status = <span style={{ color: "#8be9fd" }}>StatusCode</span>.notFound{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(status.rawValue)  <span style={{ color: "#6272a4" }}>// 404</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Create from raw value (returns optional)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>if let</span> code = <span style={{ color: "#8be9fd" }}>StatusCode</span>(rawValue: <span style={{ color: "#bd93f9" }}>200</span>) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Got code: </span>\(<span style={{ color: "#ff79c6" }}>code</span>)<span style={{ color: "#f1fa8c" }}>"</span>)  <span style={{ color: "#6272a4" }}>// Got code: ok</span>{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#805AD5" }}>
+              Associated Values (Powerful!)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Cases can carry different data</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>enum</span> <span style={{ color: "#8be9fd" }}>APIResult</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> success(data: <span style={{ color: "#8be9fd" }}>Data</span>, statusCode: <span style={{ color: "#8be9fd" }}>Int</span>){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> failure(error: <span style={{ color: "#8be9fd" }}>Error</span>){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> loading{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> result = <span style={{ color: "#8be9fd" }}>APIResult</span>.success(data: someData, statusCode: <span style={{ color: "#bd93f9" }}>200</span>){"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Pattern matching with switch</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>switch</span> result {"{"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>case</span> .success(<span style={{ color: "#ff79c6" }}>let</span> data, <span style={{ color: "#ff79c6" }}>let</span> code):{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Success! Code: </span>\(<span style={{ color: "#ff79c6" }}>code</span>)<span style={{ color: "#f1fa8c" }}>, bytes: </span>\(<span style={{ color: "#ff79c6" }}>data</span>.count)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>case</span> .failure(<span style={{ color: "#ff79c6" }}>let</span> error):{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Error: </span>\(<span style={{ color: "#ff79c6" }}>error</span>)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>case</span> .loading:{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Loading..."</span>){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Extract with if case</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>if case</span> .success(<span style={{ color: "#ff79c6" }}>let</span> data, _) = result {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Got </span>\(<span style={{ color: "#ff79c6" }}>data</span>.count)<span style={{ color: "#f1fa8c" }}> bytes"</span>){"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Protocols Section */}
+          <Paper id="protocols" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#DD6B20", 0.15), color: "#DD6B20", width: 48, height: 48 }}>
+                <LayersIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Protocols
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Protocols</strong> define a blueprint of methods, properties, and requirements. They're like a contract: any type that "conforms" to the protocol promises to implement those requirements. Think of it like a job description—it says what capabilities are needed, not how to do them. This enables <em>protocol-oriented programming</em>, Swift's preferred paradigm over class inheritance.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#DD6B20" }}>
+              Defining & Conforming to Protocols
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Define a protocol</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>protocol</span> <span style={{ color: "#8be9fd" }}>Describable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> description: <span style={{ color: "#8be9fd" }}>String</span> {"{"} <span style={{ color: "#ff79c6" }}>get</span> {"}"}  <span style={{ color: "#6272a4" }}>// Require a readable property</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>describe</span>() -{">"} <span style={{ color: "#8be9fd" }}>String</span>    <span style={{ color: "#6272a4" }}>// Require a method</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Struct conforms to protocol</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Person</span>: <span style={{ color: "#8be9fd" }}>Describable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> age: <span style={{ color: "#8be9fd" }}>Int</span>{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> description: <span style={{ color: "#8be9fd" }}>String</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#f1fa8c" }}>"\(name), \(age) years old"</span>{"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>describe</span>() -{">"} <span style={{ color: "#8be9fd" }}>String</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#f1fa8c" }}>"Person: </span>\(<span style={{ color: "#ff79c6" }}>description</span>)<span style={{ color: "#f1fa8c" }}>"</span>{"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Use protocol as type</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>printInfo</span>(_ item: <span style={{ color: "#8be9fd" }}>Describable</span>) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(item.<span style={{ color: "#50fa7b" }}>describe</span>()){"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#DD6B20" }}>
+              Common Swift Protocols
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Equatable: enables == comparison</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Point</span>: <span style={{ color: "#8be9fd" }}>Equatable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> x: <span style={{ color: "#8be9fd" }}>Int</span>, y: <span style={{ color: "#8be9fd" }}>Int</span>  <span style={{ color: "#6272a4" }}>// Auto-synthesized!</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#8be9fd" }}>Point</span>(x: <span style={{ color: "#bd93f9" }}>1</span>, y: <span style={{ color: "#bd93f9" }}>2</span>) == <span style={{ color: "#8be9fd" }}>Point</span>(x: <span style={{ color: "#bd93f9" }}>1</span>, y: <span style={{ color: "#bd93f9" }}>2</span>)  <span style={{ color: "#6272a4" }}>// true</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Hashable: can be used in Sets/Dictionary keys</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>User</span>: <span style={{ color: "#8be9fd" }}>Hashable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> id: <span style={{ color: "#8be9fd" }}>Int</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> users: <span style={{ color: "#8be9fd" }}>Set</span>{"<"}<span style={{ color: "#8be9fd" }}>User</span>{">"} = []  <span style={{ color: "#6272a4" }}>// Works!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Codable: JSON encoding/decoding</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>APIResponse</span>: <span style={{ color: "#8be9fd" }}>Codable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> id: <span style={{ color: "#8be9fd" }}>Int</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> message: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> json = <span style={{ color: "#f1fa8c" }}>#"{"{"}"id": 1, "message": "Hello"{"}"}"#</span>.data(using: .utf8)!{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> response = <span style={{ color: "#ff79c6" }}>try</span> <span style={{ color: "#8be9fd" }}>JSONDecoder</span>().<span style={{ color: "#50fa7b" }}>decode</span>(<span style={{ color: "#8be9fd" }}>APIResponse</span>.<span style={{ color: "#ff79c6" }}>self</span>, from: json)
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Error Handling Section */}
+          <Paper id="error-handling" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#E53E3E", 0.15), color: "#E53E3E", width: 48, height: 48 }}>
+                <BugReportIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Error Handling
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                Swift's error handling uses <code>throw</code>, <code>try</code>, and <code>catch</code>—similar to other languages but with explicit marking. Functions that can fail are marked with <code>throws</code>, and callers must acknowledge this with <code>try</code>. This eliminates "hidden" failures—every error path is visible in the code.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Defining & Throwing Errors
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Define errors as enum conforming to Error</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>enum</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>: <span style={{ color: "#8be9fd" }}>Error</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> tooShort(minimum: <span style={{ color: "#8be9fd" }}>Int</span>){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> tooLong(maximum: <span style={{ color: "#8be9fd" }}>Int</span>){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>case</span> invalidCharacters{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Function that throws must be marked 'throws'</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>validate</span>(password: <span style={{ color: "#8be9fd" }}>String</span>) <span style={{ color: "#ff79c6" }}>throws</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>if</span> password.count {"<"} <span style={{ color: "#bd93f9" }}>8</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>throw</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>.tooShort(minimum: <span style={{ color: "#bd93f9" }}>8</span>){"\n"}
+                {"    }"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>if</span> password.count {">"} <span style={{ color: "#bd93f9" }}>100</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>throw</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>.tooLong(maximum: <span style={{ color: "#bd93f9" }}>100</span>){"\n"}
+                {"    }"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Password valid!"</span>){"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E53E3E" }}>
+              Handling Errors: do-catch
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Must use 'try' when calling throwing function</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>do</span> {"{"}{"\n"}
+                {"    "}<span style="{{ color: "#ff79c6" }}>try</span> <span style={{ color: "#50fa7b" }}>validate</span>(password: <span style={{ color: "#f1fa8c" }}>"abc"</span>){"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Success!"</span>){"\n"}
+                {"}"} <span style={{ color: "#ff79c6" }}>catch</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>.tooShort(<span style={{ color: "#ff79c6" }}>let</span> min) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Password too short. Need </span>\(<span style={{ color: "#ff79c6" }}>min</span>)<span style={{ color: "#f1fa8c" }}>+ chars"</span>){"\n"}
+                {"}"} <span style={{ color: "#ff79c6" }}>catch</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>.tooLong {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Password too long"</span>){"\n"}
+                {"}"} <span style={{ color: "#ff79c6" }}>catch</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Unexpected error: </span>\(<span style={{ color: "#ff79c6" }}>error</span>)<span style={{ color: "#f1fa8c" }}>"</span>)  <span style={{ color: "#6272a4" }}>// 'error' is implicit</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// try?: returns optional (nil on error)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> result = <span style={{ color: "#ff79c6" }}>try</span>? <span style={{ color: "#50fa7b" }}>validate</span>(password: <span style={{ color: "#f1fa8c" }}>"abc"</span>)  <span style={{ color: "#6272a4" }}>// nil</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// try!: force (crashes on error - use carefully!)</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// try! validate(password: "abc")  // Crash!</span>
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Generics Section */}
+          <Paper id="generics" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#667EEA", 0.15), color: "#667EEA", width: 48, height: 48 }}>
+                <AutoFixHighIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Generics
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>Generics</strong> let you write flexible, reusable code that works with any type. Instead of writing separate functions for Int, String, Double, etc., you write one generic function. Think of it like a cookie cutter—same shape, works with any dough. Swift's Array, Dictionary, and Optional are all generic types!
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#667EEA" }}>
+              Generic Functions
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Without generics: need separate functions</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>swapInts</span>(_ a: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>Int</span>, _ b: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>Int</span>) {"{"} ... {"}"}{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>swapStrings</span>(_ a: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>String</span>, _ b: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>String</span>) {"{"} ... {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// With generics: one function works for ANY type</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>swapValues</span>{"<"}<span style={{ color: "#8be9fd" }}>T</span>{">"}(_ a: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>T</span>, _ b: <span style={{ color: "#ff79c6" }}>inout</span> <span style={{ color: "#8be9fd" }}>T</span>) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> temp = a{"\n"}
+                {"    "}a = b{"\n"}
+                {"    "}b = temp{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> x = <span style={{ color: "#bd93f9" }}>5</span>, y = <span style={{ color: "#bd93f9" }}>10</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>swapValues</span>(&amp;x, &amp;y)  <span style={{ color: "#6272a4" }}>// T inferred as Int</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> a = <span style={{ color: "#f1fa8c" }}>"hello"</span>, b = <span style={{ color: "#f1fa8c" }}>"world"</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>swapValues</span>(&amp;a, &amp;b)  <span style={{ color: "#6272a4" }}>// T inferred as String</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#667EEA" }}>
+              Type Constraints
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Constraining T to types that conform to Equatable</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>findIndex</span>{"<"}<span style={{ color: "#8be9fd" }}>T</span>: <span style={{ color: "#8be9fd" }}>Equatable</span>{">"}(of value: <span style={{ color: "#8be9fd" }}>T</span>, in array: [<span style={{ color: "#8be9fd" }}>T</span>]) -{">"} <span style={{ color: "#8be9fd" }}>Int</span>? {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>for</span> (index, item) <span style={{ color: "#ff79c6" }}>in</span> array.<span style={{ color: "#50fa7b" }}>enumerated</span>() {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>if</span> item == value {"{"}{"\n"}
+                {"            "}<span style={{ color: "#ff79c6" }}>return</span> index{"\n"}
+                {"        }"}{"\n"}
+                {"    }"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#ff79c6" }}>nil</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> index = <span style={{ color: "#50fa7b" }}>findIndex</span>(of: <span style={{ color: "#bd93f9" }}>3</span>, in: [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>])  <span style={{ color: "#6272a4" }}>// Optional(2)</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// where clause for complex constraints</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>allEqual</span>{"<"}<span style={{ color: "#8be9fd" }}>T</span>{">"}(_ items: [<span style={{ color: "#8be9fd" }}>T</span>]) -{">"} <span style={{ color: "#8be9fd" }}>Bool</span> <span style={{ color: "#ff79c6" }}>where</span> <span style={{ color: "#8be9fd" }}>T</span>: <span style={{ color: "#8be9fd" }}>Equatable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>guard let</span> first = items.first <span style={{ color: "#ff79c6" }}>else</span> {"{"} <span style={{ color: "#ff79c6" }}>return</span> <span style={{ color: "#ff79c6" }}>true</span> {"}"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return</span> items.<span style={{ color: "#50fa7b" }}>allSatisfy</span> {"{"} $0 == first {"}"}{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#667EEA" }}>
+              Generic Types
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Generic struct - Stack that works with any type</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Stack</span>{"<"}<span style={{ color: "#8be9fd" }}>Element</span>{">"} {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>private var</span> items: [<span style={{ color: "#8be9fd" }}>Element</span>] = []{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>mutating func</span> <span style={{ color: "#50fa7b" }}>push</span>(_ item: <span style={{ color: "#8be9fd" }}>Element</span>) {"{"}{"\n"}
+                {"        "}items.<span style={{ color: "#50fa7b" }}>append</span>(item){"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>mutating func</span> <span style={{ color: "#50fa7b" }}>pop</span>() -{">"} <span style={{ color: "#8be9fd" }}>Element</span>? {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> items.<span style={{ color: "#50fa7b" }}>popLast</span>(){"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> isEmpty: <span style={{ color: "#8be9fd" }}>Bool</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> items.isEmpty{"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> intStack = <span style={{ color: "#8be9fd" }}>Stack</span>{"<"}<span style={{ color: "#8be9fd" }}>Int</span>{">"}(){"\n"}
+                intStack.<span style={{ color: "#50fa7b" }}>push</span>(<span style={{ color: "#bd93f9" }}>1</span>){"\n"}
+                intStack.<span style={{ color: "#50fa7b" }}>push</span>(<span style={{ color: "#bd93f9" }}>2</span>){"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(intStack.<span style={{ color: "#50fa7b" }}>pop</span>())  <span style={{ color: "#6272a4" }}>// Optional(2)</span>
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Concurrency Section */}
+          <Paper id="concurrency" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#319795", 0.15), color: "#319795", width: 48, height: 48 }}>
+                <SyncIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Concurrency (async/await)
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                Swift's modern concurrency (introduced in Swift 5.5) makes async code readable and safe. <strong>async</strong> marks functions that can pause, <strong>await</strong> suspends until a result is ready, and <strong>actors</strong> protect mutable state from data races. No more callback pyramids!
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#319795" }}>
+              async/await Basics
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Async function - can pause without blocking</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#8be9fd" }}>Int</span>) <span style={{ color: "#ff79c6" }}>async throws</span> -{">"} <span style={{ color: "#8be9fd" }}>User</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> url = URL(string: <span style={{ color: "#f1fa8c" }}>"https://api.example.com/users/</span>\(<span style={{ color: "#ff79c6" }}>id</span>)<span style={{ color: "#f1fa8c" }}>"</span>)!{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> (data, _) = <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#8be9fd" }}>URLSession</span>.shared.<span style={{ color: "#50fa7b" }}>data</span>(from: url){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return try</span> <span style={{ color: "#8be9fd" }}>JSONDecoder</span>().<span style={{ color: "#50fa7b" }}>decode</span>(<span style={{ color: "#8be9fd" }}>User</span>.<span style={{ color: "#ff79c6" }}>self</span>, from: data){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Calling async function</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>loadUserData</span>() <span style={{ color: "#ff79c6" }}>async</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>do</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>let</span> user = <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#bd93f9" }}>123</span>){"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Loaded: </span>\(<span style={{ color: "#ff79c6" }}>user</span>.name)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                {"    }"} <span style={{ color: "#ff79c6" }}>catch</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Error: </span>\(<span style={{ color: "#ff79c6" }}>error</span>)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Create a task to call async code from sync context</span>{"\n"}
+                <span style={{ color: "#8be9fd" }}>Task</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>await</span> <span style={{ color: "#50fa7b" }}>loadUserData</span>(){"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#319795" }}>
+              Parallel Execution
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Sequential: one after another</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> user1 = <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#bd93f9" }}>1</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> user2 = <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#bd93f9" }}>2</span>)  <span style={{ color: "#6272a4" }}>// Waits for user1 first</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Parallel: run concurrently with async let</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>async let</span> u1 = <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#bd93f9" }}>1</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>async let</span> u2 = <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: <span style={{ color: "#bd93f9" }}>2</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> users = <span style={{ color: "#ff79c6" }}>try await</span> [u1, u2]  <span style={{ color: "#6272a4" }}>// Both run in parallel!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// TaskGroup for dynamic number of tasks</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> userIDs = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>, <span style={{ color: "#bd93f9" }}>5</span>]{"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> allUsers = <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#50fa7b" }}>withThrowingTaskGroup</span>(of: <span style={{ color: "#8be9fd" }}>User</span>.<span style={{ color: "#ff79c6" }}>self</span>) {"{"} group <span style={{ color: "#ff79c6" }}>in</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>for</span> id <span style={{ color: "#ff79c6" }}>in</span> userIDs {"{"}{"\n"}
+                {"        "}group.<span style={{ color: "#50fa7b" }}>addTask</span> {"{"} <span style={{ color: "#ff79c6" }}>try await</span> <span style={{ color: "#50fa7b" }}>fetchUser</span>(id: id) {"}"}{"\n"}
+                {"    }"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>return try await</span> group.<span style={{ color: "#50fa7b" }}>reduce</span>(into: []) {"{"} $0.<span style={{ color: "#50fa7b" }}>append</span>($1) {"}"}{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#319795" }}>
+              Actors (Thread-Safe State)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Actor protects mutable state from data races</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>actor</span> <span style={{ color: "#8be9fd" }}>BankAccount</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>private var</span> balance: <span style={{ color: "#8be9fd" }}>Double</span>{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>init</span>(initialBalance: <span style={{ color: "#8be9fd" }}>Double</span>) {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>self</span>.balance = initialBalance{"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>deposit</span>(_ amount: <span style={{ color: "#8be9fd" }}>Double</span>) {"{"}{"\n"}
+                {"        "}balance += amount{"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>getBalance</span>() -{">"} <span style={{ color: "#8be9fd" }}>Double</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>return</span> balance{"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> account = <span style={{ color: "#8be9fd" }}>BankAccount</span>(initialBalance: <span style={{ color: "#bd93f9" }}>1000</span>){"\n"}
+                <span style={{ color: "#6272a4" }}>// Must await when accessing actor from outside</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>await</span> account.<span style={{ color: "#50fa7b" }}>deposit</span>(<span style={{ color: "#bd93f9" }}>500</span>){"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> balance = <span style={{ color: "#ff79c6" }}>await</span> account.<span style={{ color: "#50fa7b" }}>getBalance</span>()
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* SwiftUI Section */}
+          <Paper id="swiftui" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha(accentColor, 0.15), color: accentColor, width: 48, height: 48 }}>
+                <PhoneIphoneIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                SwiftUI
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide
+              </Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.9 }}>
+                <strong>SwiftUI</strong> is Apple's declarative UI framework. Instead of imperatively telling the UI what to do step-by-step, you <em>declare</em> what the UI should look like based on state. When state changes, SwiftUI automatically updates the UI. It's like magic—and it works across all Apple platforms!
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              Basic SwiftUI View
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>import</span> SwiftUI{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>ContentView</span>: <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> body: <span style={{ color: "#ff79c6" }}>some</span> <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#8be9fd" }}>VStack</span>(spacing: <span style={{ color: "#bd93f9" }}>20</span>) {"{"}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>Text</span>(<span style={{ color: "#f1fa8c" }}>"Hello, SwiftUI!"</span>){"\n"}
+                {"                "}.<span style={{ color: "#50fa7b" }}>font</span>(.largeTitle){"\n"}
+                {"                "}.<span style={{ color: "#50fa7b" }}>foregroundColor</span>(.blue){"\n"}
+                {"            "}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>Image</span>(systemName: <span style={{ color: "#f1fa8c" }}>"swift"</span>){"\n"}
+                {"                "}.<span style={{ color: "#50fa7b" }}>font</span>(.system(size: <span style={{ color: "#bd93f9" }}>80</span>)){"\n"}
+                {"                "}.<span style={{ color: "#50fa7b" }}>foregroundColor</span>(.orange){"\n"}
+                {"            "}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>Button</span>(<span style={{ color: "#f1fa8c" }}>"Tap Me"</span>) {"{"}{"\n"}
+                {"                "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Button tapped!"</span>){"\n"}
+                {"            }"}{"\n"}
+                {"            "}.<span style={{ color: "#50fa7b" }}>buttonStyle</span>(.borderedProminent){"\n"}
+                {"        }"}{"\n"}
+                {"        "}.<span style={{ color: "#50fa7b" }}>padding</span>(){"\n"}
+                {"    }"}{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              State Management
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>CounterView</span>: <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// @State: view-local mutable state</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>@State private var</span> count = <span style={{ color: "#bd93f9" }}>0</span>{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> body: <span style={{ color: "#ff79c6" }}>some</span> <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#8be9fd" }}>VStack</span> {"{"}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>Text</span>(<span style={{ color: "#f1fa8c" }}>"Count: </span>\(<span style={{ color: "#ff79c6" }}>count</span>)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                {"                "}.<span style={{ color: "#50fa7b" }}>font</span>(.largeTitle){"\n"}
+                {"            "}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>HStack</span> {"{"}{"\n"}
+                {"                "}<span style={{ color: "#8be9fd" }}>Button</span>(<span style={{ color: "#f1fa8c" }}>"−"</span>) {"{"} count -= <span style={{ color: "#bd93f9" }}>1</span> {"}"}{"\n"}
+                {"                "}<span style={{ color: "#8be9fd" }}>Button</span>(<span style={{ color: "#f1fa8c" }}>"+"</span>) {"{"} count += <span style={{ color: "#bd93f9" }}>1</span> {"}"}{"\n"}
+                {"            }"}{"\n"}
+                {"            "}.<span style={{ color: "#50fa7b" }}>buttonStyle</span>(.bordered){"\n"}
+                {"        }"}{"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Other property wrappers:</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// @Binding: pass state to child views</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// @ObservedObject: observe external reference type</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// @EnvironmentObject: shared app-wide state</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// @StateObject: view-owned reference type</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              Lists and Navigation
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Item</span>: <span style={{ color: "#8be9fd" }}>Identifiable</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> id = UUID(){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>ItemListView</span>: <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> items = [<span style={{ color: "#8be9fd" }}>Item</span>(name: <span style={{ color: "#f1fa8c" }}>"Apple"</span>), <span style={{ color: "#8be9fd" }}>Item</span>(name: <span style={{ color: "#f1fa8c" }}>"Banana"</span>)]{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> body: <span style={{ color: "#ff79c6" }}>some</span> <span style={{ color: "#8be9fd" }}>View</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#8be9fd" }}>NavigationStack</span> {"{"}{"\n"}
+                {"            "}<span style={{ color: "#8be9fd" }}>List</span>(items) {"{"} item <span style={{ color: "#ff79c6" }}>in</span>{"\n"}
+                {"                "}<span style={{ color: "#8be9fd" }}>NavigationLink</span>(item.name) {"{"}{"\n"}
+                {"                    "}<span style={{ color: "#8be9fd" }}>Text</span>(<span style={{ color: "#f1fa8c" }}>"Detail for </span>\(<span style={{ color: "#ff79c6" }}>item</span>.name)<span style={{ color: "#f1fa8c" }}>"</span>){"\n"}
+                {"                }"}{"\n"}
+                {"            }"}{"\n"}
+                {"            "}.<span style={{ color: "#50fa7b" }}>navigationTitle</span>(<span style={{ color: "#f1fa8c" }}>"Fruits"</span>){"\n"}
+                {"        }"}{"\n"}
+                {"    }"}{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+          </Paper>
+
+          {/* Advanced Topics Section */}
+          <Paper id="advanced" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#6B46C1", 0.15), color: "#6B46C1", width: 48, height: 48 }}>
+                <DeveloperBoardIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Advanced Topics
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#6B46C1" }}>
+              Memory Management (ARC)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Strong reference (default) - keeps object alive</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>class</span> <span style={{ color: "#8be9fd" }}>Person</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> name: <span style={{ color: "#8be9fd" }}>String</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> apartment: <span style={{ color: "#8be9fd" }}>Apartment</span>?  <span style={{ color: "#6272a4" }}>// Strong reference</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>init</span>(name: <span style={{ color: "#8be9fd" }}>String</span>) {"{"} <span style={{ color: "#ff79c6" }}>self</span>.name = name {"}"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>class</span> <span style={{ color: "#8be9fd" }}>Apartment</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> number: <span style={{ color: "#8be9fd" }}>Int</span>{"\n"}
+                {"    "}<span style={{ color: "#6272a4" }}>// weak reference - doesn't keep Person alive</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>weak var</span> tenant: <span style={{ color: "#8be9fd" }}>Person</span>?  <span style={{ color: "#6272a4" }}>// Must be optional</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>init</span>(number: <span style={{ color: "#8be9fd" }}>Int</span>) {"{"} <span style={{ color: "#ff79c6" }}>self</span>.number = number {"}"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// In closures, capture self weakly to avoid retain cycles</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>class</span> <span style={{ color: "#8be9fd" }}>ViewController</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>loadData</span>() {"{"}{"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>fetchData</span> {"{"} [<span style={{ color: "#ff79c6" }}>weak self</span>] data <span style={{ color: "#ff79c6" }}>in</span>{"\n"}
+                {"            "}<span style={{ color: "#ff79c6" }}>guard let self</span> <span style={{ color: "#ff79c6" }}>else</span> {"{"} <span style={{ color: "#ff79c6" }}>return</span> {"}"}{"\n"}
+                {"            "}<span style={{ color: "#ff79c6" }}>self</span>.<span style={{ color: "#50fa7b" }}>updateUI</span>(with: data){"\n"}
+                {"        }"}{"\n"}
+                {"    }"}{"\n"}
+                {"}"}
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#6B46C1" }}>
+              Property Wrappers
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Custom property wrapper</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>@propertyWrapper</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Clamped</span>{"<"}<span style={{ color: "#8be9fd" }}>Value</span>: <span style={{ color: "#8be9fd" }}>Comparable</span>{">"} {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> value: <span style={{ color: "#8be9fd" }}>Value</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>let</span> range: <span style={{ color: "#8be9fd" }}>ClosedRange</span>{"<"}<span style={{ color: "#8be9fd" }}>Value</span>{">"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>var</span> wrappedValue: <span style={{ color: "#8be9fd" }}>Value</span> {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>get</span> {"{"} value {"}"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>set</span> {"{"} value = <span style={{ color: "#50fa7b" }}>min</span>(<span style={{ color: "#50fa7b" }}>max</span>(newValue, range.lowerBound), range.upperBound) {"}"}{"\n"}
+                {"    }"}{"\n"}
+                {"    "}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>init</span>(wrappedValue: <span style={{ color: "#8be9fd" }}>Value</span>, _ range: <span style={{ color: "#8be9fd" }}>ClosedRange</span>{"<"}<span style={{ color: "#8be9fd" }}>Value</span>{">"}) {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>self</span>.range = range{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>self</span>.value = <span style={{ color: "#50fa7b" }}>min</span>(<span style={{ color: "#50fa7b" }}>max</span>(wrappedValue, range.lowerBound), range.upperBound){"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>Player</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>@Clamped</span>(<span style={{ color: "#bd93f9" }}>0</span>...<span style={{ color: "#bd93f9" }}>100</span>) <span style={{ color: "#ff79c6" }}>var</span> health: <span style={{ color: "#8be9fd" }}>Int</span> = <span style={{ color: "#bd93f9" }}>100</span>{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>var</span> player = <span style={{ color: "#8be9fd" }}>Player</span>(){"\n"}
+                player.health = <span style={{ color: "#bd93f9" }}>150</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(player.health)  <span style={{ color: "#6272a4" }}>// 100 (clamped!)</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#6B46C1" }}>
+              Result Builders (DSL)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Result builders power SwiftUI's declarative syntax</span>{"\n"}
+                <span style={{ color: "#6272a4" }}>// This is how VStack {"{"} Text() Text() {"}"} works!</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>@resultBuilder</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>struct</span> <span style={{ color: "#8be9fd" }}>StringBuilder</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>static func</span> <span style={{ color: "#50fa7b" }}>buildBlock</span>(_ parts: <span style={{ color: "#8be9fd" }}>String</span>...) -{">"} <span style={{ color: "#8be9fd" }}>String</span> {"{"}{"\n"}
+                {"        "}parts.<span style={{ color: "#50fa7b" }}>joined</span>(separator: <span style={{ color: "#f1fa8c" }}>" "</span>){"\n"}
+                {"    }"}{"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>func</span> <span style={{ color: "#50fa7b" }}>makeSentence</span>(<span style={{ color: "#ff79c6" }}>@StringBuilder</span> _ content: () -{">"} <span style={{ color: "#8be9fd" }}>String</span>) -{">"} <span style={{ color: "#8be9fd" }}>String</span> {"{"}{"\n"}
+                {"    "}content(){"\n"}
+                {"}"}{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>let</span> sentence = <span style={{ color: "#50fa7b" }}>makeSentence</span> {"{"}{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>"Hello"</span>{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>"Swift"</span>{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>"World"</span>{"\n"}
+                {"}"}{"\n"}
+                <span style={{ color: "#50fa7b" }}>print</span>(sentence)  <span style={{ color: "#6272a4" }}>// "Hello Swift World"</span>
+              </Typography>
+            </Paper>
+          </Paper>
 
           {/* Quiz Section */}
           <Paper id="quiz" sx={{ p: 4, mb: 4, borderRadius: 4 }}>

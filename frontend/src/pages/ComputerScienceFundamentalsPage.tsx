@@ -156,6 +156,49 @@ const numberSystems = [
   { system: "Hexadecimal", base: 16, digits: "0-9, A-F", prefix: "0x", example: "0xA = 10", useCase: "Memory addresses, colors, MAC addresses" },
 ];
 
+// ========== OPERATING SYSTEM FUNDAMENTALS ==========
+const osFundamentals = [
+  { concept: "Process", description: "A running program with its own virtual address space", why: "Isolation and scheduling unit", example: "Browser tabs in separate processes" },
+  { concept: "Thread", description: "Execution path inside a process that shares memory", why: "Concurrency and responsiveness", example: "UI thread with worker threads" },
+  { concept: "Context Switch", description: "CPU saves/restores state between tasks", why: "Enables multitasking with overhead", example: "Switching from editor to compiler" },
+  { concept: "Scheduling", description: "Decides which task runs next", why: "Balances throughput, latency, fairness", example: "Round-robin or priority scheduling" },
+  { concept: "System Call", description: "Gateway from user space to kernel", why: "Access files, network, devices", example: "open(), read(), socket()" },
+  { concept: "Virtual Memory", description: "Private address space per process", why: "Isolation, paging, memory overcommit", example: "Heap/stack separated per process" },
+];
+
+// ========== CONCURRENCY CONCEPTS ==========
+const concurrencyConcepts = [
+  { concept: "Race Condition", description: "Outcome depends on timing between threads", pitfall: "Corrupted state, heisenbugs", mitigation: "Locks or atomic operations" },
+  { concept: "Deadlock", description: "Tasks wait forever on each other", pitfall: "System stalls", mitigation: "Lock ordering, timeouts" },
+  { concept: "Mutex vs Semaphore", description: "Mutex is exclusive; semaphore counts permits", pitfall: "Over or under locking", mitigation: "Keep critical sections small" },
+  { concept: "Thread Pool", description: "Reuse workers to run tasks", pitfall: "Queue growth, starvation", mitigation: "Backpressure, bounded queues" },
+  { concept: "Async IO", description: "Non-blocking operations with callbacks/promises", pitfall: "Hidden concurrency bugs", mitigation: "Structured async/await" },
+  { concept: "Parallelism", description: "Tasks run at the same time on multiple cores", pitfall: "Contention, false sharing", mitigation: "Batch work, reduce shared state" },
+];
+
+// ========== NETWORKING LAYERS ==========
+const networkLayers = [
+  { layer: "Application", purpose: "User-facing protocols", examples: "HTTP, DNS, SSH, SMTP", dataUnit: "Message" },
+  { layer: "Transport", purpose: "End-to-end delivery and ports", examples: "TCP, UDP, QUIC", dataUnit: "Segment/Datagram" },
+  { layer: "Internet", purpose: "Routing across networks", examples: "IP, ICMP", dataUnit: "Packet" },
+  { layer: "Link", purpose: "Local network framing", examples: "Ethernet, Wi-Fi", dataUnit: "Frame" },
+];
+
+// ========== DATABASE BASICS ==========
+const dataModels = [
+  { model: "Relational", description: "Tables with rows and columns", strengths: "Strong consistency, joins, ACID", useCase: "Transactions, reporting" },
+  { model: "Document", description: "JSON-like documents", strengths: "Flexible schema, nested data", useCase: "Content, user profiles" },
+  { model: "Key-Value", description: "Simple key to value mapping", strengths: "Fast lookups, caching", useCase: "Sessions, feature flags" },
+  { model: "Graph", description: "Nodes and edges", strengths: "Relationship queries, traversals", useCase: "Recommendations, fraud detection" },
+];
+
+const storageConcepts = [
+  { concept: "Indexing", description: "Auxiliary structure to speed lookups", tradeoff: "Faster reads, slower writes", example: "B-tree on email column" },
+  { concept: "Transactions (ACID)", description: "Atomicity, Consistency, Isolation, Durability", tradeoff: "Consistency vs throughput", example: "Bank transfers" },
+  { concept: "Replication", description: "Copy data to multiple nodes", tradeoff: "Read scaling, failover complexity", example: "Primary/replica" },
+  { concept: "Sharding", description: "Split data across partitions", tradeoff: "Scales writes, complex queries", example: "Shard by user_id" },
+];
+
 // ========== DESIGN PATTERNS ==========
 const designPatterns = [
   { name: "Singleton", category: "Creational", description: "Ensure only one instance of a class exists", useCase: "Database connections, logging, configuration" },
@@ -243,6 +286,60 @@ const stringAlgorithms = [
   { name: "Rabin-Karp", complexity: "O(n+m) avg", description: "Rolling hash for pattern matching", useCase: "Multiple pattern search, plagiarism detection" },
   { name: "Boyer-Moore", complexity: "O(n/m) best", description: "Skip sections using bad character rule", useCase: "Text editors, grep" },
   { name: "Z-Algorithm", complexity: "O(n+m)", description: "Z-array for pattern matching", useCase: "Pattern matching, string analysis" },
+];
+
+// ========== MACHINE CODE CONCEPTS ==========
+const machineCodeConcepts = [
+  { concept: "Opcode", description: "The operation code that tells the CPU what instruction to perform (e.g., ADD, MOV, JMP)", example: "0x89 = MOV (x86)" },
+  { concept: "Operand", description: "The data or address that the instruction operates on", example: "MOV EAX, 5 — '5' is the operand" },
+  { concept: "Instruction", description: "Complete machine code command: opcode + operands encoded as bytes", example: "B8 05 00 00 00 = MOV EAX, 5" },
+  { concept: "Word Size", description: "The natural unit of data for a processor (32-bit = 4 bytes, 64-bit = 8 bytes)", example: "64-bit CPU handles 8 bytes at once" },
+  { concept: "Endianness", description: "Byte order in memory — Little-endian (LE) stores LSB first, Big-endian (BE) stores MSB first", example: "0x12345678 → 78 56 34 12 (LE)" },
+  { concept: "Instruction Pointer", description: "Register (EIP/RIP) that holds the address of the next instruction to execute", example: "RIP increments after each instruction" },
+];
+
+const cpuRegistersX86 = [
+  { register: "EAX/RAX", purpose: "Accumulator", description: "Used for arithmetic operations and function return values", bits: "32/64" },
+  { register: "EBX/RBX", purpose: "Base", description: "General-purpose, often used as a base pointer for memory access", bits: "32/64" },
+  { register: "ECX/RCX", purpose: "Counter", description: "Used for loop counters and shift/rotate operations", bits: "32/64" },
+  { register: "EDX/RDX", purpose: "Data", description: "Used for I/O operations and multiplication/division overflow", bits: "32/64" },
+  { register: "ESI/RSI", purpose: "Source Index", description: "Source pointer for string operations", bits: "32/64" },
+  { register: "EDI/RDI", purpose: "Destination Index", description: "Destination pointer for string operations", bits: "32/64" },
+  { register: "ESP/RSP", purpose: "Stack Pointer", description: "Points to top of the stack — critical for function calls", bits: "32/64" },
+  { register: "EBP/RBP", purpose: "Base Pointer", description: "Points to base of current stack frame", bits: "32/64" },
+  { register: "EIP/RIP", purpose: "Instruction Pointer", description: "Address of next instruction to execute — controls program flow", bits: "32/64" },
+  { register: "EFLAGS/RFLAGS", purpose: "Flags", description: "Status flags (Zero, Carry, Sign, Overflow) set by operations", bits: "32/64" },
+];
+
+const commonInstructions = [
+  { instruction: "MOV", category: "Data Transfer", description: "Copy data from source to destination", example: "MOV EAX, 10 ; EAX = 10" },
+  { instruction: "PUSH/POP", category: "Stack", description: "Push value onto stack / Pop value from stack", example: "PUSH EAX ; Save EAX to stack" },
+  { instruction: "ADD/SUB", category: "Arithmetic", description: "Add or subtract values", example: "ADD EAX, EBX ; EAX = EAX + EBX" },
+  { instruction: "MUL/DIV", category: "Arithmetic", description: "Multiply or divide (uses EAX implicitly)", example: "MUL EBX ; EDX:EAX = EAX * EBX" },
+  { instruction: "AND/OR/XOR", category: "Logical", description: "Bitwise logical operations", example: "XOR EAX, EAX ; Clear EAX (set to 0)" },
+  { instruction: "CMP", category: "Comparison", description: "Compare two values (sets flags, doesn't store result)", example: "CMP EAX, 5 ; Compare EAX with 5" },
+  { instruction: "JMP", category: "Control Flow", description: "Unconditional jump to address", example: "JMP 0x401000 ; Jump to address" },
+  { instruction: "JE/JNE/JG/JL", category: "Control Flow", description: "Conditional jumps based on flags", example: "JE label ; Jump if equal (ZF=1)" },
+  { instruction: "CALL/RET", category: "Functions", description: "Call function / Return from function", example: "CALL printf ; Call printf function" },
+  { instruction: "NOP", category: "Misc", description: "No operation — does nothing, often used for alignment or shellcode", example: "NOP ; 0x90 in x86" },
+  { instruction: "LEA", category: "Address", description: "Load effective address — calculates address without dereferencing", example: "LEA EAX, [EBX+4] ; EAX = EBX+4" },
+  { instruction: "INT", category: "Interrupts", description: "Software interrupt — triggers system calls or handlers", example: "INT 0x80 ; Linux syscall" },
+];
+
+const instructionCycle = [
+  { phase: "1. Fetch", description: "CPU reads the instruction from memory at the address in the Instruction Pointer (IP/EIP/RIP)" },
+  { phase: "2. Decode", description: "CPU decodes the opcode to determine what operation to perform and identifies operands" },
+  { phase: "3. Execute", description: "CPU performs the operation (arithmetic, memory access, jump, etc.)" },
+  { phase: "4. Write Back", description: "Results are written back to registers or memory" },
+  { phase: "5. Update IP", description: "Instruction Pointer is updated to point to the next instruction (unless a jump occurred)" },
+];
+
+const memorySegments = [
+  { segment: "Text/Code (.text)", description: "Contains executable machine code instructions. Usually read-only to prevent self-modifying code.", permissions: "R-X" },
+  { segment: "Data (.data)", description: "Initialized global and static variables with predefined values.", permissions: "RW-" },
+  { segment: "BSS (.bss)", description: "Uninitialized global and static variables — zeroed at program start.", permissions: "RW-" },
+  { segment: "Heap", description: "Dynamically allocated memory (malloc, new). Grows toward higher addresses.", permissions: "RW-" },
+  { segment: "Stack", description: "Function call frames, local variables, return addresses. Grows toward lower addresses.", permissions: "RW-" },
 ];
 
 const ACCENT_COLOR = "#8b5cf6";
@@ -878,6 +975,11 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
     { id: "solid", label: "SOLID Principles", icon: <LayersIcon /> },
     { id: "patterns", label: "Design Patterns", icon: <BuildIcon /> },
     { id: "memory", label: "Memory Management", icon: <MemoryIcon /> },
+    { id: "os", label: "Operating Systems", icon: <ComputerIcon /> },
+    { id: "concurrency", label: "Concurrency", icon: <SpeedIcon /> },
+    { id: "networking", label: "Networking", icon: <HubIcon /> },
+    { id: "databases", label: "Databases", icon: <StorageIcon /> },
+    { id: "machine-code", label: "Machine Code", icon: <MemoryIcon /> },
     { id: "recursion", label: "Recursion", icon: <FunctionsIcon /> },
     { id: "trees", label: "Trees & Traversal", icon: <AccountTreeIcon /> },
     { id: "graphs", label: "Graph Algorithms", icon: <HubIcon /> },
@@ -922,7 +1024,7 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
   const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
   const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
-  const pageContext = `Computer Science Fundamentals learning page - Essential CS concepts for developers and security professionals. Covers data structures (arrays, linked lists, trees, graphs, hash tables), algorithms (sorting, searching, Big O notation), programming paradigms (OOP, functional, procedural), SOLID principles, design patterns, memory management, and number systems. Foundation knowledge for software development, coding interviews, and understanding system internals.`;
+  const pageContext = `Computer Science Fundamentals learning page - Essential CS concepts for developers and security professionals. Covers data structures (arrays, linked lists, trees, graphs, hash tables), algorithms (sorting, searching, Big O notation), programming paradigms (OOP, functional, procedural), SOLID principles, design patterns, memory management, operating systems, concurrency, networking, databases, and number systems. Foundation knowledge for software development, coding interviews, and understanding system internals.`;
 
   const sidebarNav = (
     <Paper
@@ -1281,6 +1383,11 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
               { id: "solid", label: "SOLID" },
               { id: "patterns", label: "Patterns" },
               { id: "memory", label: "Memory" },
+              { id: "os", label: "Operating Systems" },
+              { id: "concurrency", label: "Concurrency" },
+              { id: "networking", label: "Networking" },
+              { id: "databases", label: "Databases" },
+              { id: "machine-code", label: "Machine Code" },
               { id: "recursion", label: "Recursion" },
               { id: "trees", label: "Trees" },
               { id: "graphs", label: "Graphs" },
@@ -1491,6 +1598,68 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
           Understanding algorithm efficiency and time complexity
         </Typography>
 
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <SpeedIcon sx={{ color: "#f59e0b" }} />
+            What is Big O Notation?
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            <strong>Big O notation</strong> is a mathematical notation that describes the limiting behavior of a function when the argument 
+            tends towards a particular value or infinity. In computer science, it's used to classify algorithms according to how their 
+            run time or space requirements grow as the input size grows. When we say an algorithm is O(n), we mean its running time 
+            grows linearly with the input size — double the input, double the time.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            Big O describes the <strong>worst-case scenario</strong> and focuses on the dominant term (the part that grows fastest). 
+            We drop constants and lower-order terms because they become irrelevant as n approaches infinity. For example, if an 
+            algorithm takes 3n² + 5n + 100 steps, we say it's O(n²) because the n² term dominates as n gets large. Whether it's 
+            3n² or 1000n², it's still O(n²) — the shape of the growth curve matters more than the exact coefficients.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            Understanding Big O is crucial for writing efficient code. An O(n²) algorithm might work fine for 100 elements but become 
+            unusable with 1,000,000 elements. Consider: O(n) with n=1,000,000 means ~1 million operations. O(n²) means ~1 trillion operations. 
+            At 1 billion operations per second, that's the difference between 0.001 seconds and 16+ minutes.
+          </Typography>
+
+          <Alert severity="info" sx={{ borderRadius: 2, mb: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>💡 Practical Tip</AlertTitle>
+            <Typography variant="body2">
+              In interviews and real-world code reviews, you'll often be asked "What's the time complexity?" Being able to quickly 
+              identify Big O shows you understand scalability. Always ask: "How does this behave with 10x or 100x more data?"
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>Time Complexity</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  How runtime grows with input size. Most commonly analyzed. Usually what people mean by "Big O."
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.1), border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0ea5e9", mb: 1 }}>Space Complexity</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  How memory usage grows with input size. Important for memory-constrained environments.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.1), border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>Amortized Analysis</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Average time per operation over a sequence. Used when occasional operations are expensive but rare.
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
         <Grid container spacing={2} sx={{ mb: 5 }}>
           {bigOComplexities.map((complexity) => (
             <Grid item xs={12} sm={6} md={3} key={complexity.notation}>
@@ -1525,6 +1694,99 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Fundamental ways to organize and store data
         </Typography>
+
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <DataArrayIcon sx={{ color: "#8b5cf6" }} />
+            Understanding Data Structures
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            A <strong>data structure</strong> is a particular way of organizing data in a computer so that it can be used efficiently. 
+            Different data structures are suited for different kinds of applications, and some are highly specialized for specific tasks. 
+            Choosing the right data structure can be the difference between an algorithm running in milliseconds versus hours.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            Data structures can be broadly categorized into <strong>linear</strong> (elements arranged sequentially — arrays, linked lists, 
+            stacks, queues) and <strong>non-linear</strong> (elements not in sequence — trees, graphs, hash tables). Linear structures are 
+            simpler but may not be efficient for certain operations. Non-linear structures offer faster operations for specific use cases 
+            but are more complex to implement and understand.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            The key trade-offs to consider when choosing a data structure are: <strong>Time complexity</strong> (how fast are operations?), 
+            <strong>Space complexity</strong> (how much memory is used?), <strong>Ease of implementation</strong> (how complex is the code?), 
+            and <strong>Cache performance</strong> (how well does it work with CPU caches?). For example, arrays have excellent cache locality 
+            because elements are stored contiguously in memory, while linked lists have poor cache performance because nodes are scattered.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>🔢 Arrays</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Contiguous memory, O(1) access by index, but O(n) insertion/deletion in the middle. Best when you know the size upfront
+                  and need fast random access. Most cache-friendly structure.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0ea5e9", mb: 1 }}>🔗 Linked Lists</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Non-contiguous nodes with pointers, O(1) insertion/deletion (if you have the node), but O(n) access. Good for frequent 
+                  insertions/deletions and unknown sizes.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>#️⃣ Hash Tables</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Key-value storage with O(1) average-case operations using hash functions. The workhorse of modern programming — 
+                  dictionaries, sets, caches, and objects in many languages.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ec4899", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ec4899", mb: 1 }}>🌳 Trees</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Hierarchical structure with parent-child relationships. Binary Search Trees give O(log n) operations when balanced. 
+                  Used in filesystems, databases (B-trees), and parsing (ASTs).
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#6366f1", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6366f1", mb: 1 }}>📊 Graphs</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Nodes (vertices) connected by edges. Can be directed/undirected, weighted/unweighted. Model relationships, networks, 
+                  dependencies — social networks, maps, the internet.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ef4444", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>📚 Stacks & Queues</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Restricted access structures. Stacks: LIFO (Last In, First Out) — undo operations, function calls. 
+                  Queues: FIFO (First In, First Out) — task scheduling, BFS.
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>⚠️ Common Interview Trap</AlertTitle>
+            <Typography variant="body2">
+              Hash tables have O(1) <em>average</em> case, but O(n) <em>worst</em> case (when all keys hash to the same bucket). 
+              Always clarify whether you're discussing average or worst case. Similarly, BSTs are O(log n) only when <em>balanced</em> — 
+              a degenerate tree becomes a linked list with O(n) operations.
+            </Typography>
+          </Alert>
+        </Paper>
 
         <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
           <Table size="small">
@@ -1564,6 +1826,80 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Methods for arranging data in a specific order
         </Typography>
+
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <TimelineIcon sx={{ color: "#22c55e" }} />
+            Why Sorting Matters
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            <strong>Sorting</strong> is one of the most fundamental operations in computer science. A sorted dataset enables binary search 
+            (O(log n) instead of O(n)), makes duplicates adjacent (easy to find), and is required by many algorithms. Databases sort 
+            results, search engines rank pages, and operating systems prioritize processes — sorting is everywhere.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            Sorting algorithms are classified by several characteristics: <strong>Time complexity</strong> (how fast?), 
+            <strong>Space complexity</strong> (in-place vs. requiring extra memory), <strong>Stability</strong> (do equal elements 
+            maintain their original order?), and <strong>Adaptivity</strong> (does it run faster on partially sorted data?). 
+            No single algorithm is best for all situations — the choice depends on your data and constraints.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            The theoretical lower bound for comparison-based sorting is <strong>O(n log n)</strong> — you cannot do better by only 
+            comparing elements. This is proven using decision tree analysis. However, non-comparison sorts like Radix Sort and 
+            Counting Sort can achieve O(n) by exploiting properties of the data (e.g., bounded integer range).
+          </Typography>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>🏆 Quick Sort (Most Popular)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Average O(n log n), in-place, but unstable and O(n²) worst case. The go-to for general-purpose sorting. Most standard 
+                  library sort functions use Quick Sort or a hybrid variant.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#0ea5e9", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0ea5e9", mb: 1 }}>📊 Merge Sort (Guaranteed O(n log n))</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Always O(n log n), stable, but requires O(n) extra space. Used when stability matters or when sorting linked lists 
+                  (no random access penalty).
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>⚡ Tim Sort (Real-World Champion)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Hybrid of Merge Sort and Insertion Sort. Exploits existing order in data. Used by Python's sorted(), Java's 
+                  Arrays.sort() for objects, and Android.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ec4899", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ec4899", mb: 1 }}>📝 Insertion Sort (Best for Small/Nearly Sorted)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  O(n) on nearly sorted data, O(n²) worst case. Simple, in-place, stable. Often used as the base case in hybrid sorts 
+                  when subarrays are small.
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>💡 Interview Insight</AlertTitle>
+            <Typography variant="body2">
+              Be prepared to explain <em>why</em> you'd choose one sorting algorithm over another. "I'd use Merge Sort because stability 
+              matters here" or "Quick Sort is fine since we don't need guaranteed O(n log n)" shows deeper understanding than just 
+              reciting complexities.
+            </Typography>
+          </Alert>
+        </Paper>
 
         <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
           <Table size="small">
@@ -1612,6 +1948,69 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Methods for finding elements in data structures
         </Typography>
+
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <AccountTreeIcon sx={{ color: "#0ea5e9" }} />
+            The Art of Finding
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            <strong>Searching</strong> is the process of finding a specific item in a collection of items. The efficiency of searching 
+            depends heavily on how the data is organized. Unorganized data requires examining every element (O(n)). Organized data 
+            — sorted, indexed, or in a tree/hash structure — enables much faster searches.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            The most significant optimization is <strong>Binary Search</strong>, which halves the search space with each comparison. 
+            Instead of checking 1 million elements one by one, binary search finds any element in at most 20 comparisons (log₂(1,000,000) ≈ 20). 
+            However, binary search requires the data to be <em>sorted</em> — if you need to search frequently, the one-time cost of 
+            sorting pays off quickly.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            For even faster searches, <strong>Hash Tables</strong> provide O(1) average-case lookup by computing where an element 
+            <em>should</em> be stored, rather than searching for it. Hash tables power dictionaries, sets, caches, and database indexes. 
+            However, they sacrifice ordering — if you need sorted data or range queries, use a tree-based structure instead.
+          </Typography>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ef4444", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>🐢 Linear Search O(n)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Check every element. Simple but slow. Required for unsorted data. Only option when data structure doesn't support 
+                  faster search.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>🚀 Binary Search O(log n)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Divide and conquer on sorted data. Incredibly efficient — 1 billion elements searched in ~30 comparisons. Foundation 
+                  of many algorithms.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.1) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>⚡ Hash Lookup O(1)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Compute the location directly. Fastest possible average case. Powers dictionaries, sets, and most caching systems.
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Alert severity="warning" sx={{ mt: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>⚠️ Binary Search Gotcha</AlertTitle>
+            <Typography variant="body2">
+              Binary search looks simple but is notoriously hard to implement correctly. Off-by-one errors are common. The "correct" 
+              implementation eluded programmers for years — even Jon Bentley's original version had a bug. Use library implementations when possible!
+            </Typography>
+          </Alert>
+        </Paper>
 
         <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
           <Table size="small">
@@ -1815,6 +2214,493 @@ const ComputerScienceFundamentalsPage: React.FC = () => {
             </TableContainer>
           </AccordionDetails>
         </Accordion>
+
+        {/* Operating Systems Essentials */}
+        <Typography id="os" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🧭 Operating Systems Essentials
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          How the OS manages processes, memory, and hardware resources
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.12)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            The operating system is the traffic controller for your computer. It schedules work, isolates programs for safety,
+            and provides system calls so applications can use files, networks, and devices. Knowing the OS model helps you
+            reason about performance, permissions, and security boundaries.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {osFundamentals.map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.concept}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}`, height: "100%", bgcolor: alpha("#3b82f6", 0.02) }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 0.5 }}>{item.concept}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{item.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Why it matters:</strong> {item.why}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Example:</strong> {item.example}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Concurrency & Parallelism */}
+        <Typography id="concurrency" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          ⚙️ Concurrency & Parallelism
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Structuring work so tasks can overlap, and using multiple cores safely
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#f97316", 0.03), border: `1px solid ${alpha("#f97316", 0.12)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Concurrency is about <strong>structure</strong> (many tasks in progress), while parallelism is about
+            <strong>execution</strong> (many tasks at the same time). Both introduce shared-state risks like race conditions
+            and deadlocks, so careful synchronization and thoughtful architecture matter.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {concurrencyConcepts.map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.concept}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#f97316", 0.2)}`, height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f97316", mb: 0.5 }}>{item.concept}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{item.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Pitfall:</strong> {item.pitfall}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Mitigation:</strong> {item.mitigation}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Networking Fundamentals */}
+        <Typography id="networking" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🌐 Networking Fundamentals
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          The layers and protocols that move data across the internet
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#14b8a6", 0.03), border: `1px solid ${alpha("#14b8a6", 0.12)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Networking is layered so each level has a focused job: the link moves frames on a local network, the internet
+            layer routes packets, transport handles ports and reliability, and the application layer defines the protocols
+            you actually use. This separation makes systems interoperable and easier to debug.
+          </Typography>
+        </Paper>
+
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#14b8a6", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Layer</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Examples</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Data Unit</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {networkLayers.map((layer) => (
+                <TableRow key={layer.layer}>
+                  <TableCell sx={{ fontWeight: 600 }}>{layer.layer}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{layer.purpose}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{layer.examples}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", color: "#14b8a6" }}>{layer.dataUnit}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* Databases & Storage */}
+        <Typography id="databases" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 80 }}>
+          🗃️ Databases & Storage
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Choosing the right data model and understanding storage trade-offs
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.12)}` }}>
+          <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+            Databases organize data for fast, reliable access. Different data models prioritize flexibility, relationships,
+            or speed. Storage features like indexing, replication, and sharding make systems faster and more resilient, but
+            they also introduce trade-offs you need to understand.
+          </Typography>
+        </Paper>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {dataModels.map((model) => (
+            <Grid item xs={12} sm={6} md={3} key={model.model}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}`, height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 0.5 }}>{model.model}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{model.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Strengths:</strong> {model.strengths}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Best for:</strong> {model.useCase}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Grid container spacing={2} sx={{ mb: 5 }}>
+          {storageConcepts.map((concept) => (
+            <Grid item xs={12} sm={6} md={3} key={concept.concept}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.15)}`, height: "100%", bgcolor: alpha("#22c55e", 0.02) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#16a34a", mb: 0.5 }}>{concept.concept}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{concept.description}</Typography>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                  <strong>Trade-off:</strong> {concept.tradeoff}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>Example:</strong> {concept.example}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* ========== MACHINE CODE SECTION ========== */}
+        <Box id="machine-code" sx={{ scrollMarginTop: 80 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, mt: 5 }}>
+            💻 Machine Code & Assembly Language
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Understanding how computers truly execute instructions at the lowest level
+          </Typography>
+
+          {/* Machine Code Introduction */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#dc2626", 0.03), border: `1px solid ${alpha("#dc2626", 0.15)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              <MemoryIcon sx={{ color: "#dc2626" }} />
+              What is Machine Code?
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              <strong>Machine code</strong> is the lowest-level programming language — a sequence of binary digits (1s and 0s) 
+              that the CPU can directly execute. When you write code in Python, JavaScript, C++, or any other language, it 
+              eventually gets translated into machine code before the computer can actually run it. Every "high-level" 
+              instruction you write becomes multiple machine code instructions that the processor reads and executes one at a time.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              Machine code is <strong>processor-specific</strong>. An x86 processor (found in most desktops and laptops) uses 
+              different machine code than an ARM processor (found in most smartphones and Apple Silicon Macs). This is why you 
+              can't simply run a Windows program on an ARM-based device without emulation or recompilation — the machine 
+              instructions are completely different.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              <strong>Assembly language</strong> is a human-readable representation of machine code. Instead of memorizing that 
+              <code style={{ backgroundColor: alpha("#dc2626", 0.1), padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                B8 05 00 00 00
+              </code> means "move the value 5 into the EAX register," we can write{" "}
+              <code style={{ backgroundColor: alpha("#dc2626", 0.1), padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                MOV EAX, 5
+              </code>. An <strong>assembler</strong> converts assembly language into machine code.
+            </Typography>
+
+            <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+              <AlertTitle sx={{ fontWeight: 700 }}>🔑 Key Insight</AlertTitle>
+              <Typography variant="body2">
+                Understanding machine code is essential for security professionals. Reverse engineering malware, analyzing 
+                exploits, understanding buffer overflows, and writing shellcode all require knowledge of how instructions 
+                execute at this level. Even if you never write assembly, being able to <em>read</em> it is invaluable.
+              </Typography>
+            </Alert>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+              The Compilation Journey
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+              Here's what happens when you write code:
+            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 3 }}>
+              <Chip label="Source Code" sx={{ bgcolor: alpha("#22c55e", 0.15), fontWeight: 600 }} />
+              <Typography>→</Typography>
+              <Chip label="Preprocessing" sx={{ bgcolor: alpha("#f59e0b", 0.15), fontWeight: 600 }} />
+              <Typography>→</Typography>
+              <Chip label="Compilation to Assembly" sx={{ bgcolor: alpha("#0ea5e9", 0.15), fontWeight: 600 }} />
+              <Typography>→</Typography>
+              <Chip label="Assembly to Object Code" sx={{ bgcolor: alpha("#8b5cf6", 0.15), fontWeight: 600 }} />
+              <Typography>→</Typography>
+              <Chip label="Linking" sx={{ bgcolor: alpha("#ec4899", 0.15), fontWeight: 600 }} />
+              <Typography>→</Typography>
+              <Chip label="Executable (Machine Code)" sx={{ bgcolor: alpha("#dc2626", 0.15), fontWeight: 700 }} />
+            </Box>
+          </Paper>
+
+          {/* CPU Instruction Cycle */}
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#f59e0b" }}>
+              ⚙️ The CPU Instruction Cycle (Fetch-Decode-Execute)
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Every instruction the CPU executes follows a predictable cycle. Understanding this cycle helps you grasp how 
+              programs actually run and why certain optimizations or attacks (like speculative execution vulnerabilities) work.
+            </Typography>
+            <Grid container spacing={2}>
+              {instructionCycle.map((phase, index) => (
+                <Grid item xs={12} key={phase.phase}>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, p: 1.5, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.1)}` }}>
+                    <Chip label={index + 1} size="small" sx={{ bgcolor: "#f59e0b", color: "white", fontWeight: 800, minWidth: 32 }} />
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b" }}>{phase.phase.split(". ")[1]}</Typography>
+                      <Typography variant="body2" color="text.secondary">{phase.description}</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              <Typography variant="body2">
+                Modern CPUs use <strong>pipelining</strong>, <strong>branch prediction</strong>, and <strong>out-of-order execution</strong> 
+                to process multiple instructions simultaneously. This makes them much faster but also introduces security vulnerabilities 
+                like Spectre and Meltdown.
+              </Typography>
+            </Alert>
+          </Paper>
+
+          {/* Machine Code Concepts */}
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            📖 Key Machine Code Concepts
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {machineCodeConcepts.map((concept) => (
+              <Grid item xs={12} sm={6} md={4} key={concept.concept}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#dc2626", 0.15)}`, bgcolor: alpha("#dc2626", 0.02) }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#dc2626", mb: 0.5 }}>{concept.concept}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{concept.description}</Typography>
+                  <Typography variant="caption" sx={{ fontFamily: "monospace", bgcolor: alpha("#dc2626", 0.1), px: 1, py: 0.5, borderRadius: 1, display: "inline-block" }}>
+                    {concept.example}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* CPU Registers */}
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#8b5cf6" }}>
+              🗄️ CPU Registers (x86/x64 Architecture)
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              <strong>Registers</strong> are tiny, ultra-fast storage locations inside the CPU. They hold data the processor is 
+              actively working with. Accessing a register takes about 1 CPU cycle, while accessing RAM takes 100-300 cycles. 
+              Understanding registers is crucial because exploits often manipulate them to control program execution.
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              In x86 architecture, registers have evolved from 16-bit (AX, BX) to 32-bit (EAX, EBX — the 'E' stands for 'Extended') 
+              to 64-bit (RAX, RBX — 'R' for... well, just 64-bit). You can still access the smaller portions: AL (low 8 bits of AX), 
+              AH (high 8 bits of AX), AX (low 16 bits of EAX), EAX (low 32 bits of RAX).
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.08) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Register</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Size</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cpuRegistersX86.map((reg) => (
+                    <TableRow key={reg.register} sx={{ "&:hover": { bgcolor: alpha("#8b5cf6", 0.03) } }}>
+                      <TableCell sx={{ fontFamily: "monospace", fontWeight: 700, color: "#8b5cf6" }}>{reg.register}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{reg.purpose}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem", color: "text.secondary" }}>{reg.description}</TableCell>
+                      <TableCell sx={{ fontFamily: "monospace" }}>{reg.bits}-bit</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>
+              <AlertTitle sx={{ fontWeight: 700 }}>🔐 Security Note</AlertTitle>
+              <Typography variant="body2">
+                The <strong>EIP/RIP</strong> (Instruction Pointer) is the most targeted register in exploitation. If an attacker can 
+                overwrite EIP (via buffer overflow, ROP chain, etc.), they can redirect program execution to their malicious code. 
+                This is why understanding registers is essential for both offense and defense.
+              </Typography>
+            </Alert>
+          </Paper>
+
+          {/* Common Instructions */}
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            📋 Common x86 Assembly Instructions
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            These are the most common instructions you'll encounter when reading disassembled code. They form the building 
+            blocks of all programs. While there are hundreds of x86 instructions, knowing these ~15-20 will let you understand 
+            most code you'll encounter.
+          </Typography>
+          <TableContainer component={Paper} sx={{ mb: 4, borderRadius: 3 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha("#0ea5e9", 0.1) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Instruction</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {commonInstructions.map((inst) => (
+                  <TableRow key={inst.instruction} sx={{ "&:hover": { bgcolor: alpha("#0ea5e9", 0.03) } }}>
+                    <TableCell sx={{ fontFamily: "monospace", fontWeight: 700, color: "#0ea5e9" }}>{inst.instruction}</TableCell>
+                    <TableCell><Chip label={inst.category} size="small" sx={{ fontSize: "0.7rem", height: 20 }} /></TableCell>
+                    <TableCell sx={{ fontSize: "0.85rem" }}>{inst.description}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem", color: "text.secondary" }}>{inst.example}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Memory Layout */}
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#22c55e" }}>
+              🏗️ Program Memory Layout
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              When a program runs, the operating system loads it into memory following a specific layout. Understanding this 
+              layout is crucial for exploit development, debugging, and reverse engineering. Each region has different purposes 
+              and permissions.
+            </Typography>
+            <Grid container spacing={2}>
+              {memorySegments.map((seg) => (
+                <Grid item xs={12} sm={6} key={seg.segment}>
+                  <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>{seg.segment}</Typography>
+                      <Chip 
+                        label={seg.permissions} 
+                        size="small" 
+                        sx={{ 
+                          fontFamily: "monospace", 
+                          fontSize: "0.7rem", 
+                          height: 20,
+                          bgcolor: seg.permissions.includes("X") ? alpha("#ef4444", 0.15) : alpha("#22c55e", 0.15),
+                          color: seg.permissions.includes("X") ? "#ef4444" : "#22c55e"
+                        }} 
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">{seg.description}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05), border: `1px dashed ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>📐 Memory Layout Visualization (High to Low Address)</Typography>
+              <Typography variant="body2" sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: 2 }}>
+{`┌─────────────────────────┐  High Address (e.g., 0xFFFFFFFF)
+│      Kernel Space       │  ← Reserved for OS
+├─────────────────────────┤
+│         Stack           │  ← Grows DOWN ↓ (local vars, return addresses)
+│           ↓             │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│                         │  ← Unused space
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│           ↑             │
+│          Heap           │  ← Grows UP ↑ (malloc, dynamic memory)
+├─────────────────────────┤
+│          BSS            │  ← Uninitialized global/static data
+├─────────────────────────┤
+│          Data           │  ← Initialized global/static data
+├─────────────────────────┤
+│     Text (Code)         │  ← Executable instructions
+└─────────────────────────┘  Low Address (e.g., 0x00400000)`}
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Practical Example */}
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ec4899", 0.03), border: `1px solid ${alpha("#ec4899", 0.15)}` }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#ec4899" }}>
+              🔬 Practical Example: C to Assembly
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Let's see how a simple C function gets translated to assembly. Understanding this transformation helps you 
+              read disassembled code and understand what compiled programs are actually doing.
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>C Source Code</Typography>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", fontFamily: "monospace", fontSize: "0.85rem", color: "#d4d4d4" }}>
+                  <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{`int add_numbers(int a, int b) {
+    int result;
+    result = a + b;
+    return result;
+}`}</pre>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#0ea5e9" }}>x86 Assembly (Simplified)</Typography>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", fontFamily: "monospace", fontSize: "0.85rem", color: "#d4d4d4" }}>
+                  <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{`add_numbers:
+    push ebp          ; Save old base pointer
+    mov ebp, esp      ; Set up stack frame
+    
+    mov eax, [ebp+8]  ; Load 'a' into EAX
+    add eax, [ebp+12] ; Add 'b' to EAX
+    ; Result is now in EAX
+    
+    pop ebp           ; Restore base pointer
+    ret               ; Return (EAX = result)`}</pre>
+                </Paper>
+              </Grid>
+            </Grid>
+            <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
+              <Typography variant="body2">
+                <strong>Key observation:</strong> The function's return value is stored in <code>EAX</code> by convention. 
+                Parameters are accessed relative to <code>EBP</code> (base pointer). This is the <strong>calling convention</strong> 
+                — the agreed-upon rules for how functions receive arguments and return values.
+              </Typography>
+            </Alert>
+          </Paper>
+
+          {/* Why This Matters */}
+          <Alert severity="success" sx={{ mb: 4, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🎯 Why Machine Code Knowledge Matters</AlertTitle>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" sx={{ mb: 1 }}><strong>🔍 Reverse Engineering</strong></Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Analyze malware, understand proprietary software, crack DRM (legally for security research)
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" sx={{ mb: 1 }}><strong>🐛 Exploit Development</strong></Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Buffer overflows, ROP chains, shellcode writing all require assembly knowledge
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" sx={{ mb: 1 }}><strong>🛡️ Vulnerability Analysis</strong></Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Understanding the root cause of CVEs often requires reading disassembly
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" sx={{ mb: 1 }}><strong>⚡ Performance Optimization</strong></Typography>
+                <Typography variant="caption" color="text.secondary">
+                  See what the compiler generates, identify inefficiencies, write SIMD code
+                </Typography>
+              </Grid>
+            </Grid>
+          </Alert>
+        </Box>
 
         {/* Divider - Advanced Topics */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5 }}>

@@ -18,6 +18,10 @@ logger = get_logger(__name__)
 # Stale connection timeout (no activity for 5 minutes)
 STALE_CONNECTION_TIMEOUT = timedelta(minutes=5)
 
+# Rate limiting for whiteboard operations (excluding cursor moves)
+WHITEBOARD_RATE_LIMIT = 60  # Operations per minute
+WHITEBOARD_RATE_WINDOW = 60  # Window in seconds
+
 
 @dataclass
 class UserConnection:
@@ -33,10 +37,27 @@ class UserConnection:
     selected_element_id: Optional[str] = None
     color: str = "#3b82f6"  # User's cursor color
     last_activity: datetime = field(default_factory=datetime.utcnow)
+    operation_timestamps: List[float] = field(default_factory=list)  # Rate limiting
     
     def is_stale(self) -> bool:
         """Check if connection is stale (no activity for too long)."""
         return datetime.utcnow() - self.last_activity > STALE_CONNECTION_TIMEOUT
+    
+    def check_rate_limit(self) -> bool:
+        """Check if user is within rate limit. Returns True if allowed."""
+        import time
+        now = time.time()
+        # Clean old entries outside the window
+        self.operation_timestamps = [
+            t for t in self.operation_timestamps 
+            if now - t < WHITEBOARD_RATE_WINDOW
+        ]
+        
+        if len(self.operation_timestamps) >= WHITEBOARD_RATE_LIMIT:
+            return False
+        
+        self.operation_timestamps.append(now)
+        return True
 
 
 class WhiteboardConnectionManager:
@@ -126,12 +147,9 @@ class WhiteboardConnectionManager:
                 self.connections[whiteboard_id] = {}
             
             # Close existing connection if user reconnects
+            old_conn = None
             if user_id in self.connections[whiteboard_id]:
                 old_conn = self.connections[whiteboard_id][user_id]
-                try:
-                    await old_conn.websocket.close(code=1000, reason="Reconnected from another session")
-                except Exception:
-                    pass  # Old connection may already be closed
             
             # Create user connection with assigned color
             connection = UserConnection(
@@ -142,6 +160,13 @@ class WhiteboardConnectionManager:
             )
             
             self.connections[whiteboard_id][user_id] = connection
+        
+        # Close old connection OUTSIDE the lock to avoid race condition
+        if old_conn:
+            try:
+                await old_conn.websocket.close(code=1000, reason="Reconnected from another session")
+            except Exception:
+                pass  # Old connection may already be closed
         
         # Start cleanup task if not running
         await self.start_cleanup_task()

@@ -1480,7 +1480,36 @@ export default function KotlinProgrammingPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
               Kotlin's syntax is clean and concise while remaining expressive. If you know Java, you'll
               find Kotlin familiar but significantly less verbose. Semicolons are optional (and typically
-              omitted), and many Java patterns are simplified.
+              omitted), and many Java patterns are simplified. **The fundamental principle of Kotlin's
+              syntax design is reducing ceremony without sacrificing clarity.** Where Java requires explicit
+              type declarations, access modifiers, and boilerplate code, Kotlin infers types, provides
+              sensible defaults, and eliminates redundancy. This doesn't make the code less readable—quite
+              the opposite. By removing noise, Kotlin lets you focus on the actual logic rather than
+              language formalities.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              One of the first things you'll notice is **type inference**. You rarely need to explicitly
+              declare types because the compiler is smart enough to figure them out from context. This isn't
+              dynamic typing (like Python or JavaScript)—it's still statically typed with full compile-time
+              checks. The difference is the compiler does the work for you. When you write{" "}
+              <code>val name = "Kotlin"</code>, the compiler knows it's a String. When you write{" "}
+              <code>val numbers = listOf(1, 2, 3)</code>, it knows it's <code>List{"<"}Int{">"}</code>.
+              You can always add explicit types for clarity, but most of the time it's unnecessary. This
+              significantly reduces code verbosity without any loss of type safety.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              The distinction between **val (read-only) and var (mutable)** is central to Kotlin's design.
+              <code> val</code> declares an immutable variable—once assigned, it cannot be reassigned.
+              <code> var</code> declares a mutable variable that can be changed. The Kotlin philosophy
+              strongly encourages using <code>val</code> by default and only using <code>var</code> when
+              mutation is truly necessary. This functional programming influence makes code safer and easier
+              to reason about. When you see a <code>val</code>, you know its value never changes after
+              initialization. This eliminates entire classes of bugs caused by unexpected mutations. Modern
+              Kotlin code often has 80-90% <code>val</code> declarations, reserving <code>var</code> for
+              accumulators, counters, and truly mutable state. IDEs like IntelliJ IDEA even warn you when
+              you use <code>var</code> unnecessarily and suggest converting to <code>val</code>.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#48BB78" }}>
@@ -1541,6 +1570,20 @@ export default function KotlinProgrammingPage() {
               String Templates
             </Typography>
 
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              **String templates are one of Kotlin's most delightful features** for anyone coming from Java's
+              verbose string concatenation or Python's f-strings. Instead of writing{" "}
+              <code>"Hello, " + name + "!"</code>, you simply write <code>"Hello, $name!"</code>. The <code>$</code>{" "}
+              symbol indicates a template expression. For simple variable references, just <code>$variableName</code>.{" "}
+              For more complex expressions—function calls, property access, arithmetic—wrap them in braces:{" "}
+              <code>${"{"}expression{"}"}  </code>. This makes string building dramatically more readable, especially
+              for longer strings with multiple substitutions. Under the hood, string templates compile to efficient
+              <code> StringBuilder</code> operations, so there's no performance penalty. **String templates also work
+              with raw strings (triple-quoted)**, which are perfect for multi-line text like JSON, SQL queries, or
+              formatted output. You can embed expressions directly in multi-line strings without breaking the flow.
+              This feature alone eliminates countless lines of tedious string manipulation code that plagues Java projects.
+            </Typography>
+
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
               <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
                 <span style={{ color: "#ff79c6" }}>val</span> name = <span style={{ color: "#f1fa8c" }}>"Kotlin"</span>{"\n"}
@@ -1577,6 +1620,21 @@ export default function KotlinProgrammingPage() {
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#667EEA" }}>
               Nullable vs Non-Nullable Types
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              **This is THE killer feature of Kotlin**—the one that prevents billions of dollars in bugs and countless
+              hours of debugging. In Java, <code>NullPointerException</code> is the #1 cause of production crashes.
+              Every reference can be null, and the compiler doesn't warn you when you might dereference a null value.
+              Kotlin solves this at the language level by splitting types into **nullable** (<code>String?</code>) and{" "}
+              **non-nullable** (<code>String</code>). By default, variables cannot be null. If you want to allow null,
+              you must explicitly add <code>?</code> to the type. This forces you to think about nullability upfront
+              rather than discovering it through runtime crashes. **The compiler tracks nullability through your entire
+              program.** If you have a <code>String?</code> and try to call <code>.length</code> on it without checking
+              for null, you get a compile error. This compile-time guarantee eliminates an entire class of bugs. The
+              safe call operator <code>?.</code> returns null if the receiver is null (instead of crashing). The Elvis
+              operator <code>?:</code> provides fallback values. Together, these operators make null handling concise
+              and safe. Once you've worked in Kotlin, going back to Java's null handling feels reckless.
             </Typography>
 
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
@@ -1643,6 +1701,21 @@ export default function KotlinProgrammingPage() {
               If Expression
             </Typography>
 
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              In Kotlin, **if is not just a statement—it's an expression that returns a value**. This is a subtle but
+              profound difference from Java. In Java, <code>if</code> is a statement that executes code but doesn't
+              produce a value. You need the ternary operator (<code>? :</code>) for conditional expressions. Kotlin
+              eliminates the ternary operator because <code>if</code> itself can return values. Write{" "}
+              <code>val max = if (a {">"}  b) a else b</code> instead of Java's{" "}
+              <code>int max = (a {">"}  b) ? a : b</code>. The syntax is clearer and more consistent. **This expression
+              nature extends to blocks too.** The last expression in an <code>if</code> block becomes the return value.
+              This eliminates the need for explicit <code>return</code> statements in many cases and makes code more
+              concise. You can have multi-line logic in each branch, and the final line determines what the whole{" "}
+              <code>if</code> expression evaluates to. This functional programming influence makes Kotlin code more
+              declarative—you describe WHAT you want ("give me the max value") rather than HOW to get it ("assign
+              this variable conditionally"). It's a small change that significantly improves code readability.
+            </Typography>
+
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
               <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
                 <span style={{ color: "#6272a4" }}>// Traditional if</span>{"\n"}
@@ -1669,6 +1742,22 @@ export default function KotlinProgrammingPage() {
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#38B2AC" }}>
               When Expression (Pattern Matching)
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              **When expressions are Kotlin's supercharged replacement for Java's <code>switch</code> statement**, and
+              they're vastly more powerful. First, like <code>if</code>, <code>when</code> is an expression that returns
+              a value, so you can write <code>val result = when (x) {"{"} ... {"}"}</code>. Second, <code>when</code> branches can
+              match on any type, not just integers and enums like Java. **You can match on strings, ranges, collections,
+              type checks, and even arbitrary boolean conditions.** Write <code>when (x) {"{"} in 1..10 → ... {"}"}</code>{" "}
+              to match ranges, or <code>is String → ...</code> to match types. Third, you can omit the subject entirely
+              and use <code>when</code> as a more readable replacement for <code>if-else-if</code> chains:{" "}
+              <code>when {"{"} x.isOdd() → ... ; x.isEven() → ... {"}"}</code>. **When expressions also enforce
+              exhaustiveness when used as expressions**, meaning the compiler ensures you've handled all cases. For sealed
+              classes (covered later), this creates a powerful pattern-matching system that catches missing cases at
+              compile time. The arrow syntax (<code>→</code>) is cleaner than <code>case:</code> and doesn't require{" "}
+              <code>break</code> statements (no fall-through by default). Combined with smart casts, <code>when</code>{" "}
+              expressions make complex branching logic elegant and safe.
             </Typography>
 
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
@@ -1700,6 +1789,22 @@ export default function KotlinProgrammingPage() {
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#38B2AC" }}>
               Loops
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              Kotlin's <code>for</code> loops are **range-based and collection-focused**, eliminating Java's traditional
+              C-style <code>for (int i = 0; i {"<"} n; i++)</code> syntax. Instead, you iterate over ranges:{" "}
+              <code>for (i in 1..10)</code>, or collections: <code>for (item in list)</code>. This makes loops more
+              declarative and less error-prone—you can't accidentally write <code>i {"<"}= n</code> when you meant{" "}
+              <code>i {"<"} n</code>, a classic off-by-one bug. **Ranges in Kotlin are powerful and expressive**: use{" "}
+              <code>1..10</code> for inclusive ranges, <code>1 until 10</code> for exclusive upper bounds, or{" "}
+              <code>10 downTo 1 step 2</code> for descending ranges with custom steps. When you need the index while
+              iterating, <code>.withIndex()</code> provides elegant tuples: <code>for ((index, value) in list.withIndex())</code>.
+              This destructuring syntax is much cleaner than Java's manual index tracking. **For loops also work with any
+              type that defines an <code>iterator()</code> function**, making them extensible. While loops work exactly as
+              you'd expect, but in modern Kotlin code you'll see fewer explicit loops overall—higher-order functions like{" "}
+              <code>map</code>, <code>filter</code>, and <code>forEach</code> often express intent more clearly than
+              imperative loops.
             </Typography>
 
             <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
@@ -1740,9 +1845,17 @@ export default function KotlinProgrammingPage() {
 
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
               Kotlin supports all standard operators and adds several powerful ones unique to the language.
-              Unlike Java, Kotlin allows <strong>operator overloading</strong>—you can define what + or *
+              Unlike Java, Kotlin allows **operator overloading**—you can define what <code>+</code> or <code>*</code>
               means for your custom classes. Many operators are actually translated to method calls,
-              making the language extensible yet readable.
+              making the language extensible yet readable. **This convention-over-configuration approach means that
+              operators like <code>[]</code> translate to <code>get()</code> and <code>set()</code> calls**, allowing
+              your classes to support array-like syntax. Similarly, the <code>in</code> operator translates to{" "}
+              <code>contains()</code>, and comparison operators translate to <code>compareTo()</code>. This design
+              keeps the syntax clean while remaining predictable and discoverable. **Kotlin also introduces several
+              null-safe operators** (<code>?.</code>, <code>?:</code>, <code>!!</code>) that fundamentally change how
+              you handle nullable values. The range operator (<code>..</code>) creates ranges that work seamlessly with
+              loops and collections. Understanding operator precedence and associativity remains important, but Kotlin's
+              expression-based nature means operators can be chained and composed more naturally than in Java.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
@@ -1874,9 +1987,18 @@ export default function KotlinProgrammingPage() {
             </Box>
 
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
-              Kotlin functions are first-class citizens—they can be stored in variables, passed as arguments,
-              and returned from other functions. The language provides powerful features like default arguments,
-              named parameters, extension functions, and infix notation that make code more expressive and concise.
+              Kotlin functions are **first-class citizens**—they can be stored in variables, passed as arguments,
+              and returned from other functions. This functional programming influence makes Kotlin dramatically more
+              expressive than Java. **Every function is declared with the <code>fun</code> keyword**, and parameter
+              types are specified using Pascal notation (<code>name: Type</code>) rather than Java's C-style{" "}
+              (<code>Type name</code>). Return types come after the parameter list, separated by a colon. Functions
+              can have default argument values, eliminating the need for multiple overloaded variants. **Named arguments
+              allow you to skip optional parameters and call functions with arguments in any order**, making APIs more
+              flexible and readable. Extension functions let you add methods to existing classes without inheritance,
+              which is incredibly powerful for building DSLs and improving API ergonomics. Inline functions, higher-order
+              functions, and lambdas give you the power of functional programming without sacrificing performance or
+              readability. Together, these features make Kotlin function definitions shorter, clearer, and more
+              maintainable than their Java equivalents.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
@@ -2022,9 +2144,20 @@ export default function KotlinProgrammingPage() {
             </Box>
 
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
-              Kotlin's null safety is one of its killer features. The type system distinguishes between
-              nullable and non-nullable references, eliminating the dreaded <code>NullPointerException</code>
-              at compile time rather than runtime. This alone makes Kotlin significantly safer than Java.
+              **Kotlin's null safety is one of its killer features**—arguably THE feature that convinced Google to adopt
+              Kotlin for Android. The type system distinguishes between **nullable** and **non-nullable** references at
+              compile time, eliminating the dreaded <code>NullPointerException</code> before your code ever runs. In Java,
+              every reference can be null, and <code>NullPointerException</code> accounts for billions of dollars in
+              production bugs annually. Kotlin solves this by making nullability explicit in the type system. **By default,
+              variables cannot be null.** If you want to allow null, you must explicitly add <code>?</code> to the type
+              (<code>String?</code> instead of <code>String</code>). This forces you to think about nullability upfront
+              rather than discovering it through runtime crashes. The compiler tracks nullability through your entire
+              program, giving you compile-time safety. If you try to call a method on a nullable type without checking for
+              null first, you get a compile error. **The language provides elegant operators for handling nullability**:
+              safe calls (<code>?.</code>), Elvis operators (<code>?:</code>), and smart casts that automatically treat
+              values as non-null after null checks. This combination of type-system enforcement and convenient operators
+              makes null handling both safe and concise. Once you've worked in Kotlin, going back to Java's null handling
+              feels reckless and primitive.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
@@ -2154,10 +2287,19 @@ export default function KotlinProgrammingPage() {
             </Box>
 
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
-              Kotlin's collection framework distinguishes between <strong>read-only</strong> and
-              <strong> mutable</strong> collections at the type level. This prevents accidental
-              modification and makes code intent clearer. The standard library provides powerful
-              functional operations that make collection manipulation concise and expressive.
+              Kotlin's collection framework distinguishes between **read-only** and **mutable** collections at the type
+              level. This prevents accidental modification and makes code intent clearer. **The type system enforces
+              immutability**: a <code>List{"<"}T{">"}</code> reference provides no mutation methods, while{" "}
+              <code>MutableList{"<"}T{">"}</code> explicitly indicates that the collection can change. This is a
+              compile-time guarantee, unlike Java's convention-based approach with{" "}
+              <code>Collections.unmodifiableList()</code>. The standard library provides powerful functional operations
+              that make collection manipulation concise and expressive. **Operations like <code>map</code>,{" "}
+              <code>filter</code>, <code>flatMap</code>, <code>groupBy</code>, and <code>fold</code> eliminate the
+              need for explicit loops**, making code more declarative and easier to reason about. These operations are
+              also optimized—using sequences (<code>.asSequence()</code>) makes them lazy and efficient for large
+              datasets. Kotlin's collections interoperate seamlessly with Java collections, so you can use existing
+              libraries without friction. The distinction between read-only and mutable, combined with rich functional
+              operators, makes Kotlin's collection API one of its strongest features for everyday programming.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
@@ -2283,9 +2425,22 @@ export default function KotlinProgrammingPage() {
             </Box>
 
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
-              Kotlin's OOP model is cleaner and more concise than Java's. Classes are final by default,
-              promoting composition over inheritance. Properties replace Java's getter/setter boilerplate,
-              and constructors are declared directly in the class header.
+              Kotlin's OOP model is **cleaner and more concise than Java's**, eliminating much of the ceremony that
+              makes Java class definitions verbose. Classes are **final by default**, which promotes composition over
+              inheritance and prevents common mistakes like inadvertently allowing subclassing. If you want inheritance,
+              you must explicitly mark classes and methods as <code>open</code>. **Properties replace Java's
+              getter/setter boilerplate**—instead of writing <code>private String name; public String getName() {"{"} ...
+              {"}"}</code>, you simply write <code>val name: String</code>. Kotlin generates the accessor methods
+              automatically, and you can customize them if needed. Constructors are declared directly in the class
+              header, which dramatically reduces the amount of code you need to write. **Primary constructors define
+              parameters right after the class name**, and those parameters can be automatically turned into properties
+              by adding <code>val</code> or <code>var</code>. Secondary constructors exist for more complex initialization
+              scenarios, but primary constructors cover 90% of use cases. Data classes automatically generate{" "}
+              <code>equals()</code>, <code>hashCode()</code>, <code>toString()</code>, and <code>copy()</code> methods,
+              eliminating hundreds of lines of boilerplate. **Sealed classes and interfaces create restricted type
+              hierarchies**, perfect for modeling state machines and ADTs (algebraic data types). Combined with{" "}
+              <code>when</code> expressions, sealed classes enable exhaustive pattern matching at compile time. Kotlin's
+              OOP is pragmatic—it takes the best parts of Java's class system and removes the pain points.
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>

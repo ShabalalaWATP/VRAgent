@@ -494,7 +494,7 @@ INPUT:
             model=settings.gemini_model_id or "gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.1,
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
                 max_output_tokens=2000,
             ),
         )

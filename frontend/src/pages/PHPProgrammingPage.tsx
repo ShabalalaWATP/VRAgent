@@ -2394,6 +2394,32 @@ export default function PHPProgrammingPage() {
             </Typography>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              Superglobals Cheat Sheet
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: alpha(accentColor, 0.08), border: `1px solid ${alpha(accentColor, 0.2)}` }}>
+              <List dense>
+                {[
+                  "$_GET - Query string parameters (?page=2)",
+                  "$_POST - Form data sent with POST",
+                  "$_REQUEST - Combined GET/POST/COOKIE (use with care)",
+                  "$_SERVER - Request/headers, script info, server vars",
+                  "$_SESSION - Server-side session data",
+                  "$_COOKIE - Client-side stored values",
+                  "$_FILES - Uploaded file metadata",
+                  "$_ENV - Environment variables from server/runtime",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: accentColor }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
               Handling Form Data
             </Typography>
 
@@ -2474,6 +2500,33 @@ export default function PHPProgrammingPage() {
                 {"\n"}
                 <span style={{ color: "#6272a4" }}>// Escape output to prevent XSS</span>{"\n"}
                 <span style={{ color: "#50fa7b" }}>echo</span> <span style={{ color: "#50fa7b" }}>htmlspecialchars</span>(<span style={{ color: "#ff79c6" }}>$username</span>, ENT_QUOTES, <span style={{ color: "#f1fa8c" }}>'UTF-8'</span>);
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              File Uploads (Safe Handling)
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// HTML form must include enctype</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>&lt;form</span> method=<span style={{ color: "#f1fa8c" }}>"POST"</span> enctype=<span style={{ color: "#f1fa8c" }}>"multipart/form-data"</span><span style={{ color: "#ff79c6" }}>&gt;</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>&lt;input</span> type=<span style={{ color: "#f1fa8c" }}>"file"</span> name=<span style={{ color: "#f1fa8c" }}>"avatar"</span><span style={{ color: "#ff79c6" }}>&gt;</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>&lt;/form&gt;</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// PHP upload handling</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>$file</span> = <span style={{ color: "#ff79c6" }}>$_FILES</span>[<span style={{ color: "#f1fa8c" }}>'avatar'</span>] ?? <span style={{ color: "#ff79c6" }}>null</span>;{"\n"}
+                <span style={{ color: "#ff79c6" }}>if</span> (<span style={{ color: "#ff79c6" }}>$file</span> &amp;&amp; <span style={{ color: "#ff79c6" }}>$file</span>[<span style={{ color: "#f1fa8c" }}>'error'</span>] === UPLOAD_ERR_OK) {"{"}{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>$maxSize</span> = <span style={{ color: "#bd93f9" }}>2</span> * <span style={{ color: "#bd93f9" }}>1024</span> * <span style={{ color: "#bd93f9" }}>1024</span>;  <span style={{ color: "#6272a4" }}>// 2MB</span>{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>$allowed</span> = [<span style={{ color: "#f1fa8c" }}>'image/jpeg'</span>, <span style={{ color: "#f1fa8c" }}>'image/png'</span>];{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>$finfo</span> = <span style={{ color: "#ff79c6" }}>new</span> <span style={{ color: "#50fa7b" }}>finfo</span>(FILEINFO_MIME_TYPE);{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>$mime</span> = <span style={{ color: "#ff79c6" }}>$finfo</span>-{">"}<span style={{ color: "#50fa7b" }}>file</span>(<span style={{ color: "#ff79c6" }}>$file</span>[<span style={{ color: "#f1fa8c" }}>'tmp_name'</span>]);{"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>if</span> (<span style={{ color: "#ff79c6" }}>$file</span>[<span style={{ color: "#f1fa8c" }}>'size'</span>] &lt;= <span style={{ color: "#ff79c6" }}>$maxSize</span> &amp;&amp; <span style={{ color: "#50fa7b" }}>in_array</span>(<span style={{ color: "#ff79c6" }}>$mime</span>, <span style={{ color: "#ff79c6" }}>$allowed</span>, <span style={{ color: "#ff79c6" }}>true</span>)) {"{"}{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>$ext</span> = <span style={{ color: "#50fa7b" }}>pathinfo</span>(<span style={{ color: "#ff79c6" }}>$file</span>[<span style={{ color: "#f1fa8c" }}>'name'</span>], PATHINFO_EXTENSION);{"\n"}
+                {"        "}<span style={{ color: "#ff79c6" }}>$safeName</span> = <span style={{ color: "#50fa7b" }}>bin2hex</span>(<span style={{ color: "#50fa7b" }}>random_bytes</span>(<span style={{ color: "#bd93f9" }}>16</span>)) . <span style={{ color: "#f1fa8c" }}>'.'</span> . <span style={{ color: "#ff79c6" }}>$ext</span>;{"\n"}
+                {"        "}<span style={{ color: "#50fa7b" }}>move_uploaded_file</span>(<span style={{ color: "#ff79c6" }}>$file</span>[<span style={{ color: "#f1fa8c" }}>'tmp_name'</span>], __DIR__ . <span style={{ color: "#f1fa8c" }}>'/uploads/'</span> . <span style={{ color: "#ff79c6" }}>$safeName</span>);{"\n"}
+                {"    }"}{"\n"}
+                {"}"}
               </Typography>
             </Paper>
 
@@ -2568,6 +2621,42 @@ export default function PHPProgrammingPage() {
             </Paper>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              Binding Parameters and Fetch Modes
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Bind values with types (safer and clearer)</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span> = <span style={{ color: "#ff79c6" }}>$pdo</span>-{">"}<span style={{ color: "#50fa7b" }}>prepare</span>(<span style={{ color: "#f1fa8c" }}>'SELECT * FROM users WHERE id = :id'</span>);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>bindValue</span>(<span style={{ color: "#f1fa8c" }}>&#39;:id&#39;</span>, <span style={{ color: "#bd93f9" }}>42</span>, PDO::PARAM_INT);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>execute</span>();{"\n"}
+                <span style={{ color: "#ff79c6" }}>$row</span> = <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>fetch</span>(PDO::FETCH_ASSOC);{"\n"}
+                {"\n"}
+                <span style={{ color: "#6272a4" }}>// Fetch as objects</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span> = <span style={{ color: "#ff79c6" }}>$pdo</span>-{">"}<span style={{ color: "#50fa7b" }}>query</span>(<span style={{ color: "#f1fa8c" }}>'SELECT id, email FROM users'</span>);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$users</span> = <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>fetchAll</span>(PDO::FETCH_OBJ);
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
+              Pagination and Limits
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Validate and cast pagination params</span>{"\n"}
+                <span style={{ color: "#ff79c6" }}>$page</span> = <span style={{ color: "#50fa7b" }}>max</span>(<span style={{ color: "#bd93f9" }}>1</span>, (<span style={{ color: "#ff79c6" }}>int</span>)(<span style={{ color: "#ff79c6" }}>$_GET</span>[<span style={{ color: "#f1fa8c" }}>'page'</span>] ?? <span style={{ color: "#bd93f9" }}>1</span>));{"\n"}
+                <span style={{ color: "#ff79c6" }}>$limit</span> = <span style={{ color: "#bd93f9" }}>20</span>;{"\n"}
+                <span style={{ color: "#ff79c6" }}>$offset</span> = (<span style={{ color: "#ff79c6" }}>$page</span> - <span style={{ color: "#bd93f9" }}>1</span>) * <span style={{ color: "#ff79c6" }}>$limit</span>;{"\n"}
+                {"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span> = <span style={{ color: "#ff79c6" }}>$pdo</span>-{">"}<span style={{ color: "#50fa7b" }}>prepare</span>(<span style={{ color: "#f1fa8c" }}>'SELECT * FROM posts ORDER BY created_at DESC LIMIT :limit OFFSET :offset'</span>);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>bindValue</span>(<span style={{ color: "#f1fa8c" }}>&#39;:limit&#39;</span>, <span style={{ color: "#ff79c6" }}>$limit</span>, PDO::PARAM_INT);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>bindValue</span>(<span style={{ color: "#f1fa8c" }}>&#39;:offset&#39;</span>, <span style={{ color: "#ff79c6" }}>$offset</span>, PDO::PARAM_INT);{"\n"}
+                <span style={{ color: "#ff79c6" }}>$stmt</span>-{">"}<span style={{ color: "#50fa7b" }}>execute</span>();
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accentColor }}>
               Transactions
             </Typography>
 
@@ -2598,6 +2687,20 @@ export default function PHPProgrammingPage() {
                   <li>Set <code>ERRMODE_EXCEPTION</code> to catch database errors properly</li>
                   <li>Use <code>FETCH_ASSOC</code> for cleaner array keys</li>
                   <li>Store credentials in environment variables, not in code</li>
+                </ul>
+              </Typography>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha(accentColor, 0.08), border: `1px solid ${alpha(accentColor, 0.2)}` }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                Performance and Reliability Tips
+              </Typography>
+              <Typography variant="body2" color="text.secondary" component="div">
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  <li>Add indexes for columns used in WHERE, JOIN, and ORDER BY clauses</li>
+                  <li>Keep long-running reports off the primary database when possible</li>
+                  <li>Use transactions for multi-step changes to avoid partial updates</li>
+                  <li>Fail fast on connection errors and log them (do not display raw errors to users)</li>
                 </ul>
               </Typography>
             </Paper>
@@ -2673,6 +2776,25 @@ export default function PHPProgrammingPage() {
             </Paper>
 
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+              Session Security
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Configure secure session cookies BEFORE session_start()</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>session_set_cookie_params</span>([{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>'lifetime'</span> ={">"} <span style={{ color: "#bd93f9" }}>0</span>,{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>'path'</span> ={">"} <span style={{ color: "#f1fa8c" }}>'/'</span>,{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>'secure'</span> ={">"} <span style={{ color: "#ff79c6" }}>true</span>,{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>'httponly'</span> ={">"} <span style={{ color: "#ff79c6" }}>true</span>,{"\n"}
+                {"    "}<span style={{ color: "#f1fa8c" }}>'samesite'</span> ={">"} <span style={{ color: "#f1fa8c" }}>'Lax'</span>,{"\n"}
+                ]);{"\n"}
+                <span style={{ color: "#50fa7b" }}>session_start</span>();{"\n"}
+                <span style={{ color: "#50fa7b" }}>session_regenerate_id</span>(<span style={{ color: "#ff79c6" }}>true</span>);  <span style={{ color: "#6272a4" }}>// Prevent session fixation</span>
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
               XSS Prevention
             </Typography>
 
@@ -2690,6 +2812,20 @@ export default function PHPProgrammingPage() {
                 <span style={{ color: "#6272a4" }}>// For JSON responses</span>{"\n"}
                 <span style={{ color: "#50fa7b" }}>header</span>(<span style={{ color: "#f1fa8c" }}>'Content-Type: application/json'</span>);{"\n"}
                 <span style={{ color: "#50fa7b" }}>echo</span> <span style={{ color: "#50fa7b" }}>json_encode</span>(<span style={{ color: "#ff79c6" }}>$data</span>, JSON_HEX_TAG | JSON_HEX_AMP);
+              </Typography>
+            </Paper>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+              Security Headers
+            </Typography>
+
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                <span style={{ color: "#6272a4" }}>// Add security headers in your front controller</span>{"\n"}
+                <span style={{ color: "#50fa7b" }}>header</span>(<span style={{ color: "#f1fa8c" }}>'X-Content-Type-Options: nosniff'</span>);{"\n"}
+                <span style={{ color: "#50fa7b" }}>header</span>(<span style={{ color: "#f1fa8c" }}>'X-Frame-Options: DENY'</span>);{"\n"}
+                <span style={{ color: "#50fa7b" }}>header</span>(<span style={{ color: "#f1fa8c" }}>'Referrer-Policy: strict-origin-when-cross-origin'</span>);{"\n"}
+                <span style={{ color: "#50fa7b" }}>header</span>(<span style={{ color: "#f1fa8c" }}>'Content-Security-Policy: default-src \\'self\\''</span>);
               </Typography>
             </Paper>
 

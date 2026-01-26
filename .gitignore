@@ -90,3 +90,8 @@ test.pdf
 openapi_temp.json
 *.bin
 *.exe
+
+# Offline security databases (large, external repos)
+data/offline/exploitdb/
+data/offline/nuclei-templates/
+nul

@@ -51,9 +51,39 @@ const QuizSection: React.FC<QuizSectionProps> = ({
   const success = "#22c55e";
   const error = "#ef4444";
 
+  // Shuffle options within a question and update correctAnswer index
+  const shuffleQuestionOptions = (question: QuizQuestion): QuizQuestion => {
+    const correctAnswerText = question.options[question.correctAnswer];
+    
+    // Create array of option indices and shuffle them
+    const indices = question.options.map((_, idx) => idx);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    
+    // Reorder options based on shuffled indices
+    const shuffledOptions = indices.map(idx => question.options[idx]);
+    
+    // Find new index of correct answer
+    const newCorrectAnswer = shuffledOptions.indexOf(correctAnswerText);
+    
+    return {
+      ...question,
+      options: shuffledOptions,
+      correctAnswer: newCorrectAnswer,
+    };
+  };
+
   const startQuiz = () => {
-    const shuffled = [...questionBank].sort(() => Math.random() - 0.5);
-    setQuestions(shuffled.slice(0, QUESTIONS_PER_QUIZ));
+    // Shuffle questions
+    const shuffledQuestions = [...questionBank].sort(() => Math.random() - 0.5);
+    // Take subset and shuffle each question's options
+    const selectedQuestions = shuffledQuestions
+      .slice(0, QUESTIONS_PER_QUIZ)
+      .map(shuffleQuestionOptions);
+    
+    setQuestions(selectedQuestions);
     setCurrentQuestionIndex(0);
     setSelectedAnswers({});
     setShowExplanation(false);

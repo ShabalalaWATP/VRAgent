@@ -791,6 +791,510 @@ TRUSTED_ROOT_CA_NAMES = [
 ]
 
 
+# ============================================================================
+# MOZILLA TLS COMPLIANCE PROFILES
+# Based on https://ssl-config.mozilla.org/
+# ============================================================================
+
+MOZILLA_TLS_PROFILES = {
+    "modern": {
+        "name": "Modern",
+        "description": "Services with clients that support TLS 1.3 and don't need backward compatibility",
+        "min_tls_version": "TLSv1.3",
+        "allowed_protocols": ["TLSv1.3"],
+        "forbidden_protocols": ["SSLv2", "SSLv3", "TLSv1.0", "TLSv1.1", "TLSv1.2"],
+        "allowed_ciphers": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+        ],
+        "forbidden_ciphers": ["*CBC*", "*RC4*", "*3DES*", "*NULL*", "*EXPORT*", "*anon*"],
+        "min_rsa_key_size": 2048,
+        "min_ec_key_size": 256,
+        "allowed_curves": ["X25519", "prime256v1", "secp384r1"],
+        "hsts_required": True,
+        "hsts_min_age": 63072000,  # 2 years
+        "ocsp_stapling_required": True,
+    },
+    "intermediate": {
+        "name": "Intermediate",
+        "description": "General-purpose servers with a variety of clients, recommended for almost all systems",
+        "min_tls_version": "TLSv1.2",
+        "allowed_protocols": ["TLSv1.2", "TLSv1.3"],
+        "forbidden_protocols": ["SSLv2", "SSLv3", "TLSv1.0", "TLSv1.1"],
+        "allowed_ciphers": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+            "DHE-RSA-AES128-GCM-SHA256",
+            "DHE-RSA-AES256-GCM-SHA384",
+        ],
+        "forbidden_ciphers": ["*CBC*", "*RC4*", "*3DES*", "*NULL*", "*EXPORT*", "*anon*", "*DES*"],
+        "min_rsa_key_size": 2048,
+        "min_ec_key_size": 256,
+        "min_dh_param_size": 2048,
+        "allowed_curves": ["X25519", "prime256v1", "secp384r1"],
+        "hsts_required": True,
+        "hsts_min_age": 63072000,
+        "ocsp_stapling_required": False,
+    },
+    "old": {
+        "name": "Old",
+        "description": "Services accessed by very old clients or libraries, such as Internet Explorer 8 (Windows XP), Java 6, or OpenSSL 0.9.8",
+        "min_tls_version": "TLSv1.0",
+        "allowed_protocols": ["TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3"],
+        "forbidden_protocols": ["SSLv2", "SSLv3"],
+        "allowed_ciphers": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384", 
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+            "DHE-RSA-AES128-GCM-SHA256",
+            "DHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-SHA256",
+            "ECDHE-RSA-AES128-SHA256",
+            "ECDHE-ECDSA-AES128-SHA",
+            "ECDHE-RSA-AES128-SHA",
+            "ECDHE-ECDSA-AES256-SHA384",
+            "ECDHE-RSA-AES256-SHA384",
+            "ECDHE-ECDSA-AES256-SHA",
+            "ECDHE-RSA-AES256-SHA",
+            "DHE-RSA-AES128-SHA256",
+            "DHE-RSA-AES256-SHA256",
+            "AES128-GCM-SHA256",
+            "AES256-GCM-SHA384",
+            "AES128-SHA256",
+            "AES256-SHA256",
+            "AES128-SHA",
+            "AES256-SHA",
+            "DES-CBC3-SHA",
+        ],
+        "forbidden_ciphers": ["*RC4*", "*NULL*", "*EXPORT*", "*anon*", "*DES-CBC-*"],
+        "min_rsa_key_size": 2048,
+        "min_ec_key_size": 256,
+        "min_dh_param_size": 1024,
+        "allowed_curves": ["X25519", "prime256v1", "secp384r1"],
+        "hsts_required": False,
+        "hsts_min_age": 0,
+        "ocsp_stapling_required": False,
+    },
+}
+
+
+# ============================================================================
+# SSL LABS-STYLE GRADING SYSTEM
+# ============================================================================
+
+SSL_GRADE_CRITERIA = {
+    "A+": {
+        "min_score": 95,
+        "requirements": {
+            "no_vulnerabilities": True,
+            "tls13_supported": True,
+            "forward_secrecy": True,
+            "hsts_enabled": True,
+            "no_weak_protocols": True,
+            "no_weak_ciphers": True,
+            "cert_chain_valid": True,
+            "ocsp_stapling": True,
+        },
+        "description": "Exceptional security configuration with all best practices"
+    },
+    "A": {
+        "min_score": 85,
+        "requirements": {
+            "no_critical_vulns": True,
+            "no_weak_protocols": True,
+            "no_weak_ciphers": True,
+            "forward_secrecy": True,
+            "cert_chain_valid": True,
+        },
+        "description": "Strong security configuration"
+    },
+    "B": {
+        "min_score": 70,
+        "requirements": {
+            "no_critical_vulns": True,
+            "tls12_or_higher": True,
+            "cert_chain_valid": True,
+        },
+        "description": "Adequate security with minor issues"
+    },
+    "C": {
+        "min_score": 55,
+        "requirements": {
+            "no_critical_vulns": True,
+            "tls_supported": True,
+        },
+        "description": "Configuration has significant weaknesses"
+    },
+    "D": {
+        "min_score": 40,
+        "requirements": {
+            "ssl_tls_supported": True,
+        },
+        "description": "Insecure configuration with exploitable issues"
+    },
+    "F": {
+        "min_score": 0,
+        "requirements": {},
+        "description": "Critical vulnerabilities or broken configuration"
+    },
+}
+
+# Grade deductions
+GRADE_DEDUCTIONS = {
+    "sslv2_supported": {"points": -100, "cap": "F", "reason": "SSLv2 is critically broken"},
+    "sslv3_supported": {"points": -50, "cap": "C", "reason": "SSLv3 is vulnerable to POODLE"},
+    "tls10_supported": {"points": -20, "cap": "B", "reason": "TLS 1.0 is deprecated"},
+    "tls11_supported": {"points": -15, "cap": "B", "reason": "TLS 1.1 is deprecated"},
+    "heartbleed": {"points": -100, "cap": "F", "reason": "Heartbleed vulnerability"},
+    "robot": {"points": -40, "cap": "C", "reason": "ROBOT vulnerability"},
+    "poodle": {"points": -50, "cap": "C", "reason": "POODLE vulnerability"},
+    "drown": {"points": -100, "cap": "F", "reason": "DROWN vulnerability"},
+    "freak": {"points": -40, "cap": "C", "reason": "FREAK vulnerability"},
+    "logjam": {"points": -30, "cap": "C", "reason": "Logjam vulnerability"},
+    "sweet32": {"points": -15, "cap": "B", "reason": "Sweet32 vulnerability"},
+    "crime": {"points": -25, "cap": "B", "reason": "CRIME vulnerability"},
+    "weak_cipher": {"points": -10, "cap": "B", "reason": "Weak cipher supported"},
+    "no_forward_secrecy": {"points": -20, "cap": "B", "reason": "No forward secrecy"},
+    "self_signed_cert": {"points": -30, "cap": "B", "reason": "Self-signed certificate"},
+    "expired_cert": {"points": -50, "cap": "C", "reason": "Certificate expired"},
+    "expiring_soon": {"points": -10, "cap": None, "reason": "Certificate expiring soon"},
+    "weak_key": {"points": -25, "cap": "B", "reason": "Weak key size"},
+    "sha1_signature": {"points": -20, "cap": "B", "reason": "SHA-1 signature algorithm"},
+    "no_hsts": {"points": -10, "cap": "A", "reason": "No HSTS header"},
+    "insecure_renegotiation": {"points": -30, "cap": "C", "reason": "Insecure renegotiation"},
+}
+
+
+# ============================================================================
+# STARTTLS PROTOCOL DEFINITIONS
+# ============================================================================
+
+STARTTLS_PROTOCOLS = {
+    "smtp": {
+        "name": "SMTP",
+        "default_port": 25,
+        "alt_ports": [587, 465],
+        "starttls_command": b"EHLO scanner.local\r\n",
+        "starttls_trigger": b"STARTTLS\r\n",
+        "success_response": b"220",
+        "greeting_wait": True,
+    },
+    "imap": {
+        "name": "IMAP",
+        "default_port": 143,
+        "alt_ports": [993],
+        "starttls_command": b". CAPABILITY\r\n",
+        "starttls_trigger": b". STARTTLS\r\n",
+        "success_response": b". OK",
+        "greeting_wait": True,
+    },
+    "pop3": {
+        "name": "POP3",
+        "default_port": 110,
+        "alt_ports": [995],
+        "starttls_command": b"CAPA\r\n",
+        "starttls_trigger": b"STLS\r\n",
+        "success_response": b"+OK",
+        "greeting_wait": True,
+    },
+    "ftp": {
+        "name": "FTP",
+        "default_port": 21,
+        "alt_ports": [990],
+        "starttls_command": b"FEAT\r\n",
+        "starttls_trigger": b"AUTH TLS\r\n",
+        "success_response": b"234",
+        "greeting_wait": True,
+    },
+    "ldap": {
+        "name": "LDAP",
+        "default_port": 389,
+        "alt_ports": [636],
+        "starttls_command": None,  # Special handling required
+        "starttls_trigger": None,
+        "success_response": None,
+        "greeting_wait": False,
+    },
+    "xmpp": {
+        "name": "XMPP",
+        "default_port": 5222,
+        "alt_ports": [5223],
+        "starttls_command": b"<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' to='localhost' version='1.0'>",
+        "starttls_trigger": b"<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>",
+        "success_response": b"<proceed",
+        "greeting_wait": False,
+    },
+    "postgres": {
+        "name": "PostgreSQL",
+        "default_port": 5432,
+        "alt_ports": [],
+        "starttls_command": None,  # Special SSLRequest packet
+        "starttls_trigger": None,
+        "success_response": b"S",
+        "greeting_wait": False,
+    },
+    "mysql": {
+        "name": "MySQL",
+        "default_port": 3306,
+        "alt_ports": [],
+        "starttls_command": None,  # Special handshake
+        "starttls_trigger": None,
+        "success_response": None,
+        "greeting_wait": True,
+    },
+    "rdp": {
+        "name": "RDP",
+        "default_port": 3389,
+        "alt_ports": [],
+        "starttls_command": None,  # TPKT/X.224 with SSL request
+        "starttls_trigger": None,
+        "success_response": None,
+        "greeting_wait": False,
+    },
+    "nntp": {
+        "name": "NNTP",
+        "default_port": 119,
+        "alt_ports": [563],
+        "starttls_command": b"CAPABILITIES\r\n",
+        "starttls_trigger": b"STARTTLS\r\n",
+        "success_response": b"382",
+        "greeting_wait": True,
+    },
+    "sieve": {
+        "name": "Sieve",
+        "default_port": 4190,
+        "alt_ports": [],
+        "starttls_command": b"CAPABILITY\r\n",
+        "starttls_trigger": b"STARTTLS\r\n",
+        "success_response": b"OK",
+        "greeting_wait": True,
+    },
+}
+
+
+# ============================================================================
+# POST-QUANTUM CRYPTOGRAPHY DETECTION
+# ============================================================================
+
+POST_QUANTUM_ALGORITHMS = {
+    # Key Exchange Mechanisms (KEMs)
+    "kems": {
+        "ML-KEM-512": {"type": "kem", "security_level": 1, "nist_standard": True},
+        "ML-KEM-768": {"type": "kem", "security_level": 3, "nist_standard": True},
+        "ML-KEM-1024": {"type": "kem", "security_level": 5, "nist_standard": True},
+        "Kyber512": {"type": "kem", "security_level": 1, "nist_standard": False, "alias": "ML-KEM-512"},
+        "Kyber768": {"type": "kem", "security_level": 3, "nist_standard": False, "alias": "ML-KEM-768"},
+        "Kyber1024": {"type": "kem", "security_level": 5, "nist_standard": False, "alias": "ML-KEM-1024"},
+        "X25519Kyber768": {"type": "hybrid_kem", "security_level": 3, "components": ["X25519", "Kyber768"]},
+        "X25519MLKEM768": {"type": "hybrid_kem", "security_level": 3, "components": ["X25519", "ML-KEM-768"]},
+        "SecP256r1MLKEM768": {"type": "hybrid_kem", "security_level": 3, "components": ["P-256", "ML-KEM-768"]},
+    },
+    # Digital Signatures
+    "signatures": {
+        "ML-DSA-44": {"type": "signature", "security_level": 2, "nist_standard": True},
+        "ML-DSA-65": {"type": "signature", "security_level": 3, "nist_standard": True},
+        "ML-DSA-87": {"type": "signature", "security_level": 5, "nist_standard": True},
+        "Dilithium2": {"type": "signature", "security_level": 2, "nist_standard": False, "alias": "ML-DSA-44"},
+        "Dilithium3": {"type": "signature", "security_level": 3, "nist_standard": False, "alias": "ML-DSA-65"},
+        "Dilithium5": {"type": "signature", "security_level": 5, "nist_standard": False, "alias": "ML-DSA-87"},
+        "SLH-DSA-SHA2-128f": {"type": "signature", "security_level": 1, "nist_standard": True},
+        "SLH-DSA-SHA2-192f": {"type": "signature", "security_level": 3, "nist_standard": True},
+        "SLH-DSA-SHA2-256f": {"type": "signature", "security_level": 5, "nist_standard": True},
+        "SPHINCS+-SHA2-128f": {"type": "signature", "security_level": 1, "nist_standard": False},
+        "Falcon-512": {"type": "signature", "security_level": 1, "nist_standard": False},
+        "Falcon-1024": {"type": "signature", "security_level": 5, "nist_standard": False},
+    },
+    # TLS 1.3 Named Groups for PQ (IANA assignments)
+    "tls_named_groups": {
+        0x6399: "X25519Kyber768Draft00",
+        0x639a: "SecP256r1Kyber768Draft00",
+        0x0200: "secp256r1_mlkem768",
+        0x0201: "x25519_mlkem768",
+    },
+}
+
+# Client browser simulation profiles
+CLIENT_SIMULATION_PROFILES = {
+    "chrome_latest": {
+        "name": "Chrome 120 (Latest)",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384"],
+        "pq_support": True,
+    },
+    "firefox_latest": {
+        "name": "Firefox 121 (Latest)",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384", "P-521"],
+        "pq_support": False,
+    },
+    "safari_latest": {
+        "name": "Safari 17 (macOS Sonoma)",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) AppleWebKit/605.1.15 Safari/605.1.15",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384", "P-521"],
+        "pq_support": False,
+    },
+    "edge_latest": {
+        "name": "Edge 120 (Chromium)",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Edg/120.0.0.0",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384"],
+        "pq_support": True,
+    },
+    "ie11_win10": {
+        "name": "Internet Explorer 11 (Windows 10)",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko",
+        "tls_versions": ["TLSv1.0", "TLSv1.1", "TLSv1.2"],
+        "cipher_suites": [
+            "ECDHE-RSA-AES256-SHA384",
+            "ECDHE-RSA-AES128-SHA256",
+            "ECDHE-RSA-AES256-SHA",
+            "ECDHE-RSA-AES128-SHA",
+            "AES256-GCM-SHA384",
+            "AES128-GCM-SHA256",
+            "AES256-SHA256",
+            "AES128-SHA256",
+            "AES256-SHA",
+            "AES128-SHA",
+            "DES-CBC3-SHA",
+        ],
+        "supported_groups": ["P-256", "P-384", "P-521"],
+        "pq_support": False,
+    },
+    "android_10": {
+        "name": "Android 10 WebView",
+        "user_agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/89.0.4389.105 Mobile Safari/537.36",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384"],
+        "pq_support": False,
+    },
+    "java8": {
+        "name": "Java 8 (Oracle)",
+        "user_agent": "Java/1.8.0",
+        "tls_versions": ["TLSv1.0", "TLSv1.1", "TLSv1.2"],
+        "cipher_suites": [
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "DHE-RSA-AES256-GCM-SHA384",
+            "DHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-SHA384",
+            "ECDHE-RSA-AES256-SHA384",
+            "DHE-RSA-AES256-SHA256",
+            "ECDHE-ECDSA-AES128-SHA256",
+            "ECDHE-RSA-AES128-SHA256",
+            "AES256-GCM-SHA384",
+            "AES128-GCM-SHA256",
+        ],
+        "supported_groups": ["P-256", "P-384", "P-521"],
+        "pq_support": False,
+    },
+    "openssl_1_1_1": {
+        "name": "OpenSSL 1.1.1",
+        "user_agent": "OpenSSL/1.1.1",
+        "tls_versions": ["TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "TLS_AES_128_GCM_SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "DHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+            "DHE-RSA-CHACHA20-POLY1305",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "DHE-RSA-AES128-GCM-SHA256",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384", "P-521", "X448"],
+        "pq_support": False,
+    },
+    "curl_latest": {
+        "name": "curl/libcurl (Latest)",
+        "user_agent": "curl/8.5.0",
+        "tls_versions": ["TLSv1.2", "TLSv1.3"],
+        "cipher_suites": [
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "TLS_AES_128_GCM_SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+        ],
+        "supported_groups": ["X25519", "P-256", "P-384"],
+        "pq_support": False,
+    },
+}
+
+
 @dataclass
 class SSLCertificate:
     """SSL Certificate information."""
@@ -917,6 +1421,12 @@ class SSLScanResult:
     sweet32_analysis: Optional[Sweet32Analysis] = None
     compression_attacks: Optional[CompressionAttackAnalysis] = None
     alpn_analysis: Optional[ALPNAnalysis] = None
+    # NEW: Advanced Analysis Features
+    ssl_grade: Optional["SSLGrade"] = None
+    mozilla_compliance: Optional["MozillaComplianceResult"] = None
+    client_compatibility: Optional["ClientCompatibilityResult"] = None
+    post_quantum_analysis: Optional["PostQuantumAnalysis"] = None
+    starttls_info: Optional["STARTTLSInfo"] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -952,7 +1462,88 @@ class SSLScanResult:
             "sweet32_analysis": self.sweet32_analysis.to_dict() if self.sweet32_analysis else None,
             "compression_attacks": self.compression_attacks.to_dict() if self.compression_attacks else None,
             "alpn_analysis": self.alpn_analysis.to_dict() if self.alpn_analysis else None,
+            "ssl_grade": self.ssl_grade.to_dict() if self.ssl_grade else None,
+            "mozilla_compliance": self.mozilla_compliance.to_dict() if self.mozilla_compliance else None,
+            "client_compatibility": self.client_compatibility.to_dict() if self.client_compatibility else None,
+            "post_quantum_analysis": self.post_quantum_analysis.to_dict() if self.post_quantum_analysis else None,
+            "starttls_info": self.starttls_info.to_dict() if self.starttls_info else None,
         }
+
+
+@dataclass
+class SSLGrade:
+    """SSL Labs-style grading result."""
+    grade: str  # A+, A, B, C, D, F, T (trust issues), M (cert mismatch)
+    numeric_score: int  # 0-100
+    grade_cap: Optional[str] = None  # What capped the grade
+    cap_reasons: List[str] = field(default_factory=list)
+    deductions: List[Dict[str, Any]] = field(default_factory=list)
+    grade_details: str = ""
+    protocol_score: int = 0
+    cipher_score: int = 0
+    certificate_score: int = 0
+    key_exchange_score: int = 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MozillaComplianceResult:
+    """Mozilla TLS configuration compliance result."""
+    profile_tested: str  # modern, intermediate, old
+    is_compliant: bool
+    compliance_score: float  # 0.0-1.0
+    violations: List[Dict[str, Any]] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+    protocol_compliance: bool = True
+    cipher_compliance: bool = True
+    certificate_compliance: bool = True
+    hsts_compliance: bool = True
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ClientCompatibilityResult:
+    """Client browser/library compatibility testing result."""
+    clients_tested: int
+    compatible_clients: List[Dict[str, Any]] = field(default_factory=list)
+    incompatible_clients: List[Dict[str, Any]] = field(default_factory=list)
+    handshake_simulations: List[Dict[str, Any]] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PostQuantumAnalysis:
+    """Post-quantum cryptography support analysis."""
+    pq_ready: bool = False
+    hybrid_support: bool = False
+    supported_kems: List[str] = field(default_factory=list)
+    supported_signatures: List[str] = field(default_factory=list)
+    nist_compliant: bool = False
+    future_proof_score: int = 0  # 0-100
+    recommendations: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class STARTTLSInfo:
+    """STARTTLS protocol information."""
+    protocol: str  # smtp, imap, pop3, ftp, ldap, xmpp, etc.
+    starttls_supported: bool = False
+    starttls_required: bool = False
+    plain_auth_before_tls: bool = False  # Security issue
+    implicit_tls_supported: bool = False
+    stripping_possible: bool = False  # STARTTLS stripping attack
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -5046,6 +5637,125 @@ def scan_ssl_host(host: str, port: int = 443, timeout: float = 10.0, server_name
         except Exception as e:
             logger.debug(f"ALPN detection failed for {host}:{port}: {e}")
         
+        # === NEW ENHANCED ANALYSIS FEATURES ===
+        
+        # SSL Grade Calculation (A+ to F like SSL Labs)
+        try:
+            result.ssl_grade = calculate_ssl_grade(result)
+            if result.ssl_grade:
+                grade_severity = "critical" if result.ssl_grade.grade in ["F", "T"] else \
+                                 "high" if result.ssl_grade.grade in ["D", "E"] else \
+                                 "medium" if result.ssl_grade.grade == "C" else \
+                                 "low" if result.ssl_grade.grade == "B" else "info"
+                findings.append(SSLFinding(
+                    category="grade",
+                    severity=grade_severity,
+                    title=f"SSL/TLS Grade: {result.ssl_grade.grade}",
+                    description=f"Overall SSL/TLS configuration grade is {result.ssl_grade.grade} (score: {result.ssl_grade.score}/100). {result.ssl_grade.summary}",
+                    host=host,
+                    port=port,
+                    evidence=f"Protocol: {result.ssl_grade.protocol_score}/30, Key: {result.ssl_grade.key_exchange_score}/30, Cipher: {result.ssl_grade.cipher_score}/40",
+                    recommendation="; ".join(result.ssl_grade.recommendations[:3]) if result.ssl_grade.recommendations else None,
+                ))
+                result.findings = findings
+        except Exception as e:
+            logger.debug(f"SSL grade calculation failed for {host}:{port}: {e}")
+        
+        # Mozilla TLS Compliance Check
+        try:
+            result.mozilla_compliance = check_mozilla_compliance(result, "intermediate")
+            if result.mozilla_compliance and not result.mozilla_compliance.compliant:
+                findings.append(SSLFinding(
+                    category="compliance",
+                    severity="medium" if result.mozilla_compliance.profile == "intermediate" else "low",
+                    title=f"Mozilla TLS Compliance: {result.mozilla_compliance.profile.title()} Profile",
+                    description=f"Configuration does not meet Mozilla's {result.mozilla_compliance.profile} TLS profile. {len(result.mozilla_compliance.violations)} violations found.",
+                    host=host,
+                    port=port,
+                    evidence="; ".join(result.mozilla_compliance.violations[:3]),
+                    recommendation="; ".join(result.mozilla_compliance.recommendations[:3]) if result.mozilla_compliance.recommendations else None,
+                ))
+                result.findings = findings
+        except Exception as e:
+            logger.debug(f"Mozilla compliance check failed for {host}:{port}: {e}")
+        
+        # Client Browser Compatibility Simulation
+        try:
+            result.client_compatibility = simulate_client_compatibility(result)
+            if result.client_compatibility:
+                incompatible = [c for c in result.client_compatibility.clients if not result.client_compatibility.clients[c]["compatible"]]
+                if incompatible:
+                    findings.append(SSLFinding(
+                        category="compatibility",
+                        severity="low" if len(incompatible) <= 2 else "medium",
+                        title="Client Compatibility Issues",
+                        description=f"Server configuration is incompatible with {len(incompatible)} client(s): {', '.join(incompatible[:3])}.",
+                        host=host,
+                        port=port,
+                        evidence=f"Incompatible: {', '.join(incompatible)}",
+                        recommendation=f"Consider enabling support for older protocols/ciphers if backward compatibility is required.",
+                    ))
+                    result.findings = findings
+        except Exception as e:
+            logger.debug(f"Client compatibility simulation failed for {host}:{port}: {e}")
+        
+        # Post-Quantum Cryptography Analysis
+        try:
+            result.post_quantum_analysis = analyze_post_quantum_support(result)
+            if result.post_quantum_analysis:
+                if result.post_quantum_analysis.pq_ready:
+                    findings.append(SSLFinding(
+                        category="post_quantum",
+                        severity="info",
+                        title="Post-Quantum Ready",
+                        description=f"Server supports post-quantum cryptography algorithms: {', '.join(result.post_quantum_analysis.supported_kems + result.post_quantum_analysis.supported_signatures)}.",
+                        host=host,
+                        port=port,
+                        evidence=f"Hybrid mode: {result.post_quantum_analysis.hybrid_mode}",
+                    ))
+                else:
+                    findings.append(SSLFinding(
+                        category="post_quantum",
+                        severity="info",
+                        title="Post-Quantum Not Supported",
+                        description="Server does not support post-quantum cryptography. Consider enabling ML-KEM/Kyber for quantum-resistant key exchange.",
+                        host=host,
+                        port=port,
+                        recommendation="Enable post-quantum hybrid key exchange (X25519Kyber768) for future-proof security.",
+                    ))
+                result.findings = findings
+        except Exception as e:
+            logger.debug(f"Post-quantum analysis failed for {host}:{port}: {e}")
+        
+        # STARTTLS Detection (for non-443 ports)
+        if port not in [443, 8443]:
+            try:
+                result.starttls_info = detect_starttls(host, port, timeout)
+                if result.starttls_info and result.starttls_info.supported:
+                    findings.append(SSLFinding(
+                        category="starttls",
+                        severity="info",
+                        title=f"STARTTLS Supported ({result.starttls_info.protocol})",
+                        description=f"Server supports STARTTLS upgrade for {result.starttls_info.protocol} protocol.",
+                        host=host,
+                        port=port,
+                        evidence=f"Protocol: {result.starttls_info.protocol}, Negotiated: {result.starttls_info.negotiated_protocol or 'N/A'}",
+                    ))
+                    
+                    if result.starttls_info.vulnerabilities:
+                        for vuln in result.starttls_info.vulnerabilities:
+                            findings.append(SSLFinding(
+                                category="starttls",
+                                severity="high",
+                                title=f"STARTTLS Vulnerability: {vuln}",
+                                description=f"STARTTLS implementation is vulnerable to {vuln} attack.",
+                                host=host,
+                                port=port,
+                            ))
+                    result.findings = findings
+            except Exception as e:
+                logger.debug(f"STARTTLS detection failed for {host}:{port}: {e}")
+        
     except socket.timeout:
         result.error = f"Connection timed out after {timeout} seconds"
     except socket.gaierror as e:
@@ -5302,6 +6012,103 @@ async def analyze_ssl_with_ai(analysis_result: SSLScanAnalysisResult) -> Dict[st
             for d in protocol_attack_data[:15]
         ) if protocol_attack_data else ""
         
+        # Build NEW ANALYSIS DATA for AI (SSL Grade, Mozilla, Client Compat, PQ, STARTTLS)
+        grade_data = []
+        mozilla_data = []
+        client_compat_data = []
+        pq_data = []
+        starttls_data = []
+        
+        for r in analysis_result.results:
+            host_id = f"{r.host}:{r.port}"
+            
+            # SSL Grade
+            if r.ssl_grade:
+                grade_data.append({
+                    "host": host_id,
+                    "grade": r.ssl_grade.grade,
+                    "score": r.ssl_grade.numeric_score,
+                    "cap": r.ssl_grade.grade_cap,
+                    "cap_reasons": r.ssl_grade.cap_reasons[:3] if r.ssl_grade.cap_reasons else [],
+                    "top_issues": [d.item for d in r.ssl_grade.deductions[:3]] if r.ssl_grade.deductions else []
+                })
+            
+            # Mozilla Compliance
+            if r.mozilla_compliance:
+                mozilla_data.append({
+                    "host": host_id,
+                    "profile": r.mozilla_compliance.profile_tested,
+                    "compliant": r.mozilla_compliance.is_compliant,
+                    "score": r.mozilla_compliance.compliance_score,
+                    "violations": [v.get("issue", str(v)) if isinstance(v, dict) else str(v) for v in r.mozilla_compliance.violations[:3]] if r.mozilla_compliance.violations else []
+                })
+            
+            # Client Compatibility
+            if r.client_compatibility:
+                client_compat_data.append({
+                    "host": host_id,
+                    "tested": r.client_compatibility.clients_tested,
+                    "compatible": r.client_compatibility.compatible_clients,
+                    "incompatible": r.client_compatibility.incompatible_clients,
+                    "failures": [s.client_name for s in r.client_compatibility.handshake_simulations[:5] if not s.success] if r.client_compatibility.handshake_simulations else []
+                })
+            
+            # Post-Quantum
+            if r.post_quantum_analysis:
+                pq_data.append({
+                    "host": host_id,
+                    "pq_ready": r.post_quantum_analysis.pq_ready,
+                    "nist": r.post_quantum_analysis.nist_compliant,
+                    "score": r.post_quantum_analysis.future_proof_score,
+                    "kems": r.post_quantum_analysis.supported_kems[:3] if r.post_quantum_analysis.supported_kems else [],
+                    "hybrid": r.post_quantum_analysis.hybrid_support
+                })
+            
+            # STARTTLS
+            if r.starttls_info:
+                starttls_data.append({
+                    "host": host_id,
+                    "protocol": r.starttls_info.protocol,
+                    "supported": r.starttls_info.starttls_supported,
+                    "required": r.starttls_info.starttls_required,
+                    "stripping_risk": r.starttls_info.stripping_possible,
+                    "auth_risk": r.starttls_info.plain_auth_before_tls
+                })
+        
+        # Build text summaries for AI
+        grade_text = "\n".join(
+            f"- {g['host']}: Grade {g['grade']} ({g['score']}/100)" +
+            (f" - capped by: {', '.join(g['cap_reasons'])}" if g['cap_reasons'] else "") +
+            (f" - issues: {', '.join(g['top_issues'][:2])}" if g['top_issues'] else "")
+            for g in grade_data[:15]
+        ) if grade_data else ""
+        
+        mozilla_text = "\n".join(
+            f"- {m['host']}: {m['profile']} {'✓ Compliant' if m['compliant'] else '✗ Non-compliant'} ({m['score']}%)" +
+            (f" - violations: {', '.join(m['violations'][:2])}" if m['violations'] else "")
+            for m in mozilla_data[:15]
+        ) if mozilla_data else ""
+        
+        compat_text = "\n".join(
+            f"- {c['host']}: {c['compatible']}/{c['tested']} compatible" +
+            (f" - fails: {', '.join(c['failures'][:3])}" if c['failures'] else "")
+            for c in client_compat_data[:15]
+        ) if client_compat_data else ""
+        
+        pq_text = "\n".join(
+            f"- {p['host']}: {'PQ Ready' if p['pq_ready'] else 'Not PQ Ready'} ({p['score']}/100)" +
+            (f" - KEMs: {', '.join(p['kems'])}" if p['kems'] else "") +
+            (" + Hybrid" if p['hybrid'] else "")
+            for p in pq_data[:15]
+        ) if pq_data else ""
+        
+        starttls_text = "\n".join(
+            f"- {s['host']} ({s['protocol']}): {'Supported' if s['supported'] else 'Not supported'}" +
+            (f" - REQUIRED" if s['required'] else " - NOT required (stripping possible)" if s['stripping_risk'] else "") +
+            (" - AUTH BEFORE TLS!" if s['auth_risk'] else "")
+            for s in starttls_data[:15]
+        ) if starttls_data else ""
+        
         prompt = f"""You are an OFFENSIVE SECURITY expert analyzing sandboxed software TLS connections.
 Your role is to identify malicious infrastructure, C2 servers, and exploitation opportunities.
 
@@ -5333,6 +6140,21 @@ Your role is to identify malicious infrastructure, C2 servers, and exploitation 
 ### Security Findings
 {findings_text if findings_text else "No critical security issues detected."}
 
+### SSL Security Grades
+{grade_text if grade_text else "No SSL grade data available."}
+
+### Mozilla TLS Compliance
+{mozilla_text if mozilla_text else "No Mozilla compliance data available."}
+
+### Client Compatibility
+{compat_text if compat_text else "No client compatibility data available."}
+
+### Post-Quantum Cryptography Readiness
+{pq_text if pq_text else "No post-quantum analysis available."}
+
+### STARTTLS Detection
+{starttls_text if starttls_text else "No STARTTLS data available (not a mail/FTP server)."}
+
 ---
 
 Analyze this data for SANDBOX SOFTWARE ANALYSIS. Focus on:
@@ -5340,6 +6162,8 @@ Analyze this data for SANDBOX SOFTWARE ANALYSIS. Focus on:
 2. Can we intercept/MITM the traffic to analyze it further?
 3. What are the attack opportunities (especially protocol-level attacks like Heartbleed, ROBOT, downgrade attacks)?
 4. Can we exploit weak cryptographic configurations?
+5. Are there STARTTLS stripping opportunities or plain authentication before TLS?
+6. How does SSL grade and compliance affect exploitability?
 
 ONLY report what is actually in the data. Do not invent findings.
 
@@ -5448,3 +6272,686 @@ Return ONLY valid JSON. Be factual - only report what's in the data."""
     except Exception as e:
         logger.error(f"AI analysis failed: {e}")
         return {"error": f"AI analysis failed: {str(e)}"}
+
+
+# ============================================================================
+# NEW: SSL GRADING SYSTEM
+# ============================================================================
+
+def calculate_ssl_grade(result: SSLScanResult) -> SSLGrade:
+    """
+    Calculate an SSL Labs-style grade for a scan result.
+    
+    Grading criteria based on SSL Labs methodology:
+    - Protocol support (30%)
+    - Key exchange strength (30%)
+    - Cipher strength (30%)
+    - Certificate (10%)
+    """
+    score = 100
+    grade_cap = None
+    cap_reasons = []
+    deductions = []
+    
+    # Start with perfect score and deduct
+    protocol_score = 100
+    cipher_score = 100
+    cert_score = 100
+    key_exchange_score = 100
+    
+    protocols = result.protocols_supported or {}
+    
+    # Protocol scoring
+    if protocols.get("SSLv2", False):
+        protocol_score = 0
+        grade_cap = "F"
+        cap_reasons.append("SSLv2 supported - critically insecure")
+        deductions.append({"item": "SSLv2", "points": -100, "cap": "F"})
+    
+    if protocols.get("SSLv3", False):
+        protocol_score = min(protocol_score, 20)
+        if grade_cap is None or grade_cap > "C":
+            grade_cap = "C"
+        cap_reasons.append("SSLv3 supported - POODLE vulnerability")
+        deductions.append({"item": "SSLv3", "points": -50, "cap": "C"})
+    
+    if protocols.get("TLSv1.0", False):
+        protocol_score = min(protocol_score, 65)
+        deductions.append({"item": "TLS 1.0", "points": -20, "reason": "Deprecated protocol"})
+    
+    if protocols.get("TLSv1.1", False):
+        protocol_score = min(protocol_score, 75)
+        deductions.append({"item": "TLS 1.1", "points": -15, "reason": "Deprecated protocol"})
+    
+    if not protocols.get("TLSv1.2", False) and not protocols.get("TLSv1.3", False):
+        protocol_score = 0
+        if grade_cap is None or grade_cap > "F":
+            grade_cap = "F"
+        cap_reasons.append("No TLS 1.2 or 1.3 support")
+    
+    # Bonus for TLS 1.3
+    if protocols.get("TLSv1.3", False):
+        protocol_score = min(protocol_score + 10, 100)
+    
+    # Vulnerability checks
+    if result.heartbleed_analysis and result.heartbleed_analysis.vulnerable:
+        grade_cap = "F"
+        cap_reasons.append("Heartbleed vulnerability")
+        deductions.append({"item": "Heartbleed", "points": -100, "cap": "F"})
+    
+    if result.downgrade_attacks:
+        if result.downgrade_attacks.drown_vulnerable:
+            grade_cap = "F"
+            cap_reasons.append("DROWN vulnerability")
+            deductions.append({"item": "DROWN", "points": -100, "cap": "F"})
+        
+        if result.downgrade_attacks.poodle_sslv3_vulnerable:
+            if grade_cap is None or grade_cap > "C":
+                grade_cap = "C"
+            cap_reasons.append("POODLE (SSLv3)")
+            deductions.append({"item": "POODLE", "points": -50, "cap": "C"})
+        
+        if result.downgrade_attacks.freak_vulnerable:
+            if grade_cap is None or grade_cap > "C":
+                grade_cap = "C"
+            cap_reasons.append("FREAK vulnerability")
+            deductions.append({"item": "FREAK", "points": -40, "cap": "C"})
+        
+        if result.downgrade_attacks.logjam_vulnerable:
+            if grade_cap is None or grade_cap > "C":
+                grade_cap = "C"
+            cap_reasons.append("Logjam vulnerability")
+            deductions.append({"item": "Logjam", "points": -30, "cap": "C"})
+    
+    if result.robot_analysis and result.robot_analysis.vulnerable:
+        if grade_cap is None or grade_cap > "C":
+            grade_cap = "C"
+        cap_reasons.append("ROBOT vulnerability")
+        deductions.append({"item": "ROBOT", "points": -40, "cap": "C"})
+    
+    if result.sweet32_analysis and result.sweet32_analysis.vulnerable:
+        if grade_cap is None or grade_cap > "B":
+            grade_cap = "B"
+        cap_reasons.append("Sweet32 vulnerability")
+        deductions.append({"item": "Sweet32", "points": -15, "cap": "B"})
+    
+    if result.compression_attacks and result.compression_attacks.crime_vulnerable:
+        if grade_cap is None or grade_cap > "B":
+            grade_cap = "B"
+        cap_reasons.append("CRIME vulnerability")
+        deductions.append({"item": "CRIME", "points": -25, "cap": "B"})
+    
+    # Cipher scoring
+    weak_ciphers = 0
+    has_forward_secrecy = False
+    for cipher in (result.cipher_suites or []):
+        cipher_name = cipher.get("name", "") if isinstance(cipher, dict) else str(cipher)
+        
+        # Check for forward secrecy
+        if "ECDHE" in cipher_name or "DHE" in cipher_name:
+            has_forward_secrecy = True
+        
+        # Check for weak ciphers
+        for weak in WEAK_CIPHER_KEYWORDS:
+            if weak in cipher_name.upper():
+                weak_ciphers += 1
+                cipher_score -= 5
+                break
+    
+    if weak_ciphers > 0:
+        deductions.append({"item": f"{weak_ciphers} weak ciphers", "points": -weak_ciphers * 5})
+    
+    if not has_forward_secrecy:
+        cipher_score -= 20
+        deductions.append({"item": "No forward secrecy", "points": -20})
+        if grade_cap is None or grade_cap > "B":
+            grade_cap = "B"
+        cap_reasons.append("No forward secrecy ciphers")
+    
+    # Certificate scoring
+    if result.certificate:
+        if result.certificate.is_expired:
+            cert_score = 0
+            if grade_cap is None or grade_cap > "T":
+                grade_cap = "T"
+            cap_reasons.append("Certificate expired")
+            deductions.append({"item": "Expired certificate", "points": -100, "cap": "T"})
+        
+        if result.certificate.is_self_signed:
+            cert_score -= 30
+            if grade_cap is None or grade_cap > "T":
+                grade_cap = "T"
+            cap_reasons.append("Self-signed certificate")
+            deductions.append({"item": "Self-signed", "points": -30, "cap": "T"})
+        
+        if result.certificate.days_until_expiry and result.certificate.days_until_expiry < 30:
+            cert_score -= 10
+            deductions.append({"item": "Certificate expiring soon", "points": -10})
+        
+        # Key size check
+        key_bits = result.certificate.public_key_bits or 0
+        key_type = result.certificate.public_key_type or ""
+        
+        if "RSA" in key_type.upper() and key_bits < 2048:
+            key_exchange_score -= 40
+            if grade_cap is None or grade_cap > "B":
+                grade_cap = "B"
+            cap_reasons.append(f"Weak RSA key ({key_bits} bits)")
+            deductions.append({"item": f"RSA {key_bits}-bit", "points": -40, "cap": "B"})
+        elif "EC" in key_type.upper() and key_bits < 256:
+            key_exchange_score -= 30
+            deductions.append({"item": f"EC {key_bits}-bit", "points": -30})
+        
+        # Signature algorithm
+        sig_alg = result.certificate.signature_algorithm or ""
+        if "sha1" in sig_alg.lower() or "md5" in sig_alg.lower():
+            cert_score -= 20
+            deductions.append({"item": "Weak signature algorithm", "points": -20})
+    
+    # Security headers
+    if result.security_headers:
+        if not result.security_headers.hsts_enabled:
+            score -= 5
+            deductions.append({"item": "No HSTS", "points": -5})
+    
+    # Calculate final score
+    final_score = int(
+        (protocol_score * 0.30) +
+        (cipher_score * 0.30) +
+        (cert_score * 0.10) +
+        (key_exchange_score * 0.30)
+    )
+    
+    # Apply cap
+    if grade_cap:
+        grade = grade_cap
+    else:
+        if final_score >= 95:
+            # A+ requires additional checks
+            has_hsts = result.security_headers and result.security_headers.hsts_enabled
+            has_tls13 = protocols.get("TLSv1.3", False)
+            no_old = not protocols.get("TLSv1.0") and not protocols.get("TLSv1.1")
+            if has_hsts and has_tls13 and no_old and has_forward_secrecy:
+                grade = "A+"
+            else:
+                grade = "A"
+        elif final_score >= 85:
+            grade = "A"
+        elif final_score >= 70:
+            grade = "B"
+        elif final_score >= 55:
+            grade = "C"
+        elif final_score >= 40:
+            grade = "D"
+        else:
+            grade = "F"
+    
+    # Grade description
+    grade_descriptions = {
+        "A+": "Exceptional - Best practices with TLS 1.3, HSTS, and forward secrecy",
+        "A": "Strong - Good configuration with minor improvements possible",
+        "B": "Adequate - Some deprecated features or missing best practices",
+        "C": "Weak - Known vulnerabilities or deprecated protocols",
+        "D": "Insecure - Multiple security issues requiring immediate attention",
+        "F": "Critical - Severe vulnerabilities or broken configuration",
+        "T": "Trust Issues - Certificate problems (expired, self-signed, etc.)",
+        "M": "Mismatch - Certificate doesn't match hostname",
+    }
+    
+    return SSLGrade(
+        grade=grade,
+        numeric_score=final_score,
+        grade_cap=grade_cap,
+        cap_reasons=cap_reasons,
+        deductions=deductions,
+        grade_details=grade_descriptions.get(grade, ""),
+        protocol_score=protocol_score,
+        cipher_score=cipher_score,
+        certificate_score=cert_score,
+        key_exchange_score=key_exchange_score,
+    )
+
+
+# ============================================================================
+# NEW: MOZILLA TLS COMPLIANCE CHECKER
+# ============================================================================
+
+def check_mozilla_compliance(result: SSLScanResult, profile: str = "intermediate") -> MozillaComplianceResult:
+    """
+    Check TLS configuration against Mozilla's recommended profiles.
+    
+    Profiles:
+    - modern: TLS 1.3 only, strongest security
+    - intermediate: TLS 1.2+, recommended for most servers
+    - old: TLS 1.0+, for legacy compatibility
+    """
+    if profile not in MOZILLA_TLS_PROFILES:
+        profile = "intermediate"
+    
+    config = MOZILLA_TLS_PROFILES[profile]
+    violations = []
+    recommendations = []
+    
+    protocols = result.protocols_supported or {}
+    ciphers = result.cipher_suites or []
+    
+    protocol_compliant = True
+    cipher_compliant = True
+    cert_compliant = True
+    hsts_compliant = True
+    
+    # Check forbidden protocols
+    for proto in config["forbidden_protocols"]:
+        if protocols.get(proto, False):
+            protocol_compliant = False
+            violations.append({
+                "type": "protocol",
+                "severity": "high" if proto in ["SSLv2", "SSLv3"] else "medium",
+                "issue": f"Forbidden protocol {proto} is enabled",
+                "expected": f"Disable {proto}",
+            })
+            recommendations.append(f"Disable {proto} protocol")
+    
+    # Check required protocols
+    min_tls = config["min_tls_version"]
+    has_min_tls = False
+    for proto in config["allowed_protocols"]:
+        if protocols.get(proto, False):
+            has_min_tls = True
+            break
+    
+    if not has_min_tls:
+        protocol_compliant = False
+        violations.append({
+            "type": "protocol",
+            "severity": "high",
+            "issue": f"No allowed protocol versions enabled (need {', '.join(config['allowed_protocols'])})",
+            "expected": f"Enable {min_tls} or higher",
+        })
+        recommendations.append(f"Enable {min_tls} or higher")
+    
+    # Check ciphers
+    cipher_names = []
+    for c in ciphers:
+        if isinstance(c, dict):
+            cipher_names.append(c.get("name", ""))
+        else:
+            cipher_names.append(str(c))
+    
+    # Check for forbidden cipher patterns
+    for cipher in cipher_names:
+        for pattern in config["forbidden_ciphers"]:
+            # Convert glob pattern to simple check
+            pattern_clean = pattern.replace("*", "")
+            if pattern_clean and pattern_clean.upper() in cipher.upper():
+                cipher_compliant = False
+                violations.append({
+                    "type": "cipher",
+                    "severity": "medium",
+                    "issue": f"Forbidden cipher pattern '{pattern}' matched by {cipher}",
+                    "expected": "Remove weak ciphers",
+                })
+                recommendations.append(f"Disable cipher {cipher}")
+                break
+    
+    # Certificate checks
+    if result.certificate:
+        key_bits = result.certificate.public_key_bits or 0
+        key_type = result.certificate.public_key_type or ""
+        
+        min_rsa = config.get("min_rsa_key_size", 2048)
+        min_ec = config.get("min_ec_key_size", 256)
+        
+        if "RSA" in key_type.upper() and key_bits < min_rsa:
+            cert_compliant = False
+            violations.append({
+                "type": "certificate",
+                "severity": "high",
+                "issue": f"RSA key size {key_bits} bits is below minimum {min_rsa}",
+                "expected": f"Use RSA key >= {min_rsa} bits",
+            })
+            recommendations.append(f"Upgrade to RSA {min_rsa}-bit or higher")
+        
+        if "EC" in key_type.upper() and key_bits < min_ec:
+            cert_compliant = False
+            violations.append({
+                "type": "certificate",
+                "severity": "medium",
+                "issue": f"EC key size {key_bits} bits is below minimum {min_ec}",
+                "expected": f"Use EC key >= {min_ec} bits",
+            })
+    
+    # HSTS check
+    if config.get("hsts_required", False):
+        if not result.security_headers or not result.security_headers.hsts_enabled:
+            hsts_compliant = False
+            violations.append({
+                "type": "hsts",
+                "severity": "medium",
+                "issue": "HSTS header not present",
+                "expected": f"Add HSTS with max-age >= {config.get('hsts_min_age', 63072000)}",
+            })
+            recommendations.append("Enable HSTS header")
+        elif result.security_headers and result.security_headers.hsts_max_age:
+            min_age = config.get("hsts_min_age", 0)
+            if result.security_headers.hsts_max_age < min_age:
+                violations.append({
+                    "type": "hsts",
+                    "severity": "low",
+                    "issue": f"HSTS max-age {result.security_headers.hsts_max_age} below recommended {min_age}",
+                    "expected": f"Set max-age to {min_age} (2 years)",
+                })
+    
+    # Calculate compliance score
+    total_checks = 4
+    passed = sum([protocol_compliant, cipher_compliant, cert_compliant, hsts_compliant])
+    compliance_score = passed / total_checks
+    
+    is_compliant = len(violations) == 0
+    
+    return MozillaComplianceResult(
+        profile_tested=profile,
+        is_compliant=is_compliant,
+        compliance_score=compliance_score,
+        violations=violations,
+        recommendations=list(set(recommendations)),  # Dedupe
+        protocol_compliance=protocol_compliant,
+        cipher_compliance=cipher_compliant,
+        certificate_compliance=cert_compliant,
+        hsts_compliance=hsts_compliant,
+    )
+
+
+# ============================================================================
+# NEW: CLIENT COMPATIBILITY SIMULATION
+# ============================================================================
+
+def simulate_client_compatibility(result: SSLScanResult) -> ClientCompatibilityResult:
+    """
+    Simulate handshakes with various clients to determine compatibility.
+    """
+    compatible = []
+    incompatible = []
+    simulations = []
+    
+    protocols = result.protocols_supported or {}
+    cipher_names = []
+    for c in (result.cipher_suites or []):
+        if isinstance(c, dict):
+            cipher_names.append(c.get("name", ""))
+        else:
+            cipher_names.append(str(c))
+    
+    for client_id, client in CLIENT_SIMULATION_PROFILES.items():
+        # Check protocol overlap
+        protocol_match = False
+        matched_protocol = None
+        for proto in client["tls_versions"]:
+            if protocols.get(proto, False):
+                protocol_match = True
+                matched_protocol = proto
+                break
+        
+        # Check cipher overlap
+        cipher_match = False
+        matched_cipher = None
+        for client_cipher in client["cipher_suites"]:
+            for server_cipher in cipher_names:
+                # Normalize cipher names for comparison
+                if client_cipher.upper() in server_cipher.upper() or server_cipher.upper() in client_cipher.upper():
+                    cipher_match = True
+                    matched_cipher = server_cipher
+                    break
+            if cipher_match:
+                break
+        
+        is_compatible = protocol_match and cipher_match
+        
+        sim_result = {
+            "client_id": client_id,
+            "client_name": client["name"],
+            "compatible": is_compatible,
+            "protocol_matched": matched_protocol,
+            "cipher_matched": matched_cipher,
+            "pq_support": client.get("pq_support", False),
+        }
+        
+        simulations.append(sim_result)
+        
+        if is_compatible:
+            compatible.append({
+                "client": client["name"],
+                "protocol": matched_protocol,
+                "cipher": matched_cipher,
+            })
+        else:
+            reason = []
+            if not protocol_match:
+                reason.append(f"No protocol overlap (client needs: {', '.join(client['tls_versions'])})")
+            if not cipher_match:
+                reason.append("No cipher overlap")
+            
+            incompatible.append({
+                "client": client["name"],
+                "reason": "; ".join(reason),
+            })
+    
+    return ClientCompatibilityResult(
+        clients_tested=len(CLIENT_SIMULATION_PROFILES),
+        compatible_clients=compatible,
+        incompatible_clients=incompatible,
+        handshake_simulations=simulations,
+    )
+
+
+# ============================================================================
+# NEW: POST-QUANTUM CRYPTOGRAPHY ANALYSIS
+# ============================================================================
+
+def analyze_post_quantum_support(result: SSLScanResult) -> PostQuantumAnalysis:
+    """
+    Analyze support for post-quantum cryptographic algorithms.
+    """
+    supported_kems = []
+    supported_sigs = []
+    recommendations = []
+    
+    # Check TLS 1.3 cipher suites and named groups for PQ support
+    cipher_names = []
+    for c in (result.cipher_suites or []):
+        if isinstance(c, dict):
+            cipher_names.append(c.get("name", ""))
+        else:
+            cipher_names.append(str(c))
+    
+    # Check for Kyber/ML-KEM in cipher suites or key exchange
+    pq_patterns = [
+        "KYBER", "ML-KEM", "MLKEM", "X25519KYBER", "SECP256R1KYBER",
+        "DILITHIUM", "ML-DSA", "SPHINCS", "FALCON",
+    ]
+    
+    for cipher in cipher_names:
+        cipher_upper = cipher.upper()
+        for pattern in pq_patterns:
+            if pattern in cipher_upper:
+                if "KYBER" in pattern or "KEM" in pattern:
+                    supported_kems.append(cipher)
+                else:
+                    supported_sigs.append(cipher)
+    
+    # Check TLS 1.3 supported groups if available
+    if result.tls13_analysis and hasattr(result.tls13_analysis, 'key_exchange_groups'):
+        for group in (result.tls13_analysis.key_exchange_groups or []):
+            group_upper = group.upper()
+            for pattern in pq_patterns:
+                if pattern in group_upper:
+                    if "KYBER" in pattern or "KEM" in pattern:
+                        supported_kems.append(group)
+    
+    pq_ready = len(supported_kems) > 0 or len(supported_sigs) > 0
+    hybrid_support = any("X25519" in k.upper() or "SECP256" in k.upper() for k in supported_kems)
+    
+    # Check if using NIST standard algorithms
+    nist_kems = ["ML-KEM-512", "ML-KEM-768", "ML-KEM-1024", "MLKEM"]
+    nist_sigs = ["ML-DSA", "SLH-DSA"]
+    nist_compliant = any(
+        any(nist in algo.upper() for nist in nist_kems) for algo in supported_kems
+    ) or any(
+        any(nist in algo.upper() for nist in nist_sigs) for algo in supported_sigs
+    )
+    
+    # Calculate future-proof score
+    score = 0
+    protocols = result.protocols_supported or {}
+    
+    if protocols.get("TLSv1.3", False):
+        score += 30
+    if pq_ready:
+        score += 40
+    if hybrid_support:
+        score += 20
+    if nist_compliant:
+        score += 10
+    
+    # Recommendations
+    if not protocols.get("TLSv1.3", False):
+        recommendations.append("Enable TLS 1.3 - required for most PQ key exchange")
+    
+    if not pq_ready:
+        recommendations.append("Consider enabling post-quantum hybrid key exchange (X25519Kyber768)")
+        recommendations.append("Modern browsers (Chrome 116+) support Kyber/ML-KEM")
+    
+    if pq_ready and not hybrid_support:
+        recommendations.append("Use hybrid PQ algorithms (e.g., X25519+Kyber) for backwards compatibility")
+    
+    if pq_ready and not nist_compliant:
+        recommendations.append("Migrate to NIST standardized algorithms (ML-KEM, ML-DSA)")
+    
+    return PostQuantumAnalysis(
+        pq_ready=pq_ready,
+        hybrid_support=hybrid_support,
+        supported_kems=list(set(supported_kems)),
+        supported_signatures=list(set(supported_sigs)),
+        nist_compliant=nist_compliant,
+        future_proof_score=min(score, 100),
+        recommendations=recommendations,
+    )
+
+
+# ============================================================================
+# NEW: STARTTLS PROTOCOL SUPPORT
+# ============================================================================
+
+def detect_starttls(host: str, port: int, timeout: float = 10.0) -> Optional[STARTTLSInfo]:
+    """
+    Detect STARTTLS support for various protocols.
+    """
+    # Determine protocol based on port
+    protocol = None
+    for proto_name, proto_info in STARTTLS_PROTOCOLS.items():
+        if port == proto_info["default_port"] or port in proto_info.get("alt_ports", []):
+            protocol = proto_name
+            break
+    
+    if not protocol:
+        return None
+    
+    proto_info = STARTTLS_PROTOCOLS[protocol]
+    
+    try:
+        sock = socket.create_connection((host, port), timeout=timeout)
+        sock.settimeout(timeout)
+        
+        starttls_supported = False
+        starttls_required = False
+        plain_auth_before_tls = False
+        implicit_tls = False
+        
+        # Handle greeting if needed
+        if proto_info["greeting_wait"]:
+            greeting = sock.recv(4096)
+            logger.debug(f"STARTTLS greeting: {greeting[:200]}")
+        
+        # Protocol-specific handling
+        if protocol == "smtp":
+            # Send EHLO
+            sock.send(proto_info["starttls_command"])
+            response = sock.recv(4096).decode('utf-8', errors='ignore')
+            
+            if "STARTTLS" in response.upper():
+                starttls_supported = True
+            
+            if "REQUIRETLS" in response.upper() or "250-STARTTLS" in response.upper():
+                # Check if auth is offered before STARTTLS
+                if "AUTH" in response and response.find("AUTH") < response.find("STARTTLS"):
+                    plain_auth_before_tls = True
+            
+            # Try STARTTLS
+            if starttls_supported:
+                sock.send(proto_info["starttls_trigger"])
+                tls_response = sock.recv(1024)
+                if proto_info["success_response"] in tls_response:
+                    starttls_supported = True
+        
+        elif protocol == "imap":
+            sock.send(proto_info["starttls_command"])
+            response = sock.recv(4096).decode('utf-8', errors='ignore')
+            
+            if "STARTTLS" in response.upper():
+                starttls_supported = True
+            if "LOGINDISABLED" in response.upper():
+                starttls_required = True
+        
+        elif protocol == "pop3":
+            sock.send(proto_info["starttls_command"])
+            response = sock.recv(4096).decode('utf-8', errors='ignore')
+            
+            if "STLS" in response.upper():
+                starttls_supported = True
+        
+        elif protocol == "ftp":
+            sock.send(proto_info["starttls_command"])
+            response = sock.recv(4096).decode('utf-8', errors='ignore')
+            
+            if "AUTH TLS" in response.upper() or "AUTH SSL" in response.upper():
+                starttls_supported = True
+        
+        elif protocol == "postgres":
+            # PostgreSQL SSLRequest message
+            ssl_request = struct.pack(">II", 8, 80877103)
+            sock.send(ssl_request)
+            response = sock.recv(1)
+            if response == b'S':
+                starttls_supported = True
+                implicit_tls = False  # It's actually STARTTLS style
+        
+        sock.close()
+        
+        # Check for implicit TLS (direct TLS on alt ports)
+        if port in proto_info.get("alt_ports", []):
+            try:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                test_sock = socket.create_connection((host, port), timeout=5)
+                ssl_sock = ctx.wrap_socket(test_sock, server_hostname=host)
+                ssl_sock.close()
+                implicit_tls = True
+            except:
+                pass
+        
+        # STARTTLS stripping is possible if STARTTLS is supported but not required
+        stripping_possible = starttls_supported and not starttls_required
+        
+        return STARTTLSInfo(
+            protocol=protocol.upper(),
+            starttls_supported=starttls_supported,
+            starttls_required=starttls_required,
+            plain_auth_before_tls=plain_auth_before_tls,
+            implicit_tls_supported=implicit_tls,
+            stripping_possible=stripping_possible,
+        )
+        
+    except Exception as e:
+        logger.debug(f"STARTTLS detection failed for {host}:{port}: {e}")
+        return None

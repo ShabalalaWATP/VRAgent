@@ -4,15 +4,21 @@ API endpoints for MITM proxy management.
 """
 
 import json
+import logging
 
 import asyncio
+import time
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
+from sqlalchemy.orm import Session
 
 from ..core.auth import get_current_active_user
-from ..models.models import User
+from ..core.database import get_db
+from ..models.models import User, MITMAnalysisReport, Project
 from ..services.mitm_service import (
     mitm_service, 
     analyze_mitm_traffic,
@@ -89,6 +95,12 @@ class SessionCreateRequest(BaseModel):
     name: Optional[str] = None
 
 
+class SessionWithAnalysisRequest(BaseModel):
+    """Save session with AI analysis data."""
+    name: Optional[str] = None
+    analysis: Optional[Dict[str, Any]] = None
+
+
 class ReplayRequest(BaseModel):
     """Replay request overrides."""
     method: Optional[str] = None
@@ -99,6 +111,14 @@ class ReplayRequest(BaseModel):
     base_url: Optional[str] = None
     timeout: Optional[int] = 20
     verify_tls: Optional[bool] = False
+
+
+class SaveToProjectRequest(BaseModel):
+    """Save MITM analysis to a project."""
+    project_id: int
+    title: Optional[str] = None
+    description: Optional[str] = None
+    session_id: Optional[str] = None  # Optional: link to saved session
 
 
 @router.post("/proxies")
@@ -137,14 +157,97 @@ async def get_proxy_status(proxy_id: str):
 
 
 @router.post("/proxies/{proxy_id}/start")
-async def start_proxy(proxy_id: str):
+async def start_proxy(proxy_id: str, auto_agentic: bool = Query(True)):
     """Start a proxy"""
     try:
-        return mitm_service.start_proxy(proxy_id)
+        result = mitm_service.start_proxy(proxy_id)
+        if auto_agentic:
+            asyncio.create_task(_auto_run_agentic_session(proxy_id))
+            result["agentic_auto_started"] = True
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _auto_run_agentic_session(proxy_id: str) -> None:
+    """
+    Kick off an agentic attack session after traffic starts flowing.
+
+    This runs in the background and logs any errors rather than silently failing.
+    Results are broadcast via WebSocket to connected clients.
+    """
+    logger.info(f"Starting auto-agentic session for proxy {proxy_id}")
+
+    try:
+        # Wait for traffic to start flowing (up to 30 seconds)
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            try:
+                proxy = mitm_service._get_proxy(proxy_id)
+                if len(proxy.traffic_log) > 0:
+                    logger.info(f"Traffic detected for proxy {proxy_id}, starting agentic session")
+                    break
+            except ValueError:
+                # Proxy was deleted while waiting
+                logger.warning(f"Proxy {proxy_id} was deleted while waiting for traffic")
+                return
+            await asyncio.sleep(1)
+        else:
+            logger.info(f"No traffic detected for proxy {proxy_id} after 30s, starting anyway")
+
+        # Get per-proxy executor for session isolation
+        executor = await _get_attack_executor(proxy_id)
+        executor.auto_execute_threshold = 0.2
+        executor.stop_threshold = 0.0
+
+        # Start traffic monitoring
+        await executor.start_traffic_monitor(proxy_id, {
+            "auto_analyze": True,
+            "capture_credentials": True,
+            "detect_vulnerabilities": True,
+            "trigger_attacks": True,
+            "interval_seconds": 1
+        })
+
+        # Run the agentic session
+        result = await executor.run_agentic_attack_session(
+            proxy_id,
+            max_tools=10,
+            auto_execute=True,
+            aggressive=True
+        )
+
+        # Log results
+        findings_count = result.get("total_findings", 0)
+        tools_executed = result.get("tools_executed", 0)
+        logger.info(
+            f"Auto-agentic session completed for proxy {proxy_id}: "
+            f"{tools_executed} tools executed, {findings_count} findings"
+        )
+
+        # Broadcast completion to WebSocket clients
+        await mitm_stream_manager.broadcast(proxy_id, {
+            "type": "agentic_session_complete",
+            "session_id": result.get("session_id"),
+            "tools_executed": tools_executed,
+            "total_findings": findings_count,
+            "status": result.get("status", "completed"),
+        })
+
+    except ValueError as e:
+        logger.warning(f"Auto-agentic session for {proxy_id} failed: {e}")
+        await mitm_stream_manager.broadcast(proxy_id, {
+            "type": "agentic_session_error",
+            "error": str(e),
+        })
+    except Exception as e:
+        logger.error(f"Auto-agentic session for {proxy_id} failed with unexpected error: {e}", exc_info=True)
+        await mitm_stream_manager.broadcast(proxy_id, {
+            "type": "agentic_session_error",
+            "error": f"Unexpected error: {str(e)}",
+        })
 
 
 @router.post("/proxies/{proxy_id}/stop")
@@ -158,9 +261,12 @@ async def stop_proxy(proxy_id: str):
 
 @router.delete("/proxies/{proxy_id}")
 async def delete_proxy(proxy_id: str):
-    """Delete a proxy"""
+    """Delete a proxy and clean up associated executor"""
     try:
-        return mitm_service.delete_proxy(proxy_id)
+        result = mitm_service.delete_proxy(proxy_id)
+        # Clean up per-proxy executor to free resources
+        await _cleanup_executor(proxy_id)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -303,6 +409,34 @@ async def get_session(proxy_id: str, session_id: str, limit: int = Query(100, ge
         return mitm_service.load_session(proxy_id, session_id, limit, offset)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/sessions/save-with-analysis")
+async def save_session_with_analysis(proxy_id: str, payload: SessionWithAnalysisRequest):
+    """Save current traffic log as a session with AI analysis data."""
+    try:
+        return mitm_service.save_session_with_analysis(proxy_id, payload.name, payload.analysis)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/proxies/{proxy_id}/sessions/{session_id}")
+async def delete_session(proxy_id: str, session_id: str):
+    """Delete a saved session."""
+    try:
+        mitm_service.delete_session(proxy_id, session_id)
+        return {"status": "deleted", "session_id": session_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/sessions")
+async def list_all_sessions():
+    """List all saved sessions across all proxies."""
+    try:
+        return mitm_service.list_all_sessions()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/proxies/{proxy_id}/replay/{entry_id}")
@@ -464,6 +598,8 @@ async def analyze_proxy_traffic(proxy_id: str):
     - Authentication weaknesses
     - API security issues
     - Missing security headers
+    
+    Also includes findings from any executed attack tools.
     """
     try:
         proxy = mitm_service._get_proxy(proxy_id)
@@ -483,9 +619,53 @@ async def analyze_proxy_traffic(proxy_id: str):
             "mode": proxy.mode.value,
             "tls_enabled": proxy.tls_enabled
         }
-        
+
+        # Gather agentic activity for writeup context
+        executor = await _get_attack_executor(proxy_id)
+        execution_log = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+        verification_results = [
+            v for k, v in executor.verification_results.items()
+            if k.startswith(f"{proxy_id}:")
+        ]
+        agent_activity = {
+            "monitoring_active": proxy_id in executor.active_monitors,
+            "goals": executor.attack_goals.get(proxy_id, []),
+            "goal_progress": executor.get_goal_progress(proxy_id),
+            "captured_data_summary": {
+                "credentials": len(executor.proxy_captured_data.get(proxy_id, {}).get("credentials", [])),
+                "tokens": len(executor.proxy_captured_data.get(proxy_id, {}).get("tokens", [])),
+                "cookies": len(executor.proxy_captured_data.get(proxy_id, {}).get("cookies", [])),
+            },
+            "execution_log": execution_log,
+            "verification_results": verification_results,
+            "decision_log": executor.get_decision_log(proxy_id),
+        }
+
         # Run analysis
-        analysis = await analyze_mitm_traffic(traffic_log, rules, proxy_config)
+        analysis = await analyze_mitm_traffic(traffic_log, rules, proxy_config, agent_activity)
+
+        # Include attack tool findings if any were executed
+        attack_tool_findings = executor.get_proxy_findings(proxy_id)
+        
+        if attack_tool_findings:
+            all_findings = analysis.get("findings", [])
+            existing_titles = {f.get("title") for f in all_findings}
+            
+            for atf in attack_tool_findings:
+                if atf.get("title") not in existing_titles:
+                    atf["source"] = "attack_tool"
+                    all_findings.append(atf)
+            
+            analysis["findings"] = all_findings
+            analysis["attack_tool_findings_count"] = len(attack_tool_findings)
+            
+            # Update analysis stats
+            if "analysis_stats" not in analysis:
+                analysis["analysis_stats"] = {}
+            analysis["analysis_stats"]["attack_tool_findings"] = len(attack_tool_findings)
         
         return analysis
         
@@ -493,6 +673,282 @@ async def analyze_proxy_traffic(proxy_id: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/save-to-project")
+async def save_analysis_to_project(
+    proxy_id: str,
+    request: SaveToProjectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Save MITM analysis to a project for combined analysis and reporting.
+    
+    This persists the analysis results to the database, allowing:
+    - Inclusion in Combined Analysis reports
+    - Historical tracking of MITM findings
+    - Export with other project scan data
+    
+    Includes findings from attack tools if any were executed.
+    """
+    try:
+        # Verify project access
+        project = db.query(Project).filter(Project.id == request.project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check project access
+        if project.owner_id != current_user.id:
+            from ..models.models import ProjectCollaborator
+            collab = db.query(ProjectCollaborator).filter(
+                ProjectCollaborator.project_id == project.id,
+                ProjectCollaborator.user_id == current_user.id
+            ).first()
+            if not collab:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get proxy and run analysis
+        proxy = mitm_service._get_proxy(proxy_id)
+        traffic_log = mitm_service.get_traffic(proxy_id, limit=200, offset=0).get("entries", [])
+        rules = mitm_service.get_rules(proxy_id)
+        
+        proxy_config = {
+            "proxy_id": proxy_id,
+            "listen_host": proxy.listen_host,
+            "listen_port": proxy.listen_port,
+            "target_host": proxy.target_host,
+            "target_port": proxy.target_port,
+            "mode": proxy.mode.value,
+            "tls_enabled": proxy.tls_enabled
+        }
+
+        # Gather agentic activity for writeup context
+        executor = await _get_attack_executor(proxy_id)
+        execution_log = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+        verification_results = [
+            v for k, v in executor.verification_results.items()
+            if k.startswith(f"{proxy_id}:")
+        ]
+        agent_activity = {
+            "monitoring_active": proxy_id in executor.active_monitors,
+            "goals": executor.attack_goals.get(proxy_id, []),
+            "goal_progress": executor.get_goal_progress(proxy_id),
+            "captured_data_summary": {
+                "credentials": len(executor.proxy_captured_data.get(proxy_id, {}).get("credentials", [])),
+                "tokens": len(executor.proxy_captured_data.get(proxy_id, {}).get("tokens", [])),
+                "cookies": len(executor.proxy_captured_data.get(proxy_id, {}).get("cookies", [])),
+            },
+            "execution_log": execution_log,
+            "verification_results": verification_results,
+            "decision_log": executor.get_decision_log(proxy_id),
+        }
+
+        # Run 3-pass analysis
+        analysis = await analyze_mitm_traffic(traffic_log, rules, proxy_config, agent_activity)
+
+        # Get attack tool findings if any were executed
+        attack_tool_findings = executor.get_proxy_findings(proxy_id)
+        attack_tool_captured_data = executor.get_proxy_captured_data(proxy_id)
+        
+        # Merge attack tool findings into analysis findings
+        all_findings = analysis.get("findings", [])
+        if attack_tool_findings:
+            # Add unique attack tool findings using title+category+endpoint as key
+            # This prevents duplicate findings while preserving distinct tool discoveries
+            existing_keys = {
+                (f.get("title", ""), f.get("category", ""), f.get("affected_endpoint", ""))
+                for f in all_findings
+            }
+            for atf in attack_tool_findings:
+                finding_key = (atf.get("title", ""), atf.get("category", ""), atf.get("affected_endpoint", ""))
+                if finding_key not in existing_keys:
+                    atf["source"] = "attack_tool"  # Tag the source
+                    all_findings.append(atf)
+                    existing_keys.add(finding_key)
+        
+        # Recalculate risk score with attack tool findings
+        severity_weights = {"critical": 10, "high": 7, "medium": 4, "low": 1, "info": 0}
+        total_weight = sum(severity_weights.get(f.get("severity", "info"), 0) for f in all_findings)
+        risk_score = min(10, total_weight / max(len(all_findings), 1) * 2) if all_findings else 0
+        
+        # Update risk level based on new score
+        if risk_score >= 8:
+            risk_level = "critical"
+        elif risk_score >= 6:
+            risk_level = "high"
+        elif risk_score >= 4:
+            risk_level = "medium"
+        elif risk_score >= 2:
+            risk_level = "low"
+        else:
+            risk_level = "info"
+        
+        # Extract stats
+        analysis_stats = analysis.get("analysis_stats", {})
+        analysis_stats["attack_tool_findings"] = len(attack_tool_findings)
+        
+        # Create report record
+        report = MITMAnalysisReport(
+            project_id=request.project_id,
+            user_id=current_user.id,
+            proxy_id=proxy_id,
+            session_id=request.session_id,
+            title=request.title or f"MITM Analysis - {proxy.target_host}:{proxy.target_port}",
+            description=request.description,
+            traffic_analyzed=analysis.get("traffic_analyzed", 0),
+            rules_active=analysis.get("rules_active", 0),
+            findings_count=len(all_findings),
+            risk_score=risk_score,
+            risk_level=risk_level,
+            summary=analysis.get("summary"),
+            analysis_passes=analysis.get("analysis_passes", 3),
+            pass1_findings=analysis_stats.get("pass1_findings", 0),
+            pass2_ai_findings=analysis_stats.get("pass2_ai_findings", 0),
+            after_dedup=analysis_stats.get("after_dedup", 0),
+            false_positives_removed=analysis_stats.get("false_positives_removed", 0),
+            findings=all_findings,  # Now includes attack tool findings
+            attack_paths=analysis.get("attack_paths"),
+            recommendations=analysis.get("recommendations"),
+            exploit_references=analysis.get("exploit_references"),
+            cve_references=analysis.get("cve_references"),
+            ai_exploitation_writeup=analysis.get("ai_exploitation_writeup"),
+            # Sample first 20 traffic entries for snapshot
+            traffic_snapshot=traffic_log[:20] if traffic_log else None
+        )
+        
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        
+        return {
+            "success": True,
+            "report_id": report.id,
+            "message": f"MITM analysis saved to project '{project.name}'",
+            "findings_count": report.findings_count,
+            "attack_tool_findings": len(attack_tool_findings),
+            "risk_level": report.risk_level,
+            "analysis_stats": analysis_stats,
+            "captured_data_summary": {
+                "credentials": len(attack_tool_captured_data.get("credentials", [])),
+                "tokens": len(attack_tool_captured_data.get("tokens", [])),
+                "cookies": len(attack_tool_captured_data.get("cookies", []))
+            } if attack_tool_captured_data else None
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reports/project/{project_id}")
+async def list_project_mitm_reports(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    List all MITM analysis reports for a project.
+    """
+    # Verify project access
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.owner_id != current_user.id:
+        from ..models.models import ProjectCollaborator
+        collab = db.query(ProjectCollaborator).filter(
+            ProjectCollaborator.project_id == project.id,
+            ProjectCollaborator.user_id == current_user.id
+        ).first()
+        if not collab:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    reports = db.query(MITMAnalysisReport).filter(
+        MITMAnalysisReport.project_id == project_id
+    ).order_by(MITMAnalysisReport.created_at.desc()).all()
+    
+    return [
+        {
+            "id": r.id,
+            "title": r.title,
+            "description": r.description,
+            "traffic_analyzed": r.traffic_analyzed,
+            "findings_count": r.findings_count,
+            "risk_score": r.risk_score,
+            "risk_level": r.risk_level,
+            "analysis_passes": r.analysis_passes,
+            "pass1_findings": r.pass1_findings,
+            "pass2_ai_findings": r.pass2_ai_findings,
+            "false_positives_removed": r.false_positives_removed,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        }
+        for r in reports
+    ]
+
+
+@router.get("/reports/{report_id}")
+async def get_mitm_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get full MITM analysis report by ID.
+    """
+    report = db.query(MITMAnalysisReport).filter(MITMAnalysisReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Verify access
+    project = db.query(Project).filter(Project.id == report.project_id).first()
+    if project.owner_id != current_user.id:
+        from ..models.models import ProjectCollaborator
+        collab = db.query(ProjectCollaborator).filter(
+            ProjectCollaborator.project_id == project.id,
+            ProjectCollaborator.user_id == current_user.id
+        ).first()
+        if not collab:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return {
+        "id": report.id,
+        "project_id": report.project_id,
+        "title": report.title,
+        "description": report.description,
+        "proxy_id": report.proxy_id,
+        "session_id": report.session_id,
+        "traffic_analyzed": report.traffic_analyzed,
+        "rules_active": report.rules_active,
+        "findings_count": report.findings_count,
+        "risk_score": report.risk_score,
+        "risk_level": report.risk_level,
+        "summary": report.summary,
+        "analysis_passes": report.analysis_passes,
+        "analysis_stats": {
+            "pass1_findings": report.pass1_findings,
+            "pass2_ai_findings": report.pass2_ai_findings,
+            "after_dedup": report.after_dedup,
+            "false_positives_removed": report.false_positives_removed,
+            "final_count": report.findings_count
+        },
+        "findings": report.findings,
+        "attack_paths": report.attack_paths,
+        "recommendations": report.recommendations,
+        "exploit_references": report.exploit_references,
+        "cve_references": report.cve_references,
+        "ai_exploitation_writeup": report.ai_exploitation_writeup,
+        "traffic_snapshot": report.traffic_snapshot,
+        "created_at": report.created_at.isoformat() if report.created_at else None,
+        "updated_at": report.updated_at.isoformat() if report.updated_at else None
+    }
 
 
 # ============================================================================
@@ -531,9 +987,44 @@ async def export_proxy_analysis(
             "mode": proxy.mode.value,
             "tls_enabled": proxy.tls_enabled
         }
-        
+
+        # Gather agentic activity for writeup context
+        executor = await _get_attack_executor(proxy_id)
+        execution_log = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+        verification_results = [
+            v for k, v in executor.verification_results.items()
+            if k.startswith(f"{proxy_id}:")
+        ]
+        agent_activity = {
+            "monitoring_active": proxy_id in executor.active_monitors,
+            "goals": executor.attack_goals.get(proxy_id, []),
+            "goal_progress": executor.get_goal_progress(proxy_id),
+            "captured_data_summary": {
+                "credentials": len(executor.proxy_captured_data.get(proxy_id, {}).get("credentials", [])),
+                "tokens": len(executor.proxy_captured_data.get(proxy_id, {}).get("tokens", [])),
+                "cookies": len(executor.proxy_captured_data.get(proxy_id, {}).get("cookies", [])),
+            },
+            "execution_log": execution_log,
+            "verification_results": verification_results,
+            "decision_log": executor.get_decision_log(proxy_id),
+        }
+
         # Run analysis first
-        analysis = await analyze_mitm_traffic(traffic_log, rules, proxy_config)
+        analysis = await analyze_mitm_traffic(traffic_log, rules, proxy_config, agent_activity)
+
+        # Include attack tool findings if any were executed
+        attack_tool_findings = executor.get_proxy_findings(proxy_id)
+        if attack_tool_findings:
+            all_findings = analysis.get("findings", [])
+            existing_titles = {f.get("title") for f in all_findings}
+            for atf in attack_tool_findings:
+                if atf.get("title") not in existing_titles:
+                    atf["source"] = "attack_tool"
+                    all_findings.append(atf)
+            analysis["findings"] = all_findings
         
         # Generate report based on format
         if format == "markdown":
@@ -2720,4 +3211,1253 @@ async def full_ai_analysis(
         "risk_score": risk_score,
         "risk_level": "critical" if risk_score >= 75 else "high" if risk_score >= 50 else "medium" if risk_score >= 25 else "low"
     }
+
+
+# ============== MITM AI Chat Endpoint ==============
+
+async def _generate_ai_suggestions(
+    client,
+    model_id: str,
+    user_message: str,
+    assistant_response: str,
+    context: Dict[str, Any],
+    findings: List[Dict]
+) -> List[str]:
+    """
+    Generate AI-powered contextual follow-up questions based on the conversation.
+
+    Uses a lightweight AI call to generate relevant questions based on:
+    - The user's question and assistant's response
+    - The findings and context available
+    - Attack opportunities identified
+    """
+    try:
+        from google.genai import types
+
+        # Build a concise context for suggestion generation
+        finding_summaries = [f.get('title', '') for f in findings[:5]] if findings else []
+        risk_level = context.get('risk_level', 'unknown')
+
+        prompt = f"""Based on this MITM security analysis conversation, generate exactly 4 relevant follow-up questions the user might want to ask.
+
+User asked: "{user_message[:200]}"
+
+Assistant response summary: "{assistant_response[:300]}..."
+
+Context:
+- Risk level: {risk_level}
+- Key findings: {', '.join(finding_summaries) if finding_summaries else 'None yet'}
+- Target: {context.get('target', 'Unknown')}
+
+Generate 4 short, specific follow-up questions (max 60 chars each) that would help the user:
+1. Understand exploitation techniques
+2. Learn about specific tools to use
+3. Explore attack chains
+4. Understand remediation
+
+Output ONLY the 4 questions, one per line, no numbering or bullets."""
+
+        response = await client.aio.models.generate_content(
+            model=model_id,
+            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        )
+
+        # Parse the response into individual questions
+        questions = [q.strip() for q in response.text.strip().split('\n') if q.strip()]
+        return questions[:4]
+
+    except Exception as e:
+        logger.warning(f"Failed to generate AI suggestions: {e}")
+        # Fallback to context-aware defaults
+        if findings:
+            return [
+                "How do I exploit the most critical finding?",
+                "What tools should I use for this target?",
+                "Can you explain the attack chain?",
+                "What's the recommended fix?",
+            ]
+        return [
+            "What should I look for in the traffic?",
+            "How do I identify vulnerabilities?",
+            "What attack tools are available?",
+            "How do I set up traffic interception?",
+        ]
+
+
+async def _generate_contextual_learning_tip(
+    client,
+    model_id: str,
+    user_message: str,
+    assistant_response: str,
+    findings: List[Dict]
+) -> str:
+    """
+    Generate a contextual learning tip based on the conversation topic.
+
+    Creates educational content that relates to what the user is asking about,
+    rather than showing random generic tips.
+    """
+    try:
+        from google.genai import types
+
+        # Identify the topic from the conversation
+        finding_categories = set(f.get('category', '').lower() for f in findings[:5]) if findings else set()
+
+        prompt = f"""Generate ONE short, helpful security learning tip (max 100 chars) related to this conversation.
+
+User asked about: "{user_message[:150]}"
+Topic areas: {', '.join(finding_categories) if finding_categories else 'MITM attacks, traffic analysis'}
+
+The tip should:
+- Start with "💡 Tip:"
+- Be educational and beginner-friendly
+- Relate directly to what the user is asking about
+- Include a practical insight
+
+Output ONLY the tip, nothing else."""
+
+        response = await client.aio.models.generate_content(
+            model=model_id,
+            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        )
+
+        tip = response.text.strip()
+        if not tip.startswith("💡"):
+            tip = f"💡 Tip: {tip}"
+        return tip[:150]  # Ensure reasonable length
+
+    except Exception as e:
+        logger.warning(f"Failed to generate contextual tip: {e}")
+        # Fallback to a relevant default
+        return "💡 Tip: Always verify findings manually before reporting - false positives can damage credibility."
+
+
+class MitmChatMessage(BaseModel):
+    """A message in the MITM chat conversation."""
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class MitmChatRequest(BaseModel):
+    """Request body for MITM chat."""
+    message: str
+    conversation_history: List[MitmChatMessage] = []
+    analysis_context: Dict[str, Any] = {}
+    beginner_mode: bool = True
+
+
+class MitmChatResponse(BaseModel):
+    """Response from MITM chat."""
+    response: str
+    suggested_questions: List[str] = []
+    learning_tip: Optional[str] = None
+
+
+@router.post("/chat", response_model=MitmChatResponse)
+async def chat_about_mitm_analysis(
+    request: MitmChatRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Interactive AI chat about MITM traffic analysis findings.
+    
+    Supports multi-turn conversations with context about intercepted traffic,
+    vulnerabilities, attack vectors, and exploitation techniques.
+    """
+    from backend.core.config import settings
+    
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="AI features require Gemini API key")
+    
+    try:
+        from google import genai
+        from google.genai import types
+        
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        # Build context from analysis (increased limits for better AI context)
+        ctx = request.analysis_context
+        target = ctx.get('target', 'Unknown Target')
+
+        # Build findings summary - increased to 40 findings with longer descriptions
+        findings = ctx.get('findings', [])
+        findings_text = "\n".join([
+            f"- [{f.get('severity', 'INFO').upper()}] {f.get('category', 'Unknown')}: {f.get('title', '')} - {f.get('description', '')[:150]}"
+            for f in findings[:40]
+        ]) if findings else "None identified yet - run analysis to discover vulnerabilities"
+
+        # Build attack paths summary - increased to 15 with full descriptions
+        attack_paths = ctx.get('attack_paths', [])
+        attack_paths_text = "\n".join([
+            f"- {ap.get('title', 'Unknown')}: {ap.get('description', '')[:200]}"
+            for ap in attack_paths[:15]
+        ]) if attack_paths else "None identified - attack paths are discovered during analysis"
+
+        # Build CVE references - increased limits
+        cve_refs = ctx.get('cve_references', [])
+        cve_text = "\n".join([
+            f"- {c.get('cve_id', 'N/A')}: {c.get('description', '')[:150]} (CVSS: {c.get('cvss_score', 'N/A')})"
+            for c in cve_refs[:15]
+        ]) if cve_refs else "None matched"
+
+        # Build exploit references - increased limits
+        exploit_refs = ctx.get('exploit_references', [])
+        exploit_text = "\n".join([
+            f"- {e.get('name', 'Unknown')}: {e.get('description', '')[:120]} ({e.get('platform', 'N/A')})"
+            for e in exploit_refs[:15]
+        ]) if exploit_refs else "None matched"
+
+        # Traffic sample - increased to 25 with more details
+        traffic_sample = ctx.get('traffic_sample', [])
+        traffic_text = "\n".join([
+            f"- {t.get('method', '?')} {t.get('path', '/')} -> {t.get('status', '?')} ({t.get('content_type', 'unknown')[:30]})"
+            for t in traffic_sample[:25]
+        ]) if traffic_sample else "No traffic captured yet - start the proxy to capture traffic"
+        
+        contents = []
+        
+        # System context as first user message
+        system_context = f"""You are an expert offensive security analyst and penetration tester helping users understand MITM traffic analysis results and exploitation techniques.
+
+## TARGET BEING ANALYZED
+- **Target:** {target}
+- **Risk Level:** {ctx.get('risk_level', 'Unknown')}
+- **Risk Score:** {ctx.get('risk_score', 'N/A')}/100
+- **Traffic Captured:** {ctx.get('traffic_count', 0)} requests
+
+## VULNERABILITIES FOUND ({len(findings)})
+{findings_text}
+
+## ATTACK CHAINS IDENTIFIED ({len(attack_paths)})
+{attack_paths_text}
+
+## CVE REFERENCES ({len(cve_refs)})
+{cve_text}
+
+## KNOWN EXPLOITS ({len(exploit_refs)})
+{exploit_text}
+
+## TRAFFIC SAMPLE
+{traffic_text}
+
+## DETECTED TECHNOLOGIES
+{', '.join(ctx.get('detected_technologies', {}).keys()) or 'Unknown'}
+
+## AI ANALYSIS SUMMARY
+{(ctx.get('ai_writeup', '') or '')[:1000]}
+
+{"## BEGINNER MODE ENABLED - Explain concepts clearly, define technical terms, use analogies, and guide the user step by step." if request.beginner_mode else ""}
+
+## YOUR ROLE AS OFFENSIVE SECURITY ANALYST
+1. **Exploitation Focus**: Explain HOW vulnerabilities can be exploited, not just WHAT they are
+2. **Tool Recommendations**: Suggest specific tools (Burp Suite, sqlmap, ffuf, nuclei, etc.) with example commands
+3. **Attack Chains**: Help users understand how to chain vulnerabilities together
+4. **CVE Deep Dives**: Explain CVEs, their exploit status, and POC availability
+5. **Real-World Context**: Reference real-world attacks and techniques
+6. **MITRE ATT&CK**: Map findings to ATT&CK techniques when relevant
+7. **Remediation**: Always include how to fix issues after explaining exploitation
+8. {"Use simple language and analogies for beginners" if request.beginner_mode else "Be technically precise and assume expertise"}
+
+Remember: Your goal is to help the user think like an attacker to better defend their applications."""
+        
+        contents.append(types.Content(role="user", parts=[types.Part(text=system_context)]))
+        contents.append(types.Content(role="model", parts=[types.Part(text="I'm ready to help you understand these findings from an attacker's perspective. What would you like to explore first?")]))
+        
+        # Add conversation history - increased to 20 messages for better context
+        for msg in request.conversation_history[-20:]:
+            role = "user" if msg.role == "user" else "model"
+            contents.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
+        
+        # Add current message
+        contents.append(types.Content(role="user", parts=[types.Part(text=request.message)]))
+        
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model_id,
+            contents=contents,
+        )
+        
+        response_text = response.text
+
+        # Generate AI-powered contextual follow-up questions
+        suggested_questions = await _generate_ai_suggestions(
+            client, settings.gemini_model_id, request.message, response_text, ctx, findings
+        )
+
+        # Generate contextual learning tip for beginner mode
+        learning_tip = None
+        if request.beginner_mode:
+            learning_tip = await _generate_contextual_learning_tip(
+                client, settings.gemini_model_id, request.message, response_text, findings
+            )
+        
+        return MitmChatResponse(
+            response=response_text,
+            suggested_questions=suggested_questions[:4],
+            learning_tip=learning_tip,
+        )
+        
+    except Exception as e:
+        import logging
+        logging.error(f"MITM chat failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+# ============================================================================
+# MITM Attack Tools Integration - Agentic Execution
+# ============================================================================
+
+from ..services.mitm_attack_tools_service import (
+    init_mitm_attack_tools,
+    get_available_tools,
+    get_tool_by_id,
+    MITM_ATTACK_TOOLS,
+    MITMAgenticExecutor,
+    MITMToolRecommendationEngine
+)
+
+# Per-proxy executors for session isolation
+_proxy_executors: Dict[str, MITMAgenticExecutor] = {}
+_executor_lock = asyncio.Lock()
+
+async def _get_attack_executor(proxy_id: str = None) -> MITMAgenticExecutor:
+    """
+    Get an attack executor, optionally per-proxy for session isolation.
+
+    When proxy_id is provided, returns a dedicated executor for that proxy
+    to avoid cross-session interference. Executors are cached and reused.
+    """
+    global _proxy_executors
+
+    if proxy_id is None:
+        # Fallback to shared executor for backwards compatibility
+        proxy_id = "__shared__"
+
+    async with _executor_lock:
+        if proxy_id not in _proxy_executors:
+            _proxy_executors[proxy_id] = init_mitm_attack_tools(mitm_service)
+            logger.info(f"Created new attack executor for proxy: {proxy_id}")
+        return _proxy_executors[proxy_id]
+
+
+def _get_attack_executor_sync(proxy_id: str = None) -> MITMAgenticExecutor:
+    """Synchronous version for non-async contexts."""
+    global _proxy_executors
+
+    if proxy_id is None:
+        proxy_id = "__shared__"
+
+    if proxy_id not in _proxy_executors:
+        _proxy_executors[proxy_id] = init_mitm_attack_tools(mitm_service)
+        logger.info(f"Created new attack executor for proxy: {proxy_id}")
+    return _proxy_executors[proxy_id]
+
+
+async def _cleanup_executor(proxy_id: str):
+    """Clean up executor when proxy is deleted."""
+    global _proxy_executors
+    async with _executor_lock:
+        if proxy_id in _proxy_executors:
+            del _proxy_executors[proxy_id]
+            logger.info(f"Cleaned up attack executor for proxy: {proxy_id}")
+
+
+class ToolExecutionRequest(BaseModel):
+    """Request to execute an attack tool"""
+    tool_id: str
+    options: Optional[Dict[str, Any]] = None
+
+
+class AgenticSessionRequest(BaseModel):
+    """Request to run an agentic attack session"""
+    max_tools: int = 5
+    auto_execute: bool = True
+    aggressive: bool = False
+
+
+@router.get("/attack-tools")
+async def list_attack_tools(
+    category: Optional[str] = Query(None, description="Filter by category"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    List all available MITM attack tools.
+    
+    Returns tools like SSLStrip, Cookie Hijacker, CSP Bypass, etc.
+    Each tool includes description, capabilities, and expected findings.
+    """
+    tools = get_available_tools()
+    
+    if category:
+        tools = [t for t in tools if t.get("category") == category]
+    
+    return {
+        "tools": tools,
+        "total": len(tools),
+        "categories": list(set(t.get("category") for t in get_available_tools()))
+    }
+
+
+@router.get("/attack-tools/{tool_id}")
+async def get_attack_tool(
+    tool_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get detailed information about a specific attack tool"""
+    tool = get_tool_by_id(tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool {tool_id} not found")
+    return tool
+
+
+@router.post("/proxies/{proxy_id}/attack-tools/recommend")
+async def get_tool_recommendations(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get AI-powered attack tool recommendations based on traffic analysis.
+    
+    Analyzes captured traffic and existing findings to recommend
+    the most effective attack tools to run.
+    
+    Returns recommendations with:
+    - Tool ID and name
+    - Confidence score (0-1)
+    - Reason for recommendation
+    - Expected impact
+    - Execution steps
+    """
+    try:
+        # Get proxy and traffic
+        proxy = mitm_service._get_proxy(proxy_id)
+        traffic_log = mitm_service.get_traffic(proxy_id, limit=100).get("entries", [])
+        
+        proxy_config = {
+            "proxy_id": proxy_id,
+            "target_host": proxy.target_host,
+            "target_port": proxy.target_port,
+            "tls_enabled": proxy.tls_enabled,
+            "mode": proxy.mode.value
+        }
+        
+        # Get existing findings from analysis if any
+        existing_findings = []
+        
+        # Get recommendations
+        engine = MITMToolRecommendationEngine()
+        recommendations = await engine.analyze_and_recommend(
+            traffic_log,
+            existing_findings,
+            proxy_config
+        )
+        
+        return {
+            "proxy_id": proxy_id,
+            "traffic_analyzed": len(traffic_log),
+            "recommendations": [r.to_dict() for r in recommendations],
+            "total": len(recommendations)
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/attack-tools/execute")
+async def execute_attack_tool(
+    proxy_id: str,
+    request: ToolExecutionRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Execute a specific attack tool against the proxy.
+    
+    Executes the tool and returns results including:
+    - Success status
+    - Execution time
+    - Findings generated
+    - Captured data (credentials, tokens, etc.)
+    - Errors if any
+    
+    The tool will be activated via rules or direct analysis depending on type.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        result = await executor.execute_tool(
+            request.tool_id,
+            proxy_id,
+            request.options
+        )
+        return result.to_dict()
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/attack-tools/agentic-session")
+async def run_agentic_attack_session(
+    proxy_id: str,
+    request: AgenticSessionRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Run an AI-driven agentic attack session.
+    
+    This endpoint:
+    1. Analyzes all captured traffic
+    2. Gets AI recommendations for attack tools
+    3. Automatically executes recommended tools
+    4. Collects all findings
+    5. Returns comprehensive results
+    
+    The session runs autonomously, selecting and executing tools
+    based on what the AI determines will be most effective.
+    
+    Parameters:
+    - max_tools: Maximum number of tools to execute (default: 5)
+    - auto_execute: Whether to automatically execute recommended tools (default: true)
+    
+    Returns session results including all findings added.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        results = await executor.run_agentic_attack_session(
+            proxy_id,
+            max_tools=request.max_tools,
+            auto_execute=request.auto_execute,
+            aggressive=request.aggressive
+        )
+        return results
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Enhanced Agentic Capabilities
+# ============================================================================
+
+class AttackGoalsRequest(BaseModel):
+    """Request to set attack goals for autonomous operation"""
+    goals: List[str]  # e.g., ["compromise_authentication", "exfiltrate_data"]
+
+
+class MonitorConfigRequest(BaseModel):
+    """Configuration for real-time traffic monitoring"""
+    auto_analyze: bool = True
+    capture_credentials: bool = True
+    detect_vulnerabilities: bool = True
+    trigger_attacks: bool = True
+    interval_seconds: int = 2
+
+
+@router.post("/proxies/{proxy_id}/agent/set-goals")
+async def set_attack_goals(
+    proxy_id: str,
+    request: AttackGoalsRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Set high-level attack goals for autonomous operation.
+    
+    Available goals:
+    - compromise_authentication: Capture or bypass authentication
+    - exfiltrate_data: Capture sensitive data from traffic
+    - inject_payload: Successfully inject scripts or content
+    - downgrade_security: Remove or bypass security mechanisms
+    - map_attack_surface: Discover vulnerabilities and attack vectors
+    
+    The agent will prioritize tools and actions based on these goals.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        executor.set_attack_goals(proxy_id, request.goals)
+        return {
+            "status": "goals_set",
+            "proxy_id": proxy_id,
+            "goals": request.goals,
+            "message": f"Agent will now prioritize achieving: {', '.join(request.goals)}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/agent/goal-progress")
+async def get_goal_progress(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get progress towards attack goals.
+    
+    Shows which goals have been achieved and which indicators have been met.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        return executor.get_goal_progress(proxy_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/agent/start-monitor")
+async def start_traffic_monitor(
+    proxy_id: str,
+    request: MonitorConfigRequest = None,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Start real-time traffic monitoring with automatic attack triggering.
+    
+    The agent will:
+    - Monitor all new traffic in real-time
+    - Automatically detect credentials and capture them
+    - Identify vulnerabilities as traffic flows
+    - Trigger attacks automatically when opportunities are found (if enabled)
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        config = request.dict() if request else None
+        result = await executor.start_traffic_monitor(proxy_id, config)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/agent/stop-monitor")
+async def stop_traffic_monitor(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Stop real-time traffic monitoring"""
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        result = await executor.stop_traffic_monitor(proxy_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proxies/{proxy_id}/agent/verify-attack/{tool_id}")
+async def verify_attack_success(
+    proxy_id: str,
+    tool_id: str,
+    timeout: int = Query(30, description="Verification timeout in seconds"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Verify if an attack was successful.
+    
+    Monitors traffic for success indicators specific to the attack tool.
+    Returns verification status with indicators that were detected.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        result = await executor.verify_attack_success(proxy_id, tool_id, timeout)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/agent/attack-memory")
+@router.get("/proxies/{proxy_id}/agent/attack-memory")
+async def get_attack_memory(
+    proxy_id: str = "default",
+    tool_id: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the agent's attack memory and success rates.
+    
+    The agent learns from past attacks to improve recommendations.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        success_rate = executor.get_attack_success_rate(tool_id)
+        return {
+            "success_rate": success_rate,
+            "recent_attacks": executor.attack_memory[-20:],
+            "total_recorded": len(executor.attack_memory)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/agent/status")
+async def get_agent_status(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get comprehensive agent status for a proxy.
+    
+    Returns monitoring status, goals, findings, and captured data.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        return {
+            "proxy_id": proxy_id,
+            "monitoring_active": proxy_id in executor.active_monitors,
+            "goals": executor.attack_goals.get(proxy_id, []),
+            "goal_progress": executor.get_goal_progress(proxy_id),
+            "findings_count": len(executor.proxy_findings.get(proxy_id, [])),
+            "captured_data_summary": {
+                "credentials": len(executor.proxy_captured_data.get(proxy_id, {}).get("credentials", [])),
+                "tokens": len(executor.proxy_captured_data.get(proxy_id, {}).get("tokens", [])),
+                "cookies": len(executor.proxy_captured_data.get(proxy_id, {}).get("cookies", [])),
+            },
+            "confidence_thresholds": {
+                "auto_execute": executor.auto_execute_threshold,
+                "escalation": executor.escalation_threshold,
+                "stop": executor.stop_threshold
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/proxies/{proxy_id}/attack-tools/execution-log")
+async def get_execution_log(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the execution log of attack tools for a proxy.
+
+    Shows history of which tools were executed and their results.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        logs = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+        return {
+            "proxy_id": proxy_id,
+            "executions": logs,
+            "total": len(logs)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ATTACK PHASE MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/attack/{proxy_id}/phase")
+async def get_current_attack_phase(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the current attack phase and progress.
+
+    Returns phase info, goals achieved, and transition options.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        phase_info = executor.phase_controller.get_current_phase_info()
+        phase_progress = executor.phase_controller.get_phase_progress()
+        all_phases = executor.phase_controller.get_all_phases_status()
+
+        return {
+            "proxy_id": proxy_id,
+            "current_phase": phase_info,
+            "progress": phase_progress,
+            "all_phases": all_phases,
+            "phase_history": executor.phase_controller.get_phase_history()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/attack/{proxy_id}/phase/{phase}")
+async def set_attack_phase(
+    proxy_id: str,
+    phase: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Manually transition to a specific attack phase.
+
+    Phases: reconnaissance, initial_access, exploitation, persistence, escalation, exfiltration
+    """
+    try:
+        from ..services.mitm_attack_phases import AttackPhase
+
+        # Validate phase
+        try:
+            target_phase = AttackPhase(phase)
+        except ValueError:
+            valid_phases = [p.value for p in AttackPhase]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid phase. Valid phases: {valid_phases}"
+            )
+
+        executor = await _get_attack_executor(proxy_id)
+        transition = executor.phase_controller.transition_phase(target_phase)
+
+        return {
+            "success": True,
+            "proxy_id": proxy_id,
+            "transition": transition,
+            "current_phase": executor.phase_controller.get_current_phase_info()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/{proxy_id}/phase/relevant-tools")
+async def get_phase_relevant_tools(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get tools relevant to the current attack phase.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        relevant_tools = executor.phase_controller.get_phase_relevant_tools()
+
+        # Get full tool info
+        tools = []
+        for tool_id in relevant_tools:
+            if tool_id in executor.tools:
+                tools.append(executor.tools[tool_id].to_dict())
+
+        return {
+            "proxy_id": proxy_id,
+            "phase": executor.phase_controller.current_phase.value,
+            "relevant_tools": tools
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ATTACK CHAIN MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/attack/{proxy_id}/chains")
+async def get_available_attack_chains(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all available attack chains.
+
+    Attack chains are automated sequences of tools triggered by events.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        return {
+            "proxy_id": proxy_id,
+            "available_chains": executor.chain_executor.get_available_chains(),
+            "active_executions": executor.chain_executor.get_active_executions(),
+            "execution_history": executor.chain_executor.get_execution_history(limit=20),
+            "stats": executor.chain_executor.get_chain_stats()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/attack/{proxy_id}/chains/{chain_id}")
+async def execute_attack_chain(
+    proxy_id: str,
+    chain_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Manually execute a specific attack chain.
+
+    Chains: credential_to_session, injection_escalation, ssl_strip_capture,
+            network_pivot, api_exploitation, cache_poisoning, websocket_takeover, mfa_bypass
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Check if chain exists
+        chain_info = executor.chain_executor.get_chain_info(chain_id)
+        if not chain_info:
+            available = [c["chain_id"] for c in executor.chain_executor.get_available_chains()]
+            raise HTTPException(
+                status_code=404,
+                detail=f"Chain '{chain_id}' not found. Available: {available}"
+            )
+
+        # Execute chain
+        execution = await executor.chain_executor.execute_chain(
+            chain_id,
+            {"proxy_id": proxy_id, "trigger_type": "manual"}
+        )
+
+        return {
+            "success": True,
+            "proxy_id": proxy_id,
+            "chain_id": chain_id,
+            "execution": execution.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/{proxy_id}/chains/triggers")
+async def check_chain_triggers(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Check which attack chains would be triggered based on current metrics.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Build metrics from current state
+        captured = executor.proxy_captured_data.get(proxy_id, {})
+        findings = executor.proxy_findings.get(proxy_id, [])
+
+        metrics = {
+            "credentials_captured": len(captured.get("credentials", [])),
+            "tokens_captured": len(captured.get("tokens", [])),
+            "sessions_hijacked": len(captured.get("cookies", [])),
+            "injection_successful": any("injection" in f.get("category", "").lower() for f in findings),
+            "ssl_stripped": any("ssl" in f.get("title", "").lower() for f in findings),
+        }
+
+        triggerable = executor.chain_executor.check_chain_triggers(metrics)
+
+        return {
+            "proxy_id": proxy_id,
+            "current_metrics": metrics,
+            "triggerable_chains": triggerable,
+            "chain_details": [
+                executor.chain_executor.get_chain_info(cid)
+                for cid in triggerable
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MEMORY AND REASONING ENDPOINTS
+# ============================================================================
+
+@router.get("/attack/{proxy_id}/memory")
+async def get_agent_memory(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the agent's memory and learning statistics.
+
+    Includes attack history, tool performance, and Thompson sampling stats.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        return {
+            "proxy_id": proxy_id,
+            "session_stats": executor.memory.get_session_stats(),
+            "tool_performance": {
+                tool_id: perf.to_dict()
+                for tool_id, perf in executor.memory.tool_performance.items()
+            },
+            "exploration_stats": executor.explorer.get_stats(),
+            "memory_count": len(executor.memory.memories),
+            "recent_memories": [
+                m.to_dict() for m in executor.memory.memories[-10:]
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/{proxy_id}/reasoning")
+async def get_reasoning_chains(
+    proxy_id: str,
+    limit: int = 10,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the agent's chain-of-thought reasoning traces.
+
+    Shows the 5-step reasoning process for each attack decision.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        return {
+            "proxy_id": proxy_id,
+            "reasoning_chains": executor.reasoner.export_reasoning_chains(limit=limit),
+            "total_chains": len(executor.reasoner.reasoning_chains),
+            "min_confidence_threshold": executor.reasoner.min_confidence_threshold
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/{proxy_id}/reasoning/{chain_id}")
+async def get_reasoning_chain_detail(
+    proxy_id: str,
+    chain_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get detailed reasoning trace for a specific chain.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+        chain = executor.reasoner.get_reasoning_trace(chain_id)
+
+        if not chain:
+            raise HTTPException(status_code=404, detail=f"Reasoning chain '{chain_id}' not found")
+
+        return {
+            "proxy_id": proxy_id,
+            "chain": chain.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MITRE ATT&CK MAPPING ENDPOINTS
+# ============================================================================
+
+@router.get("/attack/{proxy_id}/mitre")
+async def get_mitre_mapping(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get MITRE ATT&CK technique mapping for executed attacks.
+
+    Maps tools and findings to MITRE techniques with references.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Get executed tools for this proxy
+        executed_tools = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+
+        # Get tool techniques
+        techniques_used = set()
+        for tool_log in executed_tools:
+            tool_id = tool_log.get("tool_id")
+            tool_techniques = executor.narrative_generator.get_tool_techniques(tool_id)
+            for t in tool_techniques:
+                techniques_used.add(t.get("technique_id"))
+
+        return {
+            "proxy_id": proxy_id,
+            "techniques_used": list(techniques_used),
+            "technique_details": [
+                executor.narrative_generator.get_technique_info(tid)
+                for tid in techniques_used
+                if executor.narrative_generator.get_technique_info(tid)
+            ],
+            "all_techniques_summary": executor.narrative_generator.get_all_techniques_summary()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/{proxy_id}/mitre/narrative")
+async def generate_mitre_narrative(
+    proxy_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate a MITRE ATT&CK narrative report for the attack session.
+
+    Includes attack timeline, techniques, risk score, and remediation.
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Get executed tools
+        executed_tools = [
+            log for log in executor.execution_log
+            if log.get("proxy_id") == proxy_id
+        ]
+
+        # Get captured data
+        captured_data = executor.proxy_captured_data.get(proxy_id, {})
+
+        # Get target info
+        proxy = mitm_service._get_proxy(proxy_id)
+        target_info = {
+            "target_host": proxy.target_host,
+            "target_port": proxy.target_port,
+            "target_ip": proxy.target_host
+        }
+
+        # Generate narrative
+        narrative = executor.narrative_generator.generate_narrative(
+            executed_tools,
+            captured_data,
+            target_info
+        )
+
+        return {
+            "proxy_id": proxy_id,
+            "narrative": narrative.to_dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# EXTERNAL TOOL COMMAND GENERATION ENDPOINTS
+# ============================================================================
+
+class ExternalToolRequest(BaseModel):
+    """Request for external tool command generation."""
+    attack_type: str
+    options: Dict[str, Any] = {}
+
+
+@router.post("/attack/{proxy_id}/external/{tool}")
+async def generate_external_command(
+    proxy_id: str,
+    tool: str,
+    request: ExternalToolRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate commands for external tools (Bettercap, Responder, mitmproxy).
+
+    Tools: bettercap, responder, mitmproxy
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Get target info from proxy
+        proxy = mitm_service._get_proxy(proxy_id)
+
+        # Merge proxy info with options
+        options = {
+            "target_ip": proxy.target_host,
+            "target_host": proxy.target_host,
+            "target_port": proxy.target_port,
+            "interface": request.options.get("interface", "eth0"),
+            **request.options
+        }
+
+        # Generate commands
+        result = executor.external_tools.generate_command(
+            tool,
+            request.attack_type,
+            options
+        )
+
+        return {
+            "proxy_id": proxy_id,
+            "tool": tool,
+            "attack_type": request.attack_type,
+            **result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/attack/external/available")
+async def get_available_external_attacks(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get available external tool attacks.
+    """
+    try:
+        executor = await _get_attack_executor()
+
+        return {
+            "available_attacks": executor.external_tools.get_available_attacks()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ENHANCED AGENTIC SESSION ENDPOINTS
+# ============================================================================
+
+class AggressiveSessionRequest(BaseModel):
+    """Request for aggressive attack session."""
+    max_tools: int = 15
+    aggressive: bool = True
+    goals: Optional[List[str]] = None
+    target_phase: Optional[str] = None
+
+
+@router.post("/attack/{proxy_id}/aggressive-session")
+async def run_aggressive_attack_session(
+    proxy_id: str,
+    request: AggressiveSessionRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Run an aggressive, autonomous attack session.
+
+    Features:
+    - Phase-based progression (Recon -> Access -> Exploit -> Persist -> Escalate)
+    - Chain-of-thought reasoning
+    - Automatic attack chaining
+    - Low confidence threshold (20%)
+    - Never stops due to low confidence
+    - Up to 15 tools per session
+    """
+    try:
+        executor = await _get_attack_executor(proxy_id)
+
+        # Set goals if provided
+        if request.goals:
+            executor.set_attack_goals(proxy_id, request.goals)
+
+        # Set target phase if provided
+        if request.target_phase:
+            from ..services.mitm_attack_phases import AttackPhase
+            try:
+                target_phase = AttackPhase(request.target_phase)
+                executor.phase_controller.force_phase(target_phase)
+            except ValueError:
+                pass
+
+        # Run the aggressive session
+        result = await executor.run_agentic_attack_session(
+            proxy_id,
+            max_tools=request.max_tools,
+            auto_execute=True,
+            aggressive=request.aggressive
+        )
+
+        # Add phase and chain info
+        result["phase_info"] = executor.phase_controller.get_current_phase_info()
+        result["chain_stats"] = executor.chain_executor.get_chain_stats()
+        result["memory_stats"] = executor.memory.get_session_stats()
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

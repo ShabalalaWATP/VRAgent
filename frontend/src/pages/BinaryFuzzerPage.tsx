@@ -115,6 +115,7 @@ import {
   Person as PersonIcon,
   Send as SendIcon,
   DeveloperBoard,
+  PhoneAndroid,
   Architecture,
   Hub,
   Computer,
@@ -124,9 +125,11 @@ import {
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { ChatCodeBlock } from '../components/ChatCodeBlock';
+import { formatMarkdownSafe } from '../utils/sanitizeHtml';
 import { jsPDF } from 'jspdf';
 import { saveAs } from 'file-saver';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import AndroidFuzzerTab from '../components/AndroidFuzzerTab';
 
 // Chat message interface
 interface ChatMessage {
@@ -143,6 +146,38 @@ interface BatchExploitResult {
   vulnerability_type: string;
   root_cause: string;
   poc_guidance: string;
+}
+
+interface CampaignControllerAction {
+  action: string;
+  priority?: string;
+  reason?: string;
+  status?: string;
+  applied_at?: string;
+  outputs?: Record<string, any>;
+  updates?: Record<string, any>;
+  error?: string;
+  audit_error?: string;
+}
+
+interface CampaignControllerResult {
+  is_stuck?: boolean;
+  stuck_reason?: string | null;
+  recommendations?: string[];
+  action_plan?: {
+    signals?: Record<string, any>;
+    actions?: CampaignControllerAction[];
+  };
+  applied_actions?: CampaignControllerAction[];
+  action_audit_path?: string;
+  next_run_config?: Record<string, any>;
+  ai_artifacts?: {
+    artifacts_dir?: string;
+    seed_dir?: string;
+    dictionary_path?: string | null;
+    manifest_path?: string;
+    warnings?: string[];
+  };
 }
 
 // QEMU Mode Types
@@ -230,6 +265,14 @@ interface FuzzingConfig {
   // Phase 2: Coverage-guided options
   coverage_guided: boolean;
   scheduler_strategy: string;
+  execution_mode: string;
+  coverage_backend: string;
+  coverage_map_size: number;
+  enable_cmp_hints: boolean;
+  enable_compcov: boolean;
+  cmp_hint_refresh_interval: number;
+  persistent_max_execs: number;
+  persistent_shm_size: number;
 }
 
 interface FuzzingStats {
@@ -514,6 +557,14 @@ const BinaryFuzzerPage: React.FC = () => {
     // Phase 2 defaults
     coverage_guided: true,
     scheduler_strategy: 'power_schedule',
+    execution_mode: 'auto',
+    coverage_backend: 'auto',
+    coverage_map_size: 65536,
+    enable_cmp_hints: true,
+    enable_compcov: true,
+    cmp_hint_refresh_interval: 500,
+    persistent_max_execs: 10000,
+    persistent_shm_size: 65536,
   });
 
   const [isRunning, setIsRunning] = useState(false);
@@ -540,6 +591,7 @@ const BinaryFuzzerPage: React.FC = () => {
   const [crashes, setCrashes] = useState<CrashBucket[]>([]);
   const [events, setEvents] = useState<FuzzingEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dictionaryInput, setDictionaryInput] = useState('');
@@ -600,6 +652,14 @@ const BinaryFuzzerPage: React.FC = () => {
     priority_areas: string[];
   } | null>(null);
   const [coverageAdviceLoading, setCoverageAdviceLoading] = useState(false);
+
+  const [campaignControllerResult, setCampaignControllerResult] = useState<CampaignControllerResult | null>(null);
+  const [campaignControllerLoading, setCampaignControllerLoading] = useState(false);
+  const [campaignControllerError, setCampaignControllerError] = useState<string | null>(null);
+  const [campaignNextRunConfig, setCampaignNextRunConfig] = useState<Record<string, any> | null>(null);
+  const [useNextRunConfig, setUseNextRunConfig] = useState(false);
+  const [aflTelemetryDir, setAflTelemetryDir] = useState<string | null>(null);
+  const [aflOutputDir, setAflOutputDir] = useState<string | null>(null);
   
   const [exploitAnalysis, setExploitAnalysis] = useState<{
     crash_id: string;
@@ -635,7 +695,15 @@ const BinaryFuzzerPage: React.FC = () => {
   const [lastCoverageUpdate, setLastCoverageUpdate] = useState<number>(0);
   const [autoAdvisorEnabled, setAutoAdvisorEnabled] = useState(true);
   const [autoAdvisorTriggered, setAutoAdvisorTriggered] = useState(false);
-  
+
+  // Auto-Pilot Mode state - fully autonomous AI-guided fuzzing
+  const [autoPilotEnabled, setAutoPilotEnabled] = useState(false);
+  const [autoPilotInterval, setAutoPilotInterval] = useState(300); // 5 minutes default
+  const [autoPilotLastRun, setAutoPilotLastRun] = useState<number>(0);
+  const [autoPilotActions, setAutoPilotActions] = useState<string[]>([]);
+  const [autoPilotRestarts, setAutoPilotRestarts] = useState(0);
+  const autoPilotTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Batch analysis state
   const [batchAnalysisResults, setBatchAnalysisResults] = useState<BatchExploitResult[]>([]);
   const [batchAnalysisLoading, setBatchAnalysisLoading] = useState(false);
@@ -690,6 +758,22 @@ const BinaryFuzzerPage: React.FC = () => {
   const [qemuHelp, setQemuHelp] = useState<QemuHelp | null>(null);
   const [qemuHelpLoading, setQemuHelpLoading] = useState(false);
   const [qemuSubTab, setQemuSubTab] = useState(0);
+
+  // FRIDA Script Generator state
+  const [fridaTargetType, setFridaTargetType] = useState<'function' | 'address' | 'module'>('function');
+  const [fridaTargetName, setFridaTargetName] = useState('');
+  const [fridaModuleName, setFridaModuleName] = useState('');
+  const [fridaHookType, setFridaHookType] = useState<'intercept' | 'replace' | 'stalker'>('intercept');
+  const [fridaOptions, setFridaOptions] = useState({
+    logArguments: true,
+    logReturnValue: true,
+    modifyReturn: false,
+    returnValue: '0',
+    trackCoverage: true,
+    dumpMemory: false,
+  });
+  const [generatedFridaScript, setGeneratedFridaScript] = useState('');
+
   const [qemuFuzzConfig, setQemuFuzzConfig] = useState({
     mode: 'standard' as 'standard' | 'persistent' | 'compcov',
     persistent_address: '',
@@ -703,41 +787,131 @@ const BinaryFuzzerPage: React.FC = () => {
   const [qemuTraceInputFile, setQemuTraceInputFile] = useState('');
   const [qemuTraceInputData, setQemuTraceInputData] = useState('');
 
-  // WebSocket ref
+  // WebSocket ref and reconnection state
   const wsRef = useRef<WebSocket | null>(null);
+  const wsReconnectAttempts = useRef(0);
+  const wsReconnectTimer = useRef<NodeJS.Timeout | null>(null);
+  const wsIntentionalClose = useRef(false);
+  const MAX_RECONNECT_ATTEMPTS = 10;
+  const BASE_RECONNECT_DELAY = 1000; // 1 second
 
-  // Connect WebSocket
+  // Validate incoming WebSocket event has required fields
+  const validateFuzzingEvent = (data: unknown): data is FuzzingEvent => {
+    if (!data || typeof data !== 'object') return false;
+    const event = data as Record<string, unknown>;
+    if (typeof event.type !== 'string') return false;
+
+    // Validate specific event types have required fields
+    switch (event.type) {
+      case 'new_crash':
+        return typeof event.bucket_id === 'string' || typeof event.crash_id === 'string';
+      case 'stats_update':
+      case 'status':
+        return true; // Stats can have missing fields, we use defaults
+      case 'error':
+        return typeof event.error === 'string';
+      default:
+        return true; // Allow unknown event types through
+    }
+  };
+
+  // Connect WebSocket with exponential backoff reconnection
   const connectWebSocket = useCallback(() => {
+    // Clear any pending reconnection timer
+    if (wsReconnectTimer.current) {
+      clearTimeout(wsReconnectTimer.current);
+      wsReconnectTimer.current = null;
+    }
+
+    // Close existing connection if any
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      wsIntentionalClose.current = true;
+      wsRef.current.close();
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/binary-fuzzer/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/api/binary-fuzzer/afl/ws`;
 
-    const ws = new WebSocket(wsUrl);
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsIntentionalClose.current = false;
 
-    ws.onopen = () => {
-      console.log('Binary Fuzzer WebSocket connected');
-      setError(null);
-    };
+      ws.onopen = () => {
+        console.log('Binary Fuzzer WebSocket connected');
+        wsReconnectAttempts.current = 0; // Reset on successful connection
+        setError(null);
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const data: FuzzingEvent = JSON.parse(event.data);
-        handleFuzzingEvent(data);
-      } catch (e) {
-        console.error('Failed to parse WebSocket message:', e);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Validate event structure before processing
+          if (!validateFuzzingEvent(data)) {
+            console.warn('Received malformed WebSocket event:', data);
+            return;
+          }
+
+          handleFuzzingEvent(data);
+        } catch (e) {
+          console.error('Failed to parse WebSocket message:', e);
+        }
+      };
+
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event);
+        // Don't set error here - wait for onclose to determine if we should reconnect
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected', { code: event.code, reason: event.reason, wasClean: event.wasClean });
+
+        // If this was an intentional close (stop button), don't reconnect
+        if (wsIntentionalClose.current) {
+          setIsRunning(false);
+          return;
+        }
+
+        // If we're running a fuzzing session, try to reconnect
+        if (isRunning && wsReconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+          wsReconnectAttempts.current++;
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY * Math.pow(2, wsReconnectAttempts.current - 1),
+            30000 // Max 30 seconds
+          );
+
+          console.log(`WebSocket reconnecting in ${delay}ms (attempt ${wsReconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
+          setError(`Connection lost. Reconnecting in ${Math.round(delay / 1000)}s... (${wsReconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
+
+          wsReconnectTimer.current = setTimeout(() => {
+            connectWebSocket();
+          }, delay);
+        } else if (wsReconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+          setError('Connection lost. Maximum reconnection attempts reached. Please restart fuzzing.');
+          setIsRunning(false);
+        } else {
+          setIsRunning(false);
+        }
+      };
+
+      wsRef.current = ws;
+    } catch (e) {
+      console.error('Failed to create WebSocket:', e);
+      setError('Failed to establish WebSocket connection');
+    }
+  }, [isRunning]);
+
+  // Cleanup reconnection timer on unmount
+  useEffect(() => {
+    return () => {
+      if (wsReconnectTimer.current) {
+        clearTimeout(wsReconnectTimer.current);
+      }
+      if (wsRef.current) {
+        wsIntentionalClose.current = true;
+        wsRef.current.close();
       }
     };
-
-    ws.onerror = (event) => {
-      console.error('WebSocket error:', event);
-      setError('WebSocket connection error');
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setIsRunning(false);
-    };
-
-    wsRef.current = ws;
   }, []);
 
   // Handle fuzzing events
@@ -749,6 +923,12 @@ const BinaryFuzzerPage: React.FC = () => {
       case 'session_start':  // AFL++ event
         setSessionId(event.session_id);
         setIsRunning(true);
+        if (event.output_dir) {
+          setAflOutputDir(event.output_dir);
+        }
+        if (event.telemetry_dir) {
+          setAflTelemetryDir(event.telemetry_dir);
+        }
         // Initialize corpus size from session start
         if (event.corpus_size) {
           setStats((prev) => ({ ...prev, corpus_size: event.corpus_size }));
@@ -813,6 +993,12 @@ const BinaryFuzzerPage: React.FC = () => {
             uaf_errors: 0,
             exploitable_errors: 0,
           });
+          if (event.output_dir) {
+            setAflOutputDir(event.output_dir);
+          }
+          if (event.telemetry_dir) {
+            setAflTelemetryDir(event.telemetry_dir);
+          }
           // Update crash list from AFL++
           if (event.crashes && event.crashes.length > 0) {
             setCrashes(event.crashes.map((c: { id: string; size: number; timestamp: number; input_preview: string }) => ({
@@ -854,27 +1040,37 @@ const BinaryFuzzerPage: React.FC = () => {
         break;
 
       case 'new_crash':
-        setCrashes((prev) => [
-          {
-            id: event.bucket_id,
-            crash_type: event.crash_type,
-            severity: event.severity,
-            stack_hash: event.input_hash?.substring(0, 16) || '',
+        // Null safety: ensure required fields have defaults
+        const crashId = event.bucket_id || event.crash_id || `crash-${Date.now()}`;
+        const crashType = event.crash_type || 'UNKNOWN';
+        const crashSeverity = event.severity || 'unknown';
+        const crashHash = event.input_hash?.substring(0, 16) || crashId.substring(0, 16);
+        const now = new Date().toISOString();
+
+        setCrashes((prev) => {
+          // Bounded array: keep only last 10,000 crashes to prevent memory issues
+          const MAX_CRASHES = 10000;
+          const newCrash: CrashBucket = {
+            id: crashId,
+            crash_type: crashType,
+            severity: crashSeverity,
+            stack_hash: crashHash,
             sample_count: 1,
-            first_seen: new Date().toISOString(),
-            last_seen: new Date().toISOString(),
-            sample_crashes: [event.crash_id],
+            first_seen: now,
+            last_seen: now,
+            sample_crashes: [event.crash_id || crashId],
             notes: '',
-          },
-          ...prev,
-        ]);
+          };
+          const updated = [newCrash, ...prev];
+          return updated.length > MAX_CRASHES ? updated.slice(0, MAX_CRASHES) : updated;
+        });
         break;
 
       case 'duplicate_crash':
         setCrashes((prev) =>
           prev.map((c) =>
             c.id === event.bucket_id
-              ? { ...c, sample_count: c.sample_count + 1, last_seen: new Date().toISOString() }
+              ? { ...c, sample_count: (c.sample_count || 0) + 1, last_seen: new Date().toISOString() }
               : c
           )
         );
@@ -903,41 +1099,68 @@ const BinaryFuzzerPage: React.FC = () => {
     const seedDir = uploadedSeeds.length > 0 
       ? `/fuzzing/seeds/${uploadedBinary?.binary_id}`
       : config.seed_dir;
-    
-    if (!targetPath) {
-      setError('Please upload a binary or specify a target path');
+
+    if (!aflStatus?.installed) {
+      setError('AFL++ is required for fuzzing. Install AFL++ and retry.');
       return;
     }
 
-    // Determine whether to use AFL++ or built-in fuzzer
-    const useAfl = aflStatus?.installed && uploadedBinary;
-    const wsEndpoint = useAfl ? '/api/binary-fuzzer/afl/ws' : '/api/binary-fuzzer/ws';
-    
-    // Build the start message
-    const startMessage = useAfl
-      ? {
-          action: 'start',
-          target_path: targetPath,
-          target_args: config.target_args || '@@',
-          input_dir: seedDir || '/fuzzing/seeds',
-          output_dir: `/fuzzing/output/${uploadedBinary?.binary_id}`,
-          timeout_ms: config.timeout_ms,
-          memory_limit_mb: 256,
-          use_qemu: true,
-        }
-      : {
-          action: 'start',
-          target_path: targetPath,
-          target_args: config.target_args,
-          seed_dir: seedDir,
-          output_dir: config.output_dir || `/fuzzing/output/${Date.now()}`,
-          timeout_ms: config.timeout_ms,
-          max_iterations: config.max_iterations,
-          max_time_seconds: config.max_time_seconds,
-          dictionary: config.dictionary.length > 0 ? config.dictionary : undefined,
-          coverage_guided: config.coverage_guided,
-          scheduler_strategy: config.scheduler_strategy,
-        };
+    const baseOutputDir = config.output_dir || (
+      uploadedBinary ? `/fuzzing/output/${uploadedBinary.binary_id}` : `/fuzzing/output/${Date.now()}`
+    );
+    const nextConfig = useNextRunConfig ? campaignNextRunConfig : null;
+    const resolvedTargetPath = nextConfig?.target_path || targetPath;
+
+    if (!resolvedTargetPath) {
+      setError('Please upload a binary or specify a target path');
+      return;
+    }
+    const resolvedTargetArgs = nextConfig?.target_args || config.target_args || '@@';
+    const resolvedInputDir = nextConfig?.input_dir || seedDir || '/fuzzing/seeds';
+    const resolvedOutputDir = nextConfig?.output_dir || baseOutputDir;
+    const resolvedTimeout = nextConfig?.timeout_ms || config.timeout_ms;
+    const resolvedMemory = nextConfig?.memory_limit_mb || 256;
+    const resolvedUseQemu = typeof nextConfig?.use_qemu === 'boolean' ? nextConfig.use_qemu : true;
+
+    const startMessage: Record<string, any> = {
+      action: 'start',
+      target_path: resolvedTargetPath,
+      target_args: resolvedTargetArgs,
+      input_dir: resolvedInputDir,
+      output_dir: resolvedOutputDir,
+      timeout_ms: resolvedTimeout,
+      memory_limit_mb: resolvedMemory,
+      use_qemu: resolvedUseQemu,
+    };
+
+    if (nextConfig?.dictionary_path) {
+      startMessage.dictionary_path = nextConfig.dictionary_path;
+    } else if (config.dictionary.length > 0) {
+      startMessage.dictionary = config.dictionary;
+    }
+
+    if (nextConfig?.extra_afl_flags?.length) {
+      startMessage.extra_afl_flags = nextConfig.extra_afl_flags;
+    }
+    if (nextConfig?.env_vars && Object.keys(nextConfig.env_vars).length > 0) {
+      startMessage.env_vars = nextConfig.env_vars;
+    }
+    if (nextConfig?.qemu_mode) {
+      startMessage.qemu_mode = nextConfig.qemu_mode;
+    }
+    if (typeof nextConfig?.enable_compcov === 'boolean') {
+      startMessage.enable_compcov = nextConfig.enable_compcov;
+    }
+
+    if (nextConfig?.output_dir) {
+      const isSessionOutput = nextConfig.output_dir === aflOutputDir ||
+        (sessionId ? nextConfig.output_dir.endsWith(`/${sessionId}`) : false);
+      if (isSessionOutput) {
+        startMessage.output_dir_is_session = true;
+      }
+    }
+
+    const wsEndpoint = '/api/binary-fuzzer/afl/ws';
 
     // Connect to the appropriate WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -951,7 +1174,7 @@ const BinaryFuzzerPage: React.FC = () => {
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
-      console.log(`Fuzzer WebSocket connected (${useAfl ? 'AFL++' : 'built-in'})`);
+      console.log('Fuzzer WebSocket connected (AFL++)');
       setError(null);
       // Send start message
       ws.send(JSON.stringify(startMessage));
@@ -977,6 +1200,10 @@ const BinaryFuzzerPage: React.FC = () => {
     };
 
     wsRef.current = ws;
+
+    if (nextConfig) {
+      setUseNextRunConfig(false);
+    }
     
     // Reset state
     setEvents([]);
@@ -1001,14 +1228,33 @@ const BinaryFuzzerPage: React.FC = () => {
       exploitable_errors: 0,
     });
     setIsRunning(true);
-  }, [config, uploadedBinary, uploadedSeeds, aflStatus]);
+  }, [
+    config,
+    uploadedBinary,
+    uploadedSeeds,
+    aflStatus,
+    campaignNextRunConfig,
+    useNextRunConfig,
+    aflOutputDir,
+    sessionId,
+  ]);
 
   // Stop fuzzing
   const stopFuzzing = useCallback(() => {
+    // Mark as intentional close to prevent reconnection attempts
+    wsIntentionalClose.current = true;
+
+    // Clear any pending reconnection timer
+    if (wsReconnectTimer.current) {
+      clearTimeout(wsReconnectTimer.current);
+      wsReconnectTimer.current = null;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ action: 'stop' }));
     }
     setIsRunning(false);
+    setError(null); // Clear any reconnection error messages
   }, []);
 
   // Add dictionary entry
@@ -1409,36 +1655,151 @@ const BinaryFuzzerPage: React.FC = () => {
     ));
   }, []);
 
-  // Export corpus file
-  const exportCorpusFile = useCallback((file: CorpusFile) => {
-    // Generate mock binary data for export
-    const data = file.preview?.split(' ').map(hex => parseInt(hex, 16)) || [];
-    const blob = new Blob([new Uint8Array(data)], { type: 'application/octet-stream' });
-    saveAs(blob, file.filename);
-  }, []);
+  // Export corpus file - fetches actual content from backend
+  const exportCorpusFile = useCallback(async (file: CorpusFile) => {
+    try {
+      // Try to get full file content from backend
+      if (sessionId) {
+        const response = await fetch(
+          `/api/binary-fuzzer/afl/queue/${sessionId}/file/${encodeURIComponent(file.filename)}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content_base64) {
+            // Decode base64 content
+            const binaryString = atob(data.content_base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'application/octet-stream' });
+            saveAs(blob, file.filename);
+            return;
+          }
+        }
+      }
+
+      // Fallback: try download endpoint
+      if (uploadedBinary?.binary_id) {
+        const downloadUrl = `/api/binary-fuzzer/download/corpus/${uploadedBinary.binary_id}/${encodeURIComponent(file.filename)}`;
+        const response = await fetch(downloadUrl, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`
+          }
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          saveAs(blob, file.filename);
+          return;
+        }
+      }
+
+      // Last resort: use preview data if available
+      if (file.preview) {
+        const hexBytes = file.preview.split(' ').map(hex => parseInt(hex, 16)).filter(n => !isNaN(n));
+        const blob = new Blob([new Uint8Array(hexBytes)], { type: 'application/octet-stream' });
+        saveAs(blob, file.filename);
+      } else {
+        setError('Unable to export file - no content available');
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      setError('Failed to export corpus file');
+    }
+  }, [sessionId, uploadedBinary]);
 
   // ==========================================
   // AI Crash Analysis Functions
   // ==========================================
   
-  // Perform AI analysis on a crash
+  // Perform AI analysis on a crash - calls real backend AI service
   const performAIAnalysis = useCallback(async (crash: CrashBucket) => {
     setAiAnalysisLoading(true);
     setAiAnalysisError(null);
-    
+
     try {
-      // Simulate AI analysis (in production, this would call the backend AI service)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate analysis based on crash type
-      const analysis = generateCrashAnalysis(crash);
-      setAiAnalysis(analysis);
+      const response = await fetch('/api/binary-fuzzer/ai/exploit-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`
+        },
+        body: JSON.stringify({
+          crash_data: {
+            crash_id: crash.id,
+            crash_type: crash.crash_type,
+            severity: crash.severity,
+            crash_address: crash.crash_address,
+            faulting_instruction: crash.faulting_instruction,
+            stack_trace: crash.stack_trace,
+            registers: crash.registers,
+            memory_dump: crash.memory_dump,
+            sample_count: crash.sample_count,
+            first_seen: crash.first_seen,
+            stack_hash: crash.stack_hash,
+            input_file: crash.input_file
+          },
+          include_poc: true
+        })
+      });
+
+      if (!response.ok) {
+        // Fallback to local analysis if backend AI fails
+        console.warn('Backend AI unavailable, using local analysis');
+        const analysis = generateCrashAnalysis(crash);
+        setAiAnalysis(analysis);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Map backend response to AIAnalysisResult
+      setAiAnalysis({
+        crash_id: crash.id,
+        summary: data.detailed_analysis || data.root_cause || 'AI analysis completed',
+        root_cause: data.root_cause || 'Unknown',
+        exploitability: mapExploitability(data.exploitability),
+        attack_vector: data.exploitation_techniques?.join(', ') || data.poc_guidance,
+        affected_components: data.affected_functions || [],
+        recommendations: [
+          data.remediation,
+          ...(data.mitigation_bypass?.map((m: string) => `Bypass: ${m}`) || [])
+        ].filter(Boolean),
+        similar_cves: data.similar_cves || [],
+        confidence: data.exploitability_score || 0.5,
+        analysis_timestamp: new Date().toISOString()
+      });
     } catch (err) {
-      setAiAnalysisError('Failed to perform AI analysis. Please try again.');
+      // Fallback to local analysis on network error
+      console.warn('AI analysis request failed, using local fallback:', err);
+      try {
+        const analysis = generateCrashAnalysis(crash);
+        setAiAnalysis(analysis);
+      } catch {
+        setAiAnalysisError('Failed to perform AI analysis. Please try again.');
+      }
     } finally {
       setAiAnalysisLoading(false);
     }
   }, []);
+
+  // Map backend exploitability to frontend format
+  const mapExploitability = (level: string): 'critical' | 'high' | 'medium' | 'low' | 'unknown' => {
+    switch (level?.toLowerCase()) {
+      case 'exploitable': return 'critical';
+      case 'probably_exploitable': return 'high';
+      case 'probably_not_exploitable': return 'medium';
+      case 'not_exploitable': return 'low';
+      default: return 'unknown';
+    }
+  };
 
   // Generate AI crash analysis based on crash data
   const generateCrashAnalysis = (crash: CrashBucket): AIAnalysisResult => {
@@ -1678,6 +2039,81 @@ const BinaryFuzzerPage: React.FC = () => {
       setCoverageAdviceLoading(false);
     }
   }, [sessionId, stats, corpusFiles, crashes]);
+
+  // Run AI campaign controller with auto-apply
+  const runCampaignController = useCallback(async () => {
+    const targetPath = uploadedBinary?.path || config.target_path;
+    const seedDir = uploadedSeeds.length > 0
+      ? `/fuzzing/seeds/${uploadedBinary?.binary_id}`
+      : config.seed_dir;
+
+    if (!targetPath) {
+      setCampaignControllerError('Target path is required to run the campaign controller');
+      return;
+    }
+    if (!aflTelemetryDir) {
+      setCampaignControllerError('Telemetry directory not available yet. Start an AFL++ session first.');
+      return;
+    }
+    if (!aflOutputDir) {
+      setCampaignControllerError('Output directory not available yet. Start an AFL++ session first.');
+      return;
+    }
+
+    setCampaignControllerLoading(true);
+    setCampaignControllerError(null);
+
+    try {
+      const response = await fetch('/api/binary-fuzzer/ai/campaign-controller', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`
+        },
+        body: JSON.stringify({
+          telemetry_dir: aflTelemetryDir,
+          output_dir: aflOutputDir,
+          target_path: targetPath,
+          seed_dir: seedDir || undefined,
+          session_id: sessionId || undefined,
+          auto_apply_actions: true
+        })
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to run campaign controller';
+        try {
+          const err = await response.json();
+          message = err.detail?.message || err.detail || message;
+        } catch {
+          // Ignore JSON parse errors
+        }
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+      setCampaignControllerResult(data);
+      if (data.next_run_config) {
+        setCampaignNextRunConfig(data.next_run_config);
+        setUseNextRunConfig(true);
+      } else {
+        setCampaignNextRunConfig(null);
+        setUseNextRunConfig(false);
+      }
+    } catch (err) {
+      setCampaignControllerError(err instanceof Error ? err.message : 'Campaign controller failed');
+    } finally {
+      setCampaignControllerLoading(false);
+    }
+  }, [
+    uploadedBinary,
+    uploadedSeeds,
+    config.target_path,
+    config.seed_dir,
+    aflTelemetryDir,
+    aflOutputDir,
+    sessionId,
+  ]);
   
   // Perform deep exploit analysis on a crash
   const performExploitAnalysis = useCallback(async (crash: CrashBucket) => {
@@ -1829,7 +2265,198 @@ const BinaryFuzzerPage: React.FC = () => {
       setAutoAdvisorTriggered(false);
     }
   }, [isRunning]);
-  
+
+  // ==========================================
+  // Auto-Pilot Mode - Fully Autonomous AI Fuzzing
+  // ==========================================
+
+  // Auto-Pilot execution function
+  const runAutoPilotCycle = useCallback(async () => {
+    if (!isRunning || !autoPilotEnabled) return;
+
+    const targetPath = uploadedBinary?.path || config.target_path;
+    if (!targetPath || !aflTelemetryDir || !aflOutputDir) return;
+
+    const timestamp = new Date().toLocaleTimeString();
+    setAutoPilotActions(prev => [...prev.slice(-29), `[${timestamp}] Agentic AI analyzing campaign...`]);
+
+    try {
+      // Run campaign controller with agentic AI enabled
+      const response = await fetch('/api/binary-fuzzer/ai/campaign-controller', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`
+        },
+        body: JSON.stringify({
+          telemetry_dir: aflTelemetryDir,
+          output_dir: aflOutputDir,
+          target_path: targetPath,
+          session_id: sessionId,
+          auto_apply_actions: true,
+          use_agentic_ai: true  // Enable agentic AI brain
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Campaign controller request failed');
+      }
+
+      const data = await response.json();
+      setAutoPilotLastRun(Date.now());
+
+      // Show agentic AI status
+      const agenticInfo = data.agentic_ai || {};
+      if (agenticInfo.used && agenticInfo.ai_available) {
+        setAutoPilotActions(prev => [
+          ...prev.slice(-29),
+          `[${timestamp}] AI Brain: Cycle #${agenticInfo.cycle_count}, ${agenticInfo.memory_count} memories`
+        ]);
+
+        // Show AI's reasoning if available
+        if (agenticInfo.reasoning_summary) {
+          const shortReasoning = agenticInfo.reasoning_summary.length > 150
+            ? agenticInfo.reasoning_summary.substring(0, 150) + '...'
+            : agenticInfo.reasoning_summary;
+          setAutoPilotActions(prev => [
+            ...prev.slice(-29),
+            `[${timestamp}] AI Reasoning: ${shortReasoning}`
+          ]);
+        }
+      } else if (!agenticInfo.ai_available) {
+        setAutoPilotActions(prev => [
+          ...prev.slice(-29),
+          `[${timestamp}] Note: AI unavailable, using heuristics`
+        ]);
+      }
+
+      // Log actions from the action plan
+      const actionPlan = data.action_plan || {};
+      const actions = actionPlan.actions || [];
+      if (actions.length > 0) {
+        const actionSummary = actions.map((a: any) => {
+          const confidence = a.ai_confidence ? ` (${Math.round(a.ai_confidence * 100)}% conf)` : '';
+          return `${a.action}${confidence}`;
+        }).join(', ');
+        setAutoPilotActions(prev => [
+          ...prev.slice(-29),
+          `[${timestamp}] Decisions: ${actionSummary}`
+        ]);
+
+        // Show detailed reasoning for high-priority actions
+        for (const action of actions.slice(0, 2)) {
+          if (action.reason && action.source === 'agentic_ai') {
+            const shortReason = action.reason.length > 100
+              ? action.reason.substring(0, 100) + '...'
+              : action.reason;
+            setAutoPilotActions(prev => [
+              ...prev.slice(-29),
+              `[${timestamp}]   -> ${action.action}: ${shortReason}`
+            ]);
+          }
+        }
+      } else {
+        setAutoPilotActions(prev => [...prev.slice(-29), `[${timestamp}] AI: Fuzzing progressing well, no intervention needed`]);
+      }
+
+      // Log applied actions
+      const appliedActions = data.applied_actions || [];
+      const successfulActions = appliedActions.filter((a: any) => a.status === 'applied');
+      if (successfulActions.length > 0) {
+        setAutoPilotActions(prev => [
+          ...prev.slice(-29),
+          `[${timestamp}] Applied: ${successfulActions.map((a: any) => a.action).join(', ')}`
+        ]);
+      }
+
+      // Check if restart is recommended
+      if (data.next_run_config && data.is_stuck) {
+        setAutoPilotActions(prev => [...prev.slice(-29), `[${timestamp}] AI recommends restart with optimized config`]);
+
+        // Auto-restart if stuck and haven't restarted too many times
+        if (autoPilotRestarts < 5) {
+          setAutoPilotActions(prev => [...prev.slice(-29), `[${timestamp}] Auto-restarting fuzzing session (attempt ${autoPilotRestarts + 1}/5)...`]);
+          setAutoPilotRestarts(prev => prev + 1);
+
+          // Stop current session
+          if (sessionId) {
+            await fetch(`/api/binary-fuzzer/afl/stop/${sessionId}`, { method: 'POST' });
+          }
+
+          // Apply new config and restart
+          setCampaignNextRunConfig(data.next_run_config);
+          setUseNextRunConfig(true);
+
+          setTimeout(() => {
+            setAutoPilotActions(prev => [...prev.slice(-29), `[${timestamp}] Restart triggered with AI-optimized config`]);
+          }, 2000);
+        }
+      }
+
+      // Update coverage advice for display
+      if (data.recommendations) {
+        setCoverageAdvice({
+          recommendations: data.recommendations || [],
+          coverage_trend: data.coverage_trend || 'unknown',
+          is_stuck: data.is_stuck || false,
+          stuck_reason: data.stuck_reason || null,
+          mutation_adjustments: data.mutation_adjustments || {},
+          priority_areas: data.priority_areas || [],
+        });
+      }
+
+    } catch (err) {
+      console.error('Auto-pilot cycle failed:', err);
+      setAutoPilotActions(prev => [
+        ...prev.slice(-29),
+        `[${timestamp}] Error: ${err instanceof Error ? err.message : 'Unknown error'}`
+      ]);
+    }
+  }, [
+    isRunning, autoPilotEnabled, uploadedBinary, config.target_path,
+    aflTelemetryDir, aflOutputDir, sessionId, autoPilotRestarts
+  ]);
+
+  // Auto-Pilot timer effect
+  useEffect(() => {
+    if (autoPilotEnabled && isRunning) {
+      // Clear any existing timer
+      if (autoPilotTimerRef.current) {
+        clearInterval(autoPilotTimerRef.current);
+      }
+
+      // Run immediately on enable
+      runAutoPilotCycle();
+
+      // Set up interval
+      autoPilotTimerRef.current = setInterval(() => {
+        runAutoPilotCycle();
+      }, autoPilotInterval * 1000);
+
+      return () => {
+        if (autoPilotTimerRef.current) {
+          clearInterval(autoPilotTimerRef.current);
+          autoPilotTimerRef.current = null;
+        }
+      };
+    } else {
+      // Clear timer when disabled
+      if (autoPilotTimerRef.current) {
+        clearInterval(autoPilotTimerRef.current);
+        autoPilotTimerRef.current = null;
+      }
+    }
+  }, [autoPilotEnabled, isRunning, autoPilotInterval, runAutoPilotCycle]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (autoPilotTimerRef.current) {
+        clearInterval(autoPilotTimerRef.current);
+      }
+    };
+  }, []);
+
   // ==========================================
   // Batch Crash Analysis Functions
   // ==========================================
@@ -2251,6 +2878,7 @@ const BinaryFuzzerPage: React.FC = () => {
             timeout_ms: qemuFuzzConfig.timeout_ms,
             memory_limit_mb: qemuFuzzConfig.memory_limit_mb,
             use_qemu: true,
+            dictionary: config.dictionary.length > 0 ? config.dictionary : undefined,
           }));
         };
         ws.onmessage = (event) => {
@@ -2304,6 +2932,169 @@ const BinaryFuzzerPage: React.FC = () => {
   }, [activeTab, qemuCapabilities, qemuCapabilitiesLoading, fetchQemuCapabilities]);
 
   // ==========================================
+  // FRIDA Script Generator Functions
+  // ==========================================
+
+  // Generate FRIDA instrumentation script
+  const generateFridaScript = useCallback(() => {
+    let script = `// FRIDA Instrumentation Script
+// Generated by VRAgent Binary Fuzzer
+// Target: ${fridaTargetType === 'function' ? fridaTargetName : fridaTargetType === 'address' ? `0x${fridaTargetName}` : fridaModuleName}
+
+`;
+
+    if (fridaHookType === 'intercept') {
+      if (fridaTargetType === 'function') {
+        script += `// Hook function by name
+const targetFunc = Module.findExportByName(${fridaModuleName ? `"${fridaModuleName}"` : 'null'}, "${fridaTargetName}");
+
+if (targetFunc) {
+    Interceptor.attach(targetFunc, {
+        onEnter: function(args) {
+            console.log("[*] ${fridaTargetName} called");
+${fridaOptions.logArguments ? `            console.log("    arg0:", args[0]);
+            console.log("    arg1:", args[1]);
+            console.log("    arg2:", args[2]);` : ''}
+${fridaOptions.dumpMemory ? `            // Dump memory at first argument (if pointer)
+            try {
+                console.log("    Memory dump:", hexdump(args[0], { length: 64 }));
+            } catch(e) {}` : ''}
+            this.startTime = Date.now();
+        },
+        onLeave: function(retval) {
+${fridaOptions.logReturnValue ? `            console.log("[*] ${fridaTargetName} returned:", retval);` : ''}
+            console.log("    Duration:", Date.now() - this.startTime, "ms");
+${fridaOptions.modifyReturn ? `            // Modify return value
+            retval.replace(ptr(${fridaOptions.returnValue}));
+            console.log("[!] Return value modified to ${fridaOptions.returnValue}");` : ''}
+        }
+    });
+    console.log("[+] Hooked ${fridaTargetName} at", targetFunc);
+} else {
+    console.log("[-] Failed to find ${fridaTargetName}");
+}
+`;
+      } else if (fridaTargetType === 'address') {
+        script += `// Hook at specific address
+const targetAddr = ptr("0x${fridaTargetName}");
+
+Interceptor.attach(targetAddr, {
+    onEnter: function(args) {
+        console.log("[*] Hit address 0x${fridaTargetName}");
+${fridaOptions.logArguments ? `        console.log("    Context:", JSON.stringify(this.context));` : ''}
+    },
+    onLeave: function(retval) {
+${fridaOptions.logReturnValue ? `        console.log("[*] Leaving 0x${fridaTargetName}, retval:", retval);` : ''}
+    }
+});
+console.log("[+] Hooked address 0x${fridaTargetName}");
+`;
+      } else {
+        script += `// Hook all exports from module
+const moduleName = "${fridaModuleName}";
+const mod = Process.findModuleByName(moduleName);
+
+if (mod) {
+    mod.enumerateExports().forEach(function(exp) {
+        if (exp.type === 'function') {
+            try {
+                Interceptor.attach(exp.address, {
+                    onEnter: function(args) {
+                        console.log("[*] " + exp.name + " called");
+                    }
+                });
+            } catch(e) {
+                // Some functions can't be hooked
+            }
+        }
+    });
+    console.log("[+] Hooked exports from", moduleName);
+} else {
+    console.log("[-] Module not found:", moduleName);
+}
+`;
+      }
+    } else if (fridaHookType === 'stalker') {
+      script += `// Code tracing with Stalker (coverage tracking)
+const targetThread = Process.getCurrentThreadId();
+
+Stalker.follow(targetThread, {
+    events: {
+        call: true,
+        ret: false,
+        exec: false,
+        block: true,
+        compile: false
+    },
+    onReceive: function(events) {
+        const parsed = Stalker.parse(events);
+        parsed.forEach(function(event) {
+            if (event[0] === 'call') {
+                console.log("[CALL]", event[1], "->", event[2]);
+            } else if (event[0] === 'block') {
+                // Basic block executed - useful for coverage
+                send({ type: 'coverage', block: event[1].toString(16) });
+            }
+        });
+    },
+    transform: function(iterator) {
+        let instruction = iterator.next();
+        do {
+            iterator.keep();
+        } while ((instruction = iterator.next()) !== null);
+    }
+});
+
+console.log("[+] Stalker tracing enabled for thread", targetThread);
+
+// Stop stalker after timeout
+setTimeout(function() {
+    Stalker.unfollow(targetThread);
+    console.log("[*] Stalker stopped");
+}, 30000);
+`;
+    } else if (fridaHookType === 'replace') {
+      script += `// Replace function implementation
+const targetFunc = Module.findExportByName(${fridaModuleName ? `"${fridaModuleName}"` : 'null'}, "${fridaTargetName}");
+
+if (targetFunc) {
+    Interceptor.replace(targetFunc, new NativeCallback(function() {
+        console.log("[*] ${fridaTargetName} called (replaced)");
+        // Return custom value
+        return ${fridaOptions.returnValue};
+    }, 'int', []));
+    console.log("[+] Replaced ${fridaTargetName}");
+} else {
+    console.log("[-] Failed to find ${fridaTargetName}");
+}
+`;
+    }
+
+    // Add coverage tracking helper if enabled
+    if (fridaOptions.trackCoverage && fridaHookType !== 'stalker') {
+      script += `
+// Coverage tracking helper
+const coverageMap = new Set();
+
+function trackBlock(address) {
+    const key = address.toString(16);
+    if (!coverageMap.has(key)) {
+        coverageMap.add(key);
+        send({ type: 'new_coverage', address: key, total: coverageMap.size });
+    }
+}
+
+// Periodically report coverage stats
+setInterval(function() {
+    send({ type: 'coverage_stats', unique_blocks: coverageMap.size });
+}, 5000);
+`;
+    }
+
+    setGeneratedFridaScript(script);
+  }, [fridaTargetType, fridaTargetName, fridaModuleName, fridaHookType, fridaOptions]);
+
+  // ==========================================
   // AI Chat Functions
   // ==========================================
   
@@ -2311,7 +3102,15 @@ const BinaryFuzzerPage: React.FC = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-  
+
+  // Auto-dismiss success messages after 3 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
   // Send chat message
   const sendChatMessage = useCallback(async () => {
     if (!chatInput.trim() || chatLoading) return;
@@ -2803,9 +3602,7 @@ const BinaryFuzzerPage: React.FC = () => {
                       '& strong': { color: theme.palette.primary.main },
                     }}
                     dangerouslySetInnerHTML={{
-                      __html: WIZARD_STEPS[wizardStep]?.description
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+                      __html: formatMarkdownSafe(WIZARD_STEPS[wizardStep]?.description || '')
                     }}
                   />
                 </Paper>
@@ -2951,6 +3748,12 @@ const BinaryFuzzerPage: React.FC = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
 
@@ -3689,6 +4492,11 @@ const BinaryFuzzerPage: React.FC = () => {
                 icon={<DeveloperBoard />}
                 iconPosition="start"
               />
+              <Tab
+                label="Android"
+                icon={<PhoneAndroid />}
+                iconPosition="start"
+              />
             </Tabs>
 
             <CardContent sx={{ minHeight: 400 }}>
@@ -4005,29 +4813,118 @@ const BinaryFuzzerPage: React.FC = () => {
               {/* AI Analysis Tab - Enhanced with 3 AI Features */}
               {activeTab === 3 && (
                 <Box>
+                  {/* Auto-Pilot Control Panel */}
+                  <Paper
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      background: autoPilotEnabled
+                        ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(33, 150, 243, 0.1) 100%)'
+                        : 'transparent',
+                      border: autoPilotEnabled ? '1px solid rgba(76, 175, 80, 0.3)' : '1px solid rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Psychology color={autoPilotEnabled ? 'success' : 'action'} />
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          Auto-Pilot Mode
+                        </Typography>
+                        {autoPilotEnabled && (
+                          <Chip
+                            size="small"
+                            label="ACTIVE"
+                            color="success"
+                            sx={{ animation: 'pulse 2s infinite' }}
+                          />
+                        )}
+                      </Box>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={autoPilotEnabled}
+                            onChange={(e) => setAutoPilotEnabled(e.target.checked)}
+                            color="success"
+                            disabled={!isRunning}
+                          />
+                        }
+                        label={autoPilotEnabled ? 'Enabled' : 'Disabled'}
+                      />
+                    </Box>
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Fully autonomous AI-guided fuzzing. The AI will continuously analyze coverage,
+                      detect stalls, optimize mutations, and auto-restart with improved configurations.
+                    </Typography>
+
+                    {!isRunning && (
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        Start a fuzzing session to enable Auto-Pilot mode
+                      </Alert>
+                    )}
+
+                    {autoPilotEnabled && (
+                      <Box>
+                        <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
+                          <TextField
+                            select
+                            size="small"
+                            label="Check Interval"
+                            value={autoPilotInterval}
+                            onChange={(e) => setAutoPilotInterval(Number(e.target.value))}
+                            sx={{ minWidth: 150 }}
+                          >
+                            <MenuItem value={60}>1 minute</MenuItem>
+                            <MenuItem value={180}>3 minutes</MenuItem>
+                            <MenuItem value={300}>5 minutes</MenuItem>
+                            <MenuItem value={600}>10 minutes</MenuItem>
+                            <MenuItem value={900}>15 minutes</MenuItem>
+                          </TextField>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Last run: {autoPilotLastRun ? new Date(autoPilotLastRun).toLocaleTimeString() : 'Never'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              | Auto-restarts: {autoPilotRestarts}/5
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {/* Auto-Pilot Action Log */}
+                        <Paper variant="outlined" sx={{ p: 1, maxHeight: 150, overflow: 'auto', bgcolor: 'grey.900' }}>
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                            {autoPilotActions.length > 0
+                              ? autoPilotActions.join('\n')
+                              : 'Auto-Pilot active. Waiting for first analysis cycle...'}
+                          </Typography>
+                        </Paper>
+                      </Box>
+                    )}
+                  </Paper>
+
                   {/* AI Feature Sub-Tabs */}
                   <Tabs
                     value={aiSubTab}
                     onChange={(_, newValue) => setAiSubTab(newValue)}
                     sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
                   >
-                    <Tab 
-                      label="AI Seed Generator" 
+                    <Tab
+                      label="AI Seed Generator"
                       icon={<AutoAwesome fontSize="small" />}
                       iconPosition="start"
                     />
-                    <Tab 
-                      label="Coverage Advisor" 
+                    <Tab
+                      label="Coverage Advisor"
                       icon={<Timeline fontSize="small" />}
                       iconPosition="start"
                     />
-                    <Tab 
-                      label="Exploit Helper" 
+                    <Tab
+                      label="Exploit Helper"
                       icon={<Security fontSize="small" />}
                       iconPosition="start"
                     />
-                    <Tab 
-                      label="Session Summary" 
+                    <Tab
+                      label="Session Summary"
                       icon={<Psychology fontSize="small" />}
                       iconPosition="start"
                     />
@@ -4251,6 +5148,162 @@ const BinaryFuzzerPage: React.FC = () => {
                                 {coverageAdviceLoading ? 'Analyzing...' : 'Get AI Advice'}
                               </Button>
                             </Box>
+                          </Paper>
+
+                          {/* Campaign Controller */}
+                          <Paper sx={{ p: 2, mb: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Assessment color="primary" />
+                                <Typography variant="subtitle2" color="primary">
+                                  AI Campaign Controller
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                {campaignNextRunConfig && (
+                                  <Chip
+                                    label={useNextRunConfig ? 'Queued for next run' : 'Next-run config ready'}
+                                    color={useNextRunConfig ? 'success' : 'default'}
+                                    size="small"
+                                  />
+                                )}
+                                <Button
+                                  variant="contained"
+                                  color="primary"
+                                  startIcon={campaignControllerLoading ? <CircularProgress size={20} color="inherit" /> : <Assessment />}
+                                  onClick={runCampaignController}
+                                  disabled={campaignControllerLoading}
+                                >
+                                  {campaignControllerLoading ? 'Running...' : 'Run Controller'}
+                                </Button>
+                              </Box>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Applies an action plan and prepares a tuned AFL++ configuration for the next run.
+                            </Typography>
+
+                            {!aflTelemetryDir && (
+                              <Alert severity="info" sx={{ mt: 2 }}>
+                                Start an AFL++ session to collect telemetry before running the controller: `run.json` and `samples.jsonl`.
+                              </Alert>
+                            )}
+
+                            {campaignControllerError && (
+                              <Alert severity="error" sx={{ mt: 2 }}>
+                                {campaignControllerError}
+                              </Alert>
+                            )}
+
+                            {campaignControllerResult && (
+                              <>
+                                <Divider sx={{ my: 2 }} />
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} sm={4}>
+                                    <Typography variant="caption" color="text.secondary">Campaign Status</Typography>
+                                    <Typography variant="body2">
+                                      {campaignControllerResult.is_stuck ? 'Stuck' : 'Active'}
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item xs={12} sm={8}>
+                                    <Typography variant="caption" color="text.secondary">Audit Log</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                        {campaignControllerResult.action_audit_path || 'Not available'}
+                                      </Typography>
+                                      {campaignControllerResult.action_audit_path && (
+                                        <Tooltip title="Copy audit path">
+                                          <IconButton size="small" onClick={() => copyToClipboard(campaignControllerResult.action_audit_path || '')}>
+                                            <ContentCopy fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  </Grid>
+                                </Grid>
+
+                                {campaignControllerResult.stuck_reason && (
+                                  <Alert severity="warning" sx={{ mt: 2 }}>
+                                    {campaignControllerResult.stuck_reason}
+                                  </Alert>
+                                )}
+
+                                {campaignControllerResult.applied_actions && campaignControllerResult.applied_actions.length > 0 && (
+                                  <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                                      Applied Actions
+                                    </Typography>
+                                    <List dense>
+                                      {campaignControllerResult.applied_actions.map((actionItem, idx) => {
+                                        const status = actionItem.status || 'skipped';
+                                        const statusIcon = status === 'applied'
+                                          ? <CheckCircle color="success" fontSize="small" />
+                                          : status === 'failed'
+                                            ? <ErrorIcon color="error" fontSize="small" />
+                                            : <Info color="info" fontSize="small" />;
+                                        const secondary = actionItem.error || actionItem.reason || actionItem.audit_error || '';
+                                        return (
+                                          <ListItem key={`${actionItem.action}-${idx}`}>
+                                            <ListItemIcon>{statusIcon}</ListItemIcon>
+                                            <ListItemText
+                                              primary={`${actionItem.action}${actionItem.priority ? ` (${actionItem.priority})` : ''}`}
+                                              secondary={`${status}${secondary ? ` - ${secondary}` : ''}`}
+                                            />
+                                          </ListItem>
+                                        );
+                                      })}
+                                    </List>
+                                  </Box>
+                                )}
+
+                                {campaignNextRunConfig && (
+                                  <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                                      Next Run Config
+                                    </Typography>
+                                    <Paper variant="outlined" sx={{ p: 2 }}>
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={12} md={6}>
+                                          <Typography variant="caption" color="text.secondary">Input Dir</Typography>
+                                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                            {campaignNextRunConfig.input_dir || 'N/A'}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                          <Typography variant="caption" color="text.secondary">Dictionary</Typography>
+                                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                            {campaignNextRunConfig.dictionary_path || 'Not set'}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                          <Typography variant="caption" color="text.secondary">QEMU Mode</Typography>
+                                          <Typography variant="body2">
+                                            {campaignNextRunConfig.qemu_mode || 'standard'}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                          <Typography variant="caption" color="text.secondary">Extra AFL Flags</Typography>
+                                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                            {Array.isArray(campaignNextRunConfig.extra_afl_flags) && campaignNextRunConfig.extra_afl_flags.length > 0
+                                              ? campaignNextRunConfig.extra_afl_flags.join(' ')
+                                              : 'None'}
+                                          </Typography>
+                                        </Grid>
+                                        {campaignNextRunConfig.env_vars && Object.keys(campaignNextRunConfig.env_vars).length > 0 && (
+                                          <Grid item xs={12}>
+                                            <Typography variant="caption" color="text.secondary">Env Vars</Typography>
+                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                                              {Object.entries(campaignNextRunConfig.env_vars).map(([key, value]) => (
+                                                <Chip key={key} label={`${key}=${value}`} size="small" variant="outlined" />
+                                              ))}
+                                            </Box>
+                                          </Grid>
+                                        )}
+                                      </Grid>
+                                    </Paper>
+                                  </Box>
+                                )}
+                              </>
+                            )}
                           </Paper>
                           
                           {/* Coverage History Graph */}
@@ -4875,6 +5928,11 @@ const BinaryFuzzerPage: React.FC = () => {
                     <Tab
                       label="Start QEMU Fuzzing"
                       icon={<FlashOn fontSize="small" />}
+                      iconPosition="start"
+                    />
+                    <Tab
+                      label="FRIDA Generator"
+                      icon={<Code fontSize="small" />}
                       iconPosition="start"
                     />
                   </Tabs>
@@ -5611,7 +6669,374 @@ const BinaryFuzzerPage: React.FC = () => {
                       </Paper>
                     </Box>
                   )}
+
+                  {/* FRIDA Script Generator Sub-Tab */}
+                  {qemuSubTab === 4 && (
+                    <Box>
+                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Code color="primary" />
+                        FRIDA Instrumentation Script Generator
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                        Generate FRIDA scripts for dynamic instrumentation, hooking, and code tracing.
+                        Use these scripts with FRIDA to analyze binary behavior at runtime.
+                      </Typography>
+
+                      <Grid container spacing={3}>
+                        {/* Configuration Panel */}
+                        <Grid item xs={12} md={5}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" color="primary" gutterBottom>
+                              Hook Configuration
+                            </Typography>
+
+                            {/* Target Type */}
+                            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                              <InputLabel>Target Type</InputLabel>
+                              <Select
+                                value={fridaTargetType}
+                                label="Target Type"
+                                onChange={(e) => setFridaTargetType(e.target.value as 'function' | 'address' | 'module')}
+                              >
+                                <MenuItem value="function">Function by Name</MenuItem>
+                                <MenuItem value="address">Memory Address</MenuItem>
+                                <MenuItem value="module">All Module Exports</MenuItem>
+                              </Select>
+                            </FormControl>
+
+                            {/* Target Name / Address */}
+                            {fridaTargetType !== 'module' && (
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label={fridaTargetType === 'function' ? 'Function Name' : 'Address (hex)'}
+                                placeholder={fridaTargetType === 'function' ? 'malloc' : '0x401000'}
+                                value={fridaTargetName}
+                                onChange={(e) => setFridaTargetName(e.target.value)}
+                                sx={{ mb: 2 }}
+                                helperText={fridaTargetType === 'function'
+                                  ? 'Name of the function to hook (e.g., malloc, free, custom_func)'
+                                  : 'Memory address without 0x prefix (e.g., 401000)'
+                                }
+                              />
+                            )}
+
+                            {/* Module Name */}
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="Module Name (optional)"
+                              placeholder="libc.so / kernel32.dll"
+                              value={fridaModuleName}
+                              onChange={(e) => setFridaModuleName(e.target.value)}
+                              sx={{ mb: 2 }}
+                              helperText={fridaTargetType === 'module'
+                                ? 'Required: Module to hook all exports from'
+                                : 'Optional: Limit search to specific module'
+                              }
+                            />
+
+                            {/* Hook Type */}
+                            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                              <InputLabel>Hook Type</InputLabel>
+                              <Select
+                                value={fridaHookType}
+                                label="Hook Type"
+                                onChange={(e) => setFridaHookType(e.target.value as 'intercept' | 'replace' | 'stalker')}
+                              >
+                                <MenuItem value="intercept">Intercept (Monitor calls)</MenuItem>
+                                <MenuItem value="replace">Replace (Change behavior)</MenuItem>
+                                <MenuItem value="stalker">Stalker (Code tracing)</MenuItem>
+                              </Select>
+                            </FormControl>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            {/* Options */}
+                            <Typography variant="subtitle2" gutterBottom>
+                              Hook Options
+                            </Typography>
+
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  size="small"
+                                  checked={fridaOptions.logArguments}
+                                  onChange={(e) => setFridaOptions(prev => ({ ...prev, logArguments: e.target.checked }))}
+                                />
+                              }
+                              label="Log Arguments"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  size="small"
+                                  checked={fridaOptions.logReturnValue}
+                                  onChange={(e) => setFridaOptions(prev => ({ ...prev, logReturnValue: e.target.checked }))}
+                                />
+                              }
+                              label="Log Return Value"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  size="small"
+                                  checked={fridaOptions.dumpMemory}
+                                  onChange={(e) => setFridaOptions(prev => ({ ...prev, dumpMemory: e.target.checked }))}
+                                />
+                              }
+                              label="Dump Memory at Args"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  size="small"
+                                  checked={fridaOptions.trackCoverage}
+                                  onChange={(e) => setFridaOptions(prev => ({ ...prev, trackCoverage: e.target.checked }))}
+                                />
+                              }
+                              label="Track Coverage"
+                            />
+
+                            {(fridaHookType === 'replace' || fridaHookType === 'intercept') && (
+                              <>
+                                <FormControlLabel
+                                  control={
+                                    <Switch
+                                      size="small"
+                                      checked={fridaOptions.modifyReturn}
+                                      onChange={(e) => setFridaOptions(prev => ({ ...prev, modifyReturn: e.target.checked }))}
+                                    />
+                                  }
+                                  label="Modify Return Value"
+                                />
+                                {fridaOptions.modifyReturn && (
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Return Value"
+                                    value={fridaOptions.returnValue}
+                                    onChange={(e) => setFridaOptions(prev => ({ ...prev, returnValue: e.target.value }))}
+                                    sx={{ mt: 1 }}
+                                    helperText="Value to return (number or pointer)"
+                                  />
+                                )}
+                              </>
+                            )}
+
+                            <Box sx={{ mt: 3 }}>
+                              <Button
+                                variant="contained"
+                                fullWidth
+                                onClick={generateFridaScript}
+                                startIcon={<Code />}
+                                disabled={
+                                  (fridaTargetType === 'function' && !fridaTargetName) ||
+                                  (fridaTargetType === 'address' && !fridaTargetName) ||
+                                  (fridaTargetType === 'module' && !fridaModuleName)
+                                }
+                              >
+                                Generate Script
+                              </Button>
+                            </Box>
+                          </Paper>
+
+                          {/* Quick Templates */}
+                          <Paper sx={{ p: 2, mt: 2 }}>
+                            <Typography variant="subtitle2" color="primary" gutterBottom>
+                              Quick Templates
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setFridaTargetType('function');
+                                  setFridaTargetName('malloc');
+                                  setFridaModuleName('');
+                                  setFridaHookType('intercept');
+                                  setFridaOptions(prev => ({ ...prev, logArguments: true, logReturnValue: true, dumpMemory: false }));
+                                }}
+                              >
+                                Hook malloc (Memory Allocations)
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setFridaTargetType('function');
+                                  setFridaTargetName('open');
+                                  setFridaModuleName('');
+                                  setFridaHookType('intercept');
+                                  setFridaOptions(prev => ({ ...prev, logArguments: true, logReturnValue: true, dumpMemory: false }));
+                                }}
+                              >
+                                Hook open (File Access)
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setFridaTargetType('function');
+                                  setFridaTargetName('recv');
+                                  setFridaModuleName('');
+                                  setFridaHookType('intercept');
+                                  setFridaOptions(prev => ({ ...prev, logArguments: true, logReturnValue: true, dumpMemory: true }));
+                                }}
+                              >
+                                Hook recv (Network Input)
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setFridaTargetType('function');
+                                  setFridaTargetName('strcmp');
+                                  setFridaModuleName('');
+                                  setFridaHookType('intercept');
+                                  setFridaOptions(prev => ({ ...prev, logArguments: true, logReturnValue: true, dumpMemory: true }));
+                                }}
+                              >
+                                Hook strcmp (String Comparisons)
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => {
+                                  setFridaTargetType('function');
+                                  setFridaTargetName('');
+                                  setFridaModuleName('');
+                                  setFridaHookType('stalker');
+                                  setFridaOptions(prev => ({ ...prev, trackCoverage: true }));
+                                }}
+                              >
+                                Code Coverage Tracing
+                              </Button>
+                            </Box>
+                          </Paper>
+                        </Grid>
+
+                        {/* Generated Script Panel */}
+                        <Grid item xs={12} md={7}>
+                          <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                              <Typography variant="subtitle2" color="primary">
+                                Generated FRIDA Script
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Tooltip title="Copy to Clipboard">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(generatedFridaScript);
+                                      setSuccess('Script copied to clipboard!');
+                                    }}
+                                    disabled={!generatedFridaScript}
+                                  >
+                                    <ContentCopy fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Download Script">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      const blob = new Blob([generatedFridaScript], { type: 'text/javascript' });
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = 'frida_hook.js';
+                                      a.click();
+                                      URL.revokeObjectURL(url);
+                                    }}
+                                    disabled={!generatedFridaScript}
+                                  >
+                                    <Download fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </Box>
+
+                            {generatedFridaScript ? (
+                              <Box
+                                sx={{
+                                  flex: 1,
+                                  overflow: 'auto',
+                                  bgcolor: '#1e1e1e',
+                                  borderRadius: 1,
+                                  p: 2,
+                                }}
+                              >
+                                <pre style={{
+                                  margin: 0,
+                                  fontSize: '0.85rem',
+                                  fontFamily: '"Fira Code", "Consolas", monospace',
+                                  color: '#d4d4d4',
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-word',
+                                }}>
+                                  {generatedFridaScript}
+                                </pre>
+                              </Box>
+                            ) : (
+                              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'text.disabled' }}>
+                                <Code sx={{ fontSize: 64, mb: 2 }} />
+                                <Typography>Configure hook settings and click Generate</Typography>
+                              </Box>
+                            )}
+                          </Paper>
+
+                          {/* Usage Instructions */}
+                          <Paper sx={{ p: 2, mt: 2, bgcolor: alpha(theme.palette.info.main, 0.1) }}>
+                            <Typography variant="subtitle2" color="info.main" gutterBottom>
+                              Usage Instructions
+                            </Typography>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              Save the script and use with FRIDA:
+                            </Typography>
+                            <Box sx={{ bgcolor: '#1e1e1e', p: 1.5, borderRadius: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                              <Box sx={{ color: '#9cdcfe' }}>
+                                # Attach to running process:<br />
+                                <span style={{ color: '#ce9178' }}>frida -p &lt;PID&gt; -l frida_hook.js</span>
+                              </Box>
+                              <Box sx={{ color: '#9cdcfe', mt: 1 }}>
+                                # Spawn new process:<br />
+                                <span style={{ color: '#ce9178' }}>frida -f ./target_binary -l frida_hook.js</span>
+                              </Box>
+                              <Box sx={{ color: '#9cdcfe', mt: 1 }}>
+                                # Android (USB):<br />
+                                <span style={{ color: '#ce9178' }}>frida -U -f com.package.name -l frida_hook.js</span>
+                              </Box>
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
                 </Box>
+              )}
+
+              {/* Android Fuzzing Tab */}
+              {activeTab === 5 && (
+                <AndroidFuzzerTab
+                  onCrashFound={(crash) => {
+                    // Add Android crashes to the main crashes list for unified view
+                    const now = new Date().toISOString();
+                    setCrashes(prev => [...prev, {
+                      id: crash.crash_id || `android-${Date.now()}`,
+                      crash_type: crash.crash_type || 'android',
+                      severity: crash.severity || 'medium',
+                      stack_hash: crash.crash_id || `android-${Date.now()}`,
+                      sample_count: 1,
+                      first_seen: now,
+                      last_seen: now,
+                      sample_crashes: [crash.crash_id],
+                      notes: `Android ${crash.source} crash in ${crash.component}. ${crash.is_exploitable ? 'EXPLOITABLE' : ''}`,
+                      stack_trace: crash.exception_or_signal ? [crash.exception_or_signal] : [],
+                      registers: {},
+                    }]);
+                  }}
+                />
               )}
             </CardContent>
           </Card>

@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: vragent-postgres
+    environment:
+      POSTGRES_USER: vragent
+      POSTGRES_PASSWORD: vragent_dev_password
+      POSTGRES_DB: vragent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vragent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: vragent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # VRAgent Backend
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: vragent-backend
+    environment:
+      # Database
+      DATABASE_URL: postgresql://vragent:vragent_dev_password@postgres:5432/vragent
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # AI Services (Optional - add your keys)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # Ghidra (Optional - for decompilation)
+      GHIDRA_HOME: ${GHIDRA_HOME:-}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-vragent-change-this-in-production}
+
+      # Environment
+      ENVIRONMENT: development
+
+      # Resource Limits
+      MAX_UPLOAD_SIZE: 2147483648  # 2GB
+
+      # Quick Start Mode
+      QUICK_START: "true"
+      SKIP_MIGRATIONS: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./uploads:/tmp/uploads
+      - ./yara_rules:/app/backend/yara_rules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo '🚀 VRAgent Quick Start - Initializing...'
+
+        # Wait for database
+        echo '⏳ Waiting for database...'
+        while ! nc -z postgres 5432; do sleep 1; done
+        echo '✅ Database ready'
+
+        # Run migrations
+        echo '📦 Running database migrations...'
+        cd backend && alembic upgrade head
+
+        # Start server
+        echo '🎯 Starting VRAgent backend...'
+        echo '📍 API: http://localhost:8000'
+        echo '📖 Docs: http://localhost:8000/docs'
+        echo '💚 Health: http://localhost:8000/health'
+        echo ''
+        echo '✨ VRAgent is ready!'
+
+        uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # Frontend (Optional - if you have one)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: vragent-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     REACT_APP_API_URL: http://localhost:8000
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: vragent-network

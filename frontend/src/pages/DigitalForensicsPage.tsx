@@ -1,13 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
-  Button,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -25,6 +22,9 @@ import {
   ListItemIcon,
   ListItemText,
   Grid,
+  useMediaQuery,
+  Drawer,
+  Fab,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -42,24 +42,40 @@ import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import DescriptionIcon from "@mui/icons-material/Description";
 import QuizIcon from "@mui/icons-material/Quiz";
-import { Link, useNavigate } from "react-router-dom";
+import MenuIcon from "@mui/icons-material/Menu";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import InfoIcon from "@mui/icons-material/Info";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import { Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+const themeColors = {
+  primary: "#14b8a6",
+  primaryLight: "#2dd4bf",
+  secondary: "#f59e0b",
+  accent: "#3b82f6",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(20, 184, 166, 0.2)",
+  textMuted: "#94a3b8",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <InfoIcon fontSize="small" /> },
+  { id: "overview", label: "Overview", icon: <DashboardIcon fontSize="small" /> },
+  { id: "fundamentals", label: "Fundamentals", icon: <GavelIcon fontSize="small" /> },
+  { id: "tools", label: "Tools", icon: <BuildIcon fontSize="small" /> },
+  { id: "disk-forensics", label: "Disk Forensics", icon: <StorageIcon fontSize="small" /> },
+  { id: "memory-forensics", label: "Memory Forensics", icon: <MemoryIcon fontSize="small" /> },
+  { id: "windows-artifacts", label: "Windows Artifacts", icon: <FolderIcon fontSize="small" /> },
+  { id: "timeline", label: "Timeline", icon: <HistoryIcon fontSize="small" /> },
+  { id: "mobile-forensics", label: "Mobile Forensics", icon: <PhoneAndroidIcon fontSize="small" /> },
+  { id: "network-forensics", label: "Network Forensics", icon: <NetworkCheckIcon fontSize="small" /> },
+  { id: "malware-analysis", label: "Malware Analysis", icon: <BugReportIcon fontSize="small" /> },
+  { id: "report-writing", label: "Report Writing", icon: <DescriptionIcon fontSize="small" /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon fontSize="small" /> },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -77,15 +93,15 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
     <Paper
       sx={{
         p: 2,
-        bgcolor: "#1a1a2e",
+        bgcolor: themeColors.bgNested,
         borderRadius: 2,
         position: "relative",
         my: 2,
-        border: "1px solid rgba(20, 184, 166, 0.3)",
+        border: `1px solid ${themeColors.border}`,
       }}
     >
       <Box sx={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 1 }}>
-        <Chip label={language} size="small" sx={{ bgcolor: "#14b8a6" }} />
+        <Chip label={language} size="small" sx={{ bgcolor: themeColors.primary }} />
         <Tooltip title={copied ? "Copied!" : "Copy"}>
           <IconButton size="small" onClick={handleCopy} sx={{ color: "#fff" }}>
             <ContentCopyIcon fontSize="small" />
@@ -878,8 +894,91 @@ const quizQuestions: QuizQuestion[] = [
 ];
 
 const DigitalForensicsPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width:900px)");
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const yOffset = -80;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+    setMobileNavOpen(false);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sectionIds = sectionNavItems.map((item) => item.id);
+      for (const id of sectionIds) {
+        const element = document.getElementById(id);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 120 && rect.bottom >= 120) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const sidebarNav = (
+    <Box
+      sx={{
+        position: "sticky",
+        top: 90,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        pr: 1,
+        "&::-webkit-scrollbar": { width: "4px" },
+        "&::-webkit-scrollbar-thumb": { bgcolor: themeColors.border, borderRadius: 2 },
+      }}
+    >
+      <Typography variant="overline" sx={{ color: themeColors.textMuted, fontWeight: 600, mb: 1, display: "block" }}>
+        ON THIS PAGE
+      </Typography>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            disablePadding
+            sx={{
+              mb: 0.5,
+              borderRadius: 1,
+              bgcolor: activeSection === item.id ? `${themeColors.primary}15` : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${themeColors.primary}` : "3px solid transparent",
+            }}
+          >
+            <Box
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                py: 0.75,
+                px: 1.5,
+                cursor: "pointer",
+                width: "100%",
+                color: activeSection === item.id ? themeColors.primary : themeColors.textMuted,
+                "&:hover": { color: themeColors.primary },
+                transition: "color 0.2s",
+              }}
+            >
+              {item.icon}
+              <Typography variant="body2" sx={{ fontWeight: activeSection === item.id ? 600 : 400 }}>
+                {item.label}
+              </Typography>
+            </Box>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   const tools = [
     { name: "Autopsy", type: "Disk Forensics", platform: "Multi", cost: "Free", best: "Full disk analysis, timeline" },
@@ -899,82 +998,160 @@ const DigitalForensicsPage: React.FC = () => {
   return (
     <LearnPageLayout pageTitle="Digital Forensics Fundamentals" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
-      <Container maxWidth="lg">
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Chip
-            component={Link}
-            to="/learn"
-            icon={<ArrowBackIcon />}
-            label="Back to Learning Hub"
-            clickable
-            variant="outlined"
-            sx={{ borderRadius: 2, mb: 2 }}
-          />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <SearchIcon sx={{ fontSize: 40, color: "#14b8a6" }} />
-            <Typography
-              variant="h3"
-              sx={{
-                fontWeight: 700,
-                background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                color: "transparent",
-              }}
-            >
-              Digital Forensics
-            </Typography>
-          </Box>
-          <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-            Evidence acquisition, analysis, and incident response fundamentals
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip icon={<StorageIcon />} label="Disk Forensics" size="small" />
-            <Chip icon={<MemoryIcon />} label="Memory Analysis" size="small" />
-            <Chip icon={<GavelIcon />} label="Chain of Custody" size="small" />
-          </Box>
-        </Box>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation */}
+          {!isMobile && (
+            <Grid item md={2.5}>
+              {sidebarNav}
+            </Grid>
+          )}
 
-        {/* Tabs */}
-        <Paper sx={{ bgcolor: "#12121a", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#14b8a6" },
-            }}
-          >
-            <Tab icon={<GavelIcon />} label="Fundamentals" />
-            <Tab icon={<BuildIcon />} label="Tools" />
-            <Tab icon={<StorageIcon />} label="Disk Forensics" />
-            <Tab icon={<MemoryIcon />} label="Memory Forensics" />
-            <Tab icon={<FolderIcon />} label="Windows Artifacts" />
-            <Tab icon={<HistoryIcon />} label="Timeline" />
-            <Tab icon={<PhoneAndroidIcon />} label="Mobile Forensics" />
-            <Tab icon={<NetworkCheckIcon />} label="Network Forensics" />
-            <Tab icon={<BugReportIcon />} label="Malware Analysis" />
-            <Tab icon={<DescriptionIcon />} label="Report Writing" />
-          </Tabs>
-
-          {/* Tab 0: Fundamentals */}
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Digital Forensics Principles
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            {/* Introduction Section */}
+            <Box id="intro" sx={{ mb: 5 }}>
+              <Chip
+                component={Link}
+                to="/learn"
+                icon={<ArrowBackIcon />}
+                label="Back to Learning Hub"
+                clickable
+                variant="outlined"
+                sx={{ borderRadius: 2, mb: 2, borderColor: themeColors.border }}
+              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <SearchIcon sx={{ fontSize: 40, color: themeColors.primary }} />
+                <Typography
+                  variant="h3"
+                  sx={{
+                    fontWeight: 700,
+                    background: `linear-gradient(135deg, ${themeColors.primary} 0%, #0d9488 100%)`,
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  Digital Forensics
+                </Typography>
+              </Box>
+              <Typography variant="h6" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                Evidence acquisition, analysis, and incident response fundamentals
               </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip icon={<StorageIcon />} label="Disk Forensics" size="small" sx={{ bgcolor: `${themeColors.primary}30` }} />
+                <Chip icon={<MemoryIcon />} label="Memory Analysis" size="small" sx={{ bgcolor: `${themeColors.primary}30` }} />
+                <Chip icon={<GavelIcon />} label="Chain of Custody" size="small" sx={{ bgcolor: `${themeColors.primary}30` }} />
+              </Box>
+              <Paper sx={{ p: 3, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 2 }}>
+                  What You'll Learn
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    "Evidence acquisition and preservation principles",
+                    "Disk and memory forensics techniques",
+                    "Windows artifact analysis",
+                    "Timeline reconstruction",
+                    "Mobile and network forensics basics",
+                    "Malware analysis fundamentals",
+                    "Professional report writing",
+                  ].map((item) => (
+                    <Grid item xs={12} sm={6} key={item}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CheckCircleIcon sx={{ color: themeColors.primary, fontSize: 18 }} />
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{item}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Box>
 
-              <Alert severity="warning" sx={{ mb: 3 }}>
+            {/* Overview Section */}
+            <Paper id="overview" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DashboardIcon /> Overview
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {[
+                  { title: "Computer Forensics", desc: "Hard drives, SSDs, file systems, OS artifacts", color: themeColors.accent },
+                  { title: "Memory Forensics", desc: "RAM analysis, running processes, malware detection", color: "#8b5cf6" },
+                  { title: "Network Forensics", desc: "PCAP analysis, traffic patterns, intrusion detection", color: "#06b6d4" },
+                  { title: "Mobile Forensics", desc: "iOS/Android devices, app data, call logs, GPS", color: "#10b981" },
+                  { title: "Cloud Forensics", desc: "AWS/Azure/GCP logs, SaaS data, virtual machines", color: themeColors.secondary },
+                  { title: "Malware Forensics", desc: "Reverse engineering, behavioral analysis, IOC extraction", color: "#ef4444" },
+                ].map((type) => (
+                  <Grid item xs={12} sm={6} md={4} key={type.title}>
+                    <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: `1px solid ${type.color}30`, height: "100%" }}>
+                      <Typography sx={{ color: type.color, fontWeight: 600, mb: 0.5 }}>{type.title}</Typography>
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{type.desc}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+              <Alert severity="info" sx={{ bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 <strong>Golden Rule:</strong> Never work on original evidence. Always create forensic images and work on copies.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Core Principles</Typography>
+              <Paper sx={{ p: 2.5, mt: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Beginner Workflow: From Scene to Report
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  Digital forensics is not just running tools. It is a repeatable process that preserves evidence,
+                  answers specific questions, and produces a defensible report. For beginners, the safest approach
+                  is to follow a simple workflow every time. This prevents accidental data changes and keeps your
+                  investigation focused.
+                </Typography>
+                <List dense>
+                  {[
+                    "Scope the case: define what you are trying to prove or disprove.",
+                    "Preserve first: isolate the system, capture volatile data, and create a forensic image.",
+                    "Verify integrity: hash originals and images; log the values.",
+                    "Analyze the copy: use tools to extract artifacts and timelines.",
+                    "Correlate findings: confirm each hypothesis with at least two artifacts.",
+                    "Document everything: actions taken, tools used, and results.",
+                    "Report with clarity: summarize facts, not assumptions, and attach evidence.",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary, fontSize: 18 }} /></ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  Keep a case notebook from minute one. When you later write a report, that notebook becomes your
+                  timeline of actions and your proof that the evidence stayed intact.
+                </Typography>
+              </Paper>
+            </Paper>
+
+            {/* Fundamentals Section */}
+            <Paper id="fundamentals" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <GavelIcon /> Digital Forensics Principles
+              </Typography>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Why Forensics Is Different From IT Troubleshooting
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  In regular IT work, you fix problems quickly by changing systems. In forensics, you must avoid changes.
+                  Every action can alter evidence. That is why forensic work emphasizes write blockers, hashing, and detailed
+                  documentation. You are not just fixing a system, you are building a defensible story of what happened.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  This mindset also changes how you interpret results. A single artifact rarely proves an action. Instead,
+                  you build confidence by combining multiple artifacts: a log entry, a file timestamp, a registry key, and
+                  a network record that all point to the same event.
+                </Typography>
+              </Paper>
+
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Core Principles</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List>
@@ -986,26 +1163,26 @@ const DigitalForensicsPage: React.FC = () => {
                       ["Reporting", "Document findings for legal/business use"],
                     ].map(([title, desc]) => (
                       <ListItem key={title}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={title} secondary={desc} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={title} secondary={desc} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" }, "& .MuiListItemText-secondary": { color: themeColors.textMuted } }} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Order of Volatility</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Order of Volatility</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Priority</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Source</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Volatility</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Priority</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Source</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Volatility</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1017,23 +1194,23 @@ const DigitalForensicsPage: React.FC = () => {
                           ["5", "Backups / Logs", "Days to years"],
                         ].map(([p, source, vol]) => (
                           <TableRow key={p}>
-                            <TableCell><Chip label={p} size="small" color="primary" /></TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{source}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{vol}</TableCell>
+                            <TableCell><Chip label={p} size="small" sx={{ bgcolor: themeColors.primary }} /></TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{source}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted }}>{vol}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  <Alert severity="info" sx={{ mt: 2 }}>
+                  <Alert severity="info" sx={{ mt: 2, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                     Collect most volatile evidence first. Memory before disk!
                   </Alert>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Chain of Custody</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Chain of Custody</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List dense>
@@ -1045,8 +1222,8 @@ const DigitalForensicsPage: React.FC = () => {
                       "Maintain detailed transfer logs",
                     ].map((item) => (
                       <ListItem key={item}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
                       </ListItem>
                     ))}
                   </List>
@@ -1076,34 +1253,9 @@ Date       | From        | To          | Purpose
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Types of Digital Forensics</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Grid container spacing={2}>
-                    {[
-                      { title: "Computer Forensics", desc: "Hard drives, SSDs, file systems, OS artifacts", color: "#3b82f6" },
-                      { title: "Memory Forensics", desc: "RAM analysis, running processes, malware detection", color: "#8b5cf6" },
-                      { title: "Network Forensics", desc: "PCAP analysis, traffic patterns, intrusion detection", color: "#06b6d4" },
-                      { title: "Mobile Forensics", desc: "iOS/Android devices, app data, call logs, GPS", color: "#10b981" },
-                      { title: "Cloud Forensics", desc: "AWS/Azure/GCP logs, SaaS data, virtual machines", color: "#f59e0b" },
-                      { title: "Malware Forensics", desc: "Reverse engineering, behavioral analysis, IOC extraction", color: "#ef4444" },
-                    ].map((type) => (
-                      <Grid item xs={12} sm={6} md={4} key={type.title}>
-                        <Paper sx={{ p: 2, bgcolor: "#0f1024", border: `1px solid ${type.color}30`, height: "100%" }}>
-                          <Typography sx={{ color: type.color, fontWeight: 600, mb: 0.5 }}>{type.title}</Typography>
-                          <Typography variant="body2" sx={{ color: "grey.400" }}>{type.desc}</Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Legal Considerations</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Legal Considerations</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Alert severity="error" sx={{ mb: 2 }}>
@@ -1118,28 +1270,28 @@ Date       | From        | To          | Purpose
                       ["Expert Testimony", "Be prepared to explain your methods in court if required"],
                     ].map(([title, desc]) => (
                       <ListItem key={title}>
-                        <ListItemIcon><CheckCircleIcon color="warning" /></ListItemIcon>
-                        <ListItemText primary={title} secondary={desc} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.secondary }} /></ListItemIcon>
+                        <ListItemText primary={title} secondary={desc} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" }, "& .MuiListItemText-secondary": { color: themeColors.textMuted } }} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Anti-Forensics Awareness</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Anti-Forensics Awareness</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Attackers may attempt to destroy or hide evidence. Know what to look for:
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Technique</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Detection Method</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Technique</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Detection Method</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1153,7 +1305,7 @@ Date       | From        | To          | Purpose
                         ].map(([technique, detection]) => (
                           <TableRow key={technique}>
                             <TableCell sx={{ color: "#f87171", fontWeight: 500 }}>{technique}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{detection}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{detection}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1162,9 +1314,9 @@ Date       | From        | To          | Purpose
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Tool Installation Quick Start</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Tool Installation Quick Start</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1207,69 +1359,21 @@ log2timeline.py --version  # Plaso`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">SIFT Workstation Setup</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Building a Forensic Workstation</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    SIFT (SANS Investigative Forensics Toolkit) is a pre-configured forensic workstation with 500+ tools.
-                  </Alert>
-                  <CodeBlock
-                    language="bash"
-                    code={`# Option 1: Download SIFT VM (Recommended for beginners)
-# Visit: https://www.sans.org/tools/sift-workstation/
-# Download the OVA and import into VirtualBox/VMware
-
-# Option 2: Install SIFT on Ubuntu
-wget https://github.com/teamdfir/sift-cli/releases/download/v1.14.0-rc1/sift-cli-linux
-chmod +x sift-cli-linux
-sudo ./sift-cli-linux install
-
-# Option 3: Docker
-docker pull teamdfir/sift
-docker run -it teamdfir/sift /bin/bash
-
-# Post-install verification
-sift --version
-which vol.py autopsy fls mmls bulk_extractor`}
-                  />
-                  <Typography variant="body2" sx={{ color: "grey.400", mt: 2 }}>
-                    Key directories after installation:
-                  </Typography>
-                  <List dense>
-                    {[
-                      ["/cases", "Mount point for case evidence"],
-                      ["/mnt/shadow_mount", "Volume shadow copy mounts"],
-                      "/usr/share/sift/resources" ,
-                    ].map((item) => (
-                      <ListItem key={Array.isArray(item) ? item[0] : item}>
-                        <ListItemIcon><FolderIcon sx={{ color: "#f59e0b" }} /></ListItemIcon>
-                        <ListItemText 
-                          primary={Array.isArray(item) ? item[0] : item} 
-                          secondary={Array.isArray(item) ? item[1] : undefined}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Building a Forensic Workstation</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Hardware recommendations for a dedicated forensic workstation:
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Component</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Minimum</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Recommended</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Component</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Minimum</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Recommended</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1283,7 +1387,7 @@ which vol.py autopsy fls mmls bulk_extractor`}
                         ].map(([component, min, rec]) => (
                           <TableRow key={component}>
                             <TableCell sx={{ color: "#a5b4fc" }}>{component}</TableCell>
-                            <TableCell sx={{ color: "grey.400" }}>{min}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted }}>{min}</TableCell>
                             <TableCell sx={{ color: "#4ade80" }}>{rec}</TableCell>
                           </TableRow>
                         ))}
@@ -1292,57 +1396,84 @@ which vol.py autopsy fls mmls bulk_extractor`}
                   </TableContainer>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 1: Tools */}
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Essential Forensic Tools
+            {/* Tools Section */}
+            <Paper id="tools" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <BuildIcon /> Essential Forensic Tools
               </Typography>
 
-              <TableContainer component={Paper} sx={{ bgcolor: "#1a1a2e", mb: 3 }}>
+              <TableContainer component={Paper} sx={{ bgcolor: themeColors.bgNested, mb: 3 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#14b8a6" }}>Tool</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Type</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Platform</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Cost</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Best For</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Tool</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Type</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Platform</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Cost</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Best For</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {tools.map((tool) => (
                       <TableRow key={tool.name}>
-                        <TableCell><Typography sx={{ color: "#14b8a6", fontWeight: 600 }}>{tool.name}</Typography></TableCell>
-                        <TableCell sx={{ color: "grey.300" }}>{tool.type}</TableCell>
-                        <TableCell sx={{ color: "grey.300" }}>{tool.platform}</TableCell>
-                        <TableCell><Chip label={tool.cost} size="small" color="success" /></TableCell>
-                        <TableCell sx={{ color: "grey.400" }}>{tool.best}</TableCell>
+                        <TableCell><Typography sx={{ color: themeColors.primary, fontWeight: 600 }}>{tool.name}</Typography></TableCell>
+                        <TableCell sx={{ color: "#e2e8f0" }}>{tool.type}</TableCell>
+                        <TableCell sx={{ color: "#e2e8f0" }}>{tool.platform}</TableCell>
+                        <TableCell><Chip label={tool.cost} size="small" sx={{ bgcolor: "#4ade80" }} /></TableCell>
+                        <TableCell sx={{ color: themeColors.textMuted }}>{tool.best}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
 
-              <Alert severity="success">
+              <Alert severity="success" sx={{ bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 <strong>Recommended Start:</strong> FTK Imager for imaging, Autopsy for analysis, Volatility for memory.
               </Alert>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 2: Disk Forensics */}
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Disk Forensics
+            {/* Disk Forensics Section */}
+            <Paper id="disk-forensics" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <StorageIcon /> Disk Forensics
               </Typography>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Creating Forensic Images</Typography>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Lesson: How File Systems Tell the Story
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  File systems do more than store files. They also store metadata that reveals user activity. On Windows,
+                  the NTFS Master File Table (MFT) records file creation, modification, and access timestamps. The USN
+                  Journal records changes over time. Even when a file is deleted, these structures often still contain
+                  traces of the file name, path, and timestamps.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                  Beginners should focus on a few high-value artifacts first: the MFT (what existed), the USN Journal
+                  (what changed), LNK files (what was opened), and browser artifacts (what was accessed). As you get more
+                  comfortable, you can expand into registry data, shadow copies, and unallocated space carving.
+                </Typography>
+                <List dense>
+                  {[
+                    "MFT: authoritative index of files and folders.",
+                    "USN Journal: change history for files and directories.",
+                    "LNK files: user launched or opened items.",
+                    "Shellbags: folder navigation history.",
+                    "Recycle Bin: deleted file metadata and paths.",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Creating Forensic Images</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1362,9 +1493,9 @@ mount -o ro,loop,noexec evidence.dd /mnt/evidence`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">File System Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>File System Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1385,31 +1516,31 @@ photorec evidence.dd`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Key Areas to Examine</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Key Areas to Examine</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
-                        <Typography sx={{ color: "#14b8a6", fontWeight: 600, mb: 1 }}>User Activity</Typography>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
+                        <Typography sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>User Activity</Typography>
                         <List dense>
                           {["Browser history & cache", "Recent documents", "Download folders", "Recycle Bin / Trash", "Desktop & Documents"].map(i => (
                             <ListItem key={i} sx={{ py: 0 }}>
-                              <ListItemText primary={i} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.9rem" } }} />
+                              <ListItemText primary={i} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0", fontSize: "0.9rem" } }} />
                             </ListItem>
                           ))}
                         </List>
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
-                        <Typography sx={{ color: "#14b8a6", fontWeight: 600, mb: 1 }}>System Artifacts</Typography>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
+                        <Typography sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>System Artifacts</Typography>
                         <List dense>
                           {["Event logs", "Prefetch files", "Registry hives", "Scheduled tasks", "$MFT / NTFS metadata"].map(i => (
                             <ListItem key={i} sx={{ py: 0 }}>
-                              <ListItemText primary={i} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.9rem" } }} />
+                              <ListItemText primary={i} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0", fontSize: "0.9rem" } }} />
                             </ListItem>
                           ))}
                         </List>
@@ -1419,9 +1550,9 @@ photorec evidence.dd`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Deleted File Recovery</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Deleted File Recovery</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1454,21 +1585,21 @@ bulk_extractor -o ./bulk_out image.dd`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">NTFS-Specific Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>NTFS-Specific Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     NTFS stores critical metadata in special files:
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>File</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Purpose</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Analysis Command</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>File</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Purpose</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Analysis Command</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1481,8 +1612,8 @@ bulk_extractor -o ./bulk_out image.dd`}
                         ].map(([file, purpose, cmd]) => (
                           <TableRow key={file}>
                             <TableCell sx={{ color: "#f472b6", fontFamily: "monospace" }}>{file}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{purpose}</TableCell>
-                            <TableCell sx={{ color: "#fbbf24", fontFamily: "monospace", fontSize: "0.75rem" }}>{cmd}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{purpose}</TableCell>
+                            <TableCell sx={{ color: themeColors.secondary, fontFamily: "monospace", fontSize: "0.75rem" }}>{cmd}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1510,12 +1641,12 @@ MFTECmd.exe -f "C:\$MFT" --csv . --csvf mft.csv`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Volume Shadow Copies</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Volume Shadow Copies</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Windows Volume Shadow Copies (VSS) are snapshots that may contain deleted/modified files:
                   </Typography>
                   <CodeBlock
@@ -1548,9 +1679,9 @@ diff -rq /mnt/current/Users /mnt/vss/vss1/Users
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Ext4/Linux File System Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Ext4/Linux File System Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1579,23 +1710,37 @@ find /mnt/evidence/bin -type f -exec md5sum {} \; > system_hashes.txt`}
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 3: Memory Forensics */}
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Memory Forensics
+            {/* Memory Forensics Section */}
+            <Paper id="memory-forensics" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <MemoryIcon /> Memory Forensics
               </Typography>
 
-              <Alert severity="info" sx={{ mb: 3 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Lesson: Why Memory Forensics Is a Game Changer
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  Memory captures the live state of a system. It reveals running processes, injected code, network
+                  connections, and sometimes plaintext credentials. Attackers often rely on "fileless" techniques
+                  that never write to disk. If you only examine disk artifacts, you can miss the most important evidence.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  A good beginner approach is to answer three questions from memory: What processes were running?
+                  What network connections were open? Are there signs of injected or hidden code? Use those answers
+                  to guide deeper disk analysis and containment decisions.
+                </Typography>
+              </Paper>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 Memory analysis reveals running processes, network connections, loaded DLLs, and malware that never touched disk.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Memory Acquisition</Typography>
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Memory Acquisition</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1612,9 +1757,9 @@ sudo osxpmem -o memory.aff4`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Volatility 3 Commands</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Volatility 3 Commands</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1646,9 +1791,9 @@ vol -f memory.raw windows.malfind`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">What to Look For</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>What to Look For</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List>
@@ -1660,17 +1805,17 @@ vol -f memory.raw windows.malfind`}
                       ["Command History", "Attacker commands in cmd/powershell history"],
                     ].map(([title, desc]) => (
                       <ListItem key={title}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={title} secondary={desc} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={title} secondary={desc} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" }, "& .MuiListItemText-secondary": { color: themeColors.textMuted } }} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Malware Detection in Memory</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Malware Detection in Memory</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1701,9 +1846,9 @@ vol -f memory.dmp windows.vadinfo --pid 1234`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Credential Extraction</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Credential Extraction</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1733,9 +1878,9 @@ vol -f memory.dmp linux.cached_creds`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Linux Memory Forensics</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Linux Memory Forensics</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1762,9 +1907,9 @@ vol -f memory.lime linux.keyboard_notifiers  # Keylogger detection`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Network Artifacts in Memory</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Network Artifacts in Memory</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1789,23 +1934,58 @@ vol -f memory.dmp windows.netscan
                   </Alert>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 4: Windows Artifacts */}
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Windows Forensic Artifacts
+            {/* Windows Artifacts Section */}
+            <Paper id="windows-artifacts" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <FolderIcon /> Windows Forensic Artifacts
               </Typography>
 
-              <TableContainer component={Paper} sx={{ bgcolor: "#1a1a2e", mb: 3 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Lesson: Windows Leaves Breadcrumbs Everywhere
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  Windows systems create artifacts for usability and performance. Those same artifacts are gold for
+                  investigators. For example, Prefetch files show which programs executed and when. LNK files show
+                  what a user opened. The Registry records system settings, installed programs, and user activity.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                  Do not rely on a single artifact. Combine registry keys, event logs, and file system timestamps to
+                  confirm a user action. If you see a suspicious executable in Prefetch, check the file path in the MFT,
+                  then confirm execution in the Event Logs.
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { title: "Registry", desc: "Installed software, user settings, recent files, USB history." },
+                    { title: "Event Logs", desc: "Logons, process creation, service changes, log clearing events." },
+                    { title: "Prefetch", desc: "Program execution history and last run time." },
+                    { title: "LNK/Jump Lists", desc: "User opened files and folders with timestamps." },
+                    { title: "Shellbags", desc: "Folder navigation history, even for deleted folders." },
+                    { title: "Amcache/Shimcache", desc: "Execution traces for binaries and installers." },
+                  ].map((artifact) => (
+                    <Grid item xs={12} sm={6} key={artifact.title}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgCard, borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#e2e8f0", mb: 0.5 }}>
+                          {artifact.title}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          {artifact.desc}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              <TableContainer component={Paper} sx={{ bgcolor: themeColors.bgNested, mb: 3 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#14b8a6" }}>Artifact</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Location</TableCell>
-                      <TableCell sx={{ color: "#14b8a6" }}>Evidence Value</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Artifact</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Location</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Evidence Value</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1822,34 +2002,34 @@ vol -f memory.dmp windows.netscan
                       ["Browser Data", "C:\\Users\\*\\AppData\\Local\\*\\User Data\\", "History, downloads, cookies"],
                     ].map(([artifact, location, value]) => (
                       <TableRow key={artifact}>
-                        <TableCell><Chip label={artifact} size="small" sx={{ bgcolor: "#14b8a6" }} /></TableCell>
-                        <TableCell sx={{ color: "grey.400", fontFamily: "monospace", fontSize: "0.8rem" }}>{location}</TableCell>
-                        <TableCell sx={{ color: "grey.300" }}>{value}</TableCell>
+                        <TableCell><Chip label={artifact} size="small" sx={{ bgcolor: themeColors.primary }} /></TableCell>
+                        <TableCell sx={{ color: themeColors.textMuted, fontFamily: "monospace", fontSize: "0.8rem" }}>{location}</TableCell>
+                        <TableCell sx={{ color: "#e2e8f0" }}>{value}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
 
-              <Alert severity="success">
+              <Alert severity="success" sx={{ bgcolor: `${themeColors.primary}15`, color: "#e2e8f0", mb: 3 }}>
                 <strong>Pro Tip:</strong> Use Eric Zimmerman's tools (PECmd, EvtxECmd, Registry Explorer) for fast artifact parsing.
               </Alert>
 
-              <Accordion sx={{ mt: 3 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Windows Event Log Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Windows Event Log Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Critical Event IDs to investigate:
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Event ID</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Log</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Description</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Event ID</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Log</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Description</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1867,8 +2047,8 @@ vol -f memory.dmp windows.netscan
                         ].map(([id, log, desc]) => (
                           <TableRow key={id}>
                             <TableCell sx={{ color: "#f472b6", fontFamily: "monospace", fontWeight: 600 }}>{id}</TableCell>
-                            <TableCell sx={{ color: "#fbbf24" }}>{log}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{desc}</TableCell>
+                            <TableCell sx={{ color: themeColors.secondary }}>{log}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{desc}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1892,9 +2072,9 @@ chainsaw hunt ./evtx_files/ --rules sigma_rules/ --mapping mappings/`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Registry Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Registry Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -1927,16 +2107,16 @@ regripper -r SYSTEM -p all > system_report.txt`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Program Execution Artifacts</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Program Execution Artifacts</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
                         <Typography sx={{ color: "#3b82f6", fontWeight: 600, mb: 1 }}>Prefetch</Typography>
-                        <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
                           Shows program execution with timestamps and run count.
                         </Typography>
                         <CodeBlock
@@ -1951,9 +2131,9 @@ prefetch_parser.py *.pf`}
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
                         <Typography sx={{ color: "#8b5cf6", fontWeight: 600, mb: 1 }}>Amcache</Typography>
-                        <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
                           Contains SHA1 hashes of executed programs.
                         </Typography>
                         <CodeBlock
@@ -1970,9 +2150,9 @@ AmcacheParser.exe -f Amcache.hve --csv . --csvf amcache.csv
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
                         <Typography sx={{ color: "#10b981", fontWeight: 600, mb: 1 }}>Shimcache</Typography>
-                        <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
                           Application compatibility cache in SYSTEM hive.
                         </Typography>
                         <CodeBlock
@@ -1983,9 +2163,9 @@ AppCompatCacheParser.exe -f SYSTEM --csv . --csvf shimcache.csv`}
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024" }}>
-                        <Typography sx={{ color: "#f59e0b", fontWeight: 600, mb: 1 }}>SRUM</Typography>
-                        <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested }}>
+                        <Typography sx={{ color: themeColors.secondary, fontWeight: 600, mb: 1 }}>SRUM</Typography>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
                           System Resource Usage Monitor - app/network history.
                         </Typography>
                         <CodeBlock
@@ -2002,9 +2182,9 @@ SrumECmd.exe -f SRUDB.dat --csv . --csvf srum.csv
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Browser Forensics</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Browser Forensics</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2038,23 +2218,52 @@ python hindsight.py -i /path/to/Chrome/User\ Data/Default -o report`}
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 5: Timeline */}
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Timeline Analysis
+            {/* Timeline Section */}
+            <Paper id="timeline" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <HistoryIcon /> Timeline Analysis
               </Typography>
 
-              <Alert severity="info" sx={{ mb: 3 }}>
+              <Alert severity="info" sx={{ mb: 3, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 Timelines correlate events across multiple sources to reconstruct what happened and when.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Creating a Super Timeline</Typography>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Lesson: How to Build a Reliable Timeline
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  A timeline is your story of events in chronological order. It helps you answer the questions "what
+                  happened first" and "what followed." Reliable timelines require time normalization. Different systems
+                  log in different time zones, and some clocks drift. Always normalize to UTC when possible.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                  A beginner-friendly approach is to start with three sources: Event Logs, file system timestamps, and
+                  browser history. Once you have those in order, add higher detail sources like Prefetch, registry keys,
+                  and network logs. When a timeline shows a gap, investigate why. It might be missing logs, or it might be
+                  evidence that logs were cleared.
+                </Typography>
+                <List dense>
+                  {[
+                    "Normalize timestamps to a single time zone.",
+                    "Start with high-confidence sources (Event Logs, MFT).",
+                    "Correlate file creation with process execution.",
+                    "Use at least two artifacts to confirm each key action.",
+                    "Document any time drift or log gaps.",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Creating a Super Timeline</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2073,9 +2282,9 @@ psort.py -o l2tcsv timeline.plaso "date > '2024-01-01' AND date < '2024-01-31'" 
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Timeline Analysis Tips</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Timeline Analysis Tips</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List>
@@ -2087,20 +2296,20 @@ psort.py -o l2tcsv timeline.plaso "date > '2024-01-01' AND date < '2024-01-31'" 
                       "Use pivot points: known malicious file, first detection, lateral movement",
                     ].map((tip) => (
                       <ListItem key={tip}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={tip} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={tip} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Manual Timeline Creation</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Manual Timeline Creation</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     When you need precise control over timeline entries:
                   </Typography>
                   <CodeBlock
@@ -2127,9 +2336,9 @@ EvtxECmd.exe -d ./evtx --csv . --csvf events.csv`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Timeline Visualization</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Timeline Visualization</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
@@ -2137,12 +2346,12 @@ EvtxECmd.exe -d ./evtx --csv . --csvf events.csv`}
                       { tool: "Timesketch", desc: "Web-based collaborative timeline analysis", color: "#3b82f6" },
                       { tool: "Autopsy Timeline", desc: "Built into Autopsy, GUI-based filtering", color: "#8b5cf6" },
                       { tool: "log2timeline/plaso", desc: "Command-line, most comprehensive", color: "#10b981" },
-                      { tool: "Excel/Sheets", desc: "Simple but effective for small datasets", color: "#f59e0b" },
+                      { tool: "Excel/Sheets", desc: "Simple but effective for small datasets", color: themeColors.secondary },
                     ].map((item) => (
                       <Grid item xs={12} sm={6} key={item.tool}>
-                        <Paper sx={{ p: 2, bgcolor: "#0f1024", border: `1px solid ${item.color}30` }}>
+                        <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: `1px solid ${item.color}30` }}>
                           <Typography sx={{ color: item.color, fontWeight: 600 }}>{item.tool}</Typography>
-                          <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{item.desc}</Typography>
                         </Paper>
                       </Grid>
                     ))}
@@ -2162,22 +2371,22 @@ source_short:"LOG" AND timestamp > "2024-01-15"`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Timeline Correlation Example</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Timeline Correlation Example</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Alert severity="info" sx={{ mb: 2 }}>
+                  <Alert severity="info" sx={{ mb: 2, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                     Example: Tracing a ransomware attack through correlated events
                   </Alert>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Time</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Source</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Event</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Significance</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Time</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Source</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Event</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Significance</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2191,9 +2400,9 @@ source_short:"LOG" AND timestamp > "2024-01-15"`}
                           ["09:47:33", "Event 1102", "Security log cleared", "Anti-forensics"],
                         ].map(([time, source, event, sig]) => (
                           <TableRow key={time}>
-                            <TableCell sx={{ color: "#fbbf24", fontFamily: "monospace" }}>{time}</TableCell>
+                            <TableCell sx={{ color: themeColors.secondary, fontFamily: "monospace" }}>{time}</TableCell>
                             <TableCell sx={{ color: "#a5b4fc" }}>{source}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{event}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{event}</TableCell>
                             <TableCell sx={{ color: "#f87171" }}>{sig}</TableCell>
                           </TableRow>
                         ))}
@@ -2203,9 +2412,9 @@ source_short:"LOG" AND timestamp > "2024-01-15"`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Advanced Filtering</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Advanced Filtering</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2234,35 +2443,33 @@ psort.py -o json timeline.plaso | jq 'select(.source_short == "REG")'`}
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 6: Mobile Forensics */}
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Mobile Device Forensics
+            {/* Mobile Forensics Section */}
+            <Paper id="mobile-forensics" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <PhoneAndroidIcon /> Mobile Device Forensics
               </Typography>
 
               <Alert severity="warning" sx={{ mb: 3 }}>
                 <strong>Legal Note:</strong> Mobile devices often contain highly personal data. Ensure proper authorization before examination.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">iOS Forensics</Typography>
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>iOS Forensics</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     iOS devices are notoriously difficult to forensically examine due to encryption.
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Acquisition Type</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Requirements</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Data Access</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Acquisition Type</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Requirements</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Data Access</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2276,8 +2483,8 @@ psort.py -o json timeline.plaso | jq 'select(.source_short == "REG")'`}
                         ].map(([type, req, access]) => (
                           <TableRow key={type}>
                             <TableCell sx={{ color: "#a5b4fc", fontWeight: 500 }}>{type}</TableCell>
-                            <TableCell sx={{ color: "grey.400" }}>{req}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{access}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted }}>{req}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{access}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2314,9 +2521,9 @@ python ileapp.py -i ./backup_folder -o ./output
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Android Forensics</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Android Forensics</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2362,9 +2569,9 @@ adb pull /sdcard/full_image.gz`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Key Mobile Artifacts</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Key Mobile Artifacts</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
@@ -2372,17 +2579,17 @@ adb pull /sdcard/full_image.gz`}
                       { title: "Messages", artifacts: ["SMS/MMS databases", "iMessage/Signal/WhatsApp", "Deleted message recovery"], color: "#3b82f6" },
                       { title: "Location", artifacts: ["GPS coordinates", "Cell tower logs", "WiFi connection history", "Photo EXIF data"], color: "#10b981" },
                       { title: "Communications", artifacts: ["Call logs", "Contacts", "Voicemail", "FaceTime/video calls"], color: "#8b5cf6" },
-                      { title: "Apps", artifacts: ["Browser history", "Social media data", "Email", "Installed app list"], color: "#f59e0b" },
+                      { title: "Apps", artifacts: ["Browser history", "Social media data", "Email", "Installed app list"], color: themeColors.secondary },
                       { title: "Media", artifacts: ["Photos & videos", "Screenshots", "Audio recordings", "Downloads"], color: "#ef4444" },
                       { title: "System", artifacts: ["WiFi passwords", "Bluetooth pairings", "Notification history", "Keyboard cache"], color: "#06b6d4" },
                     ].map((cat) => (
                       <Grid item xs={12} sm={6} md={4} key={cat.title}>
-                        <Paper sx={{ p: 2, bgcolor: "#0f1024", border: `1px solid ${cat.color}30`, height: "100%" }}>
+                        <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: `1px solid ${cat.color}30`, height: "100%" }}>
                           <Typography sx={{ color: cat.color, fontWeight: 600, mb: 1 }}>{cat.title}</Typography>
                           <List dense sx={{ py: 0 }}>
                             {cat.artifacts.map((a) => (
                               <ListItem key={a} sx={{ py: 0.25 }}>
-                                <ListItemText primary={a} sx={{ "& .MuiListItemText-primary": { color: "grey.400", fontSize: "0.85rem" } }} />
+                                <ListItemText primary={a} sx={{ "& .MuiListItemText-primary": { color: themeColors.textMuted, fontSize: "0.85rem" } }} />
                               </ListItem>
                             ))}
                           </List>
@@ -2393,19 +2600,19 @@ adb pull /sdcard/full_image.gz`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Mobile Forensics Tools</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Mobile Forensics Tools</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Tool</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Platform</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Cost</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Best For</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Tool</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Platform</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Cost</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Best For</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2421,9 +2628,9 @@ adb pull /sdcard/full_image.gz`}
                         ].map(([tool, platform, cost, best]) => (
                           <TableRow key={tool}>
                             <TableCell sx={{ color: "#a5b4fc", fontWeight: 500 }}>{tool}</TableCell>
-                            <TableCell sx={{ color: "grey.400" }}>{platform}</TableCell>
-                            <TableCell sx={{ color: cost === "Free" ? "#4ade80" : "#fbbf24" }}>{cost}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{best}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted }}>{platform}</TableCell>
+                            <TableCell sx={{ color: cost === "Free" ? "#4ade80" : themeColors.secondary }}>{cost}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{best}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2432,9 +2639,9 @@ adb pull /sdcard/full_image.gz`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">SIM Card Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>SIM Card Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2459,23 +2666,21 @@ pySim-read.py -p 0
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 7: Network Forensics */}
-          <TabPanel value={tabValue} index={7}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Network Forensics
+            {/* Network Forensics Section */}
+            <Paper id="network-forensics" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <NetworkCheckIcon /> Network Forensics
               </Typography>
 
-              <Alert severity="info" sx={{ mb: 3 }}>
+              <Alert severity="info" sx={{ mb: 3, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 Network forensics analyzes network traffic to detect intrusions, data exfiltration, and reconstruct attacker activity.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">PCAP Analysis with Wireshark</Typography>
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>PCAP Analysis with Wireshark</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2511,9 +2716,9 @@ Statistics > Endpoints  # All IPs involved`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Command Line PCAP Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Command Line PCAP Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2547,18 +2752,18 @@ mono NetworkMiner.exe capture.pcap
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Detecting Malicious Traffic</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Detecting Malicious Traffic</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Indicator</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Wireshark Filter</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>What to Look For</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Indicator</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Wireshark Filter</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>What to Look For</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2573,8 +2778,8 @@ mono NetworkMiner.exe capture.pcap
                         ].map(([indicator, filter, look]) => (
                           <TableRow key={indicator}>
                             <TableCell sx={{ color: "#f87171", fontWeight: 500 }}>{indicator}</TableCell>
-                            <TableCell sx={{ color: "#fbbf24", fontFamily: "monospace", fontSize: "0.75rem" }}>{filter}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{look}</TableCell>
+                            <TableCell sx={{ color: themeColors.secondary, fontFamily: "monospace", fontSize: "0.75rem" }}>{filter}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{look}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2583,12 +2788,12 @@ mono NetworkMiner.exe capture.pcap
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Flow Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Flow Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     NetFlow/IPFIX provides metadata about connections without full packet capture:
                   </Typography>
                   <CodeBlock
@@ -2619,9 +2824,9 @@ rwfilter --start-date=2024/01/15 --proto=6 --dport=4444 --pass=stdout | rwcut`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Log Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Log Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2651,12 +2856,12 @@ grep -E "(\.\./|\.\.\\\\)" access.log  # Path traversal`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Encrypted Traffic Analysis</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Encrypted Traffic Analysis</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Even with encryption, metadata reveals valuable information:
                   </Typography>
                   <List>
@@ -2668,8 +2873,8 @@ grep -E "(\.\./|\.\.\\\\)" access.log  # Path traversal`}
                       ["ESNI/ECH Detection", "Encrypted SNI may indicate evasion attempts"],
                     ].map(([title, desc]) => (
                       <ListItem key={title}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={title} secondary={desc} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={title} secondary={desc} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" }, "& .MuiListItemText-secondary": { color: themeColors.textMuted } }} />
                       </ListItem>
                     ))}
                   </List>
@@ -2690,23 +2895,21 @@ tshark -r capture.pcap -Y "ssl.handshake.certificate" -T fields -e x509sat.uTF8S
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 8: Malware Analysis */}
-          <TabPanel value={tabValue} index={8}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Malware Analysis
+            {/* Malware Analysis Section */}
+            <Paper id="malware-analysis" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <BugReportIcon /> Malware Analysis
               </Typography>
 
               <Alert severity="error" sx={{ mb: 3 }}>
                 <strong>Safety First:</strong> Always analyze malware in an isolated environment (VM with snapshots, no network, or isolated network).
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Analysis Types</Typography>
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Analysis Types</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
@@ -2716,14 +2919,14 @@ tshark -r capture.pcap -Y "ssl.handshake.certificate" -T fields -e x509sat.uTF8S
                       { title: "Code Analysis", desc: "Deep reverse engineering", items: ["IDA Pro / Ghidra", "Debugger stepping", "Algorithm identification", "Unpacking/deobfuscation", "Crypto analysis"], color: "#8b5cf6" },
                     ].map((type) => (
                       <Grid item xs={12} md={4} key={type.title}>
-                        <Paper sx={{ p: 2, bgcolor: "#0f1024", border: `1px solid ${type.color}30`, height: "100%" }}>
+                        <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: `1px solid ${type.color}30`, height: "100%" }}>
                           <Typography sx={{ color: type.color, fontWeight: 600, mb: 0.5 }}>{type.title}</Typography>
-                          <Typography variant="body2" sx={{ color: "grey.500", mb: 1 }}>{type.desc}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>{type.desc}</Typography>
                           <List dense sx={{ py: 0 }}>
                             {type.items.map((item) => (
                               <ListItem key={item} sx={{ py: 0.25 }}>
                                 <ListItemIcon sx={{ minWidth: 28 }}><CheckCircleIcon sx={{ fontSize: 16, color: type.color }} /></ListItemIcon>
-                                <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.85rem" } }} />
+                                <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0", fontSize: "0.85rem" } }} />
                               </ListItem>
                             ))}
                           </List>
@@ -2734,9 +2937,9 @@ tshark -r capture.pcap -Y "ssl.handshake.certificate" -T fields -e x509sat.uTF8S
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Static Analysis Commands</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Static Analysis Commands</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2778,9 +2981,9 @@ curl -s "https://www.virustotal.com/api/v3/files/<sha256>" -H "x-apikey: $VT_API
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Dynamic Analysis Setup</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Dynamic Analysis Setup</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2823,18 +3026,18 @@ cuckoo web  # View report`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Behavioral Indicators</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Behavioral Indicators</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Category</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Suspicious Behavior</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Detection Method</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Category</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Suspicious Behavior</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Detection Method</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2849,7 +3052,7 @@ cuckoo web  # View report`}
                         ].map(([cat, behavior, detection]) => (
                           <TableRow key={cat}>
                             <TableCell sx={{ color: "#f87171", fontWeight: 500 }}>{cat}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{behavior}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{behavior}</TableCell>
                             <TableCell sx={{ color: "#4ade80" }}>{detection}</TableCell>
                           </TableRow>
                         ))}
@@ -2859,9 +3062,9 @@ cuckoo web  # View report`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Reverse Engineering with Ghidra</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Reverse Engineering with Ghidra</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2897,9 +3100,9 @@ unzip ghidra_*.zip
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">IOC Extraction</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>IOC Extraction</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -2932,23 +3135,51 @@ find ./extracted -type f -exec sha256sum {} \; > hashes.txt`}
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 9: Report Writing */}
-          <TabPanel value={tabValue} index={9}>
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ color: "#14b8a6", mb: 3 }}>
-                Forensic Report Writing
+            {/* Report Writing Section */}
+            <Paper id="report-writing" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DescriptionIcon /> Forensic Report Writing
               </Typography>
 
-              <Alert severity="info" sx={{ mb: 3 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#e2e8f0" }}>
+                  Beginner Report Template (Plain Language)
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  A good forensic report is readable by non-technical leaders and defensible in court. Write with clear
+                  sentences, define terms, and avoid speculation. Every claim must be backed by evidence.
+                </Typography>
+                <List dense>
+                  {[
+                    "Executive Summary: What happened and why it matters (one page).",
+                    "Scope: What systems, users, and time windows were examined.",
+                    "Evidence Handling: Collection steps, hashes, and chain of custody.",
+                    "Findings: Facts supported by artifacts and timelines.",
+                    "Analysis: What the findings imply and how they connect.",
+                    "Limitations: What could not be confirmed and why.",
+                    "Appendix: Logs, hashes, screenshots, and tool output.",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" } }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  Tip: include a short "Evidence Table" listing artifact name, source path, timestamp, and why it matters.
+                  This makes your report easy to validate and improves trust.
+                </Typography>
+              </Paper>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: `${themeColors.primary}15`, color: "#e2e8f0" }}>
                 A forensic report may be used in court. It must be clear, accurate, and defensible.
               </Alert>
 
-              <Accordion defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Report Structure</Typography>
+              <Accordion defaultExpanded sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Report Structure</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List>
@@ -2964,17 +3195,17 @@ find ./extracted -type f -exec sha256sum {} \; > hashes.txt`}
                       ["9. Appendices", "Raw data, full logs, chain of custody forms"],
                     ].map(([section, desc]) => (
                       <ListItem key={section}>
-                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
-                        <ListItemText primary={section} secondary={desc} />
+                        <ListItemIcon><CheckCircleIcon sx={{ color: themeColors.primary }} /></ListItemIcon>
+                        <ListItemText primary={section} secondary={desc} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0" }, "& .MuiListItemText-secondary": { color: themeColors.textMuted } }} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Executive Summary Template</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Executive Summary Template</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -3018,9 +3249,9 @@ RECOMMENDATIONS
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Evidence Documentation</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Evidence Documentation</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock
@@ -3057,12 +3288,12 @@ Verification: Image hash verified against source on 2024-01-15 16:45 UTC`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Writing Technical Findings</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Writing Technical Findings</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Each finding should include: What, When, Where, How (detected), and Supporting Evidence.
                   </Typography>
                   <CodeBlock
@@ -3113,14 +3344,14 @@ characteristic of commodity malware and penetration testing frameworks.`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">Best Practices</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>Best Practices</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024", border: "1px solid #4ade8030" }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: "1px solid #4ade8030" }}>
                         <Typography sx={{ color: "#4ade80", fontWeight: 600, mb: 1 }}>DO</Typography>
                         <List dense>
                           {[
@@ -3135,14 +3366,14 @@ characteristic of commodity malware and penetration testing frameworks.`}
                           ].map((item) => (
                             <ListItem key={item} sx={{ py: 0.25 }}>
                               <ListItemIcon sx={{ minWidth: 28 }}><CheckCircleIcon sx={{ fontSize: 16, color: "#4ade80" }} /></ListItemIcon>
-                              <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.85rem" } }} />
+                              <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0", fontSize: "0.85rem" } }} />
                             </ListItem>
                           ))}
                         </List>
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "#0f1024", border: "1px solid #ef444430" }}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgNested, border: "1px solid #ef444430" }}>
                         <Typography sx={{ color: "#ef4444", fontWeight: 600, mb: 1 }}>DON'T</Typography>
                         <List dense>
                           {[
@@ -3157,7 +3388,7 @@ characteristic of commodity malware and penetration testing frameworks.`}
                           ].map((item) => (
                             <ListItem key={item} sx={{ py: 0.25 }}>
                               <ListItemIcon sx={{ minWidth: 28 }}><CheckCircleIcon sx={{ fontSize: 16, color: "#ef4444" }} /></ListItemIcon>
-                              <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300", fontSize: "0.85rem" } }} />
+                              <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "#e2e8f0", fontSize: "0.85rem" } }} />
                             </ListItem>
                           ))}
                         </List>
@@ -3167,22 +3398,22 @@ characteristic of commodity malware and penetration testing frameworks.`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6">MITRE ATT&CK Mapping</Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested, "&:before": { display: "none" }, mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.primary }} />}>
+                  <Typography variant="h6" sx={{ color: "#e2e8f0" }}>MITRE ATT&CK Mapping</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                     Map findings to MITRE ATT&CK framework for standardized reporting:
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#14b8a6" }}>Tactic</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Technique</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>ID</TableCell>
-                          <TableCell sx={{ color: "#14b8a6" }}>Evidence</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Tactic</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Technique</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>ID</TableCell>
+                          <TableCell sx={{ color: themeColors.primary }}>Evidence</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -3197,9 +3428,9 @@ characteristic of commodity malware and penetration testing frameworks.`}
                         ].map(([tactic, technique, id, evidence]) => (
                           <TableRow key={id}>
                             <TableCell sx={{ color: "#a5b4fc" }}>{tactic}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{technique}</TableCell>
-                            <TableCell sx={{ color: "#fbbf24", fontFamily: "monospace" }}>{id}</TableCell>
-                            <TableCell sx={{ color: "grey.400", fontSize: "0.85rem" }}>{evidence}</TableCell>
+                            <TableCell sx={{ color: "#e2e8f0" }}>{technique}</TableCell>
+                            <TableCell sx={{ color: themeColors.secondary, fontFamily: "monospace" }}>{id}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted, fontSize: "0.85rem" }}>{evidence}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -3207,44 +3438,49 @@ characteristic of commodity malware and penetration testing frameworks.`}
                   </TableContainer>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
-        </Paper>
+            </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            p: 4,
-            mb: 5,
-            borderRadius: 3,
-            border: "1px solid rgba(20, 184, 166, 0.25)",
-            bgcolor: "rgba(20, 184, 166, 0.04)",
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Digital Forensics Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+            {/* Quiz Section */}
+            <Paper
+              id="quiz-section"
+              sx={{
+                p: 4,
+                mb: 4,
+                borderRadius: 2,
+                border: `1px solid ${themeColors.border}`,
+                bgcolor: themeColors.bgCard,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: themeColors.primary }}>
+                <QuizIcon /> Knowledge Check
+              </Typography>
+              <QuizSection
+                questions={quizQuestions}
+                accentColor={QUIZ_ACCENT_COLOR}
+                title="Digital Forensics Knowledge Check"
+                description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                questionsPerQuiz={QUIZ_QUESTION_COUNT}
+              />
+            </Paper>
+          </Grid>
+        </Grid>
 
-        {/* Footer */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#14b8a6", color: "#14b8a6" }}
-          >
-            Back to Learning Hub
-          </Button>
-        </Box>
+        {/* Mobile Drawer */}
+        <Drawer anchor="left" open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} PaperProps={{ sx: { bgcolor: themeColors.bgCard, p: 2, width: 280 } }}>
+          {sidebarNav}
+        </Drawer>
+
+        {/* Mobile FABs */}
+        {isMobile && (
+          <>
+            <Fab color="primary" onClick={() => setMobileNavOpen(true)} sx={{ position: "fixed", bottom: 80, right: 16, bgcolor: themeColors.primary }}>
+              <MenuIcon />
+            </Fab>
+            <Fab size="small" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} sx={{ position: "fixed", bottom: 24, right: 16, bgcolor: themeColors.bgCard }}>
+              <KeyboardArrowUpIcon />
+            </Fab>
+          </>
+        )}
       </Container>
     </Box>
     </LearnPageLayout>

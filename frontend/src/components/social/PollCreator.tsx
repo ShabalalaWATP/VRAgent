@@ -76,6 +76,22 @@ export const PollCreator: React.FC<PollCreatorProps> = ({
       return;
     }
 
+    // Validate option lengths (max 200 chars each)
+    const MAX_OPTION_LENGTH = 200;
+    const tooLongOptions = validOptions.filter((o) => o.trim().length > MAX_OPTION_LENGTH);
+    if (tooLongOptions.length > 0) {
+      setError(`Poll options must be ${MAX_OPTION_LENGTH} characters or less`);
+      return;
+    }
+
+    // Check for duplicate options (case-insensitive)
+    const normalizedOptions = validOptions.map((o) => o.trim().toLowerCase());
+    const uniqueOptions = new Set(normalizedOptions);
+    if (uniqueOptions.size !== normalizedOptions.length) {
+      setError("Poll options must be unique");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 

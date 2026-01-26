@@ -1107,6 +1107,30 @@ const AgenticFuzzerPage: React.FC = () => {
       minHeight: "100vh",
       background: "linear-gradient(135deg, #0a0a0f 0%, #1a0a2e 50%, #0f1a2e 100%)",
     }}>
+      {/* Back to Security Fuzzer Link */}
+      <Button
+        component={Link}
+        to="/dynamic/fuzzer"
+        startIcon={<ArrowBackIcon />}
+        sx={{
+          mb: 3,
+          color: "#00ffff",
+          borderColor: "#00ffff",
+          border: "1px solid",
+          fontFamily: "'Orbitron', monospace",
+          letterSpacing: "1px",
+          px: 3,
+          py: 1,
+          "&:hover": {
+            background: "rgba(0, 255, 255, 0.1)",
+            borderColor: "#ff00ff",
+            boxShadow: "0 0 20px rgba(0, 255, 255, 0.5)",
+          },
+        }}
+      >
+        Back to Security Fuzzer
+      </Button>
+
       {/* Cyberpunk Header Banner */}
       <Box
         sx={{
@@ -1158,21 +1182,6 @@ const AgenticFuzzerPage: React.FC = () => {
         <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 40, height: 40, borderBottom: "3px solid #00ffff", borderRight: "3px solid #00ffff" }} />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 3, position: "relative", zIndex: 1 }}>
-          <IconButton 
-            component={Link} 
-            to="/network/fuzzer"
-            sx={{
-              color: "#00ffff",
-              border: "1px solid #00ffff",
-              "&:hover": {
-                background: "rgba(0, 255, 255, 0.1)",
-                boxShadow: "0 0 20px rgba(0, 255, 255, 0.5)",
-              },
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          
           {/* Hexagonal Icon Container */}
           <Box
             sx={{

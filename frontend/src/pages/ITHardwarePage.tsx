@@ -59,6 +59,8 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import QuizIcon from "@mui/icons-material/Quiz";
 import SchoolIcon from "@mui/icons-material/School";
 import BugReportIcon from "@mui/icons-material/BugReport";
+import SecurityIcon from "@mui/icons-material/Security";
+import LaptopIcon from "@mui/icons-material/Laptop";
 import { Link, useNavigate } from "react-router-dom";
 
 const ACCENT_COLOR = "#8b5cf6";
@@ -692,11 +694,14 @@ const ITHardwarePage: React.FC = () => {
     { id: "storage", label: "Storage", icon: <StorageIcon /> },
     { id: "psu", label: "PSU", icon: <PowerIcon /> },
     { id: "gpu", label: "GPU", icon: <SpeedIcon /> },
+    { id: "cooling", label: "Cooling Systems", icon: <ThermostatIcon /> },
     { id: "video-cables", label: "Video Cables", icon: <SettingsInputHdmiIcon /> },
     { id: "usb-cables", label: "USB Cables", icon: <UsbIcon /> },
     { id: "internal-cables", label: "Internal Cables", icon: <CableIcon /> },
     { id: "network-cables", label: "Network Cables", icon: <RouterIcon /> },
+    { id: "laptop-hardware", label: "Laptop Hardware", icon: <LaptopIcon /> },
     { id: "peripherals", label: "Peripherals", icon: <MonitorIcon /> },
+    { id: "security-hardware", label: "Security Hardware", icon: <SecurityIcon /> },
     { id: "troubleshooting", label: "Troubleshooting", icon: <BugReportIcon /> },
     { id: "maintenance", label: "Maintenance", icon: <ThermostatIcon /> },
     { id: "comptia", label: "CompTIA A+", icon: <BuildIcon /> },
@@ -1069,6 +1074,140 @@ const ITHardwarePage: React.FC = () => {
           </Grid>
         </Paper>
 
+        {/* Beginner's Analogy Section */}
+        <Alert severity="success" icon={<SchoolIcon />} sx={{ mb: 4 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            🏠 Think of Your Computer Like a House
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Understanding computer hardware is much easier when you relate it to things you already know. 
+            Here's a helpful analogy that makes the complex world of PC components click:
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>CPU (Processor)</strong> = The homeowner's brain, making all the decisions and doing the thinking
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>RAM (Memory)</strong> = Your desk workspace - the bigger it is, the more projects you can have open at once
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Storage (SSD/HDD)</strong> = Filing cabinets and closets where you keep everything long-term
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Motherboard</strong> = The house's foundation and walls that connect all the rooms together
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>PSU (Power Supply)</strong> = The electrical panel that brings power to everything in the house
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>GPU (Graphics Card)</strong> = A specialized art studio for creating and displaying visuals
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Cables</strong> = The plumbing and electrical wiring that connects everything
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Case</strong> = The actual walls and roof of the house protecting everything inside
+              </Typography>
+            </Grid>
+          </Grid>
+        </Alert>
+
+        {/* Why Hardware Knowledge Matters */}
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "#3b82f6" }}>
+            🔧 Why Hardware Knowledge Matters
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Whether you're pursuing an IT career, building your own gaming PC, or just want to understand 
+            what's happening inside your computer, hardware knowledge is invaluable. It's the foundation 
+            that makes everything else in computing possible.
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, bgcolor: "background.paper", borderRadius: 2, height: "100%", border: "1px solid", borderColor: alpha("#3b82f6", 0.2) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6", mb: 2 }}>💼 Career Benefits</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>IT Support & Help Desk:</strong> Troubleshoot and fix hardware issues for users, 
+                  from "my computer won't turn on" to "my USB ports stopped working."
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>System Administration:</strong> Spec out new workstations, plan hardware upgrades, 
+                  and manage server infrastructure.
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Security Professional:</strong> Understand hardware vulnerabilities, physical security 
+                  risks, and how attackers might exploit hardware (TPM, BIOS attacks, BadUSB).
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, bgcolor: "background.paper", borderRadius: 2, height: "100%", border: "1px solid", borderColor: alpha("#22c55e", 0.2) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#22c55e", mb: 2 }}>💰 Money Savings</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>DIY Repairs:</strong> Replacing a failed hard drive or adding RAM yourself saves 
+                  hundreds versus paying a repair shop or buying new.
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>Informed Purchases:</strong> Don't fall for marketing hype. Know what specs actually 
+                  matter for your use case and avoid overpaying.
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Extended Lifespan:</strong> Proper maintenance and targeted upgrades can keep a 
+                  computer running smoothly for years longer than expected.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, bgcolor: "background.paper", borderRadius: 2, height: "100%", border: "1px solid", borderColor: alpha("#f59e0b", 0.2) }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#f59e0b", mb: 2 }}>🎮 Personal Projects</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>Custom PC Builds:</strong> Build a gaming rig, home server, NAS, or workstation 
+                  tailored exactly to your needs and budget.
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>Home Lab:</strong> Set up virtualization servers, practice networking, or create 
+                  a cybersecurity testing environment.
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Tinkering & Learning:</strong> Old computers become learning platforms. Practice 
+                  upgrades, test configurations, and experiment without risk.
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Getting Started Tips */}
+        <Alert severity="info" sx={{ mb: 4 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            🚀 Getting Started Tips for Beginners
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Hardware can seem intimidating at first, but here's the secret: <strong>it's mostly just plugging 
+            things in correctly</strong>. Modern components are designed with foolproof connectors that only 
+            fit one way. Start simple and build your confidence:
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>1. Look Inside:</strong> Open up an old computer (or ask permission to look at someone's). 
+            Identify the main components. They're bigger and more distinct than you might think.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>2. Watch Build Videos:</strong> Watching someone build a PC on YouTube demystifies the process. 
+            Channels like Linus Tech Tips, JayzTwoCents, and Gamers Nexus are great resources.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>3. Hands-On Practice:</strong> The best way to learn is by doing. Upgrade RAM, install a new 
+            SSD, or replace thermal paste. Start with low-risk tasks on older machines.
+          </Typography>
+          <Typography variant="body2">
+            <strong>4. Use This Guide:</strong> Scroll through each section, focus on what interests you, and 
+            take the quiz at the end. Return to reference specific topics when you need them.
+          </Typography>
+        </Alert>
+
         {/* ========== CORE COMPONENTS SECTION ========== */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
           <Divider sx={{ flex: 1 }} />
@@ -1089,6 +1228,75 @@ const ITHardwarePage: React.FC = () => {
               The "brain" of the computer - executes instructions, performs calculations, and coordinates all hardware operations. 
               Modern CPUs contain billions of transistors on a silicon die.
             </Alert>
+
+            {/* Beginner Explanation */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, border: "1px solid", borderColor: alpha("#ef4444", 0.2) }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+                🧠 Understanding CPUs: The Brain Analogy
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Imagine your CPU as the brain of a very fast mathematician who can only do one simple calculation at a time, 
+                but can do <strong>billions of these calculations per second</strong>. Everything your computer does - from displaying 
+                this webpage to playing a video game - ultimately comes down to the CPU executing billions of tiny instructions.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>What does "3.5 GHz" actually mean?</strong> It means the CPU's internal clock "ticks" 3.5 billion times 
+                per second. On each tick, the CPU can do work - fetch data, add numbers, compare values, etc. Higher GHz generally 
+                means faster single-task performance, but it's not the only factor.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Why do cores matter?</strong> Think of cores as separate brains that can work independently. A 4-core CPU 
+                is like having 4 mathematicians working at 4 different desks. They can each work on different problems simultaneously, 
+                which is why more cores help with multitasking and parallel workloads (like video editing or running multiple VMs).
+              </Typography>
+              <Typography variant="body2">
+                <strong>The catch:</strong> Not all tasks can be split across multiple cores. Some things must happen in sequence 
+                (like following a recipe step-by-step). This is why games often benefit more from faster single-core performance 
+                than from having tons of cores.
+              </Typography>
+            </Paper>
+
+            {/* How CPUs Actually Work */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>How CPUs Execute Instructions</Typography>
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.02), borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Every CPU follows a basic cycle called <strong>Fetch-Decode-Execute</strong>:
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>1. Fetch</Typography>
+                    <Typography variant="body2">
+                      The CPU grabs the next instruction from memory (RAM). Instructions are just numbers that 
+                      the CPU interprets as commands like "add these two values" or "store this result."
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>2. Decode</Typography>
+                    <Typography variant="body2">
+                      The CPU figures out what the instruction means. Different parts of the instruction tell it 
+                      what operation to do and what data to use.
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>3. Execute</Typography>
+                    <Typography variant="body2">
+                      The CPU performs the operation - arithmetic, memory access, comparison, etc. The result 
+                      might be stored back to memory or used immediately for the next instruction.
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+              <Typography variant="body2" sx={{ mt: 2 }}>
+                Modern CPUs use <strong>pipelining</strong> to overlap these stages - while one instruction is executing, 
+                the next one is being decoded, and another is being fetched. This is like an assembly line, dramatically 
+                increasing throughput.
+              </Typography>
+            </Paper>
             
             {/* CPU Architecture Overview */}
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 2 }}>CPU Architecture Components</Typography>
@@ -2284,6 +2492,327 @@ const ITHardwarePage: React.FC = () => {
         {/* ========== CABLES & CONNECTORS SECTION ========== */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
           <Divider sx={{ flex: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>COOLING & THERMAL MANAGEMENT</Typography>
+          <Divider sx={{ flex: 1 }} />
+        </Box>
+
+        {/* Cooling Systems */}
+        <Accordion id="cooling" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#06b6d4", 0.05) }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <ThermostatIcon sx={{ color: "#06b6d4" }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#06b6d4" }}>Cooling Systems & Thermal Management</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Heat is the enemy of computer components. Every electrical component generates heat, and if not properly 
+              dissipated, it leads to thermal throttling, instability, and premature failure. Effective cooling is 
+              essential for performance and longevity.
+            </Alert>
+
+            {/* Why Cooling Matters */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+                🌡️ Why Cooling Matters: The Pizza Oven Analogy
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Think of your CPU like a tiny pizza oven that's constantly running. The oven (CPU) does useful work, 
+                but it produces a lot of heat as a byproduct. If you don't vent that heat, the oven gets hotter and 
+                hotter until it starts burning everything (thermal throttling) or shuts down to protect itself.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>What happens when components overheat?</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Thermal Throttling:</strong> The CPU/GPU automatically reduces speed to generate less heat. 
+                Performance drops, but damage is prevented.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>System Instability:</strong> Random crashes, blue screens, and freezes often trace back to 
+                overheating components.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Reduced Lifespan:</strong> Constant high temperatures accelerate component degradation 
+                through electromigration and other effects.
+              </Typography>
+              <Typography variant="body2">
+                • <strong>Emergency Shutdown:</strong> At critical temps (usually 100-105°C for CPUs), systems 
+                will power off immediately to prevent permanent damage.
+              </Typography>
+            </Paper>
+
+            {/* Cooling Types */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Types of CPU Coolers</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#06b6d4", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Stock Coolers</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Included with most CPUs</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Free with CPU purchase</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Adequate for stock speeds</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Easy installation</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>❌ Limited cooling capacity</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>❌ Often louder under load</Typography>
+                  <Typography variant="body2">❌ Not suitable for overclocking</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#06b6d4", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Tower Air Coolers</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Heat pipes + heatsink + fan(s)</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Excellent performance/price</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ No pump failure risk</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Often very quiet</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Good for overclocking</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>❌ Large, may block RAM</Typography>
+                  <Typography variant="body2">❌ Heavy (check case support)</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#06b6d4", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>AIO Liquid Coolers</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Closed-loop water cooling</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Excellent cooling capacity</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Compact CPU block</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Great for overclocking</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>✅ Aesthetic appeal</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>❌ Pump failure risk</Typography>
+                  <Typography variant="body2">❌ More expensive</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* How Air Cooling Works */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>How Air Cooling Works</Typography>
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.02), borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Air cooling relies on three principles: <strong>conduction, convection, and thermal mass</strong>.
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>1. Contact</Typography>
+                  <Typography variant="body2">
+                    The cooler's base plate makes direct contact with the CPU's IHS (Integrated Heat Spreader). 
+                    Thermal paste fills microscopic gaps for better heat transfer.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>2. Heat Pipes</Typography>
+                  <Typography variant="body2">
+                    Sealed copper pipes containing fluid that evaporates at the hot end and condenses at the cold 
+                    end, rapidly moving heat away from the CPU.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>3. Heatsink</Typography>
+                  <Typography variant="body2">
+                    Aluminum or copper fins provide massive surface area for heat to dissipate into the 
+                    surrounding air through convection.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>4. Fans</Typography>
+                  <Typography variant="body2">
+                    Fans force air through the heatsink fins, replacing warm air with cool air and dramatically 
+                    improving heat dissipation.
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* AIO Liquid Cooling Explained */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>How AIO Liquid Cooling Works</Typography>
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.02), borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                All-In-One (AIO) liquid coolers use water's superior heat capacity to move heat from the CPU to a 
+                remote radiator:
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>CPU Block</Typography>
+                  <Typography variant="body2">
+                    A copper plate contacts the CPU and contains channels where coolant absorbs heat. 
+                    An integrated pump circulates the liquid.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Tubes</Typography>
+                  <Typography variant="body2">
+                    Flexible rubber or braided tubes carry warm coolant to the radiator and return cool 
+                    coolant to the CPU block.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Radiator</Typography>
+                  <Typography variant="body2">
+                    Available in 120mm, 240mm, 280mm, 360mm, etc. Larger radiators have more surface area 
+                    for better heat dissipation.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Fans</Typography>
+                  <Typography variant="body2">
+                    Mounted on the radiator to pull or push air through the fins. Can be configured as 
+                    intake or exhaust depending on case layout.
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Radiator Sizes */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>AIO Radiator Size Guide</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#06b6d4", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Radiator Size</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Fan Configuration</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Cooling Capacity</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { size: "120mm", fans: "1x 120mm", cap: "~150W TDP", best: "ITX builds, budget AIOs" },
+                    { size: "240mm", fans: "2x 120mm", cap: "~200W TDP", best: "Mainstream CPUs (i5, R5)" },
+                    { size: "280mm", fans: "2x 140mm", cap: "~250W TDP", best: "High-end CPUs, quieter" },
+                    { size: "360mm", fans: "3x 120mm", cap: "~300W TDP", best: "i7/i9, R7/R9, overclocking" },
+                    { size: "420mm", fans: "3x 140mm", cap: "~350W TDP", best: "HEDT, extreme overclocking" },
+                  ].map((row) => (
+                    <TableRow key={row.size}>
+                      <TableCell sx={{ fontWeight: 600, color: "#06b6d4" }}>{row.size}</TableCell>
+                      <TableCell>{row.fans}</TableCell>
+                      <TableCell>{row.cap}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.best}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Thermal Paste */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Thermal Paste Guide</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>What It Does</Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    Even with seemingly flat surfaces, microscopic imperfections create tiny air gaps between the 
+                    CPU and cooler. Air is a terrible thermal conductor, so thermal paste fills these gaps with a 
+                    thermally conductive compound, improving heat transfer by up to 10-15°C.
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Types of Thermal Paste</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Ceramic/Silicon:</strong> Non-conductive, safe, moderate performance
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Metal-based:</strong> Best performance, electrically conductive (risky)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Carbon-based:</strong> Good performance, non-conductive, easy cleanup
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Application Methods</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Pea Method:</strong> Small pea-sized dot in center. Pressure spreads it evenly.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>X Method:</strong> Thin X pattern corner-to-corner. Good for larger CPUs.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Spread Method:</strong> Manually spread thin layer. Risk of air bubbles.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    • <strong>Line Method:</strong> Thin vertical line. Works well for rectangular dies.
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Popular Brands</Typography>
+                  <Typography variant="body2">
+                    Noctua NT-H1, Thermal Grizzly Kryonaut, Arctic MX-4, Cooler Master MasterGel
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Case Airflow */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Case Airflow Best Practices</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Positive Pressure</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    More intake fans than exhaust. Air enters through filtered intakes, exits through gaps. 
+                    <strong> Reduces dust accumulation</strong> since unfiltered gaps push air out, not in.
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Example:</strong> 3 front intake, 1 rear exhaust
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Negative Pressure</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    More exhaust than intake. Pulls air through any opening. <strong>Better cooling</strong> 
+                    but dust enters unfiltered openings.
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Example:</strong> 1 rear + 2 top exhaust, 1 front intake
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>Balanced/Neutral</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Equal intake and exhaust. Good airflow but still allows dust through unfiltered gaps. 
+                    <strong> Common default configuration.</strong>
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Example:</strong> 2 front intake, 2 rear/top exhaust
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Fan Specifications */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Understanding Fan Specifications</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#06b6d4", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Specification</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>What It Means</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Higher Value Means</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { spec: "RPM (Speed)", meaning: "Revolutions per minute", higher: "More airflow but more noise" },
+                    { spec: "CFM (Airflow)", meaning: "Cubic feet per minute of air moved", higher: "Better for case fans, open heatsinks" },
+                    { spec: "Static Pressure (mmH₂O)", meaning: "Force of air pushed through resistance", higher: "Better for radiators, dense heatsinks" },
+                    { spec: "dB(A) (Noise)", meaning: "Sound level at max speed", higher: "Louder (look for <25dB for quiet)" },
+                    { spec: "PWM", meaning: "4-pin, speed controlled by motherboard", higher: "Dynamic speed based on temp" },
+                    { spec: "DC", meaning: "3-pin, speed controlled by voltage", higher: "Simpler but less precise control" },
+                  ].map((row) => (
+                    <TableRow key={row.spec}>
+                      <TableCell sx={{ fontWeight: 600, color: "#06b6d4" }}>{row.spec}</TableCell>
+                      <TableCell>{row.meaning}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.higher}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* ========== CABLES & CONNECTORS SECTION ========== */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+          <Divider sx={{ flex: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>CABLES & CONNECTORS</Typography>
           <Divider sx={{ flex: 1 }} />
         </Box>
@@ -2566,24 +3095,215 @@ const ITHardwarePage: React.FC = () => {
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#f97316", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <CableIcon sx={{ color: "#f97316" }} />
-              <Typography variant="h6" sx={{ fontWeight: 700, color: "#f97316" }}>Internal Cables & Power</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#f97316" }}>Internal Cables & Power Connectors</Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={2}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Internal cables connect your components inside the case. Understanding these cables is essential 
+              for building PCs, upgrading hardware, and troubleshooting power or connectivity issues.
+            </Alert>
+
+            {/* Beginner Guide */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#f97316", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f97316" }}>
+                🔌 Internal Cables: The Nervous System
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Think of internal cables as your PC's nervous system. Just like nerves carry signals and blood 
+                vessels carry nutrients throughout your body, internal cables carry <strong>data</strong> (commands 
+                and information) and <strong>power</strong> (electricity) to every component.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Good news for beginners:</strong> Modern connectors are designed to only fit one way! 
+                You literally cannot plug most cables in wrong - the shapes, keying, and pin layouts prevent it. 
+                If it doesn't slide in smoothly, don't force it - you probably have it backwards or it's the 
+                wrong connector.
+              </Typography>
+              <Typography variant="body2">
+                <strong>Exception:</strong> Front panel connectors (power button, LED, etc.) are tiny individual 
+                pins that require checking your motherboard manual. These are the trickiest part of any PC build, 
+                but getting them wrong just means buttons/lights won't work - it won't damage anything.
+              </Typography>
+            </Paper>
+
+            {/* Power Cables */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Power Cables (From PSU)</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#f97316", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Connector</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Pins</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Connects To</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Power Rating</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { conn: "24-pin ATX", pins: "24 (20+4)", to: "Motherboard main power", power: "Up to 300W", notes: "Required for all builds, clips in firmly" },
+                    { conn: "8-pin EPS/CPU", pins: "8 (4+4)", to: "CPU power (near socket)", power: "~300W", notes: "Required for CPU, some boards need 2" },
+                    { conn: "6-pin PCIe", pins: "6", to: "Graphics card", power: "75W", notes: "Budget/mid GPUs, one cable often" },
+                    { conn: "8-pin PCIe", pins: "8 (6+2)", to: "Graphics card", power: "150W", notes: "High-end GPUs, may need multiple" },
+                    { conn: "12VHPWR", pins: "16 (12+4)", to: "RTX 40-series GPUs", power: "Up to 600W", notes: "New standard, includes sense pins" },
+                    { conn: "SATA Power", pins: "15", to: "Storage, fans, RGB", power: "~55W total", notes: "L-shaped, don't force orientation" },
+                    { conn: "Molex 4-pin", pins: "4", to: "Legacy devices", power: "~150W", notes: "Old standard, adapters available" },
+                    { conn: "Floppy 4-pin", pins: "4 (small)", to: "Fan controllers, some cards", power: "~10W", notes: "Rare, small Berg connector" },
+                  ].map((row) => (
+                    <TableRow key={row.conn}>
+                      <TableCell sx={{ fontWeight: 600, color: "#f97316" }}>{row.conn}</TableCell>
+                      <TableCell>{row.pins}</TableCell>
+                      <TableCell>{row.to}</TableCell>
+                      <TableCell>{row.power}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.notes}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Data Cables */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Data Cables</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#f97316" }}>Data Cables</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>SATA</strong> - Storage drives (HDD/SSD), 6 Gbps</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>M.2</strong> - NVMe SSDs, direct motherboard slot</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>Front Panel</strong> - Power/Reset buttons, LEDs, USB</Typography>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>SATA Data Cables</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>What:</strong> Flat cables with L-shaped connectors connecting storage drives to motherboard.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Speed:</strong> SATA III = 6 Gbps (~550 MB/s practical max)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Length:</strong> Typically 30-50cm, don't exceed 1 meter.
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Tip:</strong> Look for cables with metal latches for secure connections. Straight and 
+                    90-degree angled ends available for different case layouts.
+                  </Typography>
+                </Paper>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#f97316" }}>Power Cables</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>24-pin ATX</strong> - Main motherboard power</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>8-pin EPS</strong> - CPU power (4+4 pin)</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>PCIe 6/8-pin</strong> - GPU power</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>• <strong>SATA Power</strong> - Storage drives</Typography>
-                <Typography variant="body2">• <strong>Molex</strong> - Legacy peripherals, fans</Typography>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>Front Panel Headers</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>What:</strong> Tiny cables connecting case buttons/LEDs to motherboard.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Includes:</strong> Power SW, Reset SW, HDD LED, Power LED (+/-)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Polarity:</strong> Switches don't care, LEDs do (check + and - labels).
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Tip:</strong> Consult motherboard manual for exact layout. Many boards include a 
+                    Q-connector to make this easier.
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* USB Headers */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Internal USB Headers</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#f97316", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Header Type</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Pins</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>USB Version</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Speed</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Common Uses</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { header: "USB 2.0 Header", pins: "9-pin (10 with key)", ver: "USB 2.0", speed: "480 Mbps", use: "Front USB 2.0 ports, card readers, RGB controllers" },
+                    { header: "USB 3.0 Header", pins: "19-pin (20 with key)", ver: "USB 3.2 Gen 1", speed: "5 Gbps", use: "Front USB 3.0 ports (blue internal)" },
+                    { header: "USB 3.1 Header", pins: "20-pin (Key-A)", ver: "USB 3.2 Gen 2", speed: "10 Gbps", use: "Front USB 3.1 ports, newer cases" },
+                    { header: "USB-C Header", pins: "20-pin (Key-A)", ver: "USB 3.2 Gen 2", speed: "10 Gbps", use: "Front USB-C ports, may need adapter" },
+                  ].map((row) => (
+                    <TableRow key={row.header}>
+                      <TableCell sx={{ fontWeight: 600, color: "#f97316" }}>{row.header}</TableCell>
+                      <TableCell>{row.pins}</TableCell>
+                      <TableCell>{row.ver}</TableCell>
+                      <TableCell>{row.speed}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Fan and RGB Headers */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Fan & RGB Headers</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>Fan Headers</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>3-pin DC:</strong> Speed controlled by voltage. Less precise, always-on or stepped.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>4-pin PWM:</strong> Speed controlled by pulse width modulation. Precise temp-based control.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>CPU_FAN:</strong> Dedicated header for CPU cooler. System may not boot without it.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>SYS_FAN:</strong> For case fans. Usually multiple available.
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Pump Header:</strong> For AIO pumps. Runs at full speed or has special curve.
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>RGB Headers</Typography>
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    <strong>12V RGB and 5V ARGB are NOT compatible!</strong> Connecting to wrong header can damage LEDs.
+                  </Alert>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>12V RGB (4-pin):</strong> All LEDs same color. Pin order: 12V-G-R-B
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>5V ARGB (3-pin):</strong> Individual LED control. Pin order: 5V-D-GND (blank pin)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Tip:</strong> Count pins and check voltage before connecting. 4-pin = 12V, 3-pin = 5V
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Audio Headers */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Audio & Other Headers</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>HD Audio Header</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>9-pin header for front panel audio jacks.</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>HD Audio = modern standard (AAFP header)</Typography>
+                  <Typography variant="body2">AC'97 = legacy (same connector, different pinout)</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>TPM Header</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>For discrete TPM 2.0 modules.</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>Most modern CPUs have firmware TPM (fTPM).</Typography>
+                  <Typography variant="body2">Required for Windows 11 and BitLocker.</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f97316", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>Speaker Header</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>4-pin for case speaker (beep codes).</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>Useful for POST diagnostics.</Typography>
+                  <Typography variant="body2">Many cases no longer include the speaker.</Typography>
+                </Paper>
               </Grid>
             </Grid>
           </AccordionDetails>
@@ -2594,35 +3314,463 @@ const ITHardwarePage: React.FC = () => {
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#3b82f6", 0.05) }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <RouterIcon sx={{ color: "#3b82f6" }} />
-              <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6" }}>Network Cables</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6" }}>Network Cables & Connectors</Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Network cables are the backbone of wired connectivity. Understanding the differences between cable 
+              categories, connector types, and when to use wired vs wireless is essential for IT professionals.
+            </Alert>
+
+            {/* Beginner Guide */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                🌐 Network Cables: The Highway System
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Think of network cables as highways for data. Just like highways have different lane counts and 
+                speed limits, network cables have different capacities. Cat5e is like a two-lane road, Cat6 is a 
+                four-lane highway, and fiber optic is a high-speed rail system.
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Why wired over wireless?</strong> While WiFi is convenient, Ethernet cables offer:
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>• <strong>Lower Latency:</strong> Critical for gaming and real-time applications</Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>• <strong>Consistent Speed:</strong> No interference from neighbors, microwaves, or walls</Typography>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>• <strong>More Secure:</strong> Physical access required to intercept traffic</Typography>
+              <Typography variant="body2">• <strong>Higher Bandwidth:</strong> Multi-gigabit speeds readily achievable</Typography>
+            </Paper>
+
+            {/* Ethernet Cable Categories */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Ethernet Cable Categories</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
                     <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Speed</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Max Speed</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Max Length</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Use Case</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Frequency</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Shielding</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best Use Case</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {[
-                    { cat: "Cat 5e", speed: "1 Gbps", len: "100m", use: "Basic networking" },
-                    { cat: "Cat 6", speed: "10 Gbps", len: "55m (10G)", use: "Standard enterprise" },
-                    { cat: "Cat 6a", speed: "10 Gbps", len: "100m", use: "PoE, data centers" },
-                    { cat: "Cat 7", speed: "10 Gbps", len: "100m", use: "Shielded, interference" },
-                    { cat: "Cat 8", speed: "25-40 Gbps", len: "30m", use: "Data centers" },
-                    { cat: "Fiber (MM)", speed: "10+ Gbps", len: "550m", use: "Building backbone" },
-                    { cat: "Fiber (SM)", speed: "100+ Gbps", len: "10+ km", use: "Long distance" },
+                    { cat: "Cat 5", speed: "100 Mbps", len: "100m", freq: "100 MHz", shield: "UTP", use: "Legacy, avoid for new installs" },
+                    { cat: "Cat 5e", speed: "1 Gbps", len: "100m", freq: "100 MHz", shield: "UTP", use: "Home networks, basic office" },
+                    { cat: "Cat 6", speed: "10 Gbps", len: "55m (10G) / 100m (1G)", freq: "250 MHz", shield: "UTP/STP", use: "Modern standard, most installs" },
+                    { cat: "Cat 6a", speed: "10 Gbps", len: "100m", freq: "500 MHz", shield: "STP", use: "PoE, data centers, professional" },
+                    { cat: "Cat 7", speed: "10 Gbps", len: "100m", freq: "600 MHz", shield: "S/FTP", use: "High-interference environments" },
+                    { cat: "Cat 7a", speed: "10 Gbps", len: "100m", freq: "1000 MHz", shield: "S/FTP", use: "Future-proofing, AV installs" },
+                    { cat: "Cat 8", speed: "25-40 Gbps", len: "30m", freq: "2000 MHz", shield: "S/FTP", use: "Data centers, server rooms" },
                   ].map((row) => (
                     <TableRow key={row.cat}>
                       <TableCell sx={{ fontWeight: 600, color: "#3b82f6" }}>{row.cat}</TableCell>
                       <TableCell>{row.speed}</TableCell>
                       <TableCell>{row.len}</TableCell>
+                      <TableCell>{row.freq}</TableCell>
+                      <TableCell>{row.shield}</TableCell>
                       <TableCell sx={{ fontSize: "0.85rem" }}>{row.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Shielding Types */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Cable Shielding Types</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#3b82f6", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>UTP</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Unshielded Twisted Pair</Typography>
+                  <Typography variant="body2">Most common, cheapest. Fine for most home/office uses.</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#3b82f6", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>STP</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Shielded Twisted Pair</Typography>
+                  <Typography variant="body2">Overall shield. Better EMI protection.</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#3b82f6", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>F/UTP</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Foil over unshielded pairs</Typography>
+                  <Typography variant="body2">Overall foil shield, good PoE performance.</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 2, border: "2px solid", borderColor: alpha("#3b82f6", 0.3), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>S/FTP</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Shielded + Foiled pairs</Typography>
+                  <Typography variant="body2">Best protection, Cat 7/8 standard. More expensive, stiffer.</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Connectors */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Network Connectors</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>RJ-45 (8P8C)</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    The standard Ethernet connector. 8 pins, 8 contacts. Used for Cat5e through Cat8.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>T568A/T568B:</strong> Wiring standards (most use T568B)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Straight-through:</strong> Same standard both ends (PC to switch)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Crossover:</strong> Different standards each end (PC to PC, legacy)
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Other Network Connectors</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>RJ-11:</strong> 6P2C/6P4C, phone lines, DSL modems
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>LC/SC/ST:</strong> Fiber optic connectors (different form factors)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>BNC:</strong> Coaxial, legacy networking (10BASE2)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>F-Type:</strong> Coaxial for cable internet, TV
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Fiber Optic */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Fiber Optic Cables</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Core Size</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Max Distance</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Speed</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Use Case</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { type: "Multi-Mode (OM1)", core: "62.5μm", dist: "275m (1G)", speed: "1 Gbps", use: "Legacy, short runs" },
+                    { type: "Multi-Mode (OM3)", core: "50μm", dist: "300m (10G)", speed: "10-40 Gbps", use: "Building backbone" },
+                    { type: "Multi-Mode (OM4)", core: "50μm", dist: "400m (10G)", speed: "10-100 Gbps", use: "Data center" },
+                    { type: "Multi-Mode (OM5)", core: "50μm", dist: "440m (10G)", speed: "100+ Gbps", use: "High-density, SWDM" },
+                    { type: "Single-Mode (OS1)", core: "9μm", dist: "10km", speed: "100+ Gbps", use: "Campus, long haul" },
+                    { type: "Single-Mode (OS2)", core: "9μm", dist: "200km", speed: "100+ Gbps", use: "Telecom, WAN" },
+                  ].map((row) => (
+                    <TableRow key={row.type}>
+                      <TableCell sx={{ fontWeight: 600, color: "#3b82f6" }}>{row.type}</TableCell>
+                      <TableCell>{row.core}</TableCell>
+                      <TableCell>{row.dist}</TableCell>
+                      <TableCell>{row.speed}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* PoE */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Power over Ethernet (PoE)</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>PoE Standards</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>PoE (802.3af):</strong> 15.4W at source, 12.95W at device
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>PoE+ (802.3at):</strong> 30W at source, 25.5W at device
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>PoE++ Type 3 (802.3bt):</strong> 60W at source, 51W at device
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>PoE++ Type 4 (802.3bt):</strong> 100W at source, 71W at device
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Common PoE Devices</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>IP Cameras:</strong> Simplifies installation, one cable for data + power
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Wireless Access Points:</strong> Mount anywhere with Ethernet
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>VoIP Phones:</strong> No separate power adapter needed
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>IoT Sensors:</strong> Lighting controllers, environmental sensors
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* ========== PERIPHERALS SECTION ========== */}
+        <Box id="peripherals" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+          <Divider sx={{ flex: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>MOBILE & LAPTOP HARDWARE</Typography>
+          <Divider sx={{ flex: 1 }} />
+        </Box>
+
+        {/* Laptop Hardware */}
+        <Accordion id="laptop-hardware" sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#8b5cf6", 0.05) }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <ComputerIcon sx={{ color: "#8b5cf6" }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#8b5cf6" }}>Laptop & Mobile Hardware</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Laptops use specialized, compact versions of desktop components. Understanding laptop hardware is 
+              essential for mobile device support, repairs, and making informed purchasing decisions. Many components 
+              are soldered and non-upgradeable in modern thin laptops.
+            </Alert>
+
+            {/* Key Differences */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                💻 Desktop vs Laptop: Key Differences
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Laptops face unique challenges: limited space, battery power constraints, and thermal limitations. 
+                These constraints drive different design choices than desktops.
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Space & Form Factor</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>SO-DIMM RAM:</strong> ~½ the size of desktop DIMM modules
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>M.2 Storage:</strong> Primary storage, no room for 2.5" drives in thin laptops
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Integrated GPU:</strong> Most laptops use iGPU; gaming laptops add discrete GPU
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Custom Motherboard:</strong> Unique per model, no standardization
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Power & Thermal</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Lower TDP CPUs:</strong> 15W-65W vs 65-250W desktop
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Aggressive Throttling:</strong> Heat builds up faster, more frequent throttling
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Battery Balancing:</strong> Performance vs battery life tradeoffs
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Shared Heatpipe:</strong> CPU and GPU often share cooling system
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Laptop CPU Types */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Laptop CPU Naming Conventions</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Suffix</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Brand</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>TDP Range</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Target Use</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { suffix: "U", brand: "Intel/AMD", tdp: "15-28W", use: "Ultrabooks, thin laptops, best battery life" },
+                    { suffix: "P", brand: "Intel", tdp: "28W", use: "Performance thin laptops, balanced" },
+                    { suffix: "H", brand: "Intel/AMD", tdp: "35-45W", use: "Gaming laptops, workstations" },
+                    { suffix: "HX", brand: "Intel/AMD", tdp: "55-65W", use: "Desktop replacement, maximum performance" },
+                    { suffix: "HS", brand: "AMD", tdp: "35W", use: "Thin gaming laptops, efficiency" },
+                    { suffix: "HK", brand: "Intel", tdp: "45W+", use: "Unlocked for overclocking (rare)" },
+                    { suffix: "G", brand: "Intel", tdp: "Various", use: "With integrated Iris graphics" },
+                  ].map((row) => (
+                    <TableRow key={row.suffix}>
+                      <TableCell sx={{ fontWeight: 600, color: "#8b5cf6" }}>{row.suffix}</TableCell>
+                      <TableCell>{row.brand}</TableCell>
+                      <TableCell>{row.tdp}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Upgradeable vs Soldered */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Upgradeable vs Soldered Components</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>✅ Usually Upgradeable</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>RAM (some models):</strong> SO-DIMM slots, check specs before buying
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Storage:</strong> M.2 NVMe/SATA usually replaceable
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>WiFi Card:</strong> M.2 E-Key, often replaceable
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Battery:</strong> Usually replaceable (internal or external)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Thermal Paste:</strong> Can be replaced to improve cooling
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#ef4444", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>❌ Usually Soldered/Non-Upgradeable</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>CPU:</strong> BGA (soldered) in nearly all modern laptops
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>GPU:</strong> Discrete GPUs are soldered (MXM rare now)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>RAM (thin laptops):</strong> LPDDR soldered to motherboard
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Display:</strong> Integrated, though some panels can be swapped
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Keyboard:</strong> Often riveted or glued in place
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Laptop Displays */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Laptop Display Technologies</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Panel Type</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Pros</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Cons</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { type: "TN", pros: "Fast response, cheap", cons: "Poor colors, narrow viewing angles", best: "Budget, basic tasks" },
+                    { type: "IPS", pros: "Great colors, wide angles", cons: "Slower response, IPS glow", best: "Creative work, general use" },
+                    { type: "VA", pros: "Deep blacks, good contrast", cons: "Slower response, smearing", best: "Content consumption, movies" },
+                    { type: "OLED", pros: "Perfect blacks, vibrant colors", cons: "Burn-in risk, expensive", best: "Premium laptops, content creation" },
+                    { type: "Mini-LED", pros: "High brightness, good contrast", cons: "Blooming in dark scenes", best: "HDR content, outdoor use" },
+                  ].map((row) => (
+                    <TableRow key={row.type}>
+                      <TableCell sx={{ fontWeight: 600, color: "#8b5cf6" }}>{row.type}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.pros}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.cons}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.best}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Battery & Power */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Battery & Power Management</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>Battery Specifications</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Wh (Watt-hours):</strong> Total capacity. Higher = longer battery life
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Cells:</strong> Internal battery cells (3-cell, 6-cell, etc.)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Cycle Count:</strong> Charge cycles before degradation (300-1000 typical)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Battery Health:</strong> Check in OS or BIOS for wear level
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Fast Charging:</strong> USB-PD, proprietary (65W-140W typical)
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>Extending Battery Life</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Charge Limit:</strong> Keep between 20-80% for longevity
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Avoid Heat:</strong> Don't leave plugged in gaming laptops at 100%
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Power Profiles:</strong> Use balanced/power saver when on battery
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Screen Brightness:</strong> Biggest power consumer, reduce when possible
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Background Apps:</strong> Close unnecessary apps draining power
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Common Laptop Issues */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Common Laptop Hardware Issues</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Issue</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Symptoms</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Likely Causes</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Solutions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { issue: "Overheating", sym: "Fan noise, throttling, shutdowns", cause: "Dust, old paste, blocked vents", sol: "Clean vents, repaste, cooling pad" },
+                    { issue: "Battery Drain", sym: "Short runtime, won't hold charge", cause: "Old battery, background apps", sol: "Replace battery, check power settings" },
+                    { issue: "Display Issues", sym: "Flickering, dead pixels, no backlight", cause: "Cable, inverter, panel failure", sol: "Check cable, replace panel if needed" },
+                    { issue: "Keyboard Failure", sym: "Keys stuck, not responding", cause: "Liquid damage, connector loose", sol: "Clean, reseat ribbon, replace keyboard" },
+                    { issue: "Won't Power On", sym: "No lights, no fans", cause: "Dead battery, charger, DC jack", sol: "Test charger, try without battery" },
+                    { issue: "WiFi Drops", sym: "Intermittent connection", cause: "Antenna, driver, interference", sol: "Update drivers, check antenna cables" },
+                  ].map((row) => (
+                    <TableRow key={row.issue}>
+                      <TableCell sx={{ fontWeight: 600, color: "#8b5cf6" }}>{row.issue}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.sym}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.cause}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.sol}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -2632,7 +3780,7 @@ const ITHardwarePage: React.FC = () => {
         </Accordion>
 
         {/* ========== PERIPHERALS SECTION ========== */}
-        <Box id="peripherals" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
           <Divider sx={{ flex: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>PERIPHERALS & I/O</Typography>
           <Divider sx={{ flex: 1 }} />
@@ -2794,6 +3942,270 @@ const ITHardwarePage: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* ========== SECURITY HARDWARE SECTION ========== */}
+        <Box id="security-hardware" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 6 }}>
+          <Divider sx={{ flex: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>SECURITY HARDWARE</Typography>
+          <Divider sx={{ flex: 1 }} />
+        </Box>
+
+        {/* Security Hardware */}
+        <Accordion sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#dc2626", 0.05) }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <SecurityIcon sx={{ color: "#dc2626" }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#dc2626" }}>Physical Security & Hardware Authentication</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Security hardware provides physical protection and hardware-based authentication that's much harder 
+              to compromise than software-only solutions. Understanding these technologies is essential for 
+              enterprise security, compliance requirements, and protecting sensitive systems.
+            </Alert>
+
+            {/* Bank Vault Analogy */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+                🔐 The Bank Vault Analogy
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Think of security hardware like different layers of bank security:
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>TPM = The Bank Vault:</strong> A secure room where encryption keys (valuables) are stored. 
+                    The vault is designed so even bank employees (the OS) can't access its contents without proper authorization.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Hardware Security Keys = Safety Deposit Box Keys:</strong> Physical keys you must present 
+                    to access your account. Even if someone knows your password (combination), they can't get in without the key.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Biometrics = Your Identity Verification:</strong> Like the bank verifying your signature 
+                    or photo ID - something unique to you that can't be easily copied.
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Cable Locks = Physical Security:</strong> Like bolting down the ATM - it doesn't prevent 
+                    all theft, but makes casual theft much harder.
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* TPM Section */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Trusted Platform Module (TPM)</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>What TPM Does</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Key Storage:</strong> Generates and stores encryption keys that never leave the chip
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>BitLocker Support:</strong> Enables full-disk encryption on Windows
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Secure Boot:</strong> Verifies boot process hasn't been tampered with
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Platform Integrity:</strong> Detects if hardware/firmware has changed
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Credential Guard:</strong> Protects Windows credentials in isolated environment
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>TPM Versions & Types</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>TPM 1.2:</strong> Legacy version, limited algorithms (SHA-1)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>TPM 2.0:</strong> Current standard, required for Windows 11
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Discrete TPM:</strong> Separate chip on motherboard (most secure)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>fTPM (Firmware):</strong> Implemented in CPU firmware (AMD/Intel)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>TPM Header:</strong> Connect add-on TPM module via motherboard header
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Hardware Security Keys */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Hardware Security Keys</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#dc2626", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Device</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Protocols</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Connection</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Key Features</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { dev: "YubiKey 5", proto: "FIDO2, U2F, OTP, PIV, OpenPGP", conn: "USB-A/C, NFC", feat: "Multi-protocol, durable, waterproof", best: "Enterprise, developers" },
+                    { dev: "YubiKey Bio", proto: "FIDO2, U2F", conn: "USB-A/C", feat: "Built-in fingerprint reader", best: "High-security workstations" },
+                    { dev: "Google Titan", proto: "FIDO2, U2F", conn: "USB-A/C, NFC, BLE", feat: "Google's attestation, affordable", best: "Google Workspace users" },
+                    { dev: "Nitrokey", proto: "FIDO2, OpenPGP, S/MIME", conn: "USB-A", feat: "Open source firmware, EU made", best: "Privacy-conscious users" },
+                    { dev: "OnlyKey", proto: "FIDO2, U2F, TOTP, OpenPGP", conn: "USB-A", feat: "Hardware password manager", best: "Password + 2FA combo" },
+                    { dev: "SoloKey", proto: "FIDO2, U2F", conn: "USB-A/C, NFC", feat: "Open source, affordable", best: "Budget-conscious security" },
+                  ].map((row) => (
+                    <TableRow key={row.dev}>
+                      <TableCell sx={{ fontWeight: 600, color: "#dc2626" }}>{row.dev}</TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }}>{row.proto}</TableCell>
+                      <TableCell>{row.conn}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.feat}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.best}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Biometric Devices */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Biometric Authentication Hardware</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>👆 Fingerprint Readers</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Types:</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Capacitive (most common)</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Optical (older, less secure)</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Ultrasonic (under-display)</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    <strong>Integration:</strong> USB dongles, built into laptops/keyboards, 
+                    smart card readers with fingerprint
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>👁️ Facial Recognition</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Technologies:</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Windows Hello IR camera</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Face ID (Apple) structured light</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• 2D camera (less secure)</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    <strong>Security:</strong> IR-based is spoof-resistant; 2D camera can be fooled by photos
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>💳 Smart Card Readers</Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Use Cases:</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• PIV/CAC cards (government)</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• Corporate badge access + login</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, pl: 1 }}>• PKI certificate storage</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    <strong>Types:</strong> Contact, contactless (NFC), combo readers
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Physical Security */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Physical Security Devices</Typography>
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#dc2626", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Device Type</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Protection</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Common Standards</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Typical Use</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { type: "Kensington Lock", prot: "Laptop theft deterrent", std: "Kensington slot (K-slot)", use: "Offices, libraries, shared spaces" },
+                    { type: "Noble Lock", prot: "Alternative lock standard", std: "Noble Wedge slot", use: "Dell laptops, some HP models" },
+                    { type: "Cable Locks", prot: "Secure equipment to desk", std: "Various (combination/keyed)", use: "Monitors, docking stations, PCs" },
+                    { type: "Privacy Screens", prot: "Visual data protection", std: "Size-specific filters", use: "Public spaces, open offices" },
+                    { type: "Port Blockers", prot: "Prevent USB device insertion", std: "USB-A, USB-C, RJ-45 blockers", use: "Kiosks, secure terminals" },
+                    { type: "Chassis Intrusion", prot: "Detect case opening", std: "Switch sensor to motherboard", use: "Servers, secure workstations" },
+                  ].map((row) => (
+                    <TableRow key={row.type}>
+                      <TableCell sx={{ fontWeight: 600, color: "#dc2626" }}>{row.type}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.prot}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.std}</TableCell>
+                      <TableCell sx={{ fontSize: "0.85rem" }}>{row.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* HSM Section */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Hardware Security Modules (HSM)</Typography>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              HSMs are enterprise-grade devices for cryptographic operations. They're expensive but provide 
+              the highest level of key protection for banks, certificate authorities, and government systems.
+            </Alert>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>HSM Capabilities</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Key Generation:</strong> Cryptographically secure random key generation
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Key Storage:</strong> Tamper-resistant storage, keys never exported in plaintext
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Cryptographic Ops:</strong> Signing, encryption, decryption in hardware
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Tamper Evidence:</strong> Physical tampering destroys keys
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Compliance:</strong> FIPS 140-2/3, Common Criteria certified
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>HSM Form Factors</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Network HSM:</strong> Rack-mounted, shared across servers (Thales, Utimaco)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>PCIe HSM:</strong> Card installed in server (most common for single-server)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>USB HSM:</strong> Portable, lower capacity (YubiHSM, Nitrokey HSM)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    • <strong>Cloud HSM:</strong> Managed HSM service (AWS CloudHSM, Azure Dedicated HSM)
+                  </Typography>
+                  <Typography variant="body2">
+                    • <strong>Payment HSM:</strong> Specialized for banking/PCI compliance
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
           </AccordionDetails>
         </Accordion>
 

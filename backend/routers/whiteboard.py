@@ -2,14 +2,16 @@
 Whiteboard API routes for collaborative editing.
 Provides CRUD operations for whiteboards and elements, plus real-time collaboration.
 """
+import html
 import json
 import os
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,17 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/whiteboard", tags=["Whiteboard"])
 
+# Security constants
+MIN_CANVAS_SIZE = 100
+MAX_CANVAS_SIZE = 10000
+MAX_BATCH_UPDATES = 100
+MAX_CONTENT_LENGTH = 50000
+ALLOWED_ELEMENT_UPDATES = {
+    'x', 'y', 'width', 'height', 'rotation', 'fill_color', 'stroke_color',
+    'stroke_width', 'opacity', 'content', 'font_size', 'font_family',
+    'text_align', 'z_index', 'points'
+}
+
 
 # ============== Pydantic Schemas ==============
 
@@ -37,6 +50,13 @@ class WhiteboardCreate(BaseModel):
     canvas_height: int = 2000
     background_color: str = "#1e1e2e"
     grid_enabled: bool = True
+    
+    @field_validator('canvas_width', 'canvas_height')
+    @classmethod
+    def validate_canvas_size(cls, v: int) -> int:
+        if v < MIN_CANVAS_SIZE or v > MAX_CANVAS_SIZE:
+            raise ValueError(f'Canvas size must be between {MIN_CANVAS_SIZE} and {MAX_CANVAS_SIZE}')
+        return v
 
 
 class WhiteboardUpdate(BaseModel):
@@ -47,6 +67,13 @@ class WhiteboardUpdate(BaseModel):
     background_color: Optional[str] = None
     grid_enabled: Optional[bool] = None
     is_locked: Optional[bool] = None
+    
+    @field_validator('canvas_width', 'canvas_height')
+    @classmethod
+    def validate_canvas_size(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < MIN_CANVAS_SIZE or v > MAX_CANVAS_SIZE):
+            raise ValueError(f'Canvas size must be between {MIN_CANVAS_SIZE} and {MAX_CANVAS_SIZE}')
+        return v
 
 
 class ElementCreate(BaseModel):
@@ -462,6 +489,11 @@ async def batch_update_elements(
     if not check_project_access(db, current_user.id, whiteboard.project_id):
         raise HTTPException(status_code=403, detail="No access to this project")
     
+    # Enforce batch limit to prevent DoS
+    if len(updates) > MAX_BATCH_UPDATES:
+        logger.warning(f"User {current_user.id} exceeded batch update limit: {len(updates)}")
+        updates = updates[:MAX_BATCH_UPDATES]
+    
     updated_count = 0
     for update in updates:
         element_id = update.get("element_id")
@@ -477,7 +509,13 @@ async def batch_update_elements(
         
         if element:
             for key, value in update.items():
-                if key != "element_id" and hasattr(element, key):
+                # Only allow whitelisted attributes
+                if key != "element_id" and key in ALLOWED_ELEMENT_UPDATES and hasattr(element, key):
+                    # Sanitize content to prevent XSS
+                    if key == 'content' and value is not None:
+                        if len(str(value)) > MAX_CONTENT_LENGTH:
+                            value = str(value)[:MAX_CONTENT_LENGTH]
+                        value = html.escape(str(value))
                     setattr(element, key, value)
             updated_count += 1
     
@@ -856,14 +894,15 @@ Guidelines:
             })
         
         # Generate response
+        from google.genai import types
         response = client.models.generate_content(
             model=settings.gemini_model_id,
             contents=messages,
-            config={
-                "system_instruction": system_prompt,
-                "temperature": 0.7,
-                "max_output_tokens": 2048,
-            }
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                thinking_config=types.ThinkingConfig(thinking_level="high"),
+                max_output_tokens=2048,
+            )
         )
         
         if response.text:

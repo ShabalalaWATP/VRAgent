@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -31,6 +29,11 @@ import {
   CardContent,
   Divider,
   alpha,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -48,22 +51,38 @@ import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import CodeIcon from "@mui/icons-material/Code";
 import ScienceIcon from "@mui/icons-material/Science";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
 import { Link, useNavigate } from "react-router-dom";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+// Theme colors for Data Exfiltration page
+const theme = {
+  primary: "#0ea5e9",
+  primaryLight: "#38bdf8",
+  secondary: "#a5b4fc",
+  accent: "#22d3ee",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(14, 165, 233, 0.2)",
+  textMuted: "#94a3b8",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+// Section navigation items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: SchoolIcon },
+  { id: "overview", label: "Overview", icon: SecurityIcon },
+  { id: "attack-techniques", label: "ATT&CK Techniques", icon: BugReportIcon },
+  { id: "channels", label: "Channels", icon: CloudUploadIcon },
+  { id: "data-locations", label: "Data Locations", icon: StorageIcon },
+  { id: "detection", label: "Detection", icon: SearchIcon },
+  { id: "siem-queries", label: "SIEM Queries", icon: CodeIcon },
+  { id: "prevention", label: "Prevention", icon: ShieldIcon },
+  { id: "incident-response", label: "Incident Response", icon: TimelineIcon },
+  { id: "labs", label: "Labs", icon: ScienceIcon },
+  { id: "quiz-section", label: "Knowledge Check", icon: QuizIcon },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -1096,7 +1115,70 @@ const quizQuestions: QuizQuestion[] = [
 
 const DataExfiltrationPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 120 && rect.bottom >= 120) {
+            setActiveSection(sectionId);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const sidebarNav = (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+      {sectionNavItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeSection === item.id;
+        return (
+          <Box
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              px: 2,
+              py: 1,
+              borderRadius: 2,
+              cursor: "pointer",
+              bgcolor: isActive ? alpha(theme.primary, 0.15) : "transparent",
+              borderLeft: isActive ? `3px solid ${theme.primary}` : "3px solid transparent",
+              transition: "all 0.2s ease",
+              "&:hover": { bgcolor: alpha(theme.primary, 0.1) },
+            }}
+          >
+            <Icon sx={{ fontSize: 18, color: isActive ? theme.primary : theme.textMuted }} />
+            <Typography variant="body2" sx={{ color: isActive ? theme.primary : theme.textMuted, fontWeight: isActive ? 600 : 400 }}>
+              {item.label}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
+  );
 
   const pageContext = `This page covers data exfiltration detection and prevention with MITRE ATT&CK mapping. Topics include:
 - Exfiltration techniques mapped to ATT&CK T1041-T1567
@@ -1667,88 +1749,108 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
 
   return (
     <LearnPageLayout pageTitle="Data Exfiltration" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+      <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
+        <Container maxWidth="xl">
+          <Grid container spacing={3}>
+            {/* Sidebar Navigation */}
+            <Grid item xs={12} md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  position: "sticky",
+                  top: 80,
+                  bgcolor: theme.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${theme.border}`,
+                  p: 2,
+                  maxHeight: "calc(100vh - 100px)",
+                  overflow: "auto",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ color: theme.primary, fontWeight: 700, mb: 2, px: 1 }}>
+                  CONTENTS
+                </Typography>
+                {sidebarNav}
+                <Divider sx={{ my: 2, borderColor: theme.border }} />
+                <Box sx={{ px: 1 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={(sectionNavItems.findIndex((item) => item.id === activeSection) + 1) / sectionNavItems.length * 100}
+                    sx={{ height: 4, borderRadius: 2, bgcolor: alpha(theme.primary, 0.2), "& .MuiLinearProgress-bar": { bgcolor: theme.primary } }}
+                  />
+                  <Typography variant="caption" sx={{ color: theme.textMuted, mt: 0.5, display: "block" }}>
+                    {sectionNavItems.findIndex((item) => item.id === activeSection) + 1} of {sectionNavItems.length} sections
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <CloudUploadIcon sx={{ fontSize: 42, color: "#0ea5e9" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Data Exfiltration
-          </Typography>
-        </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          Data exfiltration means moving data out of a system or network without permission.
-        </Typography>
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            In simple terms, exfiltration is like taking files out of a building without authorization. It can happen
-            through websites, email, cloud drives, or even USB devices. This page shows the common paths and how to
-            spot early warning signs.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
-            Exfiltration is often the last step of a breach. Attackers may take small amounts of data repeatedly
-            to avoid detection. Knowing where sensitive data lives and how it can leave helps you respond faster.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            The focus here is defensive: recognize risks, improve monitoring, and build good documentation habits.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            Everything here is beginner-friendly and focuses on safe observation, logging, and documentation.
-          </Typography>
-        </Paper>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<SecurityIcon />} label="Data Paths" size="small" />
-          <Chip icon={<SearchIcon />} label="Detection" size="small" />
-          <Chip icon={<ShieldIcon />} label="Prevention" size="small" />
-          <Chip icon={<WarningIcon />} label="Risk Signals" size="small" />
-          <Chip icon={<BugReportIcon />} label="MITRE ATT&CK" size="small" sx={{ bgcolor: alpha("#ef4444", 0.2), color: "#ef4444" }} />
-        </Box>
+            {/* Main Content */}
+            <Grid item xs={12} md={9.5}>
+              <Chip
+                component={Link}
+                to="/learn"
+                icon={<ArrowBackIcon />}
+                label="Back to Learning Hub"
+                clickable
+                variant="outlined"
+                sx={{ borderRadius: 2, mb: 2 }}
+              />
 
-        <Paper sx={{ bgcolor: "#111424", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#0ea5e9" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<BugReportIcon />} label="ATT&CK Techniques" />
-            <Tab icon={<CloudUploadIcon />} label="Channels" />
-            <Tab icon={<StorageIcon />} label="Data Locations" />
-            <Tab icon={<SearchIcon />} label="Detection" />
-            <Tab icon={<CodeIcon />} label="SIEM Queries" />
-            <Tab icon={<ShieldIcon />} label="Prevention" />
-            <Tab icon={<TimelineIcon />} label="Incident Response" />
-            <Tab icon={<ScienceIcon />} label="Labs" />
-          </Tabs>
+            {/* Introduction Section */}
+            <Box id="intro" sx={{ scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <CloudUploadIcon sx={{ fontSize: 42, color: theme.primary }} />
+                  <Typography variant="h3" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                    Data Exfiltration
+                  </Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+                  Data exfiltration means moving data out of a system or network without permission.
+                </Typography>
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+                    In simple terms, exfiltration is like taking files out of a building without authorization. It can happen
+                    through websites, email, cloud drives, or even USB devices. This page shows the common paths and how to
+                    spot early warning signs.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                    Exfiltration is often the last step of a breach. Attackers may take small amounts of data repeatedly
+                    to avoid detection. Knowing where sensitive data lives and how it can leave helps you respond faster.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    The focus here is defensive: recognize risks, improve monitoring, and build good documentation habits.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    Everything here is beginner-friendly and focuses on safe observation, logging, and documentation.
+                  </Typography>
+                </Paper>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  <Chip icon={<SecurityIcon />} label="Data Paths" size="small" />
+                  <Chip icon={<SearchIcon />} label="Detection" size="small" />
+                  <Chip icon={<ShieldIcon />} label="Prevention" size="small" />
+                  <Chip icon={<WarningIcon />} label="Risk Signals" size="small" />
+                  <Chip icon={<BugReportIcon />} label="MITRE ATT&CK" size="small" sx={{ bgcolor: alpha("#ef4444", 0.2), color: "#ef4444" }} />
+                </Box>
+              </Paper>
+            </Box>
 
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+            {/* Overview Section */}
+            <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SecurityIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Overview
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Learning Objectives
                 </Typography>
                 <List dense>
@@ -1763,8 +1865,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Beginner Path
                 </Typography>
                 <List dense>
@@ -1779,8 +1881,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   What This Is Not
                 </Typography>
                 <List dense>
@@ -1988,18 +2090,28 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   </Table>
                 </TableContainer>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 1: ATT&CK Techniques (NEW) */}
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
+            {/* ATT&CK Techniques Section */}
+            <Box id="attack-techniques" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <BugReportIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      ATT&CK Techniques
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Alert severity="info" sx={{ mb: 3 }}>
                 MITRE ATT&CK provides a standardized framework for understanding adversary behavior. 
                 The techniques below are commonly used for data exfiltration.
               </Alert>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#ef4444", mb: 2 }}>
                   MITRE ATT&CK Exfiltration Techniques
                 </Typography>
@@ -2025,7 +2137,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </TableContainer>
               </Paper>
 
-              <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 2 }}>
+              <Typography variant="h6" sx={{ color: theme.primary, mb: 2 }}>
                 Advanced Exfiltration Techniques
               </Typography>
               <Grid container spacing={2}>
@@ -2093,21 +2205,31 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   </Accordion>
                 ))}
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 2: Channels */}
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
+            {/* Channels Section */}
+            <Box id="channels" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <CloudUploadIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Exfiltration Channels
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Grid container spacing={2}>
                 {channels.map((item) => (
                   <Grid item xs={12} md={6} key={item.title}>
                     <Paper
                       sx={{
                         p: 2,
-                        bgcolor: "#0c0f1c",
+                        bgcolor: theme.bgNested,
                         borderRadius: 2,
-                        border: "1px solid rgba(14,165,233,0.2)",
+                        border: `1px solid ${theme.border}`,
                         height: "100%",
                       }}
                     >
@@ -2117,25 +2239,35 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                       <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
                         {item.desc}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                      <Typography variant="caption" sx={{ color: theme.textMuted }}>
                         Signal: {item.signal}
                       </Typography>
                     </Paper>
                   </Grid>
                 ))}
               </Grid>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 3: Data Locations */}
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
+            {/* Data Locations Section */}
+            <Box id="data-locations" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <StorageIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Data Locations
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#0ea5e9" }}>Location</TableCell>
-                      <TableCell sx={{ color: "#0ea5e9" }}>Risk</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Location</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Risk</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2148,14 +2280,24 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   </TableBody>
                 </Table>
               </TableContainer>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 4: Detection */}
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+            {/* Detection Section */}
+            <Box id="detection" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SearchIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Detection
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Signals
                 </Typography>
                 <List dense>
@@ -2170,8 +2312,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Behavior Signals
                 </Typography>
                 <List dense>
@@ -2186,8 +2328,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Staging Indicators
                 </Typography>
                 <List dense>
@@ -2202,8 +2344,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Telemetry Sources
                 </Typography>
                 <List dense>
@@ -2218,8 +2360,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Matrix (Simple)
                 </Typography>
                 <TableContainer>
@@ -2244,8 +2386,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Evidence Checklist
                 </Typography>
                 <List dense>
@@ -2260,7 +2402,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#f59e0b", mb: 2 }}>
                   Network Indicators
                 </Typography>
@@ -2278,31 +2420,41 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                         <TableRow key={item.indicator}>
                           <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.indicator}</TableCell>
                           <TableCell sx={{ color: "grey.400" }}>{item.desc}</TableCell>
-                          <TableCell sx={{ color: "#94a3b8", fontSize: "0.8rem" }}>{item.threshold}</TableCell>
+                          <TableCell sx={{ color: theme.textMuted, fontSize: "0.8rem" }}>{item.threshold}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </TableContainer>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 5: SIEM Queries (NEW) */}
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
+            {/* SIEM Queries Section */}
+            <Box id="siem-queries" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <CodeIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      SIEM Queries
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Alert severity="info" sx={{ mb: 3 }}>
                 These queries are templates for common SIEM platforms. Adjust field names and thresholds for your environment.
               </Alert>
 
               {siemQueries.map((query, idx) => (
-                <Paper key={idx} sx={{ mb: 3, bgcolor: "#0c0f1c", borderRadius: 2, overflow: "hidden" }}>
+                <Paper key={idx} sx={{ mb: 3, bgcolor: theme.bgNested, borderRadius: 2, overflow: "hidden" }}>
                   <Box sx={{ p: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <Typography variant="subtitle1" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
                         {query.name}
                       </Typography>
-                      <Chip label={query.platform} size="small" sx={{ bgcolor: alpha("#0ea5e9", 0.2), color: "#0ea5e9" }} />
+                      <Chip label={query.platform} size="small" sx={{ bgcolor: alpha(theme.primary, 0.2), color: theme.primary }} />
                     </Box>
                     <Typography variant="body2" sx={{ color: "grey.400", mt: 0.5 }}>
                       {query.description}
@@ -2312,7 +2464,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </Paper>
               ))}
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#22c55e", mb: 2 }}>
                   Query Tuning Tips
                 </Typography>
@@ -2334,14 +2486,24 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 6: Prevention */}
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+            {/* Prevention Section */}
+            <Box id="prevention" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ShieldIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Prevention
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Prevention Checklist
                 </Typography>
                 <List dense>
@@ -2356,8 +2518,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Control Ideas
                 </Typography>
                 <List dense>
@@ -2378,7 +2540,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
               <Grid container spacing={2}>
                 {dlpStrategies.map((strategy) => (
                   <Grid item xs={12} md={6} key={strategy.category}>
-                    <Card sx={{ height: "100%", bgcolor: "#0c0f1c", border: "1px solid rgba(168,85,247,0.2)" }}>
+                    <Card sx={{ height: "100%", bgcolor: theme.bgNested, border: "1px solid rgba(168,85,247,0.2)" }}>
                       <CardContent>
                         <Typography variant="subtitle1" sx={{ color: "#a855f7", fontWeight: 700, mb: 1.5 }}>
                           {strategy.category}
@@ -2399,8 +2561,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 ))}
               </Grid>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Response Steps
                 </Typography>
                 <List dense>
@@ -2414,12 +2576,22 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 7: Incident Response (NEW) */}
-          <TabPanel value={tabValue} index={7}>
-            <Box sx={{ p: 3 }}>
+            {/* Incident Response Section */}
+            <Box id="incident-response" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <TimelineIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Incident Response
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Alert severity="warning" sx={{ mb: 3 }}>
                 This playbook provides a framework for responding to data exfiltration incidents. 
                 Adapt timelines and actions to your organization's policies and regulatory requirements.
@@ -2430,7 +2602,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
               </Typography>
               
               {incidentPlaybook.map((phase, idx) => (
-                <Paper key={idx} sx={{ mb: 2, bgcolor: "#0c0f1c", borderRadius: 2, overflow: "hidden" }}>
+                <Paper key={idx} sx={{ mb: 2, bgcolor: theme.bgNested, borderRadius: 2, overflow: "hidden" }}>
                   <Box sx={{ 
                     p: 2, 
                     display: "flex", 
@@ -2474,8 +2646,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </Paper>
               ))}
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 2 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 2 }}>
                   Timeline Reconstruction Tips
                 </Typography>
                 <List dense>
@@ -2490,26 +2662,36 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                   ].map((tip) => (
                     <ListItem key={tip} sx={{ py: 0.25 }}>
                       <ListItemIcon sx={{ minWidth: 28 }}>
-                        <TimelineIcon sx={{ fontSize: 16, color: "#0ea5e9" }} />
+                        <TimelineIcon sx={{ fontSize: 16, color: theme.primary }} />
                       </ListItemIcon>
                       <ListItemText primary={tip} primaryTypographyProps={{ variant: "body2", sx: { color: "grey.300" } }} />
                     </ListItem>
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          {/* Tab 8: Labs */}
-          <TabPanel value={tabValue} index={8}>
-            <Box sx={{ p: 3 }}>
+            {/* Labs Section */}
+            <Box id="labs" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ScienceIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Labs
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Alert severity="warning" sx={{ mb: 3 }}>
                 All lab exercises should be performed in isolated environments with synthetic data only.
                 Never use real sensitive data or production systems.
               </Alert>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Beginner Lab Walkthrough (Safe)
                 </Typography>
                 <List dense>
@@ -2524,8 +2706,8 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Safe Boundaries
                 </Typography>
                 <List dense>
@@ -2546,7 +2728,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 {advancedLabExercises.map((lab) => (
                   <Grid item xs={12} md={6} key={lab.name}>
-                    <Card sx={{ height: "100%", bgcolor: "#0c0f1c", border: "1px solid rgba(168,85,247,0.2)" }}>
+                    <Card sx={{ height: "100%", bgcolor: theme.bgNested, border: "1px solid rgba(168,85,247,0.2)" }}>
                       <CardContent>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
                           <Typography variant="subtitle1" sx={{ color: "#e2e8f0", fontWeight: 700 }}>
@@ -2563,7 +2745,7 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                             }} 
                           />
                         </Box>
-                        <Typography variant="caption" sx={{ color: "#94a3b8", display: "block", mb: 1.5 }}>
+                        <Typography variant="caption" sx={{ color: theme.textMuted, display: "block", mb: 1.5 }}>
                           <strong>Tools:</strong> {lab.tools}
                         </Typography>
                         <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.1)" }} />
@@ -2583,58 +2765,85 @@ find ~/labdata -type f -printf "%s %p\\n" | sort -nr | head -n 10`;
                 ))}
               </Grid>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#0ea5e9", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Report Template
                 </Typography>
                 <CodeBlock code={reportTemplate} language="text" />
               </Paper>
 
-              <Accordion sx={{ bgcolor: "#0c0f1c", "&:before": { display: "none" } }}>
+              <Accordion sx={{ bgcolor: theme.bgNested, "&:before": { display: "none" } }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
-                  <Typography variant="h6" sx={{ color: "#0ea5e9" }}>Safe File Review Commands</Typography>
+                  <Typography variant="h6" sx={{ color: theme.primary }}>Safe File Review Commands</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={safeChecks} language="powershell" />
                 </AccordionDetails>
               </Accordion>
+              </Paper>
             </Box>
-          </TabPanel>
-        </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Data Exfiltration Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+            {/* Quiz Section */}
+            <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${QUIZ_ACCENT_COLOR} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Knowledge Check
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+                <QuizSection
+                  questions={quizQuestions}
+                  accentColor={QUIZ_ACCENT_COLOR}
+                  title="Data Exfiltration Knowledge Check"
+                  description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                  questionsPerQuiz={QUIZ_QUESTION_COUNT}
+                />
+              </Paper>
+            </Box>
 
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#0ea5e9", color: "#0ea5e9" }}
-          >
-            Back to Learning Hub
-          </Button>
-        </Box>
+            <Box sx={{ mt: 4, textAlign: "center" }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/learn")}
+                sx={{ borderColor: theme.primary, color: theme.primary }}
+              >
+                Back to Learning Hub
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
       </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        sx={{ display: { xs: "block", lg: "none" }, "& .MuiDrawer-paper": { width: 280, bgcolor: theme.bgCard, borderRight: `1px solid ${theme.border}` } }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: theme.primary, fontWeight: 700 }}>Navigation</Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}><CloseIcon /></IconButton>
+          </Box>
+          {sidebarNav}
+        </Box>
+      </Drawer>
+
+      {/* Mobile FABs */}
+      <Box sx={{ display: { xs: "flex", lg: "none" }, position: "fixed", bottom: 16, right: 16, flexDirection: "column", gap: 1 }}>
+        <Fab size="small" sx={{ bgcolor: theme.bgCard, color: theme.primary, "&:hover": { bgcolor: alpha(theme.primary, 0.2) } }} onClick={() => setNavDrawerOpen(true)}>
+          <ListAltIcon />
+        </Fab>
+        <Fab size="small" sx={{ bgcolor: theme.bgCard, color: theme.primary, "&:hover": { bgcolor: alpha(theme.primary, 0.2) } }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Box>
     </Box>
     </LearnPageLayout>
   );

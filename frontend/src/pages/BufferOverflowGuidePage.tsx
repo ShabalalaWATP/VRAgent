@@ -1,11 +1,11 @@
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Typography,
   Paper,
   alpha,
   useTheme,
-  Tabs,
-  Tab,
+  useMediaQuery,
   Table,
   TableBody,
   TableCell,
@@ -24,8 +24,13 @@ import {
   ListItemIcon,
   ListItemText,
   Button,
+  Drawer,
+  Fab,
+  IconButton,
+  Tooltip,
+  Divider,
+  LinearProgress,
 } from "@mui/material";
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -41,9 +46,13 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import StorageIcon from "@mui/icons-material/Storage";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import QuizIcon from "@mui/icons-material/Quiz";
+import SchoolIcon from "@mui/icons-material/School";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
-import QuizIcon from "@mui/icons-material/Quiz";
 
 // CodeBlock component for syntax highlighting
 function CodeBlock({ children, title }: { children: string; title?: string }) {
@@ -72,7 +81,7 @@ function CodeBlock({ children, title }: { children: string; title?: string }) {
   );
 }
 
-// ========== DATA ARRAYS (Expandable Structure) ==========
+// ========== DATA ARRAYS ==========
 
 // Types of buffer overflows
 const overflowTypes = [
@@ -256,31 +265,31 @@ const heapExploitTechniques = [
     name: "Fastbin Attack",
     description: "Corrupt fastbin free list to get arbitrary allocation",
     conditions: "Control over freed chunk's fd pointer, same-size allocation",
-    example: "Double free → allocate at GOT/hook → overwrite with one_gadget",
+    example: "Double free -> allocate at GOT/hook -> overwrite with one_gadget",
   },
   {
     name: "Tcache Poisoning",
     description: "Corrupt tcache bin to achieve arbitrary write (glibc 2.26+)",
     conditions: "UAF or heap overflow on tcache chunk",
-    example: "Overwrite tcache next pointer → allocate at target → write payload",
+    example: "Overwrite tcache next pointer -> allocate at target -> write payload",
   },
   {
     name: "House of Force",
     description: "Overflow top chunk size to allocate anywhere in memory",
     conditions: "Overflow into top chunk, control allocation size",
-    example: "Set top size to -1 → request huge negative allocation → wrap around to target",
+    example: "Set top size to -1 -> request huge negative allocation -> wrap around to target",
   },
   {
     name: "House of Spirit",
     description: "Free a fake chunk to get it into freelist",
     conditions: "Control over memory that can look like valid chunk",
-    example: "Craft fake chunk on stack → free it → allocate returns stack memory",
+    example: "Craft fake chunk on stack -> free it -> allocate returns stack memory",
   },
   {
     name: "Unsorted Bin Attack",
     description: "Overwrite arbitrary location with main_arena address",
     conditions: "Control over unsorted chunk's bk pointer",
-    example: "Modify bk → write &unsorted_chunks to target during unlinking",
+    example: "Modify bk -> write &unsorted_chunks to target during unlinking",
   },
   {
     name: "Large Bin Attack",
@@ -1185,14 +1194,74 @@ const quizQuestions: QuizQuestion[] = [
   },
 ];
 
+// Quick stats
+const quickStats = [
+  { value: "6", label: "Overflow Types", color: "#dc2626" },
+  { value: "6", label: "Mitigations", color: "#3b82f6" },
+  { value: "75", label: "Quiz Questions", color: "#8b5cf6" },
+  { value: "35+", label: "Years of History", color: "#f59e0b" },
+];
+
 export default function BufferOverflowGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const accent = "#dc2626";
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "overflow-types", label: "Overflow Types", icon: <BugReportIcon /> },
+    { id: "vulnerable-code", label: "Vulnerable Code", icon: <CodeIcon /> },
+    { id: "protections", label: "Protections", icon: <ShieldIcon /> },
+    { id: "exploitation", label: "Exploitation", icon: <WarningIcon /> },
+    { id: "heap-exploitation", label: "Heap Techniques", icon: <StorageIcon /> },
+    { id: "aslr-bypass", label: "ASLR Bypass", icon: <SecurityIcon /> },
+    { id: "windows-exploitation", label: "Windows", icon: <MemoryIcon /> },
+    { id: "arm-exploitation", label: "ARM", icon: <MemoryIcon /> },
+    { id: "real-world-cves", label: "Real-World CVEs", icon: <HistoryIcon /> },
+    { id: "tools", label: "Tools", icon: <BuildIcon /> },
+    { id: "prevention", label: "Prevention", icon: <CheckCircleIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -1206,254 +1275,610 @@ export default function BufferOverflowGuidePage() {
 
   const pageContext = `Buffer Overflow Attacks - A comprehensive guide covering stack-based buffer overflows, heap overflows, exploitation techniques, and modern mitigations like ASLR, DEP/NX, Stack Canaries, and CFI. Topics include: memory layout, stack frames, return address overwriting, shellcode injection, ROP (Return-Oriented Programming), heap exploitation, format string vulnerabilities, and secure coding practices to prevent buffer overflows in C/C++ code.`;
 
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
+              },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Buffer Overflow Attacks" pageContext={pageContext}>
-    <Box>
-      <Box sx={{ mb: 3 }}>
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2 }}
-        />
-      </Box>
-      {/* Header */}
-      <Paper
-        sx={{
-          p: 4,
-          mb: 4,
-          borderRadius: 3,
-          background: `linear-gradient(135deg, ${alpha("#dc2626", 0.1)}, ${alpha("#f59e0b", 0.05)})`,
-          border: `1px solid ${alpha("#dc2626", 0.2)}`,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: 2,
-              bgcolor: alpha("#dc2626", 0.15),
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <MemoryIcon sx={{ fontSize: 32, color: "#dc2626" }} />
-          </Box>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              Buffer Overflow Vulnerabilities
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Memory corruption fundamentals • Exploitation • Mitigations
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Beginner-Friendly Introduction */}
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-            <SecurityIcon sx={{ color: "#dc2626" }} />
-            What is a Buffer Overflow?
-          </Typography>
-          
-          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-            Imagine you have a row of 10 mailboxes, and you're only allowed to put letters in boxes 1-10. 
-            A <strong>buffer overflow</strong> happens when someone tries to stuff letters into box 11, 12, and beyond – 
-            except those boxes belong to someone else! In computer memory, this "someone else" might be critical 
-            program data like return addresses, function pointers, or security tokens.
-          </Typography>
-
-          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-            In programming terms, a <strong>buffer</strong> is just a chunk of memory set aside to hold data – 
-            like a character array to store a username. When a program writes more data into this buffer than 
-            it can hold, the extra data "overflows" into adjacent memory locations. This overflow can corrupt 
-            other variables, crash the program, or – in the worst case – allow an attacker to execute their 
-            own malicious code.
-          </Typography>
-
-          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-            Buffer overflows have been around since the 1988 Morris Worm, one of the first computer worms to 
-            spread across the Internet. Despite being a well-known vulnerability class for over 35 years, 
-            they remain one of the most dangerous and common security issues in low-level languages like C and C++. 
-            Major attacks like <strong>EternalBlue</strong> (WannaCry ransomware) and <strong>Heartbleed</strong> 
-            exploited memory corruption vulnerabilities.
-          </Typography>
-
-          <Box sx={{ 
-            p: 2, 
-            borderRadius: 2, 
-            bgcolor: alpha("#dc2626", 0.1), 
-            border: `1px solid ${alpha("#dc2626", 0.3)}`,
-            mt: 2 
-          }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 1 }}>
-              <WarningIcon sx={{ fontSize: 18, color: "#dc2626" }} />
-              Why This Matters
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.7 }}>
-              Buffer overflows can lead to: <strong>Remote Code Execution (RCE)</strong> – attackers run their code on your system; 
-              <strong> Privilege Escalation</strong> – gaining admin/root access; <strong>Denial of Service</strong> – crashing 
-              services; and <strong>Information Disclosure</strong> – leaking sensitive memory contents. Understanding these 
-              vulnerabilities is essential for both defenders building secure systems and security researchers finding bugs.
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
-
-      {/* Navigation Tabs */}
-      <Paper sx={{ mb: 4, borderRadius: 2 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
           sx={{
-            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            "& .MuiTab-root": { fontWeight: 600, textTransform: "none" },
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#b91c1c" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
           }}
         >
-          <Tab icon={<BugReportIcon />} iconPosition="start" label="Overflow Types" />
-          <Tab icon={<CodeIcon />} iconPosition="start" label="Vulnerable Code" />
-          <Tab icon={<ShieldIcon />} iconPosition="start" label="Protections" />
-          <Tab icon={<WarningIcon />} iconPosition="start" label="Exploitation" />
-          <Tab icon={<HistoryIcon />} iconPosition="start" label="Real-World CVEs" />
-          <Tab icon={<BuildIcon />} iconPosition="start" label="Tools" />
-          <Tab icon={<SecurityIcon />} iconPosition="start" label="Prevention" />
-        </Tabs>
-      </Paper>
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
 
-      {/* Tab Content */}
-      <Box>
-        {/* Tab 0: Overflow Types */}
-        {tabValue === 0 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Types of Buffer Overflow Vulnerabilities
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
             </Typography>
-            
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {overflowTypes.map((type) => (
-                    <TableRow key={type.name} hover>
-                      <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{type.name}</TableCell>
-                      <TableCell>{type.description}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={type.severity} 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: alpha(getSeverityColor(type.severity), 0.15),
-                            color: getSeverityColor(type.severity),
-                            fontWeight: 600,
-                          }} 
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{type.example}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            <Accordion defaultExpanded sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <StorageIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
-                  Memory Layout Overview
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <CodeBlock title="Typical Process Memory Layout (High to Low Addresses)">
-{`┌─────────────────────────────────────┐  High Address (0xFFFFFFFF)
-│           Kernel Space              │  (Not accessible to user programs)
-├─────────────────────────────────────┤
-│              Stack                  │  ← Local variables, return addresses
-│              ↓                      │    (Grows downward)
-├─────────────────────────────────────┤
-│           (Free Space)              │
-├─────────────────────────────────────┤
-│              ↑                      │
-│              Heap                   │  ← Dynamic memory (malloc/new)
-│                                     │    (Grows upward)
-├─────────────────────────────────────┤
-│         Uninitialized Data          │  ← BSS segment (global vars = 0)
-├─────────────────────────────────────┤
-│         Initialized Data            │  ← Data segment (global vars)
-├─────────────────────────────────────┤
-│         Text/Code Segment           │  ← Program instructions (read-only)
-└─────────────────────────────────────┘  Low Address (0x00000000)`}
-                </CodeBlock>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  Stack overflows typically overwrite the return address, causing the program to jump to 
-                  attacker-controlled memory. Heap overflows corrupt metadata structures used by memory allocators.
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
           </Box>
-        )}
 
-        {/* Tab 1: Vulnerable Code */}
-        {tabValue === 1 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Vulnerable Functions & Patterns
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={Link}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
+          {/* Hero Banner */}
+          <Paper
+            sx={{
+              p: 4,
+              mb: 4,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha("#dc2626", 0.15)} 0%, ${alpha("#f59e0b", 0.15)} 50%, ${alpha("#8b5cf6", 0.15)} 100%)`,
+              border: `1px solid ${alpha("#dc2626", 0.2)}`,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            {/* Decorative background elements */}
+            <Box
+              sx={{
+                position: "absolute",
+                top: -50,
+                right: -50,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#dc2626", 0.1)} 0%, transparent 70%)`,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -30,
+                left: "30%",
+                width: 150,
+                height: 150,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#8b5cf6", 0.1)} 0%, transparent 70%)`,
+              }}
+            />
+
+            <Box sx={{ position: "relative", zIndex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, #dc2626, #f59e0b)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 8px 32px ${alpha("#dc2626", 0.3)}`,
+                  }}
+                >
+                  <MemoryIcon sx={{ fontSize: 44, color: "white" }} />
+                </Box>
+                <Box>
+                  <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                    Buffer Overflow Vulnerabilities
+                  </Typography>
+                  <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
+                    Memory corruption fundamentals, exploitation, and mitigations
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip label="Intermediate" color="warning" />
+                <Chip label="Exploitation" sx={{ bgcolor: alpha("#dc2626", 0.15), color: "#dc2626", fontWeight: 600 }} />
+                <Chip label="Memory Safety" sx={{ bgcolor: alpha("#3b82f6", 0.15), color: "#3b82f6", fontWeight: 600 }} />
+                <Chip label="Binary Security" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+                <Chip label="CTF Skills" sx={{ bgcolor: alpha("#10b981", 0.15), color: "#10b981", fontWeight: 600 }} />
+              </Box>
+
+              {/* Quick Stats */}
+              <Grid container spacing={2}>
+                {quickStats.map((stat) => (
+                  <Grid item xs={6} sm={3} key={stat.label}>
+                    <Paper
+                      sx={{
+                        p: 2,
+                        textAlign: "center",
+                        borderRadius: 2,
+                        bgcolor: alpha(stat.color, 0.1),
+                        border: `1px solid ${alpha(stat.color, 0.2)}`,
+                      }}
+                    >
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>
+                        {stat.value}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        {stat.label}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Paper>
+
+          {/* Quick Navigation */}
+          <Paper
+            sx={{
+              p: 2,
+              mb: 4,
+              borderRadius: 3,
+              position: "sticky",
+              top: 70,
+              zIndex: 100,
+              backdropFilter: "blur(10px)",
+              bgcolor: alpha(theme.palette.background.paper, 0.9),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+              <Chip
+                label="<- Learning Hub"
+                size="small"
+                clickable
+                onClick={() => navigate("/learn")}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  bgcolor: alpha(accent, 0.1),
+                  color: accent,
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.2),
+                  },
+                }}
+              />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                Quick Navigation
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {sectionNavItems.map((nav) => (
+                <Chip
+                  key={nav.id}
+                  label={nav.label}
+                  size="small"
+                  clickable
+                  onClick={() => scrollToSection(nav.id)}
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    "&:hover": {
+                      bgcolor: alpha(accent, 0.15),
+                      color: accent,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          </Paper>
+
+          {/* ==================== INTRODUCTION ==================== */}
+          <Typography id="intro" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            What is a Buffer Overflow?
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Understanding one of the oldest and most dangerous vulnerability classes
+          </Typography>
+
+          <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+            <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+              Imagine you have a row of 10 mailboxes, and you're only allowed to put letters in boxes 1-10.
+              A <strong>buffer overflow</strong> happens when someone tries to stuff letters into box 11, 12, and beyond --
+              except those boxes belong to someone else! In computer memory, this "someone else" might be critical
+              program data like return addresses, function pointers, or security tokens.
             </Typography>
 
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Language</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Dangerous Function</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Safe Alternative</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Risk</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {vulnerableFunctions.map((func, idx) => (
-                    <TableRow key={idx} hover>
-                      <TableCell>{func.language}</TableCell>
-                      <TableCell sx={{ fontFamily: "monospace", color: "#dc2626" }}>{func.function}</TableCell>
-                      <TableCell sx={{ fontFamily: "monospace", color: "#22c55e" }}>{func.safe}</TableCell>
-                      <TableCell>{func.risk}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+              In programming terms, a <strong>buffer</strong> is just a chunk of memory set aside to hold data --
+              like a character array to store a username. When a program writes more data into this buffer than
+              it can hold, the extra data "overflows" into adjacent memory locations. This overflow can corrupt
+              other variables, crash the program, or -- in the worst case -- allow an attacker to execute their
+              own malicious code.
+            </Typography>
 
-            <Accordion defaultExpanded sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <CancelIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
-                  Vulnerable Code Example
+            <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mb: 3 }}>
+              Buffer overflows have been around since the 1988 Morris Worm, one of the first computer worms to
+              spread across the Internet. Despite being a well-known vulnerability class for over 35 years,
+              they remain one of the most dangerous and common security issues in low-level languages like C and C++.
+              Major attacks like <strong>EternalBlue</strong> (WannaCry ransomware) and <strong>Heartbleed</strong>
+              exploited memory corruption vulnerabilities.
+            </Typography>
+
+            <Box sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: alpha("#dc2626", 0.1),
+              border: `1px solid ${alpha("#dc2626", 0.3)}`,
+            }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ fontSize: 18, color: "#dc2626" }} />
+                Why This Matters
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.7 }}>
+                Buffer overflows can lead to: <strong>Remote Code Execution (RCE)</strong> -- attackers run their code on your system;
+                <strong> Privilege Escalation</strong> -- gaining admin/root access; <strong>Denial of Service</strong> -- crashing
+                services; and <strong>Information Disclosure</strong> -- leaking sensitive memory contents. Understanding these
+                vulnerabilities is essential for both defenders building secure systems and security researchers finding bugs.
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* ==================== OVERFLOW TYPES ==================== */}
+          <Typography id="overflow-types" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Types of Buffer Overflow Vulnerabilities
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Different vulnerability classes and their characteristics
+          </Typography>
+
+          <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {overflowTypes.map((type) => (
+                  <TableRow key={type.name} hover>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{type.name}</TableCell>
+                    <TableCell>{type.description}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={type.severity}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(getSeverityColor(type.severity), 0.15),
+                          color: getSeverityColor(type.severity),
+                          fontWeight: 600,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{type.example}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Accordion defaultExpanded sx={{ borderRadius: 2, mb: 5 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                <StorageIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
+                Memory Layout Overview
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <CodeBlock title="Typical Process Memory Layout (High to Low Addresses)">
+{`+-------------------------------------+  High Address (0xFFFFFFFF)
+|           Kernel Space              |  (Not accessible to user programs)
++-------------------------------------+
+|              Stack                  |  <- Local variables, return addresses
+|              v                      |    (Grows downward)
++-------------------------------------+
+|           (Free Space)              |
++-------------------------------------+
+|              ^                      |
+|              Heap                   |  <- Dynamic memory (malloc/new)
+|                                     |    (Grows upward)
++-------------------------------------+
+|         Uninitialized Data          |  <- BSS segment (global vars = 0)
++-------------------------------------+
+|         Initialized Data            |  <- Data segment (global vars)
++-------------------------------------+
+|         Text/Code Segment           |  <- Program instructions (read-only)
++-------------------------------------+  Low Address (0x00000000)`}
+              </CodeBlock>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Stack overflows typically overwrite the return address, causing the program to jump to
+                attacker-controlled memory. Heap overflows corrupt metadata structures used by memory allocators.
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ==================== VULNERABLE CODE ==================== */}
+          <Typography id="vulnerable-code" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Vulnerable Functions & Patterns
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Common dangerous functions and their safe alternatives
+          </Typography>
+
+          <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Language</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Dangerous Function</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Safe Alternative</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Risk</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {vulnerableFunctions.map((func, idx) => (
+                  <TableRow key={idx} hover>
+                    <TableCell>{func.language}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", color: "#dc2626" }}>{func.function}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", color: "#22c55e" }}>{func.safe}</TableCell>
+                    <TableCell>{func.risk}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Grid container spacing={3} sx={{ mb: 5 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626", display: "flex", alignItems: "center", gap: 1 }}>
+                  <CancelIcon /> Vulnerable Code Example
                 </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
                 <CodeBlock title="Classic Stack Buffer Overflow (C)">
 {`#include <stdio.h>
 #include <string.h>
 
 void vulnerable_function(char *user_input) {
     char buffer[64];  // Fixed-size buffer
-    
+
     // VULNERABLE: No bounds checking!
-    strcpy(buffer, user_input);  // Will overflow if input > 63 chars
-    
+    strcpy(buffer, user_input);
+
     printf("You entered: %s\\n", buffer);
 }
 
@@ -1467,94 +1892,90 @@ int main(int argc, char *argv[]) {
 // Attacker provides: ./program $(python -c 'print("A"*100)')
 // Result: Buffer overflow, potential code execution`}
                 </CodeBlock>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <CheckCircleIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
-                  Safe Code Example
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: "100%", borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+                  <CheckCircleIcon /> Safe Code Example
                 </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
                 <CodeBlock title="Secure Implementation (C)">
 {`#include <stdio.h>
 #include <string.h>
 
 void safe_function(const char *user_input) {
     char buffer[64];
-    
+
     // SAFE: Use strncpy with explicit size limit
     strncpy(buffer, user_input, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\\0';  // Ensure null termination
-    
+    buffer[sizeof(buffer) - 1] = '\\0';
+
     printf("You entered: %s\\n", buffer);
 }
 
 // Even better: Use snprintf for formatted strings
 void safer_function(const char *user_input) {
     char buffer[64];
-    
-    // snprintf always null-terminates and returns bytes needed
+
+    // snprintf always null-terminates
     int needed = snprintf(buffer, sizeof(buffer), "%s", user_input);
     if (needed >= sizeof(buffer)) {
         printf("Warning: Input truncated\\n");
     }
-    
+
     printf("You entered: %s\\n", buffer);
 }`}
                 </CodeBlock>
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        )}
-
-        {/* Tab 2: Memory Protections */}
-        {tabValue === 2 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Modern Memory Protections
-            </Typography>
-
-            <Grid container spacing={3}>
-              {memoryProtections.map((protection) => (
-                <Grid item xs={12} md={6} key={protection.name}>
-                  <Card sx={{ height: "100%", borderRadius: 2 }}>
-                    <CardContent>
-                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center" }}>
-                        <ShieldIcon sx={{ mr: 1, color: "#3b82f6" }} />
-                        {protection.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {protection.description}
-                      </Typography>
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <Chip 
-                          label={`Bypass: ${protection.bypass}`} 
-                          size="small" 
-                          variant="outlined"
-                          sx={{ alignSelf: "flex-start" }}
-                        />
-                        <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
-                          {protection.compiler}
-                        </Typography>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
+              </Paper>
             </Grid>
+          </Grid>
 
-            <Accordion sx={{ borderRadius: 2, mt: 4 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
-                  Checking Binary Protections (checksec)
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <CodeBlock title="Using checksec to analyze binary security">
+          {/* ==================== PROTECTIONS ==================== */}
+          <Typography id="protections" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Modern Memory Protections
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Defense mechanisms and their bypass techniques
+          </Typography>
+
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {memoryProtections.map((protection) => (
+              <Grid item xs={12} md={6} key={protection.name}>
+                <Card sx={{ height: "100%", borderRadius: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center" }}>
+                      <ShieldIcon sx={{ mr: 1, color: "#3b82f6" }} />
+                      {protection.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      {protection.description}
+                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Chip
+                        label={`Bypass: ${protection.bypass}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ alignSelf: "flex-start" }}
+                      />
+                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                        {protection.compiler}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Accordion sx={{ borderRadius: 2, mb: 5 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
+                Checking Binary Protections (checksec)
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <CodeBlock title="Using checksec to analyze binary security">
 {`$ checksec --file=./vulnerable_binary
 
 RELRO           STACK CANARY      NX            PIE
@@ -1572,58 +1993,57 @@ $ gcc -o secure_binary source.c \\
     -pie -fPIE \\
     -Wl,-z,relro,-z,now \\
     -D_FORTIFY_SOURCE=2`}
-                </CodeBlock>
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        )}
+              </CodeBlock>
+            </AccordionDetails>
+          </Accordion>
 
-        {/* Tab 3: Exploitation Techniques */}
-        {tabValue === 3 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Exploitation Techniques
-            </Typography>
+          {/* ==================== EXPLOITATION ==================== */}
+          <Typography id="exploitation" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Exploitation Techniques
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Methods used to exploit buffer overflow vulnerabilities
+          </Typography>
 
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Use Case</TableCell>
+          <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Use Case</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {exploitationTechniques.map((tech) => (
+                  <TableRow key={tech.name} hover>
+                    <TableCell sx={{ fontWeight: 600 }}>{tech.name}</TableCell>
+                    <TableCell>{tech.description}</TableCell>
+                    <TableCell>{tech.useCase}</TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {exploitationTechniques.map((tech) => (
-                    <TableRow key={tech.name} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>{tech.name}</TableCell>
-                      <TableCell>{tech.description}</TableCell>
-                      <TableCell>{tech.useCase}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
-            <Accordion defaultExpanded sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <CodeIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
-                  Basic Stack Overflow Exploitation
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <CodeBlock title="Exploitation Flow (Conceptual)">
+          <Accordion defaultExpanded sx={{ borderRadius: 2, mb: 5 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                <CodeIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
+                Basic Stack Overflow Exploitation
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <CodeBlock title="Exploitation Flow (Conceptual)">
 {`# 1. Find the vulnerability
 #    - Identify buffer size (e.g., 64 bytes)
 #    - Determine offset to return address
 
 # 2. Calculate payload structure:
-┌──────────────────────────────────────────────────┐
-│ [PADDING]     [RET ADDR]    [SHELLCODE/ROP]      │
-│ (64 bytes)    (4/8 bytes)   (variable)           │
-└──────────────────────────────────────────────────┘
++--------------------------------------------------+
+| [PADDING]     [RET ADDR]    [SHELLCODE/ROP]      |
+| (64 bytes)    (4/8 bytes)   (variable)           |
++--------------------------------------------------+
 
 # 3. Without protections - Classic shellcode:
 payload = b"A" * 64           # Fill buffer
@@ -1641,549 +2061,460 @@ payload += p32(binsh_addr)    # Address of "/bin/sh"
 payload = b"A" * 64
 payload += rop_chain          # Gadgets to setup registers
                               # and call execve("/bin/sh")`}
-                </CodeBlock>
-              </AccordionDetails>
-            </Accordion>
+              </CodeBlock>
+            </AccordionDetails>
+          </Accordion>
 
-            {/* Advanced Heap Exploitation */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <StorageIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
-              Advanced Heap Exploitation Techniques
-            </Typography>
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              {heapExploitTechniques.map((tech) => (
-                <Grid item xs={12} md={6} key={tech.name}>
-                  <Card sx={{ height: "100%", borderLeft: `4px solid #f59e0b` }}>
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b" }}>{tech.name}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{tech.description}</Typography>
-                      <Box sx={{ bgcolor: alpha("#f59e0b", 0.05), p: 1, borderRadius: 1, mb: 1 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600 }}>Conditions: </Typography>
-                        <Typography variant="caption">{tech.conditions}</Typography>
-                      </Box>
-                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
-                        {tech.example}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+          {/* ==================== HEAP EXPLOITATION ==================== */}
+          <Typography id="heap-exploitation" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Advanced Heap Exploitation Techniques
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Exploiting dynamic memory allocator vulnerabilities
+          </Typography>
 
-            {/* ASLR Bypass Techniques */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <ShieldIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
-              ASLR Bypass Techniques
-            </Typography>
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              {aslrBypassTechniques.map((tech) => (
-                <Grid item xs={12} md={6} key={tech.technique}>
-                  <Card sx={{ height: "100%" }}>
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6" }}>{tech.technique}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
-                      <List dense>
-                        {tech.methods.map((method, idx) => (
-                          <ListItem key={idx} sx={{ py: 0 }}>
-                            <ListItemIcon sx={{ minWidth: 24 }}>
-                              <ArrowRightIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
-                            </ListItemIcon>
-                            <ListItemText primary={method} primaryTypographyProps={{ variant: "body2" }} />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-
-            {/* Windows Exploitation */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <SecurityIcon sx={{ mr: 1, verticalAlign: "middle", color: "#8b5cf6" }} />
-              Windows-Specific Exploitation
-            </Typography>
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {windowsExploitTechniques.map((tech) => (
-                    <TableRow key={tech.name}>
-                      <TableCell sx={{ fontWeight: 600 }}>{tech.name}</TableCell>
-                      <TableCell>{tech.description}</TableCell>
-                      <TableCell sx={{ fontSize: "0.8rem" }}>
-                        {tech.mitigation && <><strong>Mitigation:</strong> {tech.mitigation}<br/></>}
-                        {tech.bypass && <><strong>Bypass:</strong> {tech.bypass}</>}
-                        {tech.use && <><strong>Use:</strong> {tech.use}</>}
-                        {tech.size && <><br/><strong>Size:</strong> {tech.size}</>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* ARM Exploitation */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <MemoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
-              ARM Architecture Exploitation
-            </Typography>
-            <Grid container spacing={2}>
-              {armExploitTechniques.map((tech) => (
-                <Grid item xs={12} md={4} key={tech.name}>
-                  <Card sx={{ height: "100%", borderTop: `3px solid #22c55e` }}>
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>{tech.name}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
-                      <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 1, borderRadius: 1 }}>
-                        <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
-                          <strong>{tech.difference ? "Key Difference" : tech.transition ? "Mode Transition" : "Registers"}:</strong>
-                        </Typography>
-                        <Typography variant="caption">
-                          {tech.difference || tech.transition || tech.registers}
-                        </Typography>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-        )}
-
-        {/* Tab 4: Real-World CVEs */}
-        {tabValue === 4 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Notable Real-World Vulnerabilities
-            </Typography>
-
-            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>CVE</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Impact</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Year</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {realWorldCVEs.map((cve) => (
-                    <TableRow key={cve.cve} hover>
-                      <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{cve.cve}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{cve.name}</TableCell>
-                      <TableCell>{cve.type}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={cve.impact}
-                          size="small"
-                          sx={{
-                            bgcolor: alpha("#dc2626", 0.15),
-                            color: "#dc2626",
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{cve.year}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* Detailed CVE Case Studies */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <BugReportIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
-              Detailed Case Studies
-            </Typography>
-            {detailedCVEStudies.map((study) => (
-              <Accordion key={study.cve} sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Chip label={study.cve.split(" ")[0]} size="small" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626" }} />
-                    <Typography sx={{ fontWeight: 700 }}>{study.name}</Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Discovery</Typography>
-                        <Typography variant="body2">{study.discovery}</Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Description</Typography>
-                        <Typography variant="body2">{study.description}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Technical Details</Typography>
-                        <Typography variant="body2">{study.technical}</Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b" }}>Exploitation</Typography>
-                        <Typography variant="body2">{study.exploitation}</Typography>
-                      </Box>
-                      <Box sx={{ mb: 2, p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626" }}>Impact</Typography>
-                        <Typography variant="body2">{study.impact}</Typography>
-                      </Box>
-                      <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>Patch</Typography>
-                        <Typography variant="body2">{study.patch}</Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </AccordionDetails>
-              </Accordion>
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {heapExploitTechniques.map((tech) => (
+              <Grid item xs={12} md={6} key={tech.name}>
+                <Card sx={{ height: "100%", borderLeft: `4px solid #f59e0b` }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b" }}>{tech.name}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{tech.description}</Typography>
+                    <Box sx={{ bgcolor: alpha("#f59e0b", 0.05), p: 1, borderRadius: 1, mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>Conditions: </Typography>
+                      <Typography variant="caption">{tech.conditions}</Typography>
+                    </Box>
+                    <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                      {tech.example}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
             ))}
+          </Grid>
 
-            <Accordion sx={{ borderRadius: 2, mb: 2, mt: 4 }}>
+          {/* ==================== ASLR BYPASS ==================== */}
+          <Typography id="aslr-bypass" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            ASLR Bypass Techniques
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Methods to defeat address space layout randomization
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {aslrBypassTechniques.map((tech) => (
+              <Grid item xs={12} md={6} key={tech.technique}>
+                <Card sx={{ height: "100%" }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6" }}>{tech.technique}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
+                    <List dense>
+                      {tech.methods.map((method, idx) => (
+                        <ListItem key={idx} sx={{ py: 0 }}>
+                          <ListItemIcon sx={{ minWidth: 24 }}>
+                            <ArrowRightIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                          </ListItemIcon>
+                          <ListItemText primary={method} primaryTypographyProps={{ variant: "body2" }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* ==================== WINDOWS EXPLOITATION ==================== */}
+          <Typography id="windows-exploitation" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Windows-Specific Exploitation
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Platform-specific exploitation techniques for Windows
+          </Typography>
+
+          <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 5 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {windowsExploitTechniques.map((tech) => (
+                  <TableRow key={tech.name}>
+                    <TableCell sx={{ fontWeight: 600 }}>{tech.name}</TableCell>
+                    <TableCell>{tech.description}</TableCell>
+                    <TableCell sx={{ fontSize: "0.8rem" }}>
+                      {tech.mitigation && <><strong>Mitigation:</strong> {tech.mitigation}<br /></>}
+                      {tech.bypass && <><strong>Bypass:</strong> {tech.bypass}</>}
+                      {tech.use && <><strong>Use:</strong> {tech.use}</>}
+                      {tech.size && <><br /><strong>Size:</strong> {tech.size}</>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* ==================== ARM EXPLOITATION ==================== */}
+          <Typography id="arm-exploitation" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            ARM Architecture Exploitation
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Exploitation on ARM processors and mobile devices
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 5 }}>
+            {armExploitTechniques.map((tech) => (
+              <Grid item xs={12} md={4} key={tech.name}>
+                <Card sx={{ height: "100%", borderTop: `3px solid #22c55e` }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>{tech.name}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{tech.description}</Typography>
+                    <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 1, borderRadius: 1 }}>
+                      <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                        <strong>{tech.difference ? "Key Difference" : tech.transition ? "Mode Transition" : "Registers"}:</strong>
+                      </Typography>
+                      <Typography variant="caption">
+                        {tech.difference || tech.transition || tech.registers}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* ==================== REAL-WORLD CVES ==================== */}
+          <Typography id="real-world-cves" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Notable Real-World Vulnerabilities
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Famous buffer overflow CVEs and their impact
+          </Typography>
+
+          <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>CVE</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Impact</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Year</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {realWorldCVEs.map((cve) => (
+                  <TableRow key={cve.cve} hover>
+                    <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{cve.cve}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{cve.name}</TableCell>
+                    <TableCell>{cve.type}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={cve.impact}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha("#dc2626", 0.15),
+                          color: "#dc2626",
+                          fontWeight: 600,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>{cve.year}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Detailed CVE Case Studies */}
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+            <BugReportIcon sx={{ mr: 1, verticalAlign: "middle", color: "#dc2626" }} />
+            Detailed Case Studies
+          </Typography>
+          {detailedCVEStudies.map((study) => (
+            <Accordion key={study.cve} sx={{ mb: 2 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <HistoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
-                  Historical Timeline
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Chip label={study.cve.split(" ")[0]} size="small" sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626" }} />
+                  <Typography sx={{ fontWeight: 700 }}>{study.name}</Typography>
+                </Box>
               </AccordionSummary>
               <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Discovery</Typography>
+                      <Typography variant="body2">{study.discovery}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Description</Typography>
+                      <Typography variant="body2">{study.description}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Technical Details</Typography>
+                      <Typography variant="body2">{study.technical}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b" }}>Exploitation</Typography>
+                      <Typography variant="body2">{study.exploitation}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2, p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626" }}>Impact</Typography>
+                      <Typography variant="body2">{study.impact}</Typography>
+                    </Box>
+                    <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>Patch</Typography>
+                      <Typography variant="body2">{study.patch}</Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+
+          <Accordion sx={{ borderRadius: 2, mb: 5, mt: 4 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                <HistoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
+                Historical Timeline
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <List dense>
+                {[
+                  { year: "1988", event: "Morris Worm - First major buffer overflow attack" },
+                  { year: "1996", event: "Aleph One publishes 'Smashing the Stack for Fun and Profit'" },
+                  { year: "2001", event: "Code Red worm exploits IIS buffer overflow" },
+                  { year: "2003", event: "SQL Slammer worm spreads via SQL Server overflow" },
+                  { year: "2008", event: "Conficker worm exploits MS08-067 buffer overflow" },
+                  { year: "2014", event: "Heartbleed (CVE-2014-0160) disclosed" },
+                  { year: "2017", event: "EternalBlue leaked, WannaCry ransomware" },
+                  { year: "2019", event: "BlueKeep RDP vulnerability (CVE-2019-0708)" },
+                  { year: "2021", event: "Baron Samedit sudo heap overflow" },
+                  { year: "2022", event: "Dirty Pipe kernel vulnerability (CVE-2022-0847)" },
+                ].map((item, idx) => (
+                  <ListItem key={idx}>
+                    <ListItemIcon>
+                      <Chip label={item.year} size="small" sx={{ minWidth: 60 }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item.event} />
+                  </ListItem>
+                ))}
+              </List>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ==================== TOOLS ==================== */}
+          <Typography id="tools" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Analysis & Exploitation Tools
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Essential tools for buffer overflow analysis and exploitation
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {analysisTools.map((tool) => (
+              <Grid item xs={12} sm={6} md={3} key={tool.name}>
+                <Card sx={{ height: "100%", borderRadius: 2 }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      {tool.name}
+                    </Typography>
+                    <Chip
+                      label={tool.category}
+                      size="small"
+                      sx={{ mb: 1, mt: 0.5 }}
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      {tool.description}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* GDB Debugging Examples */}
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
+            <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#8b5cf6" }} />
+            GDB Debugging Examples
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {gdbExamples.map((example) => (
+              <Grid item xs={12} md={6} key={example.title}>
+                <Card sx={{ height: "100%" }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
+                      {example.title}
+                    </Typography>
+                    <Box sx={{ bgcolor: alpha("#8b5cf6", 0.03), p: 2, borderRadius: 2 }}>
+                      <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace", whiteSpace: "pre-wrap", overflow: "auto" }}>
+                        {example.commands}
+                      </pre>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Accordion defaultExpanded sx={{ borderRadius: 2, mt: 4, mb: 5 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                <CodeIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
+                Complete pwntools Exploit Template
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                A production-ready pwntools template with ASLR bypass, ROP chain building, and remote/local targeting.
+              </Typography>
+              <CodeBlock title="Python pwntools exploit template">
+                {pwntoolsTemplate}
+              </CodeBlock>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ==================== PREVENTION ==================== */}
+          <Typography id="prevention" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 180 }}>
+            Prevention & Mitigation
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Best practices for writing secure code
+          </Typography>
+
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {preventionMethods.map((method) => (
+              <Grid item xs={12} sm={6} md={4} key={method.method}>
+                <Card
+                  sx={{
+                    height: "100%",
+                    borderRadius: 2,
+                    borderLeft: `4px solid ${getSeverityColor(method.priority)}`,
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {method.method}
+                      </Typography>
+                      <Chip
+                        label={method.priority}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(getSeverityColor(method.priority), 0.15),
+                          color: getSeverityColor(method.priority),
+                          fontWeight: 600,
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {method.description}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.2)}`, mb: 5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <CheckCircleIcon sx={{ color: "#22c55e" }} />
+              Secure Development Checklist
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
+                  DO
+                </Typography>
                 <List dense>
                   {[
-                    { year: "1988", event: "Morris Worm - First major buffer overflow attack" },
-                    { year: "1996", event: "Aleph One publishes 'Smashing the Stack for Fun and Profit'" },
-                    { year: "2001", event: "Code Red worm exploits IIS buffer overflow" },
-                    { year: "2003", event: "SQL Slammer worm spreads via SQL Server overflow" },
-                    { year: "2008", event: "Conficker worm exploits MS08-067 buffer overflow" },
-                    { year: "2014", event: "Heartbleed (CVE-2014-0160) disclosed" },
-                    { year: "2017", event: "EternalBlue leaked, WannaCry ransomware" },
-                    { year: "2019", event: "BlueKeep RDP vulnerability (CVE-2019-0708)" },
-                    { year: "2021", event: "Baron Samedit sudo heap overflow" },
-                    { year: "2022", event: "Dirty Pipe kernel vulnerability (CVE-2022-0847)" },
+                    "Use bounds-checked functions (strncpy, snprintf)",
+                    "Enable all compiler protections",
+                    "Validate input lengths before processing",
+                    "Use memory-safe languages when possible",
+                    "Run static analyzers and fuzzers",
+                    "Keep dependencies updated",
                   ].map((item, idx) => (
-                    <ListItem key={idx}>
-                      <ListItemIcon>
-                        <Chip label={item.year} size="small" sx={{ minWidth: 60 }} />
+                    <ListItem key={idx} sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <ArrowRightIcon sx={{ color: "#22c55e" }} />
                       </ListItemIcon>
-                      <ListItemText primary={item.event} />
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
                     </ListItem>
                   ))}
                 </List>
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        )}
-
-        {/* Tab 5: Tools */}
-        {tabValue === 5 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Analysis & Exploitation Tools
-            </Typography>
-
-            <Grid container spacing={2}>
-              {analysisTools.map((tool) => (
-                <Grid item xs={12} sm={6} md={3} key={tool.name}>
-                  <Card sx={{ height: "100%", borderRadius: 2 }}>
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        {tool.name}
-                      </Typography>
-                      <Chip
-                        label={tool.category}
-                        size="small"
-                        sx={{ mb: 1, mt: 0.5 }}
-                        color="primary"
-                        variant="outlined"
-                      />
-                      <Typography variant="body2" color="text.secondary">
-                        {tool.description}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-
-            {/* GDB Debugging Examples */}
-            <Typography variant="h6" sx={{ fontWeight: 700, mt: 4, mb: 2 }}>
-              <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#8b5cf6" }} />
-              GDB Debugging Examples
-            </Typography>
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              {gdbExamples.map((example) => (
-                <Grid item xs={12} md={6} key={example.title}>
-                  <Card sx={{ height: "100%" }}>
-                    <CardContent>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
-                        {example.title}
-                      </Typography>
-                      <Box sx={{ bgcolor: alpha("#8b5cf6", 0.03), p: 2, borderRadius: 2 }}>
-                        <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace", whiteSpace: "pre-wrap", overflow: "auto" }}>
-                          {example.commands}
-                        </pre>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-
-            <Accordion defaultExpanded sx={{ borderRadius: 2, mt: 4, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <CodeIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
-                  Complete pwntools Exploit Template
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  A production-ready pwntools template with ASLR bypass, ROP chain building, and remote/local targeting.
-                </Typography>
-                <CodeBlock title="Python pwntools exploit template">
-                  {pwntoolsTemplate}
-                </CodeBlock>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <BuildIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
-                  Essential Tool Commands
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>checksec</Typography>
-                    <CodeBlock title="Check binary protections">
-{`$ checksec --file=./binary
-RELRO           STACK CANARY      NX            PIE
-Full RELRO      Canary found      NX enabled    PIE enabled
-
-$ checksec --fortify-file=./binary`}
-                    </CodeBlock>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>one_gadget</Typography>
-                    <CodeBlock title="Find one-shot RCE gadgets in libc">
-{`$ one_gadget ./libc.so.6
-0x4f2a5 execve("/bin/sh", rsp+0x40, environ)
-constraints:
-  rsp & 0xf == 0
-  rcx == NULL
-
-0x4f302 execve("/bin/sh", rsp+0x40, environ)
-constraints:
-  [rsp+0x40] == NULL`}
-                    </CodeBlock>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>ropper</Typography>
-                    <CodeBlock title="Find ROP gadgets">
-{`$ ropper --file ./binary --search "pop rdi"
-0x0000000000401233: pop rdi; ret;
-
-$ ropper --file ./binary --chain execve
-[INFO] Generating rop chain...`}
-                    </CodeBlock>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>patchelf</Typography>
-                    <CodeBlock title="Modify binary for local testing">
-{`# Use specific libc for testing
-$ patchelf --set-interpreter ./ld-linux.so.2 ./binary
-$ patchelf --set-rpath . ./binary
-$ patchelf --replace-needed libc.so.6 ./libc.so.6 ./binary`}
-                    </CodeBlock>
-                  </Grid>
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ borderRadius: 2, mb: 2 }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography sx={{ fontWeight: 600 }}>
-                  <MemoryIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
-                  pwndbg / GEF GDB Extensions
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Enhanced GDB extensions for exploit development. Install pwndbg or GEF for these features.
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ bgcolor: alpha("#f59e0b", 0.03), p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Heap Commands</Typography>
-                      <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace" }}>
-{`heap              # Show heap overview
-bins              # Show all freelist bins
-vis_heap_chunks   # Visual heap layout
-fastbins          # Show fastbin contents
-tcachebins        # Show tcache contents
-arena             # Show arena info`}
-                      </pre>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ bgcolor: alpha("#f59e0b", 0.03), p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Exploit Commands</Typography>
-                      <pre style={{ margin: 0, fontSize: "0.75rem", fontFamily: "monospace" }}>
-{`rop               # Show ROP gadgets
-vmmap             # Memory map
-search -s "flag"  # Search memory
-cyclic 200        # Generate pattern
-cyclic -l 0x6161  # Find offset
-got               # Show GOT entries`}
-                      </pre>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        )}
-
-        {/* Tab 6: Prevention */}
-        {tabValue === 6 && (
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-              Prevention & Mitigation
-            </Typography>
-
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-              {preventionMethods.map((method) => (
-                <Grid item xs={12} sm={6} md={4} key={method.method}>
-                  <Card 
-                    sx={{ 
-                      height: "100%", 
-                      borderRadius: 2,
-                      borderLeft: `4px solid ${getSeverityColor(method.priority)}`,
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                          {method.method}
-                        </Typography>
-                        <Chip 
-                          label={method.priority} 
-                          size="small"
-                          sx={{
-                            bgcolor: alpha(getSeverityColor(method.priority), 0.15),
-                            color: getSeverityColor(method.priority),
-                            fontWeight: 600,
-                          }}
-                        />
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {method.description}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-
-            <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                <CheckCircleIcon sx={{ color: "#22c55e" }} />
-                Secure Development Checklist
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
-                    ✅ DO
-                  </Typography>
-                  <List dense>
-                    {[
-                      "Use bounds-checked functions (strncpy, snprintf)",
-                      "Enable all compiler protections",
-                      "Validate input lengths before processing",
-                      "Use memory-safe languages when possible",
-                      "Run static analyzers and fuzzers",
-                      "Keep dependencies updated",
-                    ].map((item, idx) => (
-                      <ListItem key={idx} sx={{ py: 0.5 }}>
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                          <ArrowRightIcon sx={{ color: "#22c55e" }} />
-                        </ListItemIcon>
-                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>
-                    ❌ DON'T
-                  </Typography>
-                  <List dense>
-                    {[
-                      "Use gets(), strcpy(), sprintf() without limits",
-                      "Trust user input length claims",
-                      "Disable compiler protections for performance",
-                      "Ignore compiler warnings about buffer sizes",
-                      "Use fixed-size buffers for variable-length data",
-                      "Copy without checking destination size",
-                    ].map((item, idx) => (
-                      <ListItem key={idx} sx={{ py: 0.5 }}>
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                          <ArrowRightIcon sx={{ color: "#dc2626" }} />
-                        </ListItemIcon>
-                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Grid>
               </Grid>
-            </Paper>
-          </Box>
-        )}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#dc2626", mb: 1 }}>
+                  DON'T
+                </Typography>
+                <List dense>
+                  {[
+                    "Use gets(), strcpy(), sprintf() without limits",
+                    "Trust user input length claims",
+                    "Disable compiler protections for performance",
+                    "Ignore compiler warnings about buffer sizes",
+                    "Use fixed-size buffers for variable-length data",
+                    "Copy without checking destination size",
+                  ].map((item, idx) => (
+                    <ListItem key={idx} sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <ArrowRightIcon sx={{ color: "#dc2626" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+            </Grid>
+          </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Buffer Overflow Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
-
-        {/* Bottom Navigation */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          {/* ==================== QUIZ ==================== */}
+          <Paper
+            id="quiz"
+            sx={{
+              mt: 4,
+              p: 4,
+              borderRadius: 3,
+              border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+              scrollMarginTop: 180,
+            }}
           >
-            Back to Learning Hub
-          </Button>
+            <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+              <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+              Knowledge Check
+            </Typography>
+            <QuizSection
+              questions={quizQuestions}
+              accentColor={QUIZ_ACCENT_COLOR}
+              title="Buffer Overflow Knowledge Check"
+              description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+              questionsPerQuiz={QUIZ_QUESTION_COUNT}
+            />
+          </Paper>
+
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
       </Box>
-    </Box>
     </LearnPageLayout>
   );
 }

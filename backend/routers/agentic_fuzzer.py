@@ -95,7 +95,7 @@ class FuzzingTargetRequest(BaseModel):
 class StartAgenticFuzzingRequest(BaseModel):
     """Request to start agentic fuzzing session."""
     targets: List[FuzzingTargetRequest] = Field(..., description="Targets to fuzz")
-    max_iterations: int = Field(default=50, ge=5, le=200, description="Maximum LLM iterations")
+    max_iterations: int = Field(default=50, ge=5, le=2000, description="Maximum LLM iterations")
     techniques: List[str] = Field(default_factory=list, description="Specific techniques to focus on (empty = all)")
     depth: str = Field(default="normal", description="Fuzzing depth: quick, normal, thorough")
     auto_save: bool = Field(default=True, description="Auto-save session periodically")

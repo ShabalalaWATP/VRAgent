@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -64,7 +64,15 @@ import {
   CombinedAnalysisReport,
   CombinedAnalysisRequest,
   SupportingDocument,
+  DocumentAnalysisReport,
+  apiClient,
   ReportSection,
+  EvidenceCollectionGuide,
+  ContextualRiskScore,
+  RawAIResponseData,
+  ControlBypassGuide,
+  CorroboratedFinding,
+  DocumentFindingSummary,
 } from "../api/client";
 import { MermaidDiagram } from "./MermaidDiagram";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -346,6 +354,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
   const [projectInfo, setProjectInfo] = useState("");
   const [userRequirements, setUserRequirements] = useState("");
   const [supportingDocuments, setSupportingDocuments] = useState<SupportingDocument[]>([]);
+  const [selectedDocReportIds, setSelectedDocReportIds] = useState<number[]>([]);
   const [reportOptions, setReportOptions] = useState({
     include_cve_enrichment: true,
     include_attack_surface_mapping: true,
@@ -374,10 +383,32 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
   const [chatSuggestions, setChatSuggestions] = useState<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Parse raw_ai_response for enhanced data
+  const parsedAIResponse: RawAIResponseData | null = useMemo(() => {
+    if (!selectedReport?.raw_ai_response) return null;
+    try {
+      return JSON.parse(selectedReport.raw_ai_response) as RawAIResponseData;
+    } catch {
+      return null;
+    }
+  }, [selectedReport?.raw_ai_response]);
+
+  const evidenceGuides = parsedAIResponse?.evidence_collection_guides || [];
+  const contextualRiskScores = parsedAIResponse?.contextual_risk_scores || [];
+  const controlBypassRecommendations = parsedAIResponse?.control_bypass_recommendations || [];
+  const corroboratedFindings = parsedAIResponse?.corroborated_findings || [];
+  const documentFindingCorrelation = parsedAIResponse?.document_finding_correlation;
+  const documentStats = parsedAIResponse?.document_stats;
+
   // Queries
   const availableScansQuery = useQuery({
     queryKey: ["combined-analysis", "available-scans", projectId],
     queryFn: () => combinedAnalysisApi.getAvailableScans(parseInt(projectId)),
+  });
+
+  const analysisReportsQuery = useQuery<DocumentAnalysisReport[]>({
+    queryKey: ["combined-analysis", "doc-analysis-reports", projectId],
+    queryFn: () => apiClient.getAnalysisReports(parseInt(projectId)),
   });
 
   const reportsQuery = useQuery({
@@ -398,6 +429,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
       setProjectInfo("");
       setUserRequirements("");
       setSupportingDocuments([]);
+      setSelectedDocReportIds([]);
     },
   });
 
@@ -481,7 +513,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
     try {
       await combinedAnalysisApi.sendToTeamChat(selectedReport.id);
     } catch (error) {
-      console.error("Failed to send to team chat:", error);
+      console.error("Failed to send to project chat:", error);
     } finally {
       setExportLoading(null);
     }
@@ -574,20 +606,20 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
   };
 
   const selectAllInCategory = (category: string, scans: AvailableScanItem[]) => {
-    const scanType = getCategoryScanType(category);
-    const allSelected = scans.every((scan) => isScanSelected(scanType, scan.scan_id));
+    // Check if all scans in this category are selected (using each scan's own scan_type)
+    const allSelected = scans.every((scan) => isScanSelected(scan.scan_type, scan.scan_id));
 
     if (allSelected) {
-      // Deselect all
+      // Deselect all scans in this category
       setSelectedScans((prev) =>
-        prev.filter((s) => s.scan_type !== scanType)
+        prev.filter((s) => !scans.some((scan) => scan.scan_type === s.scan_type && scan.scan_id === s.scan_id))
       );
     } else {
-      // Select all
+      // Select all scans in this category that aren't already selected
       const newSelections: SelectedScan[] = scans
-        .filter((scan) => !isScanSelected(scanType, scan.scan_id))
+        .filter((scan) => !isScanSelected(scan.scan_type, scan.scan_id))
         .map((scan) => ({
-          scan_type: scanType,
+          scan_type: scan.scan_type as SelectedScan['scan_type'],
           scan_id: scan.scan_id,
           title: scan.title,
         }));
@@ -636,6 +668,15 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
     setSupportingDocuments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const toggleDocReport = (reportId: number) => {
+    setSelectedDocReportIds((prev) => {
+      if (prev.includes(reportId)) {
+        return prev.filter((id) => id !== reportId);
+      }
+      return [...prev, reportId];
+    });
+  };
+
   const handleGenerate = () => {
     if (selectedScans.length === 0) return;
 
@@ -646,6 +687,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
       project_info: projectInfo || undefined,
       user_requirements: userRequirements || undefined,
       supporting_documents: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+      document_analysis_report_ids: selectedDocReportIds.length > 0 ? selectedDocReportIds : undefined,
       include_exploit_recommendations: reportOptions.include_exploit_recommendations,
       include_attack_surface_map: reportOptions.include_attack_surface_mapping,
       include_risk_prioritization: reportOptions.include_remediation_priority,
@@ -683,13 +725,30 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
     if (!availableScansQuery.data) return [];
     switch (category) {
       case "security":
+        // Static Analysis: code-based security scans
         return availableScansQuery.data.security_scans || [];
       case "network":
-        return availableScansQuery.data.network_reports || [];
+        // Dynamic Analysis: all runtime/network security scans
+        return [
+          ...(availableScansQuery.data.network_reports || []),
+          ...(availableScansQuery.data.ssl_scans || []),
+          ...(availableScansQuery.data.dns_scans || []),
+          ...(availableScansQuery.data.traceroute_scans || []),
+          ...(availableScansQuery.data.nmap_scans || []),
+          ...(availableScansQuery.data.pcap_reports || []),
+          ...(availableScansQuery.data.api_tester_reports || []),
+          ...(availableScansQuery.data.dynamic_scans || []),
+          ...(availableScansQuery.data.agentic_fuzzer_reports || []),
+          ...(availableScansQuery.data.mitm_analysis_reports || []),
+        ];
       case "reverse_engineering":
         return availableScansQuery.data.re_reports || [];
       case "fuzzing":
-        return availableScansQuery.data.fuzzing_sessions || [];
+        // API and binary fuzzing sessions
+        return [
+          ...(availableScansQuery.data.fuzzing_sessions || []),
+          ...(availableScansQuery.data.binary_fuzzer_sessions || []),
+        ];
       default:
         return [];
     }
@@ -713,9 +772,9 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case "security":
-        return "Security Scans";
+        return "Static Analysis Scans";
       case "network":
-        return "Network Analysis";
+        return "Dynamic Analysis Scans";
       case "reverse_engineering":
         return "Reverse Engineering";
       case "fuzzing":
@@ -743,6 +802,16 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
   const totalAvailableScans =
     (availableScansQuery.data?.security_scans?.length || 0) +
     (availableScansQuery.data?.network_reports?.length || 0) +
+    (availableScansQuery.data?.ssl_scans?.length || 0) +
+    (availableScansQuery.data?.dns_scans?.length || 0) +
+    (availableScansQuery.data?.traceroute_scans?.length || 0) +
+    (availableScansQuery.data?.nmap_scans?.length || 0) +
+    (availableScansQuery.data?.pcap_reports?.length || 0) +
+    (availableScansQuery.data?.api_tester_reports?.length || 0) +
+    (availableScansQuery.data?.dynamic_scans?.length || 0) +
+    (availableScansQuery.data?.agentic_fuzzer_reports?.length || 0) +
+    (availableScansQuery.data?.binary_fuzzer_sessions?.length || 0) +
+    (availableScansQuery.data?.mitm_analysis_reports?.length || 0) +
     (availableScansQuery.data?.re_reports?.length || 0) +
     (availableScansQuery.data?.fuzzing_sessions?.length || 0);
 
@@ -860,12 +929,13 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                       if (scans.length === 0) return null;
 
                       const categoryColor = getCategoryColor(category);
+                      // Check selection using each scan's actual scan_type
                       const allSelected = scans.every((s) =>
-                        isScanSelected(getCategoryScanType(category), s.scan_id)
+                        isScanSelected(s.scan_type, s.scan_id)
                       );
                       const someSelected =
                         !allSelected &&
-                        scans.some((s) => isScanSelected(getCategoryScanType(category), s.scan_id));
+                        scans.some((s) => isScanSelected(s.scan_type, s.scan_id));
 
                       return (
                         <Paper
@@ -926,12 +996,12 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                               <Stack spacing={1}>
                                 {scans.map((scan) => (
                                   <FormControlLabel
-                                    key={scan.scan_id}
+                                    key={`${scan.scan_type}-${scan.scan_id}`}
                                     control={
                                       <Checkbox
-                                        checked={isScanSelected(getCategoryScanType(category), scan.scan_id)}
+                                        checked={isScanSelected(scan.scan_type, scan.scan_id)}
                                         onChange={() =>
-                                          toggleScan(getCategoryScanType(category), scan.scan_id, scan.title)
+                                          toggleScan(scan.scan_type as SelectedScan['scan_type'], scan.scan_id, scan.title)
                                         }
                                         sx={{
                                           color: alpha(categoryColor, 0.5),
@@ -1093,6 +1163,70 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                           sx={{ justifyContent: "space-between" }}
                         />
                       ))}
+                    </Stack>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Attach Document Analysis Reports */}
+              <Card
+                sx={{
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: "blur(10px)",
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                }}
+              >
+                <CardContent>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>
+                    🧠 AI Document Analysis Reports
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Attach existing AI document summaries instead of re-uploading files
+                  </Typography>
+
+                  {analysisReportsQuery.isLoading && (
+                    <Stack spacing={1}>
+                      {[1, 2].map((i) => (
+                        <Skeleton key={i} variant="rectangular" height={36} sx={{ borderRadius: 1 }} />
+                      ))}
+                    </Stack>
+                  )}
+
+                  {analysisReportsQuery.data && analysisReportsQuery.data.length === 0 && (
+                    <Alert severity="info">
+                      No document analysis reports found for this project.
+                    </Alert>
+                  )}
+
+                  {analysisReportsQuery.data && analysisReportsQuery.data.length > 0 && (
+                    <Stack spacing={1}>
+                      {analysisReportsQuery.data.map((report) => {
+                        const isCompleted = report.status === "completed";
+                        return (
+                          <FormControlLabel
+                            key={report.id}
+                            control={
+                              <Checkbox
+                                checked={selectedDocReportIds.includes(report.id)}
+                                onChange={() => toggleDocReport(report.id)}
+                                disabled={!isCompleted}
+                              />
+                            }
+                            label={
+                              <Stack spacing={0.2}>
+                                <Typography variant="body2" fontWeight={600}>
+                                  Analysis Report #{report.id}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {report.documents?.length || 0} documents •{" "}
+                                  {new Date(report.created_at).toLocaleDateString()} •{" "}
+                                  {report.status}
+                                </Typography>
+                              </Stack>
+                            }
+                          />
+                        );
+                      })}
                     </Stack>
                   )}
                 </CardContent>
@@ -1421,7 +1555,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                     </Tooltip>
                   </Stack>
                   <Stack direction="row" spacing={1}>
-                    <Tooltip title="Send report summary to project team chat">
+                    <Tooltip title="Send report summary to project chat">
                       <Button
                         size="small"
                         variant="contained"
@@ -1430,7 +1564,7 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                         onClick={handleSendToTeamChat}
                         disabled={!!exportLoading}
                       >
-                        Send to Team
+                        Send to Chat
                       </Button>
                     </Tooltip>
                   </Stack>
@@ -2220,6 +2354,783 @@ export default function ProjectCombinedAnalysisTab({ projectId, projectName }: P
                 </Typography>
                 <Divider sx={{ my: 2 }} />
                 <ReactMarkdown components={markdownComponents}>{selectedReport.documentation_analysis}</ReactMarkdown>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Contextual Risk Scores */}
+          {contextualRiskScores.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" fontWeight={600} gutterBottom>
+                  📊 Contextual Risk Assessment
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Risk scores adjusted for real-world context: authentication requirements, network position, compensating controls, and threat intelligence
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                {/* Priority Summary */}
+                <Box sx={{ mb: 3, display: "flex", gap: 2, flexWrap: "wrap" }}>
+                  {(() => {
+                    const immediate = contextualRiskScores.filter(s => s.priority_level === "immediate").length;
+                    const high = contextualRiskScores.filter(s => s.priority_level === "high").length;
+                    const medium = contextualRiskScores.filter(s => s.priority_level === "medium").length;
+                    return (
+                      <>
+                        {immediate > 0 && (
+                          <Chip
+                            label={`${immediate} Immediate (24-48h)`}
+                            sx={{ bgcolor: alpha(theme.palette.error.main, 0.1), color: theme.palette.error.main, fontWeight: 600 }}
+                          />
+                        )}
+                        {high > 0 && (
+                          <Chip
+                            label={`${high} High Priority (1-2 weeks)`}
+                            sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1), color: theme.palette.warning.main, fontWeight: 600 }}
+                          />
+                        )}
+                        {medium > 0 && (
+                          <Chip
+                            label={`${medium} Medium Priority`}
+                            sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: theme.palette.info.main, fontWeight: 600 }}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+                </Box>
+
+                <Stack spacing={2}>
+                  {contextualRiskScores.slice(0, 15).map((score, index) => (
+                    <Accordion key={index} sx={{ border: `1px solid ${alpha(getRiskColor(score.contextual_severity || "unknown"), 0.3)}` }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <Chip
+                            label={`${score.contextual_risk_score}/100`}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(getRiskColor(score.contextual_severity || "unknown"), 0.1),
+                              color: getRiskColor(score.contextual_severity || "unknown"),
+                              fontWeight: 700,
+                              minWidth: 60,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              {score.finding_title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Original: {score.original_severity} → Contextual: {score.contextual_severity}
+                              {score.priority_level === "immediate" && " 🔴 IMMEDIATE"}
+                              {score.priority_level === "high" && " 🟠 HIGH"}
+                            </Typography>
+                          </Box>
+                          <Chip label={score.recommended_timeline} size="small" variant="outlined" />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              Risk Drivers
+                            </Typography>
+                            <List dense>
+                              {score.key_risk_drivers.map((driver, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemIcon sx={{ minWidth: 28 }}>
+                                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: theme.palette.error.main }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={driver} primaryTypographyProps={{ variant: "body2" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              Risk Reducers
+                            </Typography>
+                            <List dense>
+                              {score.risk_reducers.map((reducer, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemIcon sx={{ minWidth: 28 }}>
+                                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: theme.palette.success.main }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={reducer} primaryTypographyProps={{ variant: "body2" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              Score Breakdown
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                              <Chip label={`Base: ${score.score_breakdown?.base_score || 0}`} size="small" variant="outlined" />
+                              <Chip label={`Auth: ${(score.score_breakdown?.auth_modifier || 0) >= 0 ? "+" : ""}${score.score_breakdown?.auth_modifier || 0}`} size="small" variant="outlined" />
+                              <Chip label={`Network: ${(score.score_breakdown?.network_modifier || 0) >= 0 ? "+" : ""}${score.score_breakdown?.network_modifier || 0}`} size="small" variant="outlined" />
+                              <Chip label={`Complexity: ${(score.score_breakdown?.complexity_modifier || 0) >= 0 ? "+" : ""}${score.score_breakdown?.complexity_modifier || 0}`} size="small" variant="outlined" />
+                              {(score.score_breakdown?.compensating_controls_modifier || 0) !== 0 && (
+                                <Chip label={`Controls: ${score.score_breakdown?.compensating_controls_modifier || 0}`} size="small" variant="outlined" color="success" />
+                              )}
+                              {(score.score_breakdown?.threat_intel_modifier || 0) !== 0 && (
+                                <Chip label={`Threat Intel: +${score.score_breakdown?.threat_intel_modifier || 0}`} size="small" variant="outlined" color="error" />
+                              )}
+                            </Box>
+                          </Grid>
+                          {score.additional_investigation_needed.length > 0 && (
+                            <Grid item xs={12}>
+                              <Alert severity="info" sx={{ mt: 1 }}>
+                                <Typography variant="subtitle2" fontWeight={600}>
+                                  Additional Investigation Needed:
+                                </Typography>
+                                <ul style={{ margin: "8px 0 0 0", paddingLeft: 20 }}>
+                                  {score.additional_investigation_needed.map((item, i) => (
+                                    <li key={i}><Typography variant="body2">{item}</Typography></li>
+                                  ))}
+                                </ul>
+                              </Alert>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Evidence Collection Guides */}
+          {evidenceGuides.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" fontWeight={600} gutterBottom>
+                  🔍 Evidence Collection Guides
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Step-by-step guidance for capturing proof of exploitation and validating findings
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                <Stack spacing={2}>
+                  {evidenceGuides.map((guide, index) => (
+                    <Accordion key={index} sx={{ border: `1px solid ${alpha(getRiskColor(guide.severity || "unknown"), 0.3)}` }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <Chip
+                            label={guide.severity || "Unknown"}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(getRiskColor(guide.severity || "unknown"), 0.1),
+                              color: getRiskColor(guide.severity || "unknown"),
+                              fontWeight: 600,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              {guide.finding_title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Type: {guide.finding_type} | Evidence folder: {guide.evidence_folder}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={3}>
+                          {/* Required Evidence */}
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              📸 Required Evidence
+                            </Typography>
+                            <Stack spacing={1}>
+                              {guide.evidence_requirements.map((ev, i) => (
+                                <Paper key={i} sx={{ p: 1.5, bgcolor: alpha(theme.palette.background.default, 0.5) }}>
+                                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                                    <Chip label={ev.priority} size="small" color={ev.priority === "Required" ? "error" : "default"} />
+                                    <Box sx={{ flex: 1 }}>
+                                      <Typography variant="body2" fontWeight={600}>{ev.description}</Typography>
+                                      <Typography variant="caption" color="text.secondary" display="block">
+                                        <strong>How:</strong> {ev.capture_method}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary" display="block">
+                                        <strong>Expected:</strong> {ev.expected_content}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontFamily: "monospace", bgcolor: alpha(theme.palette.primary.main, 0.1), px: 0.5, borderRadius: 0.5 }}>
+                                        Save as: {ev.filename}
+                                      </Typography>
+                                      {ev.tools.length > 0 && (
+                                        <Box sx={{ mt: 0.5 }}>
+                                          {ev.tools.map((tool, j) => (
+                                            <Chip key={j} label={tool} size="small" variant="outlined" sx={{ mr: 0.5, height: 20, fontSize: "0.7rem" }} />
+                                          ))}
+                                        </Box>
+                                      )}
+                                    </Box>
+                                  </Box>
+                                </Paper>
+                              ))}
+                            </Stack>
+                          </Grid>
+
+                          {/* Validation Steps */}
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              ✅ Validation Steps
+                            </Typography>
+                            <List dense>
+                              {guide.validation_steps.map((step: any, i: number) => (
+                                <ListItem key={i} sx={{ py: 0.5, alignItems: "flex-start" }}>
+                                  <ListItemIcon sx={{ minWidth: 28, mt: 0.5 }}>
+                                    <Chip label={typeof step === 'object' ? step.step : i + 1} size="small" sx={{ width: 24, height: 24, fontSize: "0.75rem" }} />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={typeof step === 'object' ? step.action : String(step)}
+                                    secondary={
+                                      typeof step === 'object' ? (
+                                        <>
+                                          <Typography variant="caption" color="success.main" display="block">
+                                            ✓ Expected: {step.expected || 'N/A'}
+                                          </Typography>
+                                          <Typography variant="caption" color="warning.main" display="block">
+                                            ✗ If fails: {step.if_fails || 'N/A'}
+                                          </Typography>
+                                        </>
+                                      ) : null
+                                    }
+                                    primaryTypographyProps={{ variant: "body2", fontWeight: 500 }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+
+                          {/* Quick Verify & Indicators */}
+                          <Grid item xs={12} md={6}>
+                            {guide.quick_verify && (
+                              <Box sx={{ mb: 2 }}>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                  ⚡ Quick Verification
+                                </Typography>
+                                <Box sx={{ p: 1.5, bgcolor: "#1e1e1e", borderRadius: 1, fontFamily: "monospace", fontSize: "0.8rem", color: "#22d3ee", overflow: "auto" }}>
+                                  <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{guide.quick_verify.command}</pre>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                                  Expected: {guide.quick_verify.expected}
+                                </Typography>
+                              </Box>
+                            )}
+
+                            <Typography variant="subtitle2" fontWeight={600} color="success.main" gutterBottom>
+                              ✓ True Positive Indicators
+                            </Typography>
+                            <List dense>
+                              {guide.true_positive_indicators.slice(0, 3).map((ind, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemText primary={ind} primaryTypographyProps={{ variant: "caption" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+
+                            <Typography variant="subtitle2" fontWeight={600} color="warning.main" gutterBottom sx={{ mt: 1 }}>
+                              ✗ False Positive Indicators
+                            </Typography>
+                            <List dense>
+                              {guide.false_positive_indicators.slice(0, 3).map((ind, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemText primary={ind} primaryTypographyProps={{ variant: "caption" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Control Bypass Recommendations */}
+          {controlBypassRecommendations.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" fontWeight={600} gutterBottom>
+                  🛡️ Compensating Control Bypass Techniques
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Security controls were detected protecting vulnerable endpoints. Use these techniques to bypass them.
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                <Stack spacing={2}>
+                  {controlBypassRecommendations.map((guide: ControlBypassGuide, index: number) => (
+                    <Accordion key={index} sx={{ border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}` }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <Chip
+                            label={(guide.control_type || "unknown").replace("_", " ").toUpperCase()}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(theme.palette.warning.main, 0.1),
+                              color: theme.palette.warning.main,
+                              fontWeight: 600,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              {guide.control_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {guide.bypass_techniques.length} bypass techniques available
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={3}>
+                          {/* Description */}
+                          <Grid item xs={12}>
+                            <Typography variant="body2" color="text.secondary">
+                              {guide.description}
+                            </Typography>
+                            {guide.prioritized_note && (
+                              <Alert severity="info" sx={{ mt: 1 }}>
+                                <strong>For this vulnerability:</strong> {guide.prioritized_note}
+                              </Alert>
+                            )}
+                          </Grid>
+
+                          {/* Detection Methods */}
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              🔍 How to Detect This Control
+                            </Typography>
+                            <List dense>
+                              {guide.detection_methods.slice(0, 4).map((method, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemText
+                                    primary={method}
+                                    primaryTypographyProps={{ variant: "caption" }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+
+                          {/* Common Misconfigurations */}
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom color="warning.main">
+                              ⚠️ Common Misconfigurations
+                            </Typography>
+                            <List dense>
+                              {guide.common_misconfigurations.slice(0, 4).map((misconfig, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemText
+                                    primary={misconfig}
+                                    primaryTypographyProps={{ variant: "caption" }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+
+                          {/* Bypass Techniques */}
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              🔓 Bypass Techniques
+                            </Typography>
+                            <Stack spacing={1.5}>
+                              {guide.bypass_techniques.slice(0, 5).map((technique, i) => (
+                                <Paper
+                                  key={i}
+                                  sx={{
+                                    p: 2,
+                                    bgcolor: alpha(theme.palette.background.default, 0.5),
+                                    border: `1px solid ${alpha(theme.palette.divider, 0.5)}`
+                                  }}
+                                >
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                    <Typography variant="subtitle2" fontWeight={600}>
+                                      {technique.name}
+                                    </Typography>
+                                    <Chip
+                                      label={`Complexity: ${technique.complexity}`}
+                                      size="small"
+                                      variant="outlined"
+                                      color={technique.complexity === "trivial" ? "success" : technique.complexity === "low" ? "info" : "warning"}
+                                      sx={{ height: 20, fontSize: "0.7rem" }}
+                                    />
+                                    <Chip
+                                      label={`Reliability: ${technique.reliability}`}
+                                      size="small"
+                                      variant="outlined"
+                                      color={technique.reliability === "high" ? "success" : technique.reliability === "medium" ? "info" : "warning"}
+                                      sx={{ height: 20, fontSize: "0.7rem" }}
+                                    />
+                                  </Box>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    {technique.description}
+                                  </Typography>
+
+                                  {/* Steps */}
+                                  {technique.steps.length > 0 && (
+                                    <Box sx={{ mb: 1 }}>
+                                      <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+                                        Steps:
+                                      </Typography>
+                                      <ol style={{ margin: 0, paddingLeft: 20 }}>
+                                        {technique.steps.slice(0, 3).map((step, j) => (
+                                          <li key={j}>
+                                            <Typography variant="caption">{step}</Typography>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </Box>
+                                  )}
+
+                                  {/* Example Payloads */}
+                                  {technique.example_payloads.length > 0 && (
+                                    <Box sx={{ mb: 1 }}>
+                                      <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+                                        Example Payloads:
+                                      </Typography>
+                                      <Box sx={{
+                                        p: 1,
+                                        bgcolor: "#1e1e1e",
+                                        borderRadius: 1,
+                                        fontFamily: "monospace",
+                                        fontSize: "0.75rem",
+                                        color: "#22d3ee",
+                                        overflow: "auto",
+                                        maxHeight: 100
+                                      }}>
+                                        {technique.example_payloads.slice(0, 3).map((payload, j) => (
+                                          <div key={j}>{payload}</div>
+                                        ))}
+                                      </Box>
+                                    </Box>
+                                  )}
+
+                                  {/* Tools */}
+                                  {technique.tools.length > 0 && (
+                                    <Box>
+                                      <Typography variant="caption" fontWeight={600}>Tools: </Typography>
+                                      {technique.tools.map((tool, j) => (
+                                        <Chip
+                                          key={j}
+                                          label={tool}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ mr: 0.5, height: 20, fontSize: "0.65rem" }}
+                                        />
+                                      ))}
+                                    </Box>
+                                  )}
+                                </Paper>
+                              ))}
+                            </Stack>
+                          </Grid>
+
+                          {/* General Tips */}
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                              💡 General Tips
+                            </Typography>
+                            <List dense>
+                              {guide.general_tips.slice(0, 4).map((tip, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Typography variant="caption" color="primary">•</Typography>
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={tip}
+                                    primaryTypographyProps={{ variant: "caption" }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Document-Finding Correlation Summary */}
+          {documentFindingCorrelation && !documentFindingCorrelation.error && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" fontWeight={600} gutterBottom>
+                  📚 Document-Finding Correlation
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Analysis of how uploaded documentation relates to discovered vulnerabilities.
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                {/* Coverage Stats */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={6} md={3}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.success.main, 0.1) }}>
+                      <Typography variant="h4" fontWeight={700} color="success.main">
+                        {documentFindingCorrelation.documentation_coverage_percent}%
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Documentation Coverage
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.info.main, 0.1) }}>
+                      <Typography variant="h4" fontWeight={700} color="info.main">
+                        {documentFindingCorrelation.findings_with_documentation}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Findings with Docs
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+                      <Typography variant="h4" fontWeight={700} color="warning.main">
+                        {documentFindingCorrelation.findings_without_documentation}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Undocumented Findings
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+                      <Typography variant="h4" fontWeight={700} color="primary.main">
+                        {documentFindingCorrelation.total_documents}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Documents Analyzed
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Documents Referenced */}
+                {Object.keys(documentFindingCorrelation.documents_referenced || {}).length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                      📄 Documents Referenced by Findings
+                    </Typography>
+                    <Stack spacing={1}>
+                      {Object.entries(documentFindingCorrelation.documents_referenced || {}).map(([docName, info]: [string, { finding_count: number; matched_terms: string[] }]) => (
+                        <Paper
+                          key={docName}
+                          sx={{
+                            p: 1.5,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            bgcolor: alpha(theme.palette.background.default, 0.5),
+                            border: `1px solid ${alpha(theme.palette.divider, 0.5)}`
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <DescriptionIcon fontSize="small" color="primary" />
+                            <Typography variant="body2" fontWeight={500}>
+                              {docName}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Chip
+                              label={`${info.finding_count} findings`}
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                            />
+                            <Tooltip title={info.matched_terms.join(", ")}>
+                              <Chip
+                                label={`${info.matched_terms.length} terms`}
+                                size="small"
+                                variant="outlined"
+                              />
+                            </Tooltip>
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {/* Undocumented Endpoints */}
+                {documentFindingCorrelation.undocumented_endpoints && documentFindingCorrelation.undocumented_endpoints.length > 0 && (
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="warning.main">
+                      ⚠️ Endpoints Missing Documentation
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      These vulnerable endpoints have no corresponding documentation. Consider documenting them.
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {documentFindingCorrelation.undocumented_endpoints.slice(0, 15).map((endpoint, i) => (
+                        <Chip
+                          key={i}
+                          label={endpoint}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(theme.palette.warning.main, 0.1),
+                            color: theme.palette.warning.main,
+                            fontFamily: "monospace",
+                            fontSize: "0.7rem"
+                          }}
+                        />
+                      ))}
+                      {documentFindingCorrelation.undocumented_endpoints.length > 15 && (
+                        <Chip
+                          label={`+${documentFindingCorrelation.undocumented_endpoints.length - 15} more`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Corroborated Findings with Document References */}
+          {corroboratedFindings.length > 0 && corroboratedFindings.some((f: CorroboratedFinding) => f.has_documentation) && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" fontWeight={600} gutterBottom>
+                  🔗 High-Confidence Findings with Documentation
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Findings corroborated by multiple scan sources with relevant documentation references.
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+
+                <Stack spacing={2}>
+                  {corroboratedFindings
+                    .filter((f: CorroboratedFinding) => f.has_documentation && f.document_correlations && f.document_correlations.length > 0)
+                    .slice(0, 10)
+                    .map((finding: CorroboratedFinding, index: number) => (
+                    <Accordion
+                      key={index}
+                      sx={{
+                        border: `1px solid ${alpha(
+                          finding.severity === "Critical" ? theme.palette.error.main :
+                          finding.severity === "High" ? theme.palette.warning.main :
+                          theme.palette.info.main, 0.3
+                        )}`
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <Chip
+                            label={finding.severity}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(
+                                finding.severity === "Critical" ? theme.palette.error.main :
+                                finding.severity === "High" ? theme.palette.warning.main :
+                                finding.severity === "Medium" ? theme.palette.info.main :
+                                theme.palette.success.main, 0.1
+                              ),
+                              color: finding.severity === "Critical" ? theme.palette.error.main :
+                                     finding.severity === "High" ? theme.palette.warning.main :
+                                     finding.severity === "Medium" ? theme.palette.info.main :
+                                     theme.palette.success.main,
+                              fontWeight: 600,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              {finding.finding_key}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {finding.source_count} sources • {finding.confidence_level} confidence •{" "}
+                              {finding.document_correlations?.length || 0} doc refs
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          {/* Sources */}
+                          <Grid item xs={12} md={4}>
+                            <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+                              Detected By:
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {(finding.sources as string[] || []).map((source: string, i: number) => (
+                                <Chip key={i} label={source} size="small" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Grid>
+
+                          {/* Document References */}
+                          <Grid item xs={12} md={8}>
+                            <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
+                              📚 Related Documentation:
+                            </Typography>
+                            <Stack spacing={1}>
+                              {finding.document_correlations?.slice(0, 3).map((corr: { document: string; matched_term: string; relevance_score: number; context?: string }, i: number) => (
+                                <Paper
+                                  key={i}
+                                  sx={{
+                                    p: 1.5,
+                                    bgcolor: alpha(theme.palette.info.main, 0.05),
+                                    border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`
+                                  }}
+                                >
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                                    <DescriptionIcon fontSize="small" color="info" />
+                                    <Typography variant="caption" fontWeight={600}>
+                                      {corr.document}
+                                    </Typography>
+                                    <Chip
+                                      label={`Matched: ${corr.matched_term}`}
+                                      size="small"
+                                      sx={{ height: 18, fontSize: "0.65rem" }}
+                                    />
+                                    <Chip
+                                      label={`${Math.round(corr.relevance_score * 100)}% relevant`}
+                                      size="small"
+                                      color="info"
+                                      variant="outlined"
+                                      sx={{ height: 18, fontSize: "0.65rem" }}
+                                    />
+                                  </Box>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{
+                                      display: "block",
+                                      fontFamily: "monospace",
+                                      fontSize: "0.7rem",
+                                      bgcolor: alpha(theme.palette.background.default, 0.5),
+                                      p: 1,
+                                      borderRadius: 1,
+                                      maxHeight: 80,
+                                      overflow: "auto"
+                                    }}
+                                  >
+                                    {(corr.context || "").slice(0, 300)}
+                                    {(corr.context || "").length > 300 && "..."}
+                                  </Typography>
+                                </Paper>
+                              ))}
+                            </Stack>
+                          </Grid>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Stack>
               </CardContent>
             </Card>
           )}

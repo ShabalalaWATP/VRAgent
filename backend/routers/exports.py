@@ -2183,7 +2183,7 @@ Answer the user's question based on this security scan report. Be helpful, speci
             model=settings.gemini_model_id,
             contents=conversation,
             config=types.GenerateContentConfig(
-                temperature=0.7,
+                thinking_config=types.ThinkingConfig(thinking_level="high"),
                 max_output_tokens=2048,
             )
         )
@@ -2399,7 +2399,7 @@ Analyze each carefully and respond with ONLY the JSON object."""
             model=settings.gemini_model_id,
             contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
             config=types.GenerateContentConfig(
-                temperature=0.1,  # Low temperature for consistent analysis
+                thinking_config=types.ThinkingConfig(thinking_level="low"),  # Low thinking for consistent analysis
                 response_mime_type="application/json",
             ),
         )
@@ -2772,7 +2772,7 @@ Keep the explanation concise but informative. Use bullet points."""
             model=settings.gemini_model_id,
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             config=types.GenerateContentConfig(
-                temperature=0.3,
+                thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 max_output_tokens=1500,
             )
         )

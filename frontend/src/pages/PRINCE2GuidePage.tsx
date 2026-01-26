@@ -671,6 +671,9 @@ const quizQuestions: QuizQuestion[] = [
 // ========== SIDEBAR SECTIONS ==========
 const sections = [
   { id: "introduction", label: "Introduction" },
+  { id: "road-trip-analogy", label: "Road Trip Analogy" },
+  { id: "why-prince2-matters", label: "Why PRINCE2 Matters" },
+  { id: "history", label: "History & Evolution" },
   { id: "principles", label: "7 Principles" },
   { id: "themes", label: "7 Themes" },
   { id: "theme-business-case", label: "Business Case Theme" },
@@ -681,11 +684,15 @@ const sections = [
   { id: "theme-change", label: "Change Theme" },
   { id: "theme-progress", label: "Progress Theme" },
   { id: "processes", label: "7 Processes" },
+  { id: "day-in-the-life", label: "Day in the Life" },
   { id: "roles", label: "Roles & Responsibilities" },
   { id: "management-products", label: "Management Products" },
+  { id: "pm-tools", label: "PM Tools Landscape" },
   { id: "tailoring", label: "Tailoring PRINCE2" },
   { id: "prince2-agile", label: "PRINCE2 Agile" },
+  { id: "career-paths", label: "Career Paths & Salaries" },
   { id: "certifications", label: "Certifications" },
+  { id: "exam-tips", label: "Exam Tips" },
   { id: "quiz", label: "Knowledge Check" },
 ];
 
@@ -900,6 +907,214 @@ export default function PRINCE2GuidePage() {
             </Box>
           </Paper>
 
+          {/* Road Trip Analogy for Beginners */}
+          <Paper
+            id="road-trip-analogy"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.3)}`, bgcolor: alpha("#22c55e", 0.02) }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TipsAndUpdatesIcon sx={{ color: "#22c55e" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                🚗 PRINCE2 Explained: The Road Trip Analogy
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Imagine you're planning a <strong>cross-country road trip</strong> with friends. PRINCE2 is like having
+              a proven travel planning system that's been perfected by millions of travelers before you.
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#22c55e", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Road Trip Element</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>PRINCE2 Equivalent</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>What It Does</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { trip: "🎯 Destination & Why", prince2: "Business Case", does: "Why are we going? Is it worth the time and money?" },
+                    { trip: "👥 Who's Coming & Roles", prince2: "Organization", does: "Who drives? Who navigates? Who handles money?" },
+                    { trip: "🗺️ Route & Schedule", prince2: "Plans", does: "Which roads? How many days? Where do we stop?" },
+                    { trip: "📸 Attractions to Visit", prince2: "Products", does: "Specific places and experiences we want to have" },
+                    { trip: "⛽ Checkpoints/Gas Stops", prince2: "Stages", does: "Breaking the journey into manageable legs" },
+                    { trip: "🌧️ Weather & Traffic Issues", prince2: "Risks", does: "What could go wrong? What's our backup?" },
+                    { trip: "🔄 Detours & Changes", prince2: "Change Control", does: "New attraction found - do we change the plan?" },
+                    { trip: "📍 GPS Progress Checks", prince2: "Progress", does: "Are we on track? Do we need to adjust?" },
+                  ].map((row) => (
+                    <TableRow key={row.trip}>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.trip}</TableCell>
+                      <TableCell sx={{ color: ACCENT_COLOR, fontWeight: 600 }}>{row.prince2}</TableCell>
+                      <TableCell>{row.does}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#22c55e", 0.1), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.3)}` }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <TipsAndUpdatesIcon sx={{ fontSize: 20, color: "#22c55e" }} />
+                The 7-7-7 Memory Trick
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                PRINCE2 is built on <strong>7-7-7</strong>: 7 Principles, 7 Themes, 7 Processes
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: "center", p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: ACCENT_COLOR }}>7</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Principles</Typography>
+                    <Typography variant="caption" color="text.secondary">Rules you MUST follow</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: "center", p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: "#3b82f6" }}>7</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Themes</Typography>
+                    <Typography variant="caption" color="text.secondary">Areas to manage constantly</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ textAlign: "center", p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: "#22c55e" }}>7</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Processes</Typography>
+                    <Typography variant="caption" color="text.secondary">Steps from start to finish</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          </Paper>
+
+          {/* Why PRINCE2 Matters */}
+          <Paper
+            id="why-prince2-matters"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <VerifiedIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Why PRINCE2 Matters
+              </Typography>
+            </Box>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {[
+                { stat: "1M+", label: "Certified Professionals", color: ACCENT_COLOR },
+                { stat: "150+", label: "Countries Using PRINCE2", color: "#3b82f6" },
+                { stat: "30+", label: "Years of Best Practices", color: "#22c55e" },
+                { stat: "70%", label: "UK Government Projects", color: "#f59e0b" },
+              ].map((item) => (
+                <Grid item xs={6} md={3} key={item.label}>
+                  <Box sx={{ textAlign: "center", p: 2, bgcolor: alpha(item.color, 0.1), borderRadius: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: item.color }}>{item.stat}</Typography>
+                    <Typography variant="caption" color="text.secondary">{item.label}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#dc2626", mb: 2 }}>
+                    😰 Without PRINCE2:
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Projects start without clear justification",
+                      "No one knows who's responsible for what",
+                      "Scope creep runs unchecked",
+                      "Issues discovered too late to fix",
+                      "Projects 'complete' but benefits never realized",
+                      "Same mistakes repeated on every project",
+                    ].map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <WarningIcon sx={{ fontSize: 16, color: "#dc2626" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#22c55e", mb: 2 }}>
+                    ✅ With PRINCE2:
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Business justification reviewed at every stage",
+                      "Clear roles and decision-making authority",
+                      "Controlled changes through proper governance",
+                      "Early warning systems through management by exception",
+                      "Focus on benefits realization post-project",
+                      "Lessons captured and applied to future projects",
+                    ].map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha(ACCENT_COLOR, 0.05), borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ fontStyle: "italic", textAlign: "center" }}>
+                "68% of IT projects fail. PRINCE2 provides the governance framework to be in the successful 32%."
+                <br />
+                <Typography component="span" variant="caption" color="text.secondary">
+                  — Based on industry research from Standish Group CHAOS Report
+                </Typography>
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* PRINCE2 History & Evolution */}
+          <Paper
+            id="history"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TimelineIcon sx={{ color: ACCENT_COLOR }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                PRINCE2 History & Evolution
+              </Typography>
+            </Box>
+            <Box sx={{ position: "relative" }}>
+              {[
+                { year: "1975", title: "PROMPTII Created", desc: "UK Government's CCTA develops PROMPTII for IT project management", color: "#6b7280" },
+                { year: "1989", title: "PRINCE is Born", desc: "PROMPTII evolves into PRINCE (PRojects IN Controlled Environments)", color: "#8b5cf6" },
+                { year: "1996", title: "PRINCE2 Released", desc: "Major revision adds themes, becomes methodology for all project types", color: ACCENT_COLOR },
+                { year: "2009", title: "PRINCE2:2009", desc: "Simplified, 7 principles introduced, more flexible and practical", color: "#3b82f6" },
+                { year: "2013", title: "AXELOS Formed", desc: "Joint venture takes ownership, globalizes the methodology", color: "#0891b2" },
+                { year: "2017", title: "PRINCE2:2017", desc: "Current version with updated guidance and improved alignment", color: "#22c55e" },
+                { year: "2015-Now", title: "PRINCE2 Agile", desc: "Combines PRINCE2 governance with agile flexibility", color: "#f59e0b" },
+              ].map((milestone, i) => (
+                <Box key={milestone.year} sx={{ display: "flex", mb: 2 }}>
+                  <Box sx={{ width: 80, flexShrink: 0, textAlign: "right", pr: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: milestone.color }}>
+                      {milestone.year}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ position: "relative", pr: 2 }}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: milestone.color, position: "absolute", left: -6, top: 4 }} />
+                    {i < 6 && <Box sx={{ position: "absolute", left: -1, top: 16, width: 2, height: "calc(100% + 8px)", bgcolor: alpha(milestone.color, 0.3) }} />}
+                  </Box>
+                  <Box sx={{ flex: 1, pb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{milestone.title}</Typography>
+                    <Typography variant="body2" color="text.secondary">{milestone.desc}</Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Paper>
+
           {/* 7 Principles Section */}
           <Paper id="principles" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -913,6 +1128,35 @@ export default function PRINCE2GuidePage() {
               using PRINCE2. They are universal, self-validating, and empowering. All seven must be applied for a
               project to be PRINCE2 compliant.
             </Typography>
+            
+            {/* Visual: Project Control Equation */}
+            <Box sx={{ mb: 4, p: 3, bgcolor: alpha(ACCENT_COLOR, 0.05), borderRadius: 2, textAlign: "center" }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+                The PRINCE2 Control Equation:
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, flexWrap: "wrap" }}>
+                <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, minWidth: 120 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "#dc2626" }}>7 Principles</Typography>
+                  <Typography variant="caption" color="text.secondary">Foundation</Typography>
+                </Box>
+                <Typography variant="h4" sx={{ color: "text.secondary" }}>+</Typography>
+                <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, minWidth: 120 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6" }}>7 Themes</Typography>
+                  <Typography variant="caption" color="text.secondary">What to Manage</Typography>
+                </Box>
+                <Typography variant="h4" sx={{ color: "text.secondary" }}>+</Typography>
+                <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2, minWidth: 120 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "#22c55e" }}>7 Processes</Typography>
+                  <Typography variant="caption" color="text.secondary">How to Do It</Typography>
+                </Box>
+                <Typography variant="h4" sx={{ color: "text.secondary" }}>=</Typography>
+                <Box sx={{ p: 2, bgcolor: ACCENT_COLOR, borderRadius: 2, minWidth: 140 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: "white" }}>Controlled Project</Typography>
+                  <Typography variant="caption" sx={{ color: alpha("#fff", 0.8) }}>Success!</Typography>
+                </Box>
+              </Box>
+            </Box>
+
             <Grid container spacing={2}>
               {[
                 {
@@ -1447,6 +1691,102 @@ export default function PRINCE2GuidePage() {
             </Grid>
           </Paper>
 
+          {/* Day in the Life: PRINCE2 in Action */}
+          <Paper
+            id="day-in-the-life"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#0891b2", 0.3)}`, bgcolor: alpha("#0891b2", 0.02) }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <PersonIcon sx={{ color: "#0891b2" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                📅 Day in the Life: PRINCE2 in Action
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              See how PRINCE2 processes and products work in real project scenarios throughout a typical day:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                {
+                  time: "8:00 AM",
+                  event: "Daily Stand-up",
+                  scenario: "Team Manager reviews yesterday's Work Package progress. One task is behind schedule.",
+                  prince2: "Managing Product Delivery (MP) - monitoring work assigned",
+                  color: "#3b82f6",
+                },
+                {
+                  time: "9:30 AM",
+                  event: "Issue Escalation",
+                  scenario: "A supplier can't deliver a critical component on time. This will exceed stage tolerance.",
+                  prince2: "Exception Report prepared, Controlling a Stage (CS) - escalate to Project Board",
+                  color: "#dc2626",
+                },
+                {
+                  time: "10:30 AM",
+                  event: "Project Board Meeting",
+                  scenario: "Board reviews Exception Report. Decides to extend timeline by 2 weeks within project tolerance.",
+                  prince2: "Directing a Project (DP) - ad hoc direction, authorizing exception",
+                  color: "#8b5cf6",
+                },
+                {
+                  time: "12:00 PM",
+                  event: "Quality Review",
+                  scenario: "Team conducts quality review of completed deliverable against Product Description.",
+                  prince2: "Quality Theme - Quality Control, updating Quality Register",
+                  color: "#f59e0b",
+                },
+                {
+                  time: "2:00 PM",
+                  event: "Change Request",
+                  scenario: "User requests new feature. PM assesses impact using Issue Register, logs as RFC.",
+                  prince2: "Change Theme - Request for Change evaluated against baseline",
+                  color: "#0891b2",
+                },
+                {
+                  time: "3:30 PM",
+                  event: "Risk Review",
+                  scenario: "Weekly risk review identifies new threat. Team updates Risk Register with response plan.",
+                  prince2: "Risk Theme - Assess, Plan responses, Communicate to stakeholders",
+                  color: "#22c55e",
+                },
+                {
+                  time: "4:30 PM",
+                  event: "Highlight Report",
+                  scenario: "PM prepares weekly Highlight Report summarizing progress, issues, and risks for Project Board.",
+                  prince2: "Progress Theme - Controlling a Stage (CS), regular reporting",
+                  color: ACCENT_COLOR,
+                },
+                {
+                  time: "5:00 PM",
+                  event: "Lessons Captured",
+                  scenario: "Team debriefs on supplier issue. PM adds lesson to Lessons Log for future reference.",
+                  prince2: "Learn from Experience principle - continuous improvement",
+                  color: "#64748b",
+                },
+              ].map((item) => (
+                <Grid item xs={12} md={6} key={item.time}>
+                  <Card sx={{ height: "100%", borderLeft: `4px solid ${item.color}` }}>
+                    <CardContent>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Chip label={item.time} size="small" sx={{ bgcolor: item.color, color: "white", fontWeight: 600 }} />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.event}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {item.scenario}
+                      </Typography>
+                      <Box sx={{ bgcolor: alpha(item.color, 0.1), p: 1, borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: item.color }}>
+                          PRINCE2: {item.prince2}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
           {/* Roles & Responsibilities */}
           <Paper id="roles" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -1612,6 +1952,75 @@ export default function PRINCE2GuidePage() {
             </Grid>
           </Paper>
 
+          {/* PM Tools Landscape */}
+          <Paper
+            id="pm-tools"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <SettingsIcon sx={{ color: "#0891b2" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Project Management Tools Landscape
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              While PRINCE2 is methodology-agnostic regarding tools, many organizations use software to manage
+              PRINCE2 projects. Here's how popular tools align with PRINCE2:
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#0891b2", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Tool</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>PRINCE2 Alignment</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Pricing</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { tool: "Microsoft Project", bestFor: "Traditional waterfall projects", alignment: "⭐⭐⭐⭐⭐ Excellent - built for stage-gate", pricing: "£££" },
+                    { tool: "Jira", bestFor: "Agile/PRINCE2 Agile hybrid", alignment: "⭐⭐⭐⭐ Good - with configuration", pricing: "££" },
+                    { tool: "Monday.com", bestFor: "Visual project tracking", alignment: "⭐⭐⭐ Moderate - flexible templates", pricing: "££" },
+                    { tool: "Asana", bestFor: "Task management & collaboration", alignment: "⭐⭐⭐ Moderate - needs customization", pricing: "££" },
+                    { tool: "Smartsheet", bestFor: "Enterprise PMO", alignment: "⭐⭐⭐⭐ Good - strong governance features", pricing: "£££" },
+                    { tool: "Wrike", bestFor: "Cross-functional teams", alignment: "⭐⭐⭐⭐ Good - customizable workflows", pricing: "££" },
+                    { tool: "Planview", bestFor: "Enterprise portfolio management", alignment: "⭐⭐⭐⭐⭐ Excellent - built for governance", pricing: "££££" },
+                    { tool: "OpenProject", bestFor: "Open source alternative", alignment: "⭐⭐⭐⭐ Good - free PRINCE2 templates", pricing: "Free/£" },
+                  ].map((row) => (
+                    <TableRow key={row.tool}>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.tool}</TableCell>
+                      <TableCell>{row.bestFor}</TableCell>
+                      <TableCell>{row.alignment}</TableCell>
+                      <TableCell>{row.pricing}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#0891b2", 0.05), borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                💡 Tool Selection Tip:
+              </Typography>
+              <Typography variant="body2">
+                Choose tools that support your tailored PRINCE2 approach. A simple project might only need a
+                spreadsheet for the Daily Log and Issue Register, while enterprise projects may need integrated
+                PPM (Project Portfolio Management) suites. <strong>The method comes first, then the tool.</strong>
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                PRINCE2 Management Products You Can Track in Tools:
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {["Risk Register", "Issue Register", "Lessons Log", "Daily Log", "Quality Register", "Highlight Reports", "Stage Plans", "Work Packages"].map((product) => (
+                  <Chip key={product} label={product} size="small" sx={{ bgcolor: alpha("#0891b2", 0.1) }} />
+                ))}
+              </Box>
+            </Box>
+          </Paper>
+
           {/* Tailoring PRINCE2 */}
           <Paper id="tailoring" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -1713,6 +2122,91 @@ export default function PRINCE2GuidePage() {
             </Grid>
           </Paper>
 
+          {/* Career Paths & Salary Guide */}
+          <Paper
+            id="career-paths"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.3)}`, bgcolor: alpha("#22c55e", 0.02) }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <SchoolIcon sx={{ color: "#22c55e" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                💼 Career Paths & Salary Guide
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              PRINCE2 certification opens doors across industries. Here are typical UK/US salary ranges (2024):
+            </Typography>
+            <TableContainer sx={{ mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#22c55e", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>UK Salary Range</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>US Salary Range</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Typical Cert Level</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { role: "Junior Project Coordinator", uk: "£25-35K", us: "$45-55K", cert: "Foundation" },
+                    { role: "Project Administrator", uk: "£30-40K", us: "$50-65K", cert: "Foundation" },
+                    { role: "Assistant Project Manager", uk: "£35-50K", us: "$60-80K", cert: "Foundation/Practitioner" },
+                    { role: "Project Manager", uk: "£45-70K", us: "$75-110K", cert: "Practitioner" },
+                    { role: "Senior Project Manager", uk: "£60-90K", us: "$95-140K", cert: "Practitioner + experience" },
+                    { role: "Programme Manager", uk: "£75-120K", us: "$120-180K", cert: "Practitioner + MSP" },
+                    { role: "PMO Manager", uk: "£55-85K", us: "$90-130K", cert: "Practitioner" },
+                    { role: "Head of Projects", uk: "£90-150K", us: "$150-220K", cert: "Multiple certifications" },
+                  ].map((row) => (
+                    <TableRow key={row.role}>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.role}</TableCell>
+                      <TableCell>{row.uk}</TableCell>
+                      <TableCell>{row.us}</TableCell>
+                      <TableCell><Chip label={row.cert} size="small" sx={{ fontSize: "0.7rem" }} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+              Career Progression Timeline:
+            </Typography>
+            <Grid container spacing={1}>
+              {[
+                { stage: "1", years: "0-2 years", role: "Project Coordinator/Administrator", focus: "Learn processes, assist PM, PRINCE2 Foundation", color: "#3b82f6" },
+                { stage: "2", years: "2-4 years", role: "Assistant/Junior Project Manager", focus: "Run small projects, get Practitioner certified", color: "#8b5cf6" },
+                { stage: "3", years: "4-7 years", role: "Project Manager", focus: "Lead medium projects, build stakeholder skills", color: ACCENT_COLOR },
+                { stage: "4", years: "7-10 years", role: "Senior PM / Programme Manager", focus: "Complex portfolios, mentor others, MSP/MoP", color: "#f59e0b" },
+                { stage: "5", years: "10+ years", role: "PMO Director / Head of Projects", focus: "Strategic leadership, organizational PM maturity", color: "#22c55e" },
+              ].map((item) => (
+                <Grid item xs={12} key={item.stage}>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, p: 1.5, bgcolor: alpha(item.color, 0.05), borderRadius: 1 }}>
+                    <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: item.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>
+                      {item.stage}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.role}</Typography>
+                        <Chip label={item.years} size="small" sx={{ fontSize: "0.7rem", bgcolor: alpha(item.color, 0.2) }} />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">{item.focus}</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                🔍 Job Titles to Search For:
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {["PRINCE2 Project Manager", "IT Project Manager", "Programme Manager", "PMO Analyst", "Delivery Manager", "Project Lead", "Change Manager", "Implementation Manager"].map((title) => (
+                  <Chip key={title} label={title} size="small" variant="outlined" />
+                ))}
+              </Box>
+            </Box>
+          </Paper>
+
           {/* Certifications */}
           <Paper id="certifications" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -1778,6 +2272,154 @@ export default function PRINCE2GuidePage() {
                 </Grid>
               ))}
             </Grid>
+          </Paper>
+
+          {/* Exam Tips Section */}
+          <Paper
+            id="exam-tips"
+            elevation={0}
+            sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.3)}`, bgcolor: alpha("#f59e0b", 0.02) }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <SchoolIcon sx={{ color: "#f59e0b" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                📝 Exam Preparation Tips
+              </Typography>
+            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Foundation Exam Format
+                  </Typography>
+                  <List dense>
+                    {[
+                      "60 multiple-choice questions",
+                      "60 minutes (1 hour)",
+                      "55% pass mark (33/60 correct)",
+                      "Closed book - no manual allowed",
+                      "Cost: ~£300-400 / $350-450",
+                      "Online proctored or test center",
+                    ].map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <ArrowRightIcon sx={{ color: "#f59e0b" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, height: "100%" }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Practitioner Exam Format
+                  </Typography>
+                  <List dense>
+                    {[
+                      "68 questions (objective testing)",
+                      "150 minutes (2.5 hours)",
+                      "60% pass mark (38/68 correct)",
+                      "Open book - official manual allowed",
+                      "Cost: ~£400-500 / $450-550",
+                      "Scenario-based questions",
+                    ].map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 24 }}>
+                          <ArrowRightIcon sx={{ color: "#8b5cf6" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha(ACCENT_COLOR, 0.05), borderRadius: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                Foundation Exam Topic Weightings:
+              </Typography>
+              <Grid container spacing={1}>
+                {[
+                  { topic: "Principles", weight: "12%", questions: "~7 questions" },
+                  { topic: "Themes", weight: "35%", questions: "~21 questions" },
+                  { topic: "Processes", weight: "35%", questions: "~21 questions" },
+                  { topic: "Roles", weight: "12%", questions: "~7 questions" },
+                  { topic: "Management Products", weight: "6%", questions: "~4 questions" },
+                ].map((item) => (
+                  <Grid item xs={6} md={2.4} key={item.topic}>
+                    <Box sx={{ textAlign: "center", p: 1.5, bgcolor: "background.paper", borderRadius: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: ACCENT_COLOR }}>{item.weight}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.topic}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.questions}</Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 20 }} />
+                  Study These Well:
+                </Typography>
+                <List dense>
+                  {[
+                    "7 Principles - know ALL by heart",
+                    "7 Themes - what each addresses",
+                    "7 Processes - who does what",
+                    "Management by Exception concept",
+                    "Roles: Executive vs PM responsibilities",
+                    "Tolerance dimensions (Time, Cost, Quality, Scope, Benefits, Risk)",
+                  ].map((tip, i) => (
+                    <ListItem key={i} sx={{ py: 0.5 }}>
+                      <ListItemText primary={tip} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <WarningIcon sx={{ color: "#dc2626", fontSize: 20 }} />
+                  Common Exam Traps:
+                </Typography>
+                <List dense>
+                  {[
+                    "Confusing Executive with Sponsor (PRINCE2 uses Executive)",
+                    "Mixing up themes with processes",
+                    "Forgetting who APPROVES vs who CREATES products",
+                    "Stage vs Project level tolerances",
+                    "Checkpoint Report (TM→PM) vs Highlight Report (PM→Board)",
+                    "Thinking principles can be tailored (they can't!)",
+                  ].map((trap, i) => (
+                    <ListItem key={i} sx={{ py: 0.5 }}>
+                      <ListItemText primary={trap} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#22c55e", 0.1), borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                📚 Recommended Study Resources:
+              </Typography>
+              <Grid container spacing={1}>
+                {[
+                  { resource: "Official AXELOS Manual", type: "Essential" },
+                  { resource: "PRINCE2 Foundation Training Course", type: "Recommended" },
+                  { resource: "Practice Exam Simulators", type: "Highly Recommended" },
+                  { resource: "PRINCE2 Wiki & Glossary", type: "Quick Reference" },
+                ].map((item) => (
+                  <Grid item xs={12} sm={6} md={3} key={item.resource}>
+                    <Box sx={{ p: 1, bgcolor: "background.paper", borderRadius: 1, textAlign: "center" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.resource}</Typography>
+                      <Chip label={item.type} size="small" sx={{ mt: 0.5, fontSize: "0.65rem" }} />
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
           </Paper>
 
           {/* Quiz Section */}

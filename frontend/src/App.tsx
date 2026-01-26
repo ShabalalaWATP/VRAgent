@@ -24,8 +24,12 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import HubIcon from "@mui/icons-material/Hub";
 import MemoryIcon from "@mui/icons-material/Memory";
 import PeopleIcon from "@mui/icons-material/People";
+import HomeIcon from "@mui/icons-material/Home";
+import SecurityIcon from "@mui/icons-material/Security";
 
 // Lazy load all pages
+const HomePage = lazy(() => import("./pages/HomePage"));
+const StaticAnalysisHub = lazy(() => import("./pages/StaticAnalysisHub"));
 const ProjectListPage = lazy(() => import("./pages/ProjectListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
 const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage"));
@@ -49,11 +53,13 @@ const ApiSecurityPage = lazy(() => import("./pages/ApiSecurityPage"));
 const ReverseEngineeringPage = lazy(() => import("./pages/ReverseEngineeringPage"));
 const MobilePentestPage = lazy(() => import("./pages/MobilePentestPage"));
 const PcapAnalyzerPage = lazy(() => import("./pages/PcapAnalyzerPage"));
-const NetworkAnalysisHub = lazy(() => import("./pages/NetworkAnalysisHub"));
+const DynamicAnalysisHub = lazy(() => import("./pages/DynamicAnalysisHub"));
 const NmapAnalyzerPage = lazy(() => import("./pages/NmapAnalyzerPage"));
 const NetworkAnalysisGuidePage = lazy(() => import("./pages/NetworkAnalysisGuidePage"));
 const WiresharkGuidePage = lazy(() => import("./pages/WiresharkGuidePage"));
-const NmapGuidePage = lazy(() => import("./pages/NmapGuidePage"));
+const WiresharkDeepDivePage = lazy(() => import("./pages/WiresharkDeepDivePage"));
+const SDRSignalsIntelligencePage = lazy(() => import("./pages/SDRSignalsIntelligencePage"));
+const DynamicScannerGuidePage = lazy(() => import("./pages/DynamicScannerGuidePage"));
 const SSLTLSGuidePage = lazy(() => import("./pages/SSLTLSGuidePage"));
 const SSLScannerPage = lazy(() => import("./pages/SSLScannerPage"));
 const DNSAnalyzerPage = lazy(() => import("./pages/DNSAnalyzerPage"));
@@ -69,9 +75,13 @@ const MITMWorkbenchPage = lazy(() => import("./pages/MITMWorkbenchPage"));
 const MITMGuidePage = lazy(() => import("./pages/MITMGuidePage"));
 const BinaryFuzzerPage = lazy(() => import("./pages/BinaryFuzzerPage"));
 const AgenticFuzzerPage = lazy(() => import("./pages/AgenticFuzzerPage"));
+const AgenticBinaryFuzzerPage = lazy(() => import("./pages/AgenticBinaryFuzzerPage"));
+const ZAPPage = lazy(() => import("./pages/ZAPPage"));
+const DynamicSecurityScannerPage = lazy(() => import("./pages/DynamicSecurityScannerPage"));
 const DigitalForensicsPage = lazy(() => import("./pages/DigitalForensicsPage"));
 const OSINTReconPage = lazy(() => import("./pages/OSINTReconPage"));
 const LateralMovementPage = lazy(() => import("./pages/LateralMovementPage"));
+const InitialAccessPage = lazy(() => import("./pages/InitialAccessPage"));
 const ReverseEngineeringHubPage = lazy(() => import("./pages/ReverseEngineeringHubPage"));
 const WhiteboardPage = lazy(() => import("./pages/WhiteboardPage"));
 const ApkAnalysisGuidePage = lazy(() => import("./pages/ApkAnalysisGuidePage"));
@@ -90,8 +100,13 @@ const DataExfiltrationPage = lazy(() => import("./pages/DataExfiltrationPage"));
 const ArpDnsPoisoningPage = lazy(() => import("./pages/ArpDnsPoisoningPage"));
 const PivotingTunnelingPage = lazy(() => import("./pages/PivotingTunnelingPage"));
 const C2FrameworksGuidePage = lazy(() => import("./pages/C2FrameworksGuidePage"));
+const AIHackingGuidePage = lazy(() => import("./pages/AIHackingGuidePage"));
+const PayloadDevelopmentGuidePage = lazy(() => import("./pages/PayloadDevelopmentGuidePage"));
+const ExploitDevelopmentGuidePage = lazy(() => import("./pages/ExploitDevelopmentGuidePage"));
 const DDoSAttackTechniquesPage = lazy(() => import("./pages/DDoSAttackTechniquesPage"));
 const WirelessPentestingPage = lazy(() => import("./pages/WirelessPentestingPage"));
+const DMRHackingPage = lazy(() => import("./pages/DMRHackingPage"));
+const CounterUASPage = lazy(() => import("./pages/CounterUASPage"));
 const NetworkProtocolExploitationPage = lazy(() => import("./pages/NetworkProtocolExploitationPage"));
 const SQLInjectionPage = lazy(() => import("./pages/SQLInjectionPage"));
 const DeserializationAttacksPage = lazy(() => import("./pages/DeserializationAttacksPage"));
@@ -149,6 +164,11 @@ const ScrumGuidePage = lazy(() => import("./pages/ScrumGuidePage"));
 const PRINCE2GuidePage = lazy(() => import("./pages/PRINCE2GuidePage"));
 const ITILv4GuidePage = lazy(() => import("./pages/ITILv4GuidePage"));
 const GitVersionControlPage = lazy(() => import("./pages/GitVersionControlPage"));
+
+// Missing pages that were orphaned (no routes)
+const CombinedAnalysisGuidePage = lazy(() => import("./pages/CombinedAnalysisGuidePage"));
+const NmapGuidePage = lazy(() => import("./pages/NmapGuidePage"));
+const SecurityScanGuidePage = lazy(() => import("./pages/SecurityScanGuidePage"));
 
 // Auth pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -306,11 +326,45 @@ function App() {
 
           {/* Action Buttons */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            {/* Show Projects, Network, Reverse links - even when not authenticated (but link to login if not auth) */}
+            {/* Home button */}
+            <Tooltip title="Home - Dashboard">
+              <Button
+                component={Link}
+                to="/"
+                startIcon={<HomeIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#4f46e5", 0.4)}, 0 0 20px ${alpha("#4f46e5", 0.2)}`,
+                  border: `1px solid ${alpha("#6366f1", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #4f46e5 0%, #4338ca 50%, #3730a3 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#4f46e5", 0.5)}, 0 0 30px ${alpha("#4f46e5", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Home
+              </Button>
+            </Tooltip>
+
+            {/* Show Projects, Static, Dynamic, Reverse links - even when not authenticated (but link to login if not auth) */}
             <Tooltip title="Projects - Manage your codebases">
               <Button
                 component={Link}
-                to={isAuthenticated ? "/" : "/login"}
+                to={isAuthenticated ? "/projects" : "/login"}
                 startIcon={<Box component="span" sx={{ display: "flex" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg></Box>}
                 variant="contained"
                 size="medium"
@@ -339,11 +393,44 @@ function App() {
                 Projects
               </Button>
             </Tooltip>
-            
-            <Tooltip title="Network Analysis - PCAP & Nmap Security Analysis">
+
+            <Tooltip title="Static Analysis Hub - Security Scanner for Code">
               <Button
                 component={Link}
-                to={isAuthenticated ? "/network" : "/login"}
+                to={isAuthenticated ? "/static" : "/login"}
+                startIcon={<SecurityIcon sx={{ fontSize: "1.3rem !important" }} />}
+                variant="contained"
+                size="medium"
+                sx={{
+                  background: `linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)`,
+                  color: "white",
+                  fontWeight: 700,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontSize: "0.95rem",
+                  boxShadow: `0 4px 15px ${alpha("#16a34a", 0.4)}, 0 0 20px ${alpha("#16a34a", 0.2)}`,
+                  border: `1px solid ${alpha("#22c55e", 0.5)}`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #16a34a 0%, #15803d 50%, #166534 100%)`,
+                    boxShadow: `0 6px 25px ${alpha("#16a34a", 0.5)}, 0 0 30px ${alpha("#16a34a", 0.3)}`,
+                    transform: "translateY(-2px)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Static Analysis
+              </Button>
+            </Tooltip>
+            
+            <Tooltip title="Dynamic Analysis Hub - Network, API & Runtime Testing">
+              <Button
+                component={Link}
+                to={isAuthenticated ? "/dynamic" : "/login"}
                 startIcon={<HubIcon sx={{ fontSize: "1.3rem !important" }} />}
                 variant="contained"
                 size="medium"
@@ -369,11 +456,11 @@ function App() {
                   transition: "all 0.3s ease",
                 }}
               >
-                Network Analysis
+                Dynamic Analysis
               </Button>
             </Tooltip>
             
-            <Tooltip title="Reverse Engineering - Binary, APK & Docker Analysis">
+            <Tooltip title="Reverse Engineering Hub - Binary, APK & Docker Analysis">
               <Button
                 component={Link}
                 to={isAuthenticated ? "/reverse" : "/login"}
@@ -565,7 +652,17 @@ function App() {
                 {/* Protected Routes */}
                 <Route path="/" element={
                   <ProtectedRoute>
+                    <HomePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/projects" element={
+                  <ProtectedRoute>
                     <ProjectListPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/static" element={
+                  <ProtectedRoute>
+                    <StaticAnalysisHub />
                   </ProtectedRoute>
                 } />
                 <Route path="/projects/:projectId" element={
@@ -583,59 +680,74 @@ function App() {
                 <ReportDetailPage />
               </ProtectedRoute>
             } />
-            <Route path="/network" element={
+            <Route path="/dynamic" element={
               <ProtectedRoute>
-                <NetworkAnalysisHub />
+                <DynamicAnalysisHub />
               </ProtectedRoute>
             } />
-            <Route path="/network/pcap" element={
+            <Route path="/dynamic/pcap" element={
               <ProtectedRoute>
                 <PcapAnalyzerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/nmap" element={
+            <Route path="/dynamic/nmap" element={
               <ProtectedRoute>
                 <NmapAnalyzerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/ssl" element={
+            <Route path="/dynamic/ssl" element={
               <ProtectedRoute>
                 <SSLScannerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/dns" element={
+            <Route path="/dynamic/dns" element={
               <ProtectedRoute>
                 <DNSAnalyzerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/traceroute" element={
+            <Route path="/dynamic/traceroute" element={
               <ProtectedRoute>
                 <TracerouteAnalyzerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/api-tester" element={
+            <Route path="/dynamic/api-tester" element={
               <ProtectedRoute>
                 <APITesterPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/fuzzer" element={
+            <Route path="/dynamic/fuzzer" element={
               <ProtectedRoute>
                 <FuzzingPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/mitm" element={
+            <Route path="/dynamic/mitm" element={
               <ProtectedRoute>
                 <MITMWorkbenchPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/binary-fuzzer" element={
+            <Route path="/dynamic/binary-fuzzer" element={
               <ProtectedRoute>
                 <BinaryFuzzerPage />
               </ProtectedRoute>
             } />
-            <Route path="/network/agentic-fuzzer" element={
+            <Route path="/dynamic/agentic-fuzzer" element={
               <ProtectedRoute>
                 <AgenticFuzzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/dynamic/agentic-binary-fuzzer" element={
+              <ProtectedRoute>
+                <AgenticBinaryFuzzerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/dynamic/zap" element={
+              <ProtectedRoute>
+                <ZAPPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/dynamic/dynamic-scanner" element={
+              <ProtectedRoute>
+                <DynamicSecurityScannerPage />
               </ProtectedRoute>
             } />
             <Route path="/reverse" element={
@@ -666,7 +778,9 @@ function App() {
             <Route path="/learn/mobile-pentest" element={<MobilePentestPage />} />
             <Route path="/learn/network-hub" element={<NetworkAnalysisGuidePage />} />
             <Route path="/learn/wireshark" element={<WiresharkGuidePage />} />
-            <Route path="/learn/nmap" element={<NmapGuidePage />} />
+            <Route path="/learn/wireshark-deep-dive" element={<WiresharkDeepDivePage />} />
+            <Route path="/learn/sdr-signals-intelligence" element={<SDRSignalsIntelligencePage />} />
+            <Route path="/learn/dynamic-scanner" element={<DynamicScannerGuidePage />} />
             <Route path="/learn/ssl-tls" element={<SSLTLSGuidePage />} />
             <Route path="/learn/dns" element={<DNSGuidePage />} />
             <Route path="/learn/traceroute" element={<TracerouteGuidePage />} />
@@ -676,6 +790,7 @@ function App() {
             <Route path="/learn/digital-forensics" element={<DigitalForensicsPage />} />
             <Route path="/learn/osint" element={<OSINTReconPage />} />
             <Route path="/learn/lateral-movement" element={<LateralMovementPage />} />
+            <Route path="/learn/initial-access" element={<InitialAccessPage />} />
             <Route path="/learn/apk-analysis" element={<ApkAnalysisGuidePage />} />
             <Route path="/learn/binary-analysis" element={<BinaryAnalysisGuidePage />} />
             <Route path="/learn/android-reverse-engineering" element={<AndroidReverseEngineeringGuidePage />} />
@@ -704,8 +819,13 @@ function App() {
             <Route path="/learn/arp-dns-poisoning" element={<ArpDnsPoisoningPage />} />
             <Route path="/learn/pivoting-tunneling" element={<PivotingTunnelingPage />} />
             <Route path="/learn/c2-frameworks" element={<C2FrameworksGuidePage />} />
+            <Route path="/learn/ai-hacking" element={<AIHackingGuidePage />} />
+            <Route path="/learn/payload-development" element={<PayloadDevelopmentGuidePage />} />
+            <Route path="/learn/exploit-development" element={<ExploitDevelopmentGuidePage />} />
             <Route path="/learn/ddos-techniques" element={<DDoSAttackTechniquesPage />} />
             <Route path="/learn/wireless-pentesting" element={<WirelessPentestingPage />} />
+            <Route path="/learn/dmr-hacking" element={<DMRHackingPage />} />
+            <Route path="/learn/counter-uas" element={<CounterUASPage />} />
             <Route path="/learn/network-protocol-exploitation" element={<NetworkProtocolExploitationPage />} />
             <Route path="/learn/sql-injection" element={<SQLInjectionPage />} />
             <Route path="/learn/deserialization-attacks" element={<DeserializationAttacksPage />} />
@@ -751,6 +871,10 @@ function App() {
             <Route path="/learn/prince2" element={<PRINCE2GuidePage />} />
             <Route path="/learn/itil-v4" element={<ITILv4GuidePage />} />
             <Route path="/learn/git-version-control" element={<GitVersionControlPage />} />
+            <Route path="/learn/combined-analysis" element={<CombinedAnalysisGuidePage />} />
+            <Route path="/learn/network-analysis-hub" element={<DynamicAnalysisHub />} />
+            <Route path="/learn/nmap" element={<NmapGuidePage />} />
+            <Route path="/learn/security-scan" element={<SecurityScanGuidePage />} />
               </Routes>
             </Suspense>
           </Container>

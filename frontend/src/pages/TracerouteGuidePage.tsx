@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -31,6 +31,9 @@ import {
   useTheme,
   Divider,
   LinearProgress,
+  Fab,
+  Drawer,
+  useMediaQuery,
 } from "@mui/material";
 import {
   ArrowBack as BackIcon,
@@ -65,8 +68,22 @@ import {
   BugReport as BugReportIcon,
   AccountTree as AccountTreeIcon,
   BatchPrediction as BatchIcon,
+  ListAlt as ListAltIcon,
+  Close as CloseIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  Radar as RadarIcon,
+  Extension as ExtensionIcon,
+  SettingsEthernet as SettingsEthernetIcon,
+  DeviceHub as DeviceHubIcon,
+  Scanner as ScannerIcon,
+  FindInPage as FindInPageIcon,
+  UploadFile as UploadFileIcon,
+  Build as BuildIcon,
 } from "@mui/icons-material";
 import { Link, useNavigate } from "react-router-dom";
+
+// Accent color for this learning page
+const ACCENT_COLOR = "#ec4899";
 
 // ============================================================================
 // Command Reference Data
@@ -194,6 +211,101 @@ const TROUBLESHOOTING_SCENARIOS: TroubleshootingScenario[] = [
       "Wait for BGP convergence if recent change",
     ],
   },
+];
+
+// ============================================================================
+// Nmap Integration Data - Combined Network Analysis
+// ============================================================================
+
+const NMAP_SCAN_TYPES = [
+  { id: "ping", name: "Ping Sweep", description: "Host discovery only - no port scanning", intensity: 1, time: "5-30 sec" },
+  { id: "quick", name: "Quick Scan", description: "Top 100 ports, no service detection", intensity: 2, time: "30-60 sec" },
+  { id: "stealth", name: "Stealth SYN Scan", description: "SYN scan - fast and less detectable", intensity: 3, time: "1-3 min" },
+  { id: "basic", name: "Basic Scan", description: "Top 1000 ports with service detection", intensity: 4, time: "3-10 min" },
+  { id: "version", name: "Version Detection", description: "Detailed service version identification", intensity: 5, time: "3-10 min" },
+  { id: "script", name: "Script Scan", description: "Default NSE scripts for common services", intensity: 6, time: "3-10 min" },
+  { id: "udp_quick", name: "UDP Quick Scan", description: "Common UDP ports with service detection", intensity: 7, time: "5-15 min" },
+  { id: "os_detect", name: "OS Detection", description: "Operating system fingerprinting", intensity: 8, time: "5-15 min" },
+  { id: "vuln", name: "Vulnerability Scan", description: "Run vulnerability detection scripts", intensity: 9, time: "10-30 min" },
+  { id: "aggressive", name: "Aggressive Scan", description: "OS, version, scripts, traceroute combined", intensity: 10, time: "10-20 min" },
+  { id: "udp", name: "UDP Full Scan", description: "All common UDP ports with extensive probing", intensity: 11, time: "20-60 min" },
+  { id: "comprehensive", name: "Comprehensive Scan", description: "TCP + UDP + OS + scripts + traceroute", intensity: 12, time: "20-45 min" },
+  { id: "full_tcp", name: "Full TCP Scan", description: "All 65535 TCP ports with service detection", intensity: 13, time: "30-120 min" },
+  { id: "full_all", name: "Full All Ports Scan", description: "All 65535 TCP + UDP ports with all detection methods", intensity: 14, time: "60-240 min" },
+];
+
+const NMAP_NSE_CATEGORIES = [
+  { id: "vuln", name: "Vulnerability Scripts", description: "Checks for known vulnerabilities", warning: "May trigger IDS/IPS" },
+  { id: "safe", name: "Safe Scripts", description: "Non-intrusive scripts that won't crash services", warning: null },
+  { id: "discovery", name: "Discovery Scripts", description: "Enumerate services and gather info", warning: "Generates traffic" },
+  { id: "auth", name: "Authentication Scripts", description: "Check for auth issues, default creds", warning: null },
+  { id: "brute", name: "Brute Force Scripts", description: "Password brute forcing", warning: "May lock accounts" },
+  { id: "exploit", name: "Exploit Scripts", description: "Attempt to exploit vulnerabilities", warning: "DANGEROUS - Authorized pentests only" },
+  { id: "malware", name: "Malware Detection Scripts", description: "Detect malicious software and backdoors", warning: "May generate alerts" },
+];
+
+const COMBINED_WORKFLOW_STEPS = [
+  {
+    step: 1,
+    title: "Network Path Discovery",
+    tool: "Traceroute",
+    icon: <RouteIcon />,
+    description: "First, trace the network path to understand the topology between you and the target.",
+    actions: ["Run traceroute to target", "Identify network segments", "Note filtering/firewalls"],
+  },
+  {
+    step: 2,
+    title: "Path Analysis",
+    tool: "AI Analysis",
+    icon: <AiIcon />,
+    description: "AI analyzes the path to infer ISPs, geographic locations, and security posture.",
+    actions: ["ISP identification", "Geographic path mapping", "Attack surface assessment"],
+  },
+  {
+    step: 3,
+    title: "Host Discovery",
+    tool: "Nmap Ping Sweep",
+    icon: <RadarIcon />,
+    description: "Discover live hosts on the target network using Nmap ping scan.",
+    actions: ["Identify live hosts", "Map network topology", "Prepare scan targets"],
+  },
+  {
+    step: 4,
+    title: "Port Scanning",
+    tool: "Nmap Port Scan",
+    icon: <ScannerIcon />,
+    description: "Scan discovered hosts for open ports and running services.",
+    actions: ["Identify open ports", "Detect services", "Version fingerprinting"],
+  },
+  {
+    step: 5,
+    title: "Vulnerability Assessment",
+    tool: "Nmap NSE Scripts",
+    icon: <BugReportIcon />,
+    description: "Run vulnerability detection scripts against discovered services.",
+    actions: ["CVE detection", "Misconfig identification", "Banner analysis"],
+  },
+  {
+    step: 6,
+    title: "Comprehensive Report",
+    tool: "AI Analysis",
+    icon: <AssessmentIcon />,
+    description: "Generate AI-powered security report combining all findings.",
+    actions: ["Risk scoring", "Remediation priorities", "Executive summary"],
+  },
+];
+
+const HIGH_RISK_PORTS_SAMPLE = [
+  { port: 21, service: "FTP", severity: "high", reason: "Often transmits credentials in cleartext" },
+  { port: 22, service: "SSH", severity: "info", reason: "Verify strong authentication required" },
+  { port: 23, service: "Telnet", severity: "critical", reason: "All data including credentials in cleartext" },
+  { port: 445, service: "SMB", severity: "high", reason: "Common target for ransomware (EternalBlue)" },
+  { port: 3306, service: "MySQL", severity: "high", reason: "Database exposure - verify authentication" },
+  { port: 3389, service: "RDP", severity: "high", reason: "Remote Desktop - common brute force target" },
+  { port: 6379, service: "Redis", severity: "critical", reason: "Often has no authentication by default" },
+  { port: 27017, service: "MongoDB", severity: "critical", reason: "Often has no authentication by default" },
+  { port: 2375, service: "Docker API", severity: "critical", reason: "Full container control if exposed" },
+  { port: 9200, service: "Elasticsearch", severity: "critical", reason: "Often has no authentication" },
 ];
 
 // ============================================================================
@@ -345,18 +457,68 @@ const ADVANCED_TRACE_MODES = [
 const TracerouteGuidePage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [activeTab, setActiveTab] = useState(0);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [scrollProgress, setScrollProgress] = useState(0);
 
-  const pageContext = `This page covers traceroute and network path analysis including:
-- Traceroute command options for Windows and Linux
-- Understanding hop-by-hop network path analysis
-- Latency interpretation and troubleshooting
-- Common network issues: high latency, packet loss, unreachable destination
-- Security applications: firewall detection, CDN identification
-- MTR (My Traceroute) for advanced analysis
-- Network topology discovery techniques
-- Interpreting asterisks and timeouts in traceroute output`;
+  // Navigation items for sidebar
+  const navigationItems = [
+    { id: "intro", label: "Introduction", icon: <PublicIcon /> },
+    { id: "overview", label: "Overview", icon: <InfoIcon /> },
+    { id: "commands", label: "Commands", icon: <TerminalIcon /> },
+    { id: "interpreting", label: "Interpreting Results", icon: <AssessmentIcon /> },
+    { id: "troubleshooting", label: "Troubleshooting", icon: <WarningIcon /> },
+    { id: "security", label: "Security", icon: <ShieldIcon /> },
+    { id: "ai-analysis", label: "AI Analysis", icon: <AiIcon /> },
+    { id: "nmap-integration", label: "Nmap Integration", icon: <RadarIcon /> },
+  ];
+
+  // Scroll tracking
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = (window.scrollY / totalHeight) * 100;
+      setScrollProgress(progress);
+
+      // Update active section based on scroll position
+      const sections = navigationItems.map(item => document.getElementById(item.id));
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = sections[i];
+        if (section) {
+          const rect = section.getBoundingClientRect();
+          if (rect.top <= 150) {
+            setActiveSection(navigationItems[i].id);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setMobileNavOpen(false);
+  };
+
+  const pageContext = `This page covers the combined Nmap & Traceroute Analyzer with 4 analysis modes:
+- Traceroute Path Analysis: Hop-by-hop network path discovery with latency and packet loss tracking
+- Nmap Scan Mode: Live network scanning with 14 scan types (ping sweep, quick, stealth, basic, version, script, UDP, OS detection, vulnerability, aggressive, comprehensive)
+- Nmap File Analyzer: Upload and analyze existing Nmap XML/nmap/gnmap output files
+- Nmap Command Builder: Interactive NSE script selector with custom command generation
+- Platform support: Windows (tracert), Linux/macOS (traceroute), MTR fallback
+- AI-powered security assessment with risk scoring (0-100), attack surface analysis, and remediation guidance
+- Network topology visualization with host relationships and service detection
+- NSE script categories: vuln, safe, discovery, auth, brute, exploit, malware
+- Export capabilities: JSON, Markdown, PDF, DOCX for professional reporting`;
 
   const copyCommand = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -393,11 +555,163 @@ const TracerouteGuidePage: React.FC = () => {
     </Box>
   );
 
+  // Sidebar Navigation Component
+  const SidebarNavigation = () => (
+    <Box
+      sx={{
+        position: "sticky",
+        top: 80,
+        width: 240,
+        flexShrink: 0,
+        display: { xs: "none", md: "block" },
+      }}
+    >
+      <Paper sx={{ p: 2, borderRadius: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <ListAltIcon sx={{ color: ACCENT_COLOR }} />
+          <Typography variant="subtitle2" fontWeight="bold">
+            Contents
+          </Typography>
+        </Box>
+        <LinearProgress
+          variant="determinate"
+          value={scrollProgress}
+          sx={{
+            mb: 2,
+            height: 4,
+            borderRadius: 2,
+            bgcolor: alpha(ACCENT_COLOR, 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR },
+          }}
+        />
+        <List dense>
+          {navigationItems.map((item) => (
+            <ListItem
+              key={item.id}
+              component="button"
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1,
+                mb: 0.5,
+                bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.1) : "transparent",
+                border: "none",
+                cursor: "pointer",
+                width: "100%",
+                textAlign: "left",
+                "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.05) },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? ACCENT_COLOR : "text.secondary" }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  variant: "body2",
+                  fontWeight: activeSection === item.id ? "bold" : "normal",
+                  color: activeSection === item.id ? ACCENT_COLOR : "text.primary",
+                }}
+              />
+            </ListItem>
+          ))}
+        </List>
+        <Divider sx={{ my: 2 }} />
+        <Button
+          component={Link}
+          to="/dynamic/traceroute"
+          fullWidth
+          variant="contained"
+          size="small"
+          sx={{ bgcolor: ACCENT_COLOR, "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.8) } }}
+        >
+          Launch Analyzer
+        </Button>
+      </Paper>
+    </Box>
+  );
+
   return (
-    <LearnPageLayout pageTitle="Traceroute Guide" pageContext={pageContext}>
-    <Box sx={{ p: 3 }}>
+    <LearnPageLayout pageTitle="Nmap & Traceroute Analyzer" pageContext={pageContext}>
+    <Box sx={{ p: 3, display: "flex", gap: 3 }}>
+      {/* Sidebar Navigation */}
+      <SidebarNavigation />
+
+      {/* Mobile Navigation FAB */}
+      {isMobile && (
+        <Fab
+          size="small"
+          onClick={() => setMobileNavOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            bgcolor: ACCENT_COLOR,
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.8) },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      )}
+
+      {/* Scroll to Top FAB */}
+      {isMobile && scrollProgress > 20 && (
+        <Fab
+          size="small"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          sx={{
+            position: "fixed",
+            bottom: 140,
+            right: 16,
+            bgcolor: alpha(ACCENT_COLOR, 0.8),
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      )}
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="right"
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      >
+        <Box sx={{ width: 280, p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6">Contents</Typography>
+            <IconButton onClick={() => setMobileNavOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <List>
+            {navigationItems.map((item) => (
+              <ListItem
+                key={item.id}
+                component="button"
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 1,
+                  mb: 0.5,
+                  bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.1) : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  width: "100%",
+                  textAlign: "left",
+                }}
+              >
+                <ListItemIcon sx={{ color: activeSection === item.id ? ACCENT_COLOR : "text.secondary" }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* Main Content */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
       {/* Back Link */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 3 }} id="intro">
         <Chip
           component={Link}
           to="/learn"
@@ -410,26 +724,26 @@ const TracerouteGuidePage: React.FC = () => {
       </Box>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-        <RouteIcon sx={{ fontSize: 40, color: "#ec4899" }} />
+        <RouteIcon sx={{ fontSize: 40, color: ACCENT_COLOR }} />
         <Box>
           <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-            Traceroute Guide
+            Nmap & Traceroute Analyzer Guide
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Learn network path analysis and troubleshooting techniques
+            Master 4-in-1 network analysis: Traceroute path discovery, live Nmap scanning, file analysis, and custom command building
           </Typography>
         </Box>
         <Box sx={{ flex: 1 }} />
         <Button
           component={Link}
-          to="/network/traceroute"
+          to="/dynamic/traceroute"
           variant="contained"
           sx={{
-            bgcolor: "#ec4899",
+            bgcolor: ACCENT_COLOR,
             "&:hover": { bgcolor: "#db2777" },
           }}
         >
-          Open Traceroute Tool
+          Launch Analyzer
         </Button>
       </Box>
 
@@ -441,68 +755,79 @@ const TracerouteGuidePage: React.FC = () => {
         <Tab label="Troubleshooting" />
         <Tab label="Security" />
         <Tab label="VRAgent AI Analysis" icon={<AiIcon />} iconPosition="start" />
+        <Tab label="Nmap Integration" icon={<RadarIcon />} iconPosition="start" />
       </Tabs>
 
       {/* Tab 0: Overview */}
+      <Box id="overview">
       {activeTab === 0 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h5" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <PublicIcon color="primary" />
-                What is Traceroute?
+                4-in-1 Network Analysis Tool
               </Typography>
               <Typography variant="body1" paragraph>
-                Traceroute is a network diagnostic tool that maps the path packets take from your computer 
-                to a destination host. It reveals each "hop" (router) along the way, showing network topology 
-                and helping identify where delays or failures occur.
+                VRAgent's Nmap & Traceroute Analyzer combines 4 powerful network analysis modes into a single interface:
               </Typography>
-              
+
               <Alert severity="info" sx={{ mb: 3 }}>
-                <strong>How it works:</strong> Traceroute sends packets with incrementing Time-To-Live (TTL) values. 
-                Each router decrements the TTL; when it reaches 0, the router sends back an ICMP "Time Exceeded" 
-                message, revealing its identity.
+                <strong>Mode 1: Traceroute Path Analysis</strong> - Hop-by-hop network path discovery with latency and packet loss tracking. Maps the route packets take from your computer to any destination.<br/><br/>
+                <strong>Mode 2: Nmap Live Scanning</strong> - Execute 14 different Nmap scan types (ping sweep, stealth SYN, version detection, vulnerability scans, OS detection, comprehensive scans) directly from the interface.<br/><br/>
+                <strong>Mode 3: Nmap File Analyzer</strong> - Upload and analyze existing Nmap output files (XML, .nmap, .gnmap formats) with AI-powered security assessment.<br/><br/>
+                <strong>Mode 4: Nmap Command Builder</strong> - Interactive NSE script selector with 7 categories (vuln, safe, discovery, auth, brute, exploit, malware) for custom command generation.
               </Alert>
 
               <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <Card sx={{ height: "100%", bgcolor: alpha("#3b82f6", 0.1) }}>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
-                        <SpeedIcon sx={{ mr: 1, color: "#3b82f6" }} />
-                        Latency Analysis
+                        <RouteIcon sx={{ mr: 1, color: "#3b82f6" }} />
+                        Path Tracing
                       </Typography>
                       <Typography variant="body2">
-                        Measure round-trip time (RTT) to each hop, identifying slow segments 
-                        and network bottlenecks.
+                        Hop-by-hop network path discovery with latency tracking and packet loss detection.
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <Card sx={{ height: "100%", bgcolor: alpha("#10b981", 0.1) }}>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
-                        <NetworkIcon sx={{ mr: 1, color: "#10b981" }} />
-                        Path Discovery
+                        <RadarIcon sx={{ mr: 1, color: "#10b981" }} />
+                        Live Scanning
                       </Typography>
                       <Typography variant="body2">
-                        Map the network topology between you and any destination, 
-                        understanding routing decisions.
+                        14 Nmap scan types from quick ping sweeps to comprehensive vulnerability assessments.
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ height: "100%", bgcolor: alpha("#8b5cf6", 0.1) }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        <UploadFileIcon sx={{ mr: 1, color: "#8b5cf6" }} />
+                        File Analysis
+                      </Typography>
+                      <Typography variant="body2">
+                        Upload existing Nmap XML/nmap/gnmap files for AI-powered security assessment.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
                   <Card sx={{ height: "100%", bgcolor: alpha("#f59e0b", 0.1) }}>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
-                        <WarningIcon sx={{ mr: 1, color: "#f59e0b" }} />
-                        Troubleshooting
+                        <BuildIcon sx={{ mr: 1, color: "#f59e0b" }} />
+                        Command Builder
                       </Typography>
                       <Typography variant="body2">
-                        Pinpoint exactly where connectivity issues occur - whether in your 
-                        network, ISP, or destination.
+                        Interactive NSE script selector with 7 categories for custom Nmap command generation.
                       </Typography>
                     </CardContent>
                   </Card>
@@ -513,19 +838,41 @@ const TracerouteGuidePage: React.FC = () => {
 
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: "100%" }}>
-              <Typography variant="h6" gutterBottom>Quick Start Examples</Typography>
-              
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Windows:</Typography>
-              <CodeBlock code="tracert google.com" />
-              
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Linux/macOS:</Typography>
+              <Typography variant="h6" gutterBottom>Quick Start Guide</Typography>
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <RouteIcon sx={{ fontSize: 18, color: "#3b82f6" }} />
+                Mode 1: Traceroute Path Analysis
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                Enter a target domain or IP to discover the network path
+              </Typography>
               <CodeBlock code="traceroute google.com" />
-              
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Skip DNS resolution (faster):</Typography>
-              <CodeBlock code="traceroute -n 8.8.8.8" />
-              
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Use ICMP (may need sudo):</Typography>
-              <CodeBlock code="sudo traceroute -I google.com" />
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <RadarIcon sx={{ fontSize: 18, color: "#10b981" }} />
+                Mode 2: Nmap Live Scanning
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                Select from 14 scan types (quick, stealth, vulnerability, comprehensive, etc.)
+              </Typography>
+              <CodeBlock code="nmap -sV -sC 192.168.1.1" />
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <UploadFileIcon sx={{ fontSize: 18, color: "#8b5cf6" }} />
+                Mode 3: Nmap File Analyzer
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                Upload .xml, .nmap, or .gnmap files for AI analysis
+              </Typography>
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <BuildIcon sx={{ fontSize: 18, color: "#f59e0b" }} />
+                Mode 4: Nmap Command Builder
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
+                Interactive NSE script selector with custom command generation
+              </Typography>
             </Paper>
           </Grid>
 
@@ -564,8 +911,10 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      </Box>
 
       {/* Tab 1: Commands & Options */}
+      <Box id="commands">
       {activeTab === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
@@ -694,8 +1043,10 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      </Box>
 
       {/* Tab 2: Interpreting Results */}
+      <Box id="interpreting">
       {activeTab === 2 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
@@ -828,8 +1179,10 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      </Box>
 
       {/* Tab 3: Troubleshooting */}
+      <Box id="troubleshooting">
       {activeTab === 3 && (
         <Grid container spacing={3}>
           {TROUBLESHOOTING_SCENARIOS.map((scenario, index) => (
@@ -889,8 +1242,10 @@ const TracerouteGuidePage: React.FC = () => {
           ))}
         </Grid>
       )}
+      </Box>
 
       {/* Tab 4: Security */}
+      <Box id="security">
       {activeTab === 4 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
@@ -1009,8 +1364,10 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      </Box>
 
       {/* Tab 5: VRAgent AI Analysis */}
+      <Box id="ai-analysis">
       {activeTab === 5 && (
         <Grid container spacing={3}>
           {/* Header Alert */}
@@ -1400,6 +1757,508 @@ const TracerouteGuidePage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+      </Box>
+
+      {/* Tab 6: Nmap Integration */}
+      <Box id="nmap-integration">
+      {activeTab === 6 && (
+        <Grid container spacing={3}>
+          {/* Header Alert */}
+          <Grid item xs={12}>
+            <Alert 
+              severity="info" 
+              icon={<RadarIcon />}
+              sx={{ 
+                bgcolor: alpha("#3b82f6", 0.1), 
+                border: `1px solid ${alpha("#3b82f6", 0.3)}`,
+                "& .MuiAlert-icon": { color: "#3b82f6" }
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight="bold">
+                Combined Network Analysis: Traceroute + Nmap
+              </Typography>
+              <Typography variant="body2">
+                VRAgent integrates traceroute network path analysis with Nmap port scanning to provide 
+                comprehensive security assessments. Discover the route to your target, then scan for 
+                vulnerabilities along the path.
+              </Typography>
+            </Alert>
+          </Grid>
+
+          {/* Combined Workflow */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <AccountTreeIcon sx={{ color: "#3b82f6" }} />
+                Combined Network Analysis Workflow
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Follow this workflow for comprehensive network security assessment combining path discovery with vulnerability scanning.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                {COMBINED_WORKFLOW_STEPS.map((step, index) => (
+                  <Grid item xs={12} md={4} key={index}>
+                    <Card 
+                      variant="outlined"
+                      sx={{ 
+                        height: "100%",
+                        borderColor: alpha("#3b82f6", 0.3),
+                        position: "relative",
+                        overflow: "visible",
+                        "&:hover": { borderColor: "#3b82f6" }
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: -12,
+                          left: 16,
+                          bgcolor: "#3b82f6",
+                          color: "white",
+                          borderRadius: "50%",
+                          width: 32,
+                          height: 32,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: "bold",
+                          fontSize: "0.875rem",
+                        }}
+                      >
+                        {step.step}
+                      </Box>
+                      <CardContent sx={{ pt: 3 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Box sx={{ color: "#3b82f6" }}>{step.icon}</Box>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {step.title}
+                          </Typography>
+                        </Box>
+                        <Chip label={step.tool} size="small" sx={{ mb: 1, bgcolor: alpha("#3b82f6", 0.1) }} />
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          {step.description}
+                        </Typography>
+                        <List dense>
+                          {step.actions.map((action, i) => (
+                            <ListItem key={i} sx={{ py: 0, px: 0 }}>
+                              <ListItemIcon sx={{ minWidth: 24 }}>
+                                <CheckIcon sx={{ fontSize: 14, color: "#10b981" }} />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={action} 
+                                primaryTypographyProps={{ variant: "body2" }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Nmap Scan Types */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <ScannerIcon sx={{ color: "#8b5cf6" }} />
+                Nmap Scan Types (14 Options)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent supports 14 different Nmap scan types, ordered from least to most intensive. Choose based on your needs and time constraints.
+              </Typography>
+              
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Scan Type</TableCell>
+                      <TableCell>Description</TableCell>
+                      <TableCell align="center">Intensity</TableCell>
+                      <TableCell align="center">Est. Time</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {NMAP_SCAN_TYPES.map((scan) => (
+                      <TableRow key={scan.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: ACCENT_COLOR }}>
+                            {scan.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">{scan.description}</Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <LinearProgress
+                            variant="determinate"
+                            value={(scan.intensity / 14) * 100}
+                            sx={{
+                              width: 60,
+                              height: 6,
+                              borderRadius: 3,
+                              bgcolor: alpha("#8b5cf6", 0.1),
+                              "& .MuiLinearProgress-bar": {
+                                bgcolor: scan.intensity <= 4 ? "#10b981" : scan.intensity <= 8 ? "#f59e0b" : "#ef4444",
+                              },
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip label={scan.time} size="small" variant="outlined" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+
+          {/* NSE Script Categories */}
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%" }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <ExtensionIcon sx={{ color: "#f59e0b" }} />
+                NSE Script Categories
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Nmap Scripting Engine (NSE) categories for extended scanning capabilities.
+              </Typography>
+              
+              <List>
+                {NMAP_NSE_CATEGORIES.map((cat) => (
+                  <ListItem key={cat.id} sx={{ flexDirection: "column", alignItems: "flex-start", py: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
+                      <Chip 
+                        label={cat.id} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: cat.warning ? alpha("#ef4444", 0.1) : alpha("#10b981", 0.1),
+                          color: cat.warning ? "#ef4444" : "#10b981",
+                        }} 
+                      />
+                      <Typography variant="subtitle2" fontWeight="bold">{cat.name}</Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {cat.description}
+                    </Typography>
+                    {cat.warning && (
+                      <Alert severity="warning" sx={{ mt: 1, py: 0, width: "100%" }}>
+                        <Typography variant="caption">{cat.warning}</Typography>
+                      </Alert>
+                    )}
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+
+          {/* High-Risk Ports */}
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3, height: "100%" }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningIcon sx={{ color: "#ef4444" }} />
+                High-Risk Port Detection
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent automatically flags 200+ high-risk ports with severity ratings. Here are some examples:
+              </Typography>
+              
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Port</TableCell>
+                      <TableCell>Service</TableCell>
+                      <TableCell>Risk</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {HIGH_RISK_PORTS_SAMPLE.map((port) => (
+                      <TableRow key={port.port} hover>
+                        <TableCell>
+                          <Chip label={port.port} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">{port.service}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={port.reason}>
+                            <Chip 
+                              label={port.severity}
+                              size="small"
+                              sx={{
+                                bgcolor: 
+                                  port.severity === "critical" ? alpha("#ef4444", 0.2) :
+                                  port.severity === "high" ? alpha("#f59e0b", 0.2) :
+                                  port.severity === "medium" ? alpha("#3b82f6", 0.2) :
+                                  alpha("#10b981", 0.2),
+                                color:
+                                  port.severity === "critical" ? "#ef4444" :
+                                  port.severity === "high" ? "#f59e0b" :
+                                  port.severity === "medium" ? "#3b82f6" :
+                                  "#10b981",
+                              }}
+                            />
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+
+          {/* Vulnerability Detection */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <BugReportIcon sx={{ color: "#ef4444" }} />
+                Automated Vulnerability Detection
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                VRAgent's Nmap integration automatically detects 300+ known vulnerable software versions and misconfigurations.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <FindInPageIcon sx={{ color: "#8b5cf6" }} />
+                        Banner Analysis
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Automatically analyze service banners for vulnerable versions.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• OpenSSH vulnerabilities (RegreSSHion, CVE-2024-6387)" /></ListItem>
+                        <ListItem><ListItemText primary="• Apache/nginx version detection" /></ListItem>
+                        <ListItem><ListItemText primary="• Database server analysis (MySQL, PostgreSQL)" /></ListItem>
+                        <ListItem><ListItemText primary="• Log4j and Spring4Shell detection" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <DeviceHubIcon sx={{ color: "#3b82f6" }} />
+                        NSE Script Results
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        Parse and interpret NSE script outputs for vulnerabilities.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• SMB vulnerabilities (EternalBlue, MS17-010)" /></ListItem>
+                        <ListItem><ListItemText primary="• SSL/TLS issues (Heartbleed, POODLE)" /></ListItem>
+                        <ListItem><ListItemText primary="• HTTP vulnerabilities (Shellshock, SQL injection)" /></ListItem>
+                        <ListItem><ListItemText primary="• Default credentials detection" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Card variant="outlined" sx={{ height: "100%" }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <AiIcon sx={{ color: "#10b981" }} />
+                        AI Risk Assessment
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        AI-powered analysis combining all findings into actionable reports.
+                      </Typography>
+                      <List dense>
+                        <ListItem><ListItemText primary="• Risk score (0-100) calculation" /></ListItem>
+                        <ListItem><ListItemText primary="• Attack vector identification" /></ListItem>
+                        <ListItem><ListItemText primary="• Compliance concerns (PCI-DSS, HIPAA)" /></ListItem>
+                        <ListItem><ListItemText primary="• Prioritized recommendations" /></ListItem>
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* AI Report Structure */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <AssessmentIcon sx={{ color: "#10b981" }} />
+                AI-Generated Security Report Structure
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Every Nmap scan generates a comprehensive AI analysis with the following structure:
+              </Typography>
+              
+              <Box
+                sx={{
+                  bgcolor: "#1e1e1e",
+                  borderRadius: 1,
+                  p: 2,
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  color: "#d4d4d4",
+                  overflow: "auto",
+                  maxHeight: 400,
+                }}
+              >
+                <pre style={{ margin: 0 }}>{`{
+  "risk_level": "High",
+  "risk_score": 72,
+  "executive_summary": "The network scan revealed multiple security concerns...",
+  "network_overview": {
+    "attack_surface_rating": "Large",
+    "internet_exposed_services": 15,
+    "internal_only_services": 8
+  },
+  "key_findings": [
+    {
+      "title": "Critical: MongoDB exposed without authentication",
+      "severity": "Critical",
+      "affected_hosts": ["192.168.1.50"],
+      "affected_ports": [27017],
+      "recommendation": "Enable authentication immediately"
+    }
+  ],
+  "vulnerable_services": [
+    {
+      "service": "OpenSSH",
+      "port": 22,
+      "hosts": ["192.168.1.10", "192.168.1.20"],
+      "vulnerability": "RegreSSHion (CVE-2024-6387)",
+      "severity": "Critical",
+      "cve_ids": ["CVE-2024-6387"],
+      "exploit_available": true
+    }
+  ],
+  "high_risk_hosts": [
+    {
+      "ip": "192.168.1.50",
+      "risk_level": "Critical",
+      "critical_services": ["MongoDB", "Redis"],
+      "priority_actions": ["Enable auth", "Firewall rules"]
+    }
+  ],
+  "attack_vectors": [
+    {
+      "vector": "Unauthenticated Database Access",
+      "severity": "Critical",
+      "entry_points": ["192.168.1.50:27017"],
+      "potential_impact": "Data breach, ransomware"
+    }
+  ],
+  "compliance_concerns": [
+    {
+      "standard": "PCI-DSS",
+      "concern": "Unencrypted database connections",
+      "remediation": "Enable TLS for all database traffic"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "Immediate",
+      "category": "Configuration",
+      "action": "Enable authentication on MongoDB",
+      "rationale": "Unauthenticated access = data breach risk"
+    }
+  ]
+}`}</pre>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* Quick Reference Commands */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <TerminalIcon sx={{ color: ACCENT_COLOR }} />
+                Quick Reference: Combined Analysis Commands
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>1. Trace the path first:</Typography>
+                  <CodeBlock code="traceroute -n target.com" />
+                  
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>2. Quick host discovery:</Typography>
+                  <CodeBlock code="nmap -sn 192.168.1.0/24" />
+                  
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>3. Basic service scan:</Typography>
+                  <CodeBlock code="nmap -sV -sC -T4 target.com" />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>4. Vulnerability scan:</Typography>
+                  <CodeBlock code="nmap -sV --script vuln target.com" />
+                  
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>5. Comprehensive scan:</Typography>
+                  <CodeBlock code="nmap -A -T4 -p- target.com" />
+                  
+                  <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>6. Stealth scan (requires root):</Typography>
+                  <CodeBlock code="sudo nmap -sS -T4 target.com" />
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* Tool Links */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, bgcolor: alpha(ACCENT_COLOR, 0.05) }}>
+              <Typography variant="h6" gutterBottom>Try the Combined Tools</Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Use VRAgent's integrated network analysis tools for comprehensive security assessment.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Button
+                    component={Link}
+                    to="/dynamic/traceroute"
+                    variant="contained"
+                    fullWidth
+                    startIcon={<RouteIcon />}
+                    sx={{ bgcolor: ACCENT_COLOR, "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.8) } }}
+                  >
+                    Traceroute Analyzer
+                  </Button>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Button
+                    component={Link}
+                    to="/dynamic/nmap"
+                    variant="contained"
+                    fullWidth
+                    startIcon={<RadarIcon />}
+                    sx={{ bgcolor: "#3b82f6", "&:hover": { bgcolor: alpha("#3b82f6", 0.8) } }}
+                  >
+                    Nmap Scanner
+                  </Button>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Button
+                    component={Link}
+                    to="/dynamic/network"
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<DeviceHubIcon />}
+                    sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+                  >
+                    Network Analysis Hub
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+      </Box>
 
       {/* Bottom Navigation */}
       <Box sx={{ mt: 4, textAlign: "center" }}>
@@ -1411,6 +2270,7 @@ const TracerouteGuidePage: React.FC = () => {
         >
           Back to Learning Hub
         </Button>
+      </Box>
       </Box>
     </Box>
     </LearnPageLayout>

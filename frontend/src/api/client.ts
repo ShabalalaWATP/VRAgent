@@ -1,3 +1,5 @@
+import logger from "../utils/logger";
+
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const ACCESS_TOKEN_KEY = "vragent_access_token";
 const REFRESH_TOKEN_KEY = "vragent_refresh_token";
@@ -7,11 +9,21 @@ let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
 // Get auth headers
-function getAuthHeaders(): HeadersInit {
+export function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem(ACCESS_TOKEN_KEY);
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+// Get auth headers without Content-Type (for fetch with custom content handling)
+export function getAuthHeadersNoContentType(): HeadersInit {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const headers: HeadersInit = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -34,7 +46,7 @@ async function tryRefreshToken(): Promise<boolean> {
       const tokens = await resp.json();
       localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
       localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
-      console.log("[API] Token refreshed successfully");
+      logger.debug("[API] Token refreshed successfully");
       return true;
     }
     return false;
@@ -77,7 +89,7 @@ async function request<T>(path: string, options?: RequestInit, retryOnAuth = tru
   
   // Handle 401 - try to refresh token first
   if (resp.status === 401 && retryOnAuth) {
-    console.log("[API] Got 401, attempting token refresh...");
+    logger.debug("[API] Got 401, attempting token refresh...");
     const refreshed = await refreshTokenIfNeeded();
     
     if (refreshed) {
@@ -98,7 +110,14 @@ async function request<T>(path: string, options?: RequestInit, retryOnAuth = tru
     const text = await resp.text();
     throw new Error(text || resp.statusText);
   }
-  return (await resp.json()) as T;
+
+  // Safely parse JSON response
+  try {
+    return (await resp.json()) as T;
+  } catch (parseError) {
+    console.error("Failed to parse JSON response:", parseError);
+    throw new Error("Invalid response format from server");
+  }
 }
 
 export async function uploadZip(projectId: number, file: File, retryOnAuth = true): Promise<any> {
@@ -205,7 +224,39 @@ export const api = {
         enhanced_scan: options?.enhancedScan ?? false
       })
     }),
+  
+  // Quick Scan endpoints (standalone, no project required)
+  quickScanUpload: async (file: File, enhancedScan: boolean = false): Promise<QuickScanResponse> => {
+    const form = new FormData();
+    form.append("file", file);
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/projects/quick-scan/upload?enhanced_scan=${enhancedScan}`, {
+      method: "POST",
+      headers,
+      body: form
+    });
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+    return resp.json();
+  },
+  
+  quickScanClone: (repoUrl: string, branch?: string, enhancedScan: boolean = false) =>
+    request<QuickScanResponse>(`/projects/quick-scan/clone`, {
+      method: "POST",
+      body: JSON.stringify({ 
+        repo_url: repoUrl, 
+        branch: branch || null,
+        enhanced_scan: enhancedScan 
+      })
+    }),
+
   getReports: (projectId: number) => request<Report[]>(`/projects/${projectId}/reports`),
+  getRecentReports: (limit: number = 20) => request<RecentReport[]>(`/reports/recent?limit=${limit}`),
   getReport: (reportId: number) => request<Report>(`/reports/${reportId}`),
   getFindings: (reportId: number) => request<Finding[]>(`/reports/${reportId}/findings`),
   deleteReport: (reportId: number) => 
@@ -324,6 +375,13 @@ export type ScanRun = {
   error_message?: string;
 };
 
+export type QuickScanResponse = {
+  project_id: number;
+  project_name: string;
+  scan_run_id: number;
+  message: string;
+};
+
 export type Report = {
   id: number;
   project_id: number;
@@ -339,6 +397,19 @@ export type Report = {
     scan_stats?: any;
     [key: string]: any;
   };
+};
+
+export type RecentReport = {
+  id: number;
+  project_id: number;
+  project_name: string;
+  scan_run_id: number;
+  created_at: string;
+  title: string;
+  summary?: string;
+  overall_risk_score?: number;
+  finding_count: number;
+  severity_counts: Record<string, number>;
 };
 
 export type Finding = {
@@ -1401,6 +1472,25 @@ export type NmapScanRequest = {
   scan_type: string;
   ports?: string;
   title?: string;
+  scripts?: string[];  // Individual NSE scripts to run
+  script_categories?: string[];  // NSE script categories (e.g., "vuln", "safe")
+};
+
+// NSE script category info
+export type NseScriptCategory = {
+  id: string;
+  name: string;
+  description: string;
+  examples: string[];
+  warning?: string;
+};
+
+// Individual NSE script info
+export type NseScript = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
 };
 
 // Packet capture profile
@@ -1448,6 +1538,20 @@ export const apiClient = {
   // Get available Nmap scan types
   getNmapScanTypes: async (): Promise<NmapScanType[]> => {
     const resp = await fetch(`${API_URL}/network/nmap/scan-types`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available NSE script categories
+  getNseScriptCategories: async (): Promise<NseScriptCategory[]> => {
+    const resp = await fetch(`${API_URL}/network/nmap/script-categories`);
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get available individual NSE scripts
+  getNseScripts: async (): Promise<NseScript[]> => {
+    const resp = await fetch(`${API_URL}/network/nmap/scripts`);
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -2393,12 +2497,14 @@ export const apiClient = {
     projectId: number,
     files: File[],
     customPrompt?: string,
+    analysisDepth?: string,
     onProgress?: (progress: number) => void
   ): Promise<DocumentAnalysisReport> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
     if (customPrompt) formData.append("custom_prompt", customPrompt);
+    if (analysisDepth) formData.append("analysis_depth", analysisDepth);
     
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -2445,6 +2551,75 @@ export const apiClient = {
 
   reprocessAnalysisReport: async (projectId: number, reportId: number): Promise<{ status: string }> => {
     const resp = await fetch(`${API_URL}/projects/${projectId}/analysis-reports/${reportId}/reprocess`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Document Translation
+  // ============================================================================
+
+  getDocumentTranslations: async (projectId: number): Promise<DocumentTranslation[]> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/translations`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  createDocumentTranslation: async (
+    projectId: number,
+    file: File,
+    options?: { targetLanguage?: string; sourceLanguage?: string; ocrLanguages?: string },
+    onProgress?: (progress: number) => void
+  ): Promise<DocumentTranslation> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const formData = new FormData();
+    formData.append("file", file);
+    if (options?.targetLanguage) formData.append("target_language", options.targetLanguage);
+    if (options?.sourceLanguage) formData.append("source_language", options.sourceLanguage);
+    if (options?.ocrLanguages) formData.append("ocr_languages", options.ocrLanguages);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}/projects/${projectId}/translations`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || xhr.statusText));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(formData);
+    });
+  },
+
+  deleteDocumentTranslation: async (projectId: number, translationId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/translations/${translationId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  reprocessDocumentTranslation: async (projectId: number, translationId: number): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/projects/${projectId}/translations/${translationId}/reprocess`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -5369,17 +5544,108 @@ export interface MITMTrafficEntry {
   notes?: string;
 }
 
+export interface MITMSessionAnalysis {
+  summary?: string;
+  risk_score?: number;
+  findings_count?: number;
+  critical_count?: number;
+  high_count?: number;
+  medium_count?: number;
+  low_count?: number;
+  findings?: Array<{
+    severity: string;
+    title: string;
+    description?: string;
+  }>;
+  ai_writeup?: string;
+  attack_paths?: string[];
+  agent_activity?: {
+    monitoring_active?: boolean;
+    goal_progress?: {
+      goals?: Array<{
+        goal?: string;
+        completion?: number;
+      }>;
+    };
+    captured_data_summary?: {
+      credentials?: number;
+      tokens?: number;
+      cookies?: number;
+    };
+    execution_log?: Array<{
+      tool_id?: string;
+      tool_name?: string;
+      success?: boolean;
+      findings_count?: number;
+      execution_time?: number;
+    }>;
+    verification_results?: Array<{
+      tool_id?: string;
+      success?: boolean;
+      status?: string;
+      indicators?: string[];
+    }>;
+    decision_log?: Array<{
+      step?: string;
+      decision?: string;
+      tool?: string;
+      reason?: string;
+      confidence?: number;
+    }>;
+  };
+}
+
 export interface MITMSession {
   id: string;
   name: string;
   created_at: string;
   entries: number;
+  proxy_id?: string;
+  target_host?: string;
+  target_port?: number;
+  analysis?: MITMSessionAnalysis;
+  has_analysis?: boolean;
 }
 
 export interface MITMSessionResponse {
   entries: MITMTrafficEntry[];
   total: number;
   meta?: MITMSession;
+}
+
+export interface MITMSavedScanFinding {
+  severity?: string;
+  title?: string;
+  type?: string;
+  description?: string;
+}
+
+export interface MITMSavedScan {
+  id: number;
+  title?: string;
+  target_host?: string;
+  target_port?: number;
+  created_at?: string;
+  risk_level?: string;
+  summary?: string;
+  findings?: MITMSavedScanFinding[];
+  findings_count?: number;
+  auto_saved?: boolean;
+  project_id?: number | null;
+  attack_chains?: any[];
+  decision_log?: any[];
+  tools_used?: string[];
+  target_url?: string;
+  scan_type?: string;
+  status?: string;
+  alerts_summary?: {
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  urls?: string[];
 }
 
 export interface MITMRule {
@@ -5411,6 +5677,68 @@ export interface MITMPresetRule {
   id: string;
   name: string;
   description?: string;
+}
+
+function parseTargetHostPort(targetUrl?: string): { host?: string; port?: number } {
+  if (!targetUrl) {
+    return {};
+  }
+  try {
+    const parsed = new URL(targetUrl);
+    const port = parsed.port
+      ? Number.parseInt(parsed.port, 10)
+      : parsed.protocol === "https:"
+        ? 443
+        : 80;
+    return { host: parsed.hostname, port };
+  } catch {
+    return {};
+  }
+}
+
+function riskLevelFromAlerts(alerts?: { high: number; medium: number; low: number; info: number }): string {
+  if (!alerts) return "info";
+  if (alerts.high > 0) return "high";
+  if (alerts.medium > 0) return "medium";
+  if (alerts.low > 0) return "low";
+  return "info";
+}
+
+function mapZAPSummaryToMITMSavedScan(scan: ZAPScanSummary): MITMSavedScan {
+  const { host, port } = parseTargetHostPort(scan.target_url);
+  return {
+    id: scan.id,
+    title: scan.title,
+    target_host: host,
+    target_port: port,
+    created_at: scan.created_at,
+    risk_level: riskLevelFromAlerts(scan.alerts),
+    findings_count: scan.alerts?.total,
+    target_url: scan.target_url,
+    scan_type: scan.scan_type,
+    status: scan.status,
+    alerts_summary: scan.alerts,
+  };
+}
+
+function mapZAPDetailToMITMSavedScan(scan: ZAPScanDetail): MITMSavedScan {
+  const { host, port } = parseTargetHostPort(scan.target_url);
+  return {
+    id: scan.id,
+    title: scan.title,
+    target_host: host,
+    target_port: port,
+    created_at: scan.created_at,
+    risk_level: riskLevelFromAlerts(scan.alerts_summary),
+    summary: scan.stats?.summary,
+    findings: scan.alerts,
+    findings_count: scan.alerts_summary?.total ?? scan.alerts?.length,
+    target_url: scan.target_url,
+    scan_type: scan.scan_type,
+    status: scan.status,
+    alerts_summary: scan.alerts_summary,
+    urls: scan.urls,
+  };
 }
 
 export const mitmClient = {
@@ -5454,10 +5782,17 @@ export const mitmClient = {
   },
 
   // Stop a proxy
-  stopProxy: async (proxyId: string): Promise<any> => {
+  stopProxy: async (
+    proxyId: string,
+    options?: { autoSave?: boolean; projectId?: number }
+  ): Promise<any> => {
     const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/stop`, {
       method: "POST",
       headers: getAuthHeaders(),
+      body: options ? JSON.stringify({
+        auto_save: options.autoSave ?? true,
+        project_id: options.projectId,
+      }) : undefined,
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -5567,6 +5902,57 @@ export const mitmClient = {
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
+  },
+
+  // List saved scans (mapped from ZAP saved scans)
+  listSavedScans: async (): Promise<MITMSavedScan[]> => {
+    const data = await zapClient.getSavedScans();
+    const scans = data.scans || [];
+    return scans.map(mapZAPSummaryToMITMSavedScan);
+  },
+
+  // Get saved scan detail (mapped from ZAP saved scans)
+  getSavedScan: async (scanId: number): Promise<MITMSavedScan> => {
+    const detail = await zapClient.getSavedScan(scanId);
+    return mapZAPDetailToMITMSavedScan(detail);
+  },
+
+  // Delete saved scan
+  deleteSavedScan: async (scanId: number): Promise<{ success: boolean; message: string }> => {
+    return zapClient.deleteSavedScan(scanId);
+  },
+
+  // Save session with AI analysis included
+  saveSessionWithAnalysis: async (
+    proxyId: string, 
+    name?: string, 
+    analysisResult?: any
+  ): Promise<MITMSession> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/sessions/save-with-analysis`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, analysis: analysisResult }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all saved sessions across all proxies
+  listAllSessions: async (): Promise<MITMSession[]> => {
+    const resp = await fetch(`${API_URL}/mitm/sessions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a saved session
+  deleteSession: async (proxyId: string, sessionId: string): Promise<void> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/sessions/${sessionId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
   },
 
   // Replay a traffic entry
@@ -5689,7 +6075,373 @@ export const mitmClient = {
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
+
+  // Save analysis to a project for combined analysis
+  saveToProject: async (
+    proxyId: string, 
+    projectId: number, 
+    title?: string, 
+    description?: string,
+    sessionId?: string
+  ): Promise<{ success: boolean; report_id: number; message: string; findings_count: number; risk_level: string }> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/save-to-project`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, title, description, session_id: sessionId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List MITM reports for a project
+  listProjectReports: async (projectId: number): Promise<MITMSavedReport[]> => {
+    const resp = await fetch(`${API_URL}/mitm/reports/project/${projectId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get a specific saved MITM report
+  getReport: async (reportId: number): Promise<MITMSavedReportFull> => {
+    const resp = await fetch(`${API_URL}/mitm/reports/${reportId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Attack Tools - Agentic Execution
+  // ============================================================================
+
+  // List all available attack tools
+  listAttackTools: async (category?: string): Promise<MITMAttackToolsResponse> => {
+    const url = category 
+      ? `${API_URL}/mitm/attack-tools?category=${encodeURIComponent(category)}`
+      : `${API_URL}/mitm/attack-tools`;
+    const resp = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get details of a specific attack tool
+  getAttackTool: async (toolId: string): Promise<MITMAttackTool> => {
+    const resp = await fetch(`${API_URL}/mitm/attack-tools/${toolId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get AI recommendations for attack tools based on traffic
+  getAttackToolRecommendations: async (proxyId: string): Promise<MITMToolRecommendationsResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/attack-tools/recommend`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Execute a specific attack tool
+  executeAttackTool: async (proxyId: string, toolId: string, options?: Record<string, any>): Promise<MITMToolExecutionResult> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/attack-tools/execute`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ tool_id: toolId, options }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Run an AI-driven agentic attack session
+  runAgenticSession: async (proxyId: string, maxTools?: number, autoExecute?: boolean): Promise<MITMAgenticSessionResult> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/attack-tools/agentic-session`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ max_tools: maxTools ?? 5, auto_execute: autoExecute ?? true }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get execution log for a proxy
+  getAttackToolExecutionLog: async (proxyId: string): Promise<MITMExecutionLogResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/attack-tools/execution-log`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ============================================================================
+  // Enhanced Agentic Capabilities
+  // ============================================================================
+
+  // Set attack goals for autonomous operation
+  setAttackGoals: async (proxyId: string, goals: string[]): Promise<MITMGoalSetResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/set-goals`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ goals }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get progress towards attack goals
+  getGoalProgress: async (proxyId: string): Promise<MITMGoalProgressResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/goal-progress`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Start real-time traffic monitoring
+  startTrafficMonitor: async (proxyId: string, config?: MITMMonitorConfig): Promise<MITMMonitorStatusResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/start-monitor`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(config || {}),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Stop real-time traffic monitoring
+  stopTrafficMonitor: async (proxyId: string): Promise<MITMMonitorStatusResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/stop-monitor`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Verify if an attack was successful
+  verifyAttackSuccess: async (proxyId: string, toolId: string, timeout?: number): Promise<MITMAttackVerificationResult> => {
+    const params = new URLSearchParams();
+    if (timeout) params.append('timeout', timeout.toString());
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/verify-attack/${toolId}?${params}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get agent attack memory and success rates
+  getAttackMemory: async (toolId?: string): Promise<MITMAttackMemoryResponse> => {
+    const params = new URLSearchParams();
+    if (toolId) params.append('tool_id', toolId);
+    const resp = await fetch(`${API_URL}/mitm/agent/attack-memory?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get comprehensive agent status
+  getAgentStatus: async (proxyId: string): Promise<MITMAgentStatusResponse> => {
+    const resp = await fetch(`${API_URL}/mitm/proxies/${proxyId}/agent/status`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
 };
+
+// ============================================================================
+// MITM Attack Tools Types
+// ============================================================================
+
+export interface MITMAttackTool {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  capabilities: string[];
+  expected_findings: string[];
+  triggers: string[];
+  prerequisites: string[];
+  execution_type: 'rule' | 'analysis' | 'hybrid';
+}
+
+export interface MITMAttackToolsResponse {
+  tools: MITMAttackTool[];
+  total: number;
+  categories: string[];
+}
+
+export interface MITMToolRecommendation {
+  tool_id: string;
+  tool_name: string;
+  confidence: number;
+  reason: string;
+  expected_impact: string;
+  execution_steps: string[];
+  risk_warning?: string;
+}
+
+export interface MITMToolRecommendationsResponse {
+  proxy_id: string;
+  traffic_analyzed: number;
+  recommendations: MITMToolRecommendation[];
+  total: number;
+}
+
+export interface MITMToolExecutionResult {
+  success: boolean;
+  tool_id: string;
+  execution_time: number;
+  findings: MITMAnalysisFinding[];
+  rules_applied: number;
+  captured_data?: {
+    credentials?: Array<{ username: string; password: string; source: string }>;
+    tokens?: Array<{ type: string; value: string; source: string }>;
+    cookies?: Array<{ name: string; value: string; domain: string }>;
+    sensitive_data?: Array<{ type: string; value: string; context: string }>;
+  };
+  errors?: string[];
+  summary: string;
+}
+
+export interface MITMAgenticSessionResult {
+  session_id: string;
+  proxy_id: string;
+  status: 'completed' | 'partial' | 'failed';
+  tools_recommended: number;
+  tools_executed: number;
+  total_findings: number;
+  findings: MITMAnalysisFinding[];
+  execution_results: MITMToolExecutionResult[];
+  ai_summary: string;
+  duration_seconds: number;
+  decision_log?: MITMDecisionLogEntry[];
+  captured_data?: {
+    credentials?: Array<{ type: string; username?: string; value?: string }>;
+    tokens?: Array<{ type: string; token: string }>;
+  };
+}
+
+// Enhanced Agentic Types
+export interface MITMDecisionLogEntry {
+  step: string;
+  timestamp?: string;
+  decision?: 'execute' | 'stop';
+  tool?: string;
+  confidence?: number;
+  reason?: string;
+  analysis?: string;
+  feedback?: string;
+  suggested_follow_up?: string[];
+  based_on?: string;
+}
+
+export interface MITMGoalSetResponse {
+  status: string;
+  proxy_id: string;
+  goals: string[];
+  message: string;
+}
+
+export interface MITMGoalProgress {
+  goal: string;
+  indicators_total: number;
+  indicators_met: number;
+  completion: number;
+  details: string[];
+}
+
+export interface MITMGoalProgressResponse {
+  proxy_id: string;
+  goals: MITMGoalProgress[];
+}
+
+export interface MITMMonitorConfig {
+  auto_analyze?: boolean;
+  capture_credentials?: boolean;
+  detect_vulnerabilities?: boolean;
+  trigger_attacks?: boolean;
+  interval_seconds?: number;
+}
+
+export interface MITMMonitorStatusResponse {
+  status: string;
+  proxy_id: string;
+  config?: MITMMonitorConfig;
+}
+
+export interface MITMAttackVerificationResult {
+  tool_id: string;
+  status: 'verifying' | 'verified' | 'unverified' | 'unknown_tool';
+  indicators: string[];
+  success: boolean;
+  verification_time_seconds?: number;
+}
+
+export interface MITMAttackMemoryEntry {
+  timestamp: string;
+  tool_id: string;
+  target_host: string;
+  target_port: number;
+  tls_enabled: boolean;
+  success: boolean;
+  context: {
+    traffic_count: number;
+    rules_active: number;
+  };
+}
+
+export interface MITMAttackMemoryResponse {
+  success_rate: {
+    total: number;
+    successes: number;
+    success_rate: number;
+  };
+  recent_attacks: MITMAttackMemoryEntry[];
+  total_recorded: number;
+}
+
+export interface MITMAgentStatusResponse {
+  proxy_id: string;
+  monitoring_active: boolean;
+  goals: Array<{ name: string; priority: number }>;
+  goal_progress: MITMGoalProgressResponse;
+  findings_count: number;
+  captured_data_summary: {
+    credentials: number;
+    tokens: number;
+    cookies: number;
+  };
+  confidence_thresholds: {
+    auto_execute: number;
+    escalation: number;
+    stop: number;
+  };
+}
+
+export interface MITMExecutionLogEntry {
+  timestamp: string;
+  proxy_id: string;
+  tool_id: string;
+  tool_name: string;
+  success: boolean;
+  findings_count: number;
+  execution_time: number;
+  error?: string;
+}
+
+export interface MITMExecutionLogResponse {
+  proxy_id: string;
+  executions: MITMExecutionLogEntry[];
+  total: number;
+}
 
 // MITM Analysis Types
 export interface MITMAnalysisFinding {
@@ -5699,6 +6451,16 @@ export interface MITMAnalysisFinding {
   description: string;
   evidence: string;
   recommendation: string;
+  // Intelligence enrichment fields
+  intelligence?: {
+    cwe_id?: string;
+    cvss_score?: number;
+    technical_details?: string;
+    exploitation_steps?: string[];
+    poc_payloads?: string[];
+    references?: string[];
+    related_cves?: string[];
+  };
 }
 
 export interface MITMAnalysisResult {
@@ -5710,6 +6472,110 @@ export interface MITMAnalysisResult {
   ai_analysis?: string;
   traffic_analyzed: number;
   rules_active: number;
+  agent_activity?: {
+    monitoring_active?: boolean;
+    goals?: Array<{ name?: string }>;
+    goal_progress?: {
+      goals?: Array<{
+        goal?: string;
+        completion?: number;
+      }>;
+    };
+    captured_data_summary?: {
+      credentials?: number;
+      tokens?: number;
+      cookies?: number;
+    };
+    execution_log?: Array<{
+      tool_id?: string;
+      tool_name?: string;
+      success?: boolean;
+      findings_count?: number;
+      execution_time?: number;
+    }>;
+    verification_results?: Array<{
+      tool_id?: string;
+      success?: boolean;
+      status?: string;
+      indicators?: string[];
+    }>;
+    decision_log?: Array<{
+      step?: string;
+      decision?: string;
+      tool?: string;
+      reason?: string;
+      confidence?: number;
+    }>;
+  };
+  // Enhanced intelligence fields
+  attack_paths?: Array<{
+    name: string;
+    severity?: string;
+    description?: string;
+    steps: string[];
+    impact: string;
+    likelihood: string;
+    findings_involved?: string[];
+  }>;
+  exploit_references?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    type?: string;
+    platform?: string;
+    description?: string;
+    vulnerability_type?: string;
+  }>;
+  cve_references?: Array<{
+    cve_id: string;
+    description: string;
+    cvss_score?: number;
+    severity?: string;
+    url?: string;
+    references?: string[];
+  }>;
+  ai_writeup?: string;
+  detected_technologies?: string[];
+  // 3-pass analysis stats
+  analysis_passes?: number;
+  analysis_stats?: {
+    pass1_findings: number;
+    pass2_ai_findings: number;
+    after_dedup: number;
+    false_positives_removed: number;
+    final_count: number;
+  };
+}
+
+// Saved MITM Report (summary)
+export interface MITMSavedReport {
+  id: number;
+  title: string;
+  description?: string;
+  traffic_analyzed: number;
+  findings_count: number;
+  risk_score: number | null;
+  risk_level: string | null;
+  analysis_passes: number;
+  pass1_findings: number;
+  pass2_ai_findings: number;
+  false_positives_removed: number;
+  created_at: string;
+}
+
+// Full saved MITM report
+export interface MITMSavedReportFull extends MITMAnalysisResult {
+  id: number;
+  project_id: number;
+  title: string;
+  description?: string;
+  proxy_id: string;
+  session_id?: string;
+  rules_active: number;
+  ai_exploitation_writeup?: string;
+  traffic_snapshot?: any[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MITMGuidedStep {
@@ -5732,6 +6598,38 @@ export interface MITMGuidedSetup {
   difficulty: string;
   estimated_time: string;
   steps: MITMGuidedStep[];
+  deployment_scenarios?: Array<{
+    title: string;
+    subtitle?: string;
+    description: string;
+    diagram?: string;
+    key_concept?: string;
+    why_it_works?: string;
+    config?: {
+      listen_host: string;
+      listen_port: string;
+      target_host: string;
+      target_port: string;
+    };
+    explanation?: string[];
+    traffic_flow?: string;
+    verify_command?: string;
+    common_mistake?: string;
+    warning?: string;
+  }>;
+  juice_shop_setup?: {
+    title: string;
+    description: string;
+    methods: Array<{
+      name: string;
+      description: string;
+      steps: string[];
+    }>;
+    port_explanation?: {
+      title: string;
+      details: string[];
+    };
+  };
   common_use_cases: Array<{
     title: string;
     description: string;
@@ -6991,7 +7889,7 @@ export type ELFSymbolResult = {
   reason?: string;
 };
 
-// Disassembly Types
+// Disassembly Types - Enhanced with CFG and cross-references
 export type DisassemblyInstruction = {
   address: number;
   mnemonic: string;
@@ -7000,8 +7898,45 @@ export type DisassemblyInstruction = {
   size: number;
   is_call: boolean;
   is_jump: boolean;
+  is_conditional_jump?: boolean;
+  is_return?: boolean;
   is_suspicious: boolean;
   comment?: string;
+  // Enhanced fields
+  target_address?: number;
+  reads_regs?: string[];
+  writes_regs?: string[];
+  memory_refs?: string[];
+  string_ref?: string;
+  xrefs_from?: number[];
+  xrefs_to?: number[];
+};
+
+export type DisassemblyBasicBlock = {
+  start_address: number;
+  end_address: number;
+  instructions: DisassemblyInstruction[];
+  predecessors?: number[];
+  successors?: number[];
+  is_entry?: boolean;
+  is_exit?: boolean;
+  block_type?: string;
+};
+
+export type ControlFlowGraph = {
+  blocks: Record<number, DisassemblyBasicBlock>;
+  entry_block?: number;
+  exit_blocks?: number[];
+  loop_headers?: number[];
+  complexity?: number;
+};
+
+export type CrossReference = {
+  from_address: number;
+  to_address: number;
+  xref_type: string;
+  from_function?: string;
+  to_function?: string;
 };
 
 export type DisassemblyFunction = {
@@ -7011,14 +7946,29 @@ export type DisassemblyFunction = {
   instructions: DisassemblyInstruction[];
   calls: string[];
   suspicious_patterns: string[];
+  // Enhanced fields
+  cfg?: ControlFlowGraph;
+  local_vars?: string[];
+  arguments?: string[];
+  calling_convention?: string;
+  cyclomatic_complexity?: number;
+  is_leaf?: boolean;
+  is_recursive?: boolean;
+  stack_frame_size?: number;
 };
 
 export type DisassemblyResult = {
   entry_point_disasm: DisassemblyInstruction[];
   functions: DisassemblyFunction[];
-  suspicious_instructions: Array<{ function?: string; pattern?: string; note?: string }>;
+  suspicious_instructions: Array<{ function?: string; pattern?: string; note?: string; address?: string; severity?: string }>;
   architecture: string;
   mode: string;
+  // Enhanced fields
+  cross_references?: CrossReference[];
+  string_references?: Record<number, string>;
+  import_references?: Record<number, string>;
+  total_instructions?: number;
+  coverage_percent?: number;
 };
 
 export type SecretResult = {
@@ -7091,6 +8041,373 @@ export type GhidraAISummary = {
   entry?: string;
   size?: number;
   summary?: string;
+  error?: string;
+};
+
+// ============================================================================
+// Data Flow Analysis Types (Binary/Native)
+// ============================================================================
+
+export type BinaryTaintSource = {
+  address: number;
+  source_type: string;  // 'user_input', 'network', 'environment', 'argv'
+  register_or_memory: string;
+  function_name: string;
+  description: string;
+};
+
+export type BinaryTaintSink = {
+  address: number;
+  sink_type: string;  // 'exec', 'format_string', 'memcpy', 'sql', 'file_write'
+  function_name: string;
+  cwe_id: string;
+  description: string;
+};
+
+export type BinaryDataFlowPath = {
+  source: BinaryTaintSource;
+  sink: BinaryTaintSink;
+  path: number[];  // addresses
+  instructions: string[];
+  is_exploitable: boolean;
+  confidence: number;
+  vulnerability_type?: string;
+  cwe_id?: string;
+  sanitizers_found?: string[];
+};
+
+export type BinaryDataFlowAnalysisResult = {
+  taint_sources: BinaryTaintSource[];
+  taint_sinks: BinaryTaintSink[];
+  data_flow_paths: BinaryDataFlowPath[];
+  vulnerable_paths: BinaryDataFlowPath[];
+  total_paths_analyzed: number;
+  analysis_coverage?: number;
+};
+
+// ============================================================================
+// Type Recovery Types
+// ============================================================================
+
+export type RecoveredField = {
+  offset: number;
+  size: number;
+  inferred_type: string;
+  access_pattern: string;
+  name?: string;
+};
+
+export type RecoveredStruct = {
+  address: number;
+  total_size: number;
+  fields: RecoveredField[];
+  inferred_name: string;
+  confidence: number;
+  usage_count?: number;
+};
+
+export type RecoveredArgument = {
+  index: number;
+  register_or_stack: string;
+  inferred_type: string;
+  is_pointer: boolean;
+  points_to?: string;
+};
+
+export type RecoveredLocalVar = {
+  stack_offset: number;
+  size: number;
+  inferred_type: string;
+  scope_start?: number;
+  scope_end?: number;
+};
+
+export type RecoveredFunctionSignature = {
+  address: number;
+  name: string;
+  return_type: string;
+  arguments: RecoveredArgument[];
+  local_vars: RecoveredLocalVar[];
+  calling_convention: string;
+  confidence: number;
+};
+
+export type TypeRecoveryResult = {
+  functions: RecoveredFunctionSignature[];
+  structs: RecoveredStruct[];
+  global_vars: Array<{
+    address: number;
+    name: string;
+    inferred_type: string;
+    size: number;
+  }>;
+  vtables: Array<{
+    address: number;
+    class_name: string;
+    method_pointers: number[];
+  }>;
+  total_types_recovered?: number;
+};
+
+// ============================================================================
+// CPU Emulation Types
+// ============================================================================
+
+export type EmulationMemoryAccess = {
+  address: number;
+  access_type: 'read' | 'write';
+  size: number;
+  value?: number;
+  instruction_address?: number;
+};
+
+export type EmulationState = {
+  address: number;
+  registers: Record<string, number>;
+  flags: Record<string, boolean>;
+  stack_top: number[];
+  instruction_count: number;
+};
+
+export type DecodedString = {
+  address: number;
+  decoded_value: string;
+  encoding: string;
+  decoding_method: string;
+  original_bytes?: number[];
+};
+
+export type EmulationTrace = {
+  start_address: number;
+  end_address: number;
+  instructions_executed: number;
+  states: EmulationState[];
+  memory_accesses: EmulationMemoryAccess[];
+  syscalls: Array<{
+    address: number;
+    syscall_number: number;
+    syscall_name: string;
+    arguments: number[];
+    return_value?: number;
+  }>;
+  api_calls: Array<{
+    address: number;
+    function_name: string;
+    arguments: any[];
+    return_value?: any;
+    library?: string;
+  }>;
+  decoded_strings: DecodedString[];
+  loops_detected: Array<{ address: number; iterations: number; type: string }>;
+  suspicious_behaviors: string[];
+  error?: string;
+};
+
+export type EmulationResult = {
+  traces: EmulationTrace[];
+  decoded_strings: DecodedString[];
+  api_calls: Array<{
+    address: number;
+    function_name: string;
+    arguments: any[];
+    return_value?: any;
+    library?: string;
+  }>;
+  syscalls: Array<{
+    address: number;
+    syscall_number: number;
+    syscall_name: string;
+    arguments: number[];
+    return_value?: number;
+  }>;
+  self_modifying_code: Array<{
+    address: number;
+    size: number;
+    trace_start: number;
+  }>;
+  unpacked_code?: Array<{
+    original_address: number;
+    unpacked_address: number;
+    size: number;
+  }>;
+  shellcode_detected?: boolean;
+  anti_analysis_detected: string[];
+  total_instructions_emulated?: number;
+  emulation_coverage?: number;
+};
+
+// ============================================================================
+// Symbolic Execution Types
+// ============================================================================
+
+export type SymbolicInput = {
+  name: string;
+  type: string;  // 'stdin', 'argv', 'file', 'network', 'memory'
+  size_bits: number;
+  constraints: string[];
+  concrete_examples: string[];
+};
+
+export type SymbolicPath = {
+  path_id: number;
+  depth: number;
+  constraints_count: number;
+  is_feasible: boolean;
+  termination_reason: string;
+  addresses_visited: number[];
+  branches_taken: Array<[number, boolean]>;
+};
+
+export type CrashInput = {
+  input_type: string;
+  input_value: string;  // hex encoded
+  crash_address: number;
+  crash_type: string;
+  vulnerability_type: string;
+  cwe_id?: string;
+  exploitability: string;
+};
+
+export type TargetReach = {
+  target_address: number;
+  target_name?: string;
+  reached: boolean;
+  input_to_reach?: string;  // hex encoded
+  path_length: number;
+  constraints_solved: number;
+};
+
+export type SymbolicExecutionResult = {
+  paths_explored: number;
+  paths_deadended: number;
+  paths_errored: number;
+  max_depth_reached: number;
+  symbolic_inputs: SymbolicInput[];
+  crash_inputs: CrashInput[];
+  target_reaches: TargetReach[];
+  interesting_paths: SymbolicPath[];
+  vulnerabilities_found: Array<{
+    type: string;
+    function?: string;
+    address: number;
+    cwe?: string;
+    input_sample?: string;
+    description: string;
+  }>;
+  execution_time_seconds: number;
+  memory_used_mb: number;
+  timeout_reached?: boolean;
+  error?: string;
+};
+
+// ============================================================================
+// Binary Diffing Types
+// ============================================================================
+
+export type FunctionDiff = {
+  address_a: number;
+  address_b?: number;
+  name: string;
+  match_type: 'identical' | 'modified' | 'added' | 'removed';
+  similarity_score: number;
+  size_a: number;
+  size_b?: number;
+  instructions_changed: number;
+  blocks_changed: number;
+  calls_added: string[];
+  calls_removed: string[];
+  is_security_relevant: boolean;
+  diff_summary?: string;
+};
+
+export type StringDiff = {
+  value: string;
+  status: 'added' | 'removed' | 'unchanged';
+  address_a?: number;
+  address_b?: number;
+  is_security_relevant: boolean;
+};
+
+export type ImportDiff = {
+  name: string;
+  library: string;
+  status: 'added' | 'removed' | 'unchanged';
+  is_security_relevant: boolean;
+};
+
+export type BinaryDiffResult = {
+  file_a: string;
+  file_b: string;
+  architecture_a: string;
+  architecture_b: string;
+  functions_identical: number;
+  functions_modified: number;
+  functions_added: number;
+  functions_removed: number;
+  overall_similarity: number;
+  function_diffs: FunctionDiff[];
+  block_diffs: Array<{
+    address_a: number;
+    address_b?: number;
+    function_name: string;
+    match_type: string;
+    instructions_a: string[];
+    instructions_b: string[];
+    similarity: number;
+  }>;
+  string_diffs: StringDiff[];
+  import_diffs: ImportDiff[];
+  security_relevant_changes: Array<{
+    type: string;
+    function?: string;
+    value?: string;
+    description: string;
+  }>;
+  patch_analysis?: string;
+  is_same_binary: boolean;
+  error?: string;
+};
+
+// ============================================================================
+// ROP Gadget Types
+// ============================================================================
+
+export type ROPGadget = {
+  address: number;
+  instructions: string[];
+  gadget_string: string;
+  gadget_type: string;
+  size_bytes: number;
+  registers_controlled: string[];
+  is_useful: boolean;
+  quality_score: number;
+};
+
+export type ROPChainTemplate = {
+  name: string;
+  description: string;
+  required_gadgets: string[];
+  available_gadgets: ROPGadget[];
+  is_buildable: boolean;
+  chain_addresses: number[];
+  payload_template?: string;
+};
+
+export type ROPGadgetResult = {
+  total_gadgets: number;
+  unique_gadgets: number;
+  gadgets_by_type: Record<string, number>;
+  gadgets: ROPGadget[];
+  useful_gadgets: ROPGadget[];
+  pop_gadgets: ROPGadget[];
+  syscall_gadgets: ROPGadget[];
+  write_gadgets: ROPGadget[];
+  pivot_gadgets: ROPGadget[];
+  chain_templates: ROPChainTemplate[];
+  nx_bypass_possible: boolean;
+  execve_chain_buildable: boolean;
+  mprotect_chain_buildable: boolean;
+  rop_difficulty: 'easy' | 'medium' | 'hard' | 'very_hard';
   error?: string;
 };
 
@@ -7187,6 +8504,13 @@ export type BinaryAnalysisResult = {
   // NEW: Legitimacy detection
   is_legitimate_software?: boolean;
   legitimacy_indicators?: string[];
+  // NEW: Advanced binary analysis
+  data_flow_analysis?: DataFlowAnalysisResult;
+  type_recovery?: TypeRecoveryResult;
+  emulation_analysis?: EmulationResult;
+  // NEW: Professional binary analysis features
+  symbolic_execution?: SymbolicExecutionResult;
+  rop_gadgets?: ROPGadgetResult;
   error?: string;
 };
 
@@ -8171,6 +9495,40 @@ export type DockerAnalysisResult = {
   layer_secrets?: LayerSecret[];
   layer_scan_metadata?: Record<string, any>;
   deleted_secrets_count?: number;
+  // CVE Scan Results
+  cve_scan?: {
+    vulnerabilities?: Array<{
+      id?: string;
+      severity?: string;
+      package?: string;
+      installed_version?: string;
+      fixed_version?: string;
+      description?: string;
+      in_kev?: boolean;
+      title?: string;
+      external_id?: string;
+      package_name?: string;
+      package_version?: string;
+      cvss_score?: number;
+      epss_percentile?: number;
+      epss_score?: number;
+      priority_label?: string;
+    }>;
+    scan_date?: string;
+    total_vulnerabilities?: number;
+    critical_count?: number;
+    high_count?: number;
+    medium_count?: number;
+    low_count?: number;
+    kev_count?: number;
+    high_epss_count?: number;
+    packages_scanned?: number;
+    packages_with_vulns?: number;
+    enrichment_applied?: boolean;
+    scan_duration_seconds?: number;
+    trivy_available?: boolean;
+    error?: string;
+  };
 };
 
 export type ReverseEngineeringStatus = {
@@ -9289,7 +10647,11 @@ export const reverseEngineeringClient = {
     adjudicateFindings: boolean = true,
     skepticismLevel: "high" | "medium" | "low" = "high",
     deepLayerScan: boolean = true,
-    checkBaseImage: boolean = true
+    checkBaseImage: boolean = true,
+    scanCves: boolean = false,
+    includeNvd: boolean = true,
+    includeKev: boolean = true,
+    includeEpss: boolean = true
   ): Promise<DockerAnalysisResult> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {};
@@ -9302,6 +10664,10 @@ export const reverseEngineeringClient = {
       skepticism_level: skepticismLevel,
       deep_layer_scan: String(deepLayerScan),
       check_base_image: String(checkBaseImage),
+      scan_cves: String(scanCves),
+      include_nvd: String(includeNvd),
+      include_kev: String(includeKev),
+      include_epss: String(includeEpss),
     });
     const resp = await fetch(`${API_URL}/reverse/analyze-docker/${encodeURIComponent(imageName)}?${params}`, {
       headers,
@@ -9312,6 +10678,27 @@ export const reverseEngineeringClient = {
       throw new Error(text || resp.statusText);
     }
     return resp.json();
+  },
+
+  /**
+   * Export Docker analysis result to various formats
+   */
+  exportDockerResult: async (
+    result: DockerAnalysisResult,
+    format: "markdown" | "pdf" | "docx"
+  ): Promise<Blob> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/export-docker/${format}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(result),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
   },
 
   /**
@@ -10676,6 +12063,113 @@ export const reverseEngineeringClient = {
         body: formData,
       }
     );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ================== Advanced Binary Analysis APIs ==================
+
+  /**
+   * Perform symbolic execution on a binary to discover vulnerabilities
+   */
+  performSymbolicExecution: async (
+    file: File,
+    options?: {
+      targetAddresses?: number[];
+      maxTimeSeconds?: number;
+      maxPaths?: number;
+    }
+  ): Promise<SymbolicExecutionResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const params = new URLSearchParams();
+    if (options?.targetAddresses?.length) {
+      params.set("target_addresses", options.targetAddresses.map(a => `0x${a.toString(16)}`).join(","));
+    }
+    if (options?.maxTimeSeconds) {
+      params.set("max_time_seconds", options.maxTimeSeconds.toString());
+    }
+    if (options?.maxPaths) {
+      params.set("max_paths", options.maxPaths.toString());
+    }
+
+    const url = `${API_URL}/reverse/binary/symbolic-execution${params.toString() ? `?${params}` : ""}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Compare two binary files to identify differences
+   */
+  diffBinaries: async (
+    fileA: File,
+    fileB: File,
+    detailed: boolean = true
+  ): Promise<BinaryDiffResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file_a", fileA);
+    formData.append("file_b", fileB);
+
+    const resp = await fetch(
+      `${API_URL}/reverse/binary/diff?detailed=${detailed}`,
+      {
+        method: "POST",
+        headers,
+        body: formData,
+      }
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Find ROP gadgets in a binary for exploit development
+   */
+  findROPGadgets: async (
+    file: File,
+    options?: {
+      maxGadgets?: number;
+      maxGadgetLength?: number;
+    }
+  ): Promise<ROPGadgetResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const params = new URLSearchParams();
+    if (options?.maxGadgets) {
+      params.set("max_gadgets", options.maxGadgets.toString());
+    }
+    if (options?.maxGadgetLength) {
+      params.set("max_gadget_length", options.maxGadgetLength.toString());
+    }
+
+    const url = `${API_URL}/reverse/binary/rop-gadgets${params.toString() ? `?${params}` : ""}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -13256,6 +14750,7 @@ export type DocumentAnalysisReport = {
   id: number;
   project_id: number;
   custom_prompt: string | null;
+  analysis_depth?: string | null;
   combined_summary: string | null;
   combined_key_points: string[] | null;
   status: "pending" | "processing" | "completed" | "failed";
@@ -13273,6 +14768,30 @@ export type ReportChatMessage = {
   content: string;
   created_at: string;
   username: string | null;
+};
+
+export type DocumentTranslation = {
+  id: number;
+  project_id: number;
+  filename: string;
+  original_filename: string;
+  file_url: string;
+  file_size: number;
+  mime_type: string | null;
+  output_filename: string | null;
+  output_url: string | null;
+  target_language: string;
+  source_language: string | null;
+  ocr_languages: string | null;
+  ocr_used: boolean | null;
+  page_count: number | null;
+  chars_extracted: number | null;
+  chars_translated: number | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string;
+  processed_at: string | null;
+  uploaded_by_username: string | null;
 };
 
 // ============================================================================
@@ -14937,7 +16456,7 @@ export class NotesCollaborationClient {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('Notes collaboration WebSocket connected');
+      logger.debug('Notes collaboration WebSocket connected');
       this.reconnectAttempts = 0;
       this.onConnectionChange(true);
       this.startPing();
@@ -14954,7 +16473,7 @@ export class NotesCollaborationClient {
     };
 
     this.ws.onclose = () => {
-      console.log('Notes collaboration WebSocket closed');
+      logger.debug('Notes collaboration WebSocket closed');
       this.onConnectionChange(false);
       this.stopPing();
       this.attemptReconnect();
@@ -14982,14 +16501,14 @@ export class NotesCollaborationClient {
 
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('Max reconnection attempts reached for notes WebSocket');
+      logger.debug('Max reconnection attempts reached for notes WebSocket');
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    console.log(`Attempting notes WebSocket reconnection in ${delay}ms...`);
-    
+    logger.debug(`Attempting notes WebSocket reconnection in ${delay}ms...`);
+
     setTimeout(() => this.connect(), delay);
   }
 
@@ -15085,7 +16604,7 @@ export class NotesCollaborationClient {
 // ============================================================================
 
 export interface SelectedScan {
-  scan_type: 'security_scan' | 'network_report' | 're_report' | 'fuzzing_session';
+  scan_type: 'security_scan' | 'network_report' | 're_report' | 'fuzzing_session' | 'ssl_scan' | 'dns_scan' | 'traceroute_scan' | 'agentic_fuzzer_report' | 'dynamic_scan' | 'binary_fuzzer_session' | 'mitm_analysis_report';
   scan_id: number;
   title?: string;
 }
@@ -15102,6 +16621,7 @@ export interface CombinedAnalysisRequest {
   title: string;
   selected_scans: SelectedScan[];
   supporting_documents?: SupportingDocument[];
+  document_analysis_report_ids?: number[];
   project_info?: string;
   user_requirements?: string;
   include_exploit_recommendations?: boolean;
@@ -15122,13 +16642,25 @@ export interface AvailableScanItem {
 export interface AvailableScansResponse {
   project_id: number;
   project_name: string;
+  // Static Analysis
   security_scans: AvailableScanItem[];
+  // Dynamic Analysis - Network
   network_reports: AvailableScanItem[];
   ssl_scans: AvailableScanItem[];
   dns_scans: AvailableScanItem[];
   traceroute_scans: AvailableScanItem[];
-  re_reports: AvailableScanItem[];
+  nmap_scans: AvailableScanItem[];
+  pcap_reports: AvailableScanItem[];
+  api_tester_reports: AvailableScanItem[];
+  // Dynamic Analysis - Scanning
+  dynamic_scans: AvailableScanItem[];
+  mitm_analysis_reports: AvailableScanItem[];
+  // Fuzzing
   fuzzing_sessions: AvailableScanItem[];
+  agentic_fuzzer_reports: AvailableScanItem[];
+  binary_fuzzer_sessions: AvailableScanItem[];
+  // Reverse Engineering
+  re_reports: AvailableScanItem[];
   total_available: number;
 }
 
@@ -15233,6 +16765,122 @@ export interface SourceCodeFinding {
   remediation?: string;
 }
 
+// Combined Analysis Extended Types
+export interface EvidenceCollectionGuide {
+  finding_id: string;
+  finding_title: string;
+  severity?: string;
+  finding_type?: string;
+  evidence_folder?: string;
+  evidence_requirements: Array<{
+    evidence_type?: string;
+    tools: string[];
+    collection_steps?: string[];
+    priority?: string;
+    description?: string;
+    capture_method?: string;
+    expected_content?: string;
+    filename?: string;
+  }>;
+  validation_steps: Array<string | { step?: number; action?: string; expected?: string; if_fails?: string }>;
+  true_positive_indicators: string[];
+  false_positive_indicators: string[];
+  quick_verify?: { command: string; expected: string };
+}
+
+export interface ContextualRiskScore {
+  finding_id: string;
+  finding_title: string;
+  contextual_risk_score: number;
+  priority_level: string;
+  key_risk_drivers: string[];
+  risk_reducers: string[];
+  additional_investigation_needed: string[];
+  contextual_severity?: string;
+  original_severity?: string;
+  recommended_timeline?: string;
+  score_breakdown?: {
+    base_score: number;
+    auth_modifier: number;
+    network_modifier: number;
+    complexity_modifier: number;
+    compensating_controls_modifier: number;
+    threat_intel_modifier: number;
+  };
+}
+
+export interface ControlBypassGuide {
+  control_name: string;
+  control_type?: string;
+  description?: string;
+  prioritized_note?: string;
+  detection_methods: string[];
+  common_misconfigurations: string[];
+  bypass_techniques: Array<{
+    technique_name?: string;
+    name?: string;
+    description?: string;
+    complexity?: string;
+    reliability?: string;
+    steps: string[];
+    example_payloads: string[];
+    tools: string[];
+  }>;
+  general_tips: string[];
+}
+
+export interface CorroboratedFinding {
+  finding_title: string;
+  supporting_evidence_sources: string[];
+  confidence_level: string;
+  corroboration_details: string;
+  severity?: string;
+  source_count?: number;
+  finding_key?: string;
+  has_documentation?: boolean;
+  document_correlations?: Array<{
+    document: string;
+    matched_term: string;
+    relevance_score: number;
+    context?: string;
+  }>;
+  sources?: string[];
+}
+
+export interface DocumentFindingSummary {
+  endpoint: string;
+  findings_info: { finding_count: number; matched_terms: string[] };
+}
+
+export interface RawAIResponseData {
+  evidence_collection_guides?: EvidenceCollectionGuide[];
+  contextual_risk_scores?: ContextualRiskScore[];
+  control_bypass_recommendations?: ControlBypassGuide[];
+  control_bypass_guides?: ControlBypassGuide[];
+  corroborated_findings?: CorroboratedFinding[];
+  document_finding_correlation?: {
+    documented_findings: DocumentFindingSummary[];
+    undocumented_endpoints: string[];
+    error?: string;
+    documentation_coverage_percent?: number;
+    findings_with_documentation?: number;
+    findings_without_documentation?: number;
+    total_documents?: number;
+    documents_referenced?: Record<string, { finding_count: number; matched_terms: string[] }>;
+  };
+  documentation_finding_correlation?: {
+    documented_findings: DocumentFindingSummary[];
+    undocumented_endpoints: string[];
+    error?: string;
+    documentation_coverage_percent?: number;
+    findings_with_documentation?: number;
+    findings_without_documentation?: number;
+    total_documents?: number;
+    documents_referenced?: Record<string, { finding_count: number; matched_terms: string[] }>;
+  };
+  document_stats?: Record<string, unknown>;
+}
+
 export interface CombinedAnalysisReport {
   id: number;
   project_id: number;
@@ -15256,6 +16904,7 @@ export interface CombinedAnalysisReport {
   source_code_findings?: SourceCodeFinding[];
   documentation_analysis?: string;
   included_scans: SelectedScan[];
+  raw_ai_response?: string;
 }
 
 export interface CombinedAnalysisListItem {
@@ -15799,6 +17448,1662 @@ Object.assign(mitmClient, {
   },
 });
 
+// =============================================================================
+// OWASP ZAP Types and Functions
+// =============================================================================
+
+export type ZAPScanType = "spider" | "ajax_spider" | "active_scan" | "passive_scan" | "full_scan";
+
+export type ZAPScanRequest = {
+  target_url: string;
+  scan_type?: ZAPScanType;
+  max_depth?: number;
+  max_children?: number;
+  subtree_only?: boolean;
+  enable_ajax_spider?: boolean;
+  ajax_spider_max_duration?: number;
+  browser_id?: string;
+  scan_policy?: string;
+  recurse?: boolean;
+  in_scope_only?: boolean;
+  delay_in_ms?: number;
+  max_scan_duration_mins?: number;
+  include_regexes?: string[];
+  exclude_regexes?: string[];
+};
+
+export type ZAPQuickScanRequest = {
+  url: string;
+  max_duration_mins?: number;
+};
+
+export type ZAPSpiderRequest = {
+  url: string;
+  max_depth?: number;
+  include_ajax?: boolean;
+};
+
+export type ZAPAlert = {
+  id: string;
+  name: string;
+  risk: string;
+  risk_code: number;
+  confidence: string;
+  confidence_code?: number;
+  url: string;
+  method: string;
+  parameter?: string;
+  attack?: string;
+  evidence?: string;
+  description?: string;
+  solution?: string;
+  reference?: string;
+  cwe_id?: string;
+  wasc_id?: string;
+};
+
+export type ZAPFinding = {
+  id: string;
+  source: "owasp_zap";
+  technique: string;
+  severity: string;
+  title: string;
+  description: string;
+  endpoint: string;
+  parameter?: string;
+  payload?: string;
+  evidence?: string[];
+  cwe_id?: string;
+  recommendation?: string;
+};
+
+export type ZAPScanSummary = {
+  id: number;
+  session_id: string;
+  title: string;
+  target_url: string;
+  scan_type: string;
+  status: string;
+  completed_at?: string;
+  urls_found: number;
+  alerts: {
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  created_at?: string;
+};
+
+export type ZAPScanDetail = {
+  id: number;
+  session_id: string;
+  title: string;
+  target_url: string;
+  scan_type: string;
+  status: string;
+  started_at?: string;
+  completed_at?: string;
+  urls_found: number;
+  alerts_summary: {
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  alerts: ZAPFinding[];
+  urls: string[];
+  stats?: Record<string, any>;
+  created_at?: string;
+};
+
+export type ZAPHealthStatus = {
+  available: boolean;
+  version?: string;
+  error?: string;
+  message?: string;
+};
+
+export type ZAPScanProgress = {
+  type: string;
+  phase?: string;
+  progress?: number;
+  message?: string;
+  urls_found?: number;
+  alerts?: ZAPAlert[];
+  error?: string;
+  session_id?: string;
+};
+
+// =============================================================================
+// ZAP WebSocket Testing Types
+// =============================================================================
+
+export type ZAPWebSocketChannel = {
+  id: number;
+  host: string;
+  port: number;
+  url: string;
+  startTimestamp: number;
+  endTimestamp?: number;
+  historyId?: number;
+};
+
+export type ZAPWebSocketMessage = {
+  id: number;
+  opcode: number;
+  channelId: number;
+  timestamp: number;
+  readableOpcode: string;
+  payload?: string;
+  isOutgoing: boolean;
+  payloadLength: number;
+};
+
+// =============================================================================
+// ZAP GraphQL Testing Types
+// =============================================================================
+
+export type ZAPGraphQLOptions = {
+  args_type: string;
+  max_args_depth: number;
+  max_query_depth: number;
+  optional_args_enabled: boolean;
+  query_split_type: string;
+  request_method: string;
+  lenient_max_query_depth: boolean;
+};
+
+// =============================================================================
+// ZAP Scan Policy Types
+// =============================================================================
+
+export type ZAPScanPolicy = {
+  id: string;
+  name: string;
+  alertThreshold?: string;
+  attackStrength?: string;
+};
+
+export type ZAPScanner = {
+  id: number;
+  name: string;
+  cweId: number;
+  wascId: number;
+  alertThreshold: string;
+  attackStrength: string;
+  enabled: boolean;
+  category?: string;
+};
+
+// =============================================================================
+// ZAP Manual Request Types
+// =============================================================================
+
+export type ZAPMessage = {
+  id: number;
+  requestHeader: string;
+  requestBody: string;
+  responseHeader: string;
+  responseBody: string;
+  timestamp?: string;
+  note?: string;
+};
+
+export type ZAPMessageSummary = {
+  id: number;
+  timestamp?: string;
+  method?: string;
+  url?: string;
+  statusCode?: number;
+  reasonPhrase?: string;
+  rtt?: number;
+  note?: string;
+};
+
+export type ZAPAIAnalysis = {
+  status: string;
+  findings_analyzed: number;
+  risk_score: number;
+  risk_level: string;
+  summary: string;
+  exploit_chains: {
+    title: string;
+    description: string;
+    severity: string;
+    steps: string[];
+    affected_findings?: string[];
+    tools?: string[];
+    difficulty?: string;
+    real_world_impact?: string;
+  }[];
+  remediation_plan: {
+    priority: number;
+    vulnerability: string;
+    severity: string;
+    recommendation: string;
+    affected_urls?: string[];
+    affected_count?: number;
+    effort: string;
+    quick_win?: boolean;
+  }[];
+  business_impact: string;
+  attack_narrative?: string;
+  offensive_insights?: {
+    easiest_entry_point?: string;
+    most_valuable_target?: string;
+    estimated_time_to_compromise?: string;
+    required_skill_level?: string;
+    detection_likelihood?: string;
+  };
+  findings_by_severity?: {
+    critical: any[];
+    high: any[];
+    medium: any[];
+    low: any[];
+    info: any[];
+  };
+  findings_by_type?: Record<string, any[]>;
+  owasp_mapping?: Record<string, string[]>;
+};
+
+// =============================================================================
+// ZAP Context Types
+// =============================================================================
+
+export type ZAPContextDetails = {
+  name: string;
+  context: any;
+  include_regexes: string[];
+  exclude_regexes: string[];
+  included_technologies: string[];
+  excluded_technologies: string[];
+};
+
+// =============================================================================
+// ZAP Script Types
+// =============================================================================
+
+export type ZAPScript = {
+  name: string;
+  type: string;
+  engine: string;
+  enabled: boolean;
+  description?: string;
+  error?: string;
+};
+
+export type ZAPScriptEngine = {
+  name: string;
+  languageName?: string;
+  engineVersion?: string;
+};
+
+// Passive Scan Types
+export type ZAPPassiveScanner = {
+  id: number;
+  name: string;
+  enabled: boolean;
+  alertThreshold?: string;
+  quality?: string;
+};
+
+export type ZAPPassiveScanStatus = {
+  records_to_scan: number;
+  current_rule: Record<string, any>;
+  max_alerts_per_rule: number;
+  scan_only_in_scope: boolean;
+};
+
+// Statistics & Dashboard Types
+export type ZAPStatsOverview = {
+  zap_version: string;
+  mode: string;
+  hosts_count: number;
+  sites_count: number;
+  total_messages: number;
+  alerts: {
+    total: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+  };
+  passive_scan_queue: number;
+  hosts: string[];
+  sites: string[];
+};
+
+export type ZAPActiveScan = {
+  id: string;
+  state: string;
+  progress: number;
+  maxResults?: number;
+  reqCount?: number;
+};
+
+export type ZAPScanProgressDetail = {
+  scan_id: string;
+  spider: {
+    progress: number;
+    urls_found: number;
+  };
+  active_scan: {
+    progress: number;
+    alerts_found: number;
+  };
+};
+
+// ZAP API Client
+export const zapClient = {
+  // Health check
+  getHealth: async (): Promise<ZAPHealthStatus> => {
+    const resp = await fetch(`${API_URL}/zap/health`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get version
+  getVersion: async (): Promise<{ version: string; status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/version`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Start full scan with SSE streaming
+  startScan: (
+    request: ZAPScanRequest,
+    onProgress: (event: ZAPScanProgress) => void,
+    onError: (error: string) => void,
+    onComplete: () => void
+  ): AbortController => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const token = localStorage.getItem("vragent_access_token");
+        const resp = await fetch(`${API_URL}/zap/scan`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        });
+
+        if (!resp.ok) {
+          onError(await resp.text());
+          return;
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) {
+          onError("No response body");
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            onComplete();
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onProgress(data);
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          onError(err.message || "Scan failed");
+        }
+      }
+    })();
+
+    return controller;
+  },
+
+  // Quick scan with SSE streaming
+  quickScan: (
+    request: ZAPQuickScanRequest,
+    onProgress: (event: ZAPScanProgress) => void,
+    onError: (error: string) => void,
+    onComplete: () => void
+  ): AbortController => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const token = localStorage.getItem("vragent_access_token");
+        const resp = await fetch(`${API_URL}/zap/quick-scan`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        });
+
+        if (!resp.ok) {
+          onError(await resp.text());
+          return;
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) {
+          onError("No response body");
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            onComplete();
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onProgress(data);
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          onError(err.message || "Quick scan failed");
+        }
+      }
+    })();
+
+    return controller;
+  },
+
+  // Spider-only scan with SSE
+  spiderScan: (
+    request: ZAPSpiderRequest,
+    onProgress: (event: ZAPScanProgress) => void,
+    onError: (error: string) => void,
+    onComplete: () => void
+  ): AbortController => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const token = localStorage.getItem("vragent_access_token");
+        const resp = await fetch(`${API_URL}/zap/spider`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        });
+
+        if (!resp.ok) {
+          onError(await resp.text());
+          return;
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) {
+          onError("No response body");
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            onComplete();
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onProgress(data);
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          onError(err.message || "Spider scan failed");
+        }
+      }
+    })();
+
+    return controller;
+  },
+
+  // Stop a running scan
+  stopScan: async (sessionId: string): Promise<{ message: string; session_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scan/${sessionId}/stop`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get alerts
+  getAlerts: async (url?: string, minRisk?: number): Promise<{ count: number; alerts: ZAPAlert[] }> => {
+    const params = new URLSearchParams();
+    if (url) params.set("url", url);
+    if (minRisk !== undefined) params.set("min_risk", String(minRisk));
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    
+    const resp = await fetch(`${API_URL}/zap/alerts${queryString}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get findings in Agentic Fuzzer format
+  getFindings: async (url?: string): Promise<{ count: number; source: string; findings: ZAPFinding[] }> => {
+    const params = url ? `?url=${encodeURIComponent(url)}` : "";
+    const resp = await fetch(`${API_URL}/zap/findings${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Generate report
+  getReport: async (format: "json" | "html" | "xml" | "markdown" = "json"): Promise<any> => {
+    const resp = await fetch(`${API_URL}/zap/report?format=${format}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    
+    if (format === "json") {
+      return resp.json();
+    } else {
+      return resp.blob();
+    }
+  },
+
+  // Create new session
+  newSession: async (): Promise<{ message: string; status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/session/new`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear alerts
+  clearAlerts: async (): Promise<{ message: string }> => {
+    const resp = await fetch(`${API_URL}/zap/alerts`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Save scan to database
+  saveScan: async (sessionId: string, title?: string, projectId?: number): Promise<{
+    success: boolean;
+    message: string;
+    scan_id: number;
+    session_id: string;
+    alerts_count: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/zap/scans/save`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        session_id: sessionId,
+        title,
+        project_id: projectId,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List saved scans
+  getSavedScans: async (skip?: number, limit?: number): Promise<{
+    total: number;
+    skip: number;
+    limit: number;
+    scans: ZAPScanSummary[];
+  }> => {
+    const params = new URLSearchParams();
+    if (skip !== undefined) params.set("skip", String(skip));
+    if (limit !== undefined) params.set("limit", String(limit));
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    
+    const resp = await fetch(`${API_URL}/zap/scans${queryString}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get saved scan by ID
+  getSavedScan: async (scanId: number): Promise<ZAPScanDetail> => {
+    const resp = await fetch(`${API_URL}/zap/scans/${scanId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete saved scan
+  deleteSavedScan: async (scanId: number): Promise<{ success: boolean; message: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scans/${scanId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Merge ZAP findings with Agentic Fuzzer
+  mergeFindings: async (
+    fuzzerSessionId?: string,
+    zapSessionId?: string,
+    url?: string
+  ): Promise<{
+    total: number;
+    by_source: { owasp_zap: number; agentic_fuzzer: number };
+    by_severity: Record<string, number>;
+    findings: any[];
+  }> => {
+    const params = new URLSearchParams();
+    if (fuzzerSessionId) params.set("fuzzer_session_id", fuzzerSessionId);
+    if (zapSessionId) params.set("zap_session_id", zapSessionId);
+    if (url) params.set("url", url);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    
+    const resp = await fetch(`${API_URL}/zap/integrate/merge-findings${queryString}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // AI-powered analysis of ZAP findings
+  aiAnalyze: async (
+    alerts: ZAPAlert[],
+    targetUrl: string,
+    options?: {
+      includeExploitChains?: boolean;
+      includeRemediation?: boolean;
+      includeBusinessImpact?: boolean;
+      additionalContext?: string;
+      scanStatistics?: {
+        total_messages?: number;
+        urls_discovered?: number;
+        hosts_count?: number;
+        passive_scan_queue?: number;
+        scan_duration_seconds?: number;
+        spider_progress?: number;
+        active_scan_progress?: number;
+      };
+    }
+  ): Promise<ZAPAIAnalysis> => {
+    const resp = await fetch(`${API_URL}/zap/analyze`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        alerts,
+        target_url: targetUrl,
+        include_exploit_chains: options?.includeExploitChains ?? true,
+        include_remediation: options?.includeRemediation ?? true,
+        include_business_impact: options?.includeBusinessImpact ?? true,
+        additional_context: options?.additionalContext,
+        scan_statistics: options?.scanStatistics,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export AI analysis report as Markdown, PDF, or Word
+  exportAIReport: async (
+    analysis: ZAPAIAnalysis,
+    targetUrl: string,
+    format: "markdown" | "pdf" | "word" = "markdown",
+    scanInfo?: { scan_type?: string; completed_at?: string }
+  ): Promise<Blob> => {
+    const resp = await fetch(`${API_URL}/zap/export-report`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        analysis,
+        target_url: targetUrl,
+        scan_info: scanInfo,
+        format,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  // Chat with AI about ZAP findings
+  chat: async (
+    message: string,
+    context: string,
+    alerts: ZAPAlert[],
+    conversationHistory: Array<{ role: string; content: string }>
+  ): Promise<{ response: string }> => {
+    const resp = await fetch(`${API_URL}/zap/chat`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        message,
+        context,
+        alerts: alerts.slice(0, 20), // Limit to 20 alerts for context
+        conversation_history: conversationHistory,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // WebSocket Testing API
+  // ==========================================================================
+
+  // Get WebSocket channels
+  getWebSocketChannels: async (): Promise<{ channels: ZAPWebSocketChannel[] }> => {
+    const resp = await fetch(`${API_URL}/zap/websocket/channels`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get WebSocket messages
+  getWebSocketMessages: async (
+    channelId?: number,
+    start: number = 0,
+    count: number = 100
+  ): Promise<{ messages: ZAPWebSocketMessage[] }> => {
+    const params = new URLSearchParams();
+    if (channelId !== undefined) params.set("channel_id", channelId.toString());
+    params.set("start", start.toString());
+    params.set("count", count.toString());
+    
+    const resp = await fetch(`${API_URL}/zap/websocket/messages?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get specific WebSocket message
+  getWebSocketMessage: async (
+    channelId: number,
+    messageId: number
+  ): Promise<{ message: ZAPWebSocketMessage }> => {
+    const resp = await fetch(`${API_URL}/zap/websocket/messages/${channelId}/${messageId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Send WebSocket message
+  sendWebSocketMessage: async (
+    channelId: number,
+    message: string,
+    outgoing: boolean = true
+  ): Promise<{ status: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/websocket/send`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ channel_id: channelId, message, outgoing }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set WebSocket break pattern
+  setWebSocketBreak: async (
+    message: string,
+    outgoing: boolean = true
+  ): Promise<{ status: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/websocket/break`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ message, outgoing }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // GraphQL Testing API
+  // ==========================================================================
+
+  // Get GraphQL options
+  getGraphQLOptions: async (): Promise<ZAPGraphQLOptions> => {
+    const resp = await fetch(`${API_URL}/zap/graphql/options`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update GraphQL options
+  updateGraphQLOptions: async (options: Partial<ZAPGraphQLOptions>): Promise<{ status: string; results: any[] }> => {
+    const resp = await fetch(`${API_URL}/zap/graphql/options`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(options),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import GraphQL schema via introspection URL
+  importGraphQLUrl: async (
+    url: string,
+    endpointUrl?: string
+  ): Promise<{ status: string; url: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/graphql/import/url`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ url, endpoint_url: endpointUrl }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import GraphQL schema from SDL content
+  importGraphQLSchema: async (
+    schemaContent: string,
+    endpointUrl: string
+  ): Promise<{ status: string; endpoint_url: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/graphql/import/schema`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ schema_content: schemaContent, endpoint_url: endpointUrl }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // OpenAPI/Swagger Import API
+  // ==========================================================================
+
+  // Import OpenAPI/Swagger from URL
+  importOpenAPIUrl: async (
+    url: string,
+    hostOverride?: string,
+    contextId?: number
+  ): Promise<{ status: string; url: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/openapi/import/url`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ url, host_override: hostOverride, context_id: contextId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import OpenAPI/Swagger from content
+  importOpenAPIFile: async (
+    content: string,
+    targetUrl: string,
+    contextId?: number
+  ): Promise<{ status: string; target_url: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/openapi/import/file`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content, target_url: targetUrl, context_id: contextId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Manual Request Editor API
+  // ==========================================================================
+
+  // Send a manual HTTP request
+  sendRequest: async (
+    request: string,
+    followRedirects: boolean = true
+  ): Promise<{ status: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/request/send`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ request, follow_redirects: followRedirects }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get messages from history
+  getMessages: async (
+    baseUrl?: string,
+    start: number = 0,
+    count: number = 50
+  ): Promise<{ messages: ZAPMessageSummary[] }> => {
+    const params = new URLSearchParams();
+    if (baseUrl) params.set("base_url", baseUrl);
+    params.set("start", start.toString());
+    params.set("count", count.toString());
+    
+    const resp = await fetch(`${API_URL}/zap/request/messages?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get message detail
+  getMessageDetail: async (messageId: number): Promise<ZAPMessage> => {
+    const resp = await fetch(`${API_URL}/zap/request/messages/${messageId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Custom Scan Policies API
+  // ==========================================================================
+
+  // List scan policies
+  getScanPolicies: async (): Promise<{ policies: ZAPScanPolicy[] }> => {
+    const resp = await fetch(`${API_URL}/zap/policies`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create scan policy
+  createScanPolicy: async (
+    name: string,
+    alertThreshold: string = "MEDIUM",
+    attackStrength: string = "MEDIUM"
+  ): Promise<{ status: string; name: string; policy_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/policies`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, alert_threshold: alertThreshold, attack_strength: attackStrength }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete scan policy
+  deleteScanPolicy: async (policyName: string): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get policy scanners
+  getPolicyScanners: async (policyName: string): Promise<{ policy_name: string; scanners: ZAPScanner[] }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}/scanners`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Update scanner in policy
+  updatePolicyScanner: async (
+    policyName: string,
+    scannerId: number,
+    options: { alertThreshold?: string; attackStrength?: string; enabled?: boolean }
+  ): Promise<{ status: string; results: any[] }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}/scanners`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        scanner_id: scannerId,
+        alert_threshold: options.alertThreshold,
+        attack_strength: options.attackStrength,
+        enabled: options.enabled,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Bulk update scanners
+  bulkUpdateScanners: async (
+    policyName: string,
+    scannerIds: number[],
+    enabled: boolean
+  ): Promise<{ status: string; scanner_count: number; enabled: boolean }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}/scanners/bulk`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ scanner_ids: scannerIds, enabled }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable all scanners
+  enableAllScanners: async (policyName: string): Promise<{ status: string; policy_name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}/enable-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Disable all scanners
+  disableAllScanners: async (policyName: string): Promise<{ status: string; policy_name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/policies/${encodeURIComponent(policyName)}/disable-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Context Management API
+  // ==========================================================================
+
+  // List all contexts
+  listContexts: async (): Promise<{ contexts: string[] }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Create a new context
+  createContext: async (name: string): Promise<{ status: string; name: string; context_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get context details
+  getContext: async (contextName: string): Promise<ZAPContextDetails> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Delete a context
+  deleteContext: async (contextName: string): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Add include regex to context
+  addContextInclude: async (contextName: string, regex: string): Promise<{ status: string; regex: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/include`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ regex }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Add exclude regex to context
+  addContextExclude: async (contextName: string, regex: string): Promise<{ status: string; regex: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/exclude`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ regex }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set context in scope
+  setContextScope: async (contextName: string, inScope: boolean): Promise<{ status: string; in_scope: boolean }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/scope`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ in_scope: inScope }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List available technologies
+  listTechnologies: async (): Promise<{ technologies: string[] }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/technologies/available`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Include technologies in context
+  includeTechnologies: async (contextName: string, technologies: string[]): Promise<{ status: string; technologies: string[] }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/technologies/include`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ technologies }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Exclude technologies from context
+  excludeTechnologies: async (contextName: string, technologies: string[]): Promise<{ status: string; technologies: string[] }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/technologies/exclude`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ technologies }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Include all technologies in context
+  includeAllTechnologies: async (contextName: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/technologies/include-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Exclude all technologies from context
+  excludeAllTechnologies: async (contextName: string): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/technologies/exclude-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export context to file
+  exportContext: async (contextName: string, filePath: string): Promise<{ status: string; file_path: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/${encodeURIComponent(contextName)}/export`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ file_path: filePath }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Import context from file
+  importContext: async (filePath: string): Promise<{ status: string; file_path: string }> => {
+    const resp = await fetch(`${API_URL}/zap/contexts/import`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ file_path: filePath }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Forced Browse / Directory Discovery API (Local Implementation)
+  // ==========================================================================
+
+  // Start forced browse scan (local implementation)
+  startForcedBrowse: async (
+    url: string, 
+    recurse: boolean = true,
+    wordlist: string = "directories_comprehensive.txt",
+    threads: number = 10
+  ): Promise<{ status: string; session_id: string; url: string; wordlist: string }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/scan`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ url, recursive: recurse, wordlist, threads }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get forced browse status
+  getForcedBrowseStatus: async (sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    progress: number;
+    total_paths: number;
+    checked_paths: number;
+    found_count: number;
+    duration_seconds: number;
+    target_url: string;
+    wordlist: string;
+  }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/status?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get forced browse results
+  getForcedBrowseResults: async (sessionId: string): Promise<{
+    results: Array<{
+      url: string;
+      status_code: number;
+      content_length: number;
+      content_type: string;
+      redirect_url?: string;
+      reason: string;
+    }>;
+    count: number;
+  }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/results?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Stop forced browse scan
+  stopForcedBrowse: async (sessionId: string): Promise<{ status: string; session_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/stop?session_id=${encodeURIComponent(sessionId)}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Pause forced browse scan
+  pauseForcedBrowse: async (sessionId: string): Promise<{ status: string; session_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/pause?session_id=${encodeURIComponent(sessionId)}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Resume forced browse scan
+  resumeForcedBrowse: async (sessionId: string): Promise<{ status: string; session_id: string }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/resume?session_id=${encodeURIComponent(sessionId)}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List wordlists (local)
+  listWordlists: async (): Promise<{ 
+    wordlists: string[]; 
+    default: string;
+    details?: Array<{ name: string; path: string; entries: number; description: string }>;
+  }> => {
+    const resp = await fetch(`${API_URL}/zap/forcedBrowse/wordlists`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ==========================================================================
+  // Script Console API
+  // ==========================================================================
+
+  // List all scripts
+  listScripts: async (): Promise<{ scripts: ZAPScript[] }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List script engines
+  listScriptEngines: async (): Promise<{ engines: ZAPScriptEngine[] }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/engines`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List script types
+  listScriptTypes: async (): Promise<{ types: string[] }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/types`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Load a script from file
+  loadScript: async (
+    name: string,
+    type: string,
+    engine: string,
+    filePath: string,
+    description?: string
+  ): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/load`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        name,
+        type,
+        engine,
+        file_path: filePath,
+        description,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable a script
+  enableScript: async (scriptName: string): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/${encodeURIComponent(scriptName)}/enable`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Disable a script
+  disableScript: async (scriptName: string): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/${encodeURIComponent(scriptName)}/disable`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Run a standalone script
+  runScript: async (scriptName: string): Promise<{ status: string; name: string; result: any }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/${encodeURIComponent(scriptName)}/run`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Remove a script
+  removeScript: async (scriptName: string): Promise<{ status: string; name: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/${encodeURIComponent(scriptName)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List script variables
+  listScriptVariables: async (): Promise<{ global_vars: Record<string, string>; custom_vars: Record<string, string> }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/vars`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set a script variable
+  setScriptVariable: async (key: string, value: string): Promise<{ status: string; key: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/vars`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ key, value }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear a script variable
+  clearScriptVariable: async (varKey: string): Promise<{ status: string; key: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/vars/${encodeURIComponent(varKey)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear all script variables
+  clearAllScriptVariables: async (): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/scripts/vars`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===========================================================================
+  // Passive Scan Rule Configuration
+  // ===========================================================================
+
+  // List all passive scanners
+  listPassiveScanners: async (): Promise<{ scanners: ZAPPassiveScanner[] }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get passive scan status
+  getPassiveScanStatus: async (): Promise<ZAPPassiveScanStatus> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/status`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable a passive scanner
+  enablePassiveScanner: async (scannerId: number): Promise<{ status: string; scanner_id: number }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners/${scannerId}/enable`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Disable a passive scanner
+  disablePassiveScanner: async (scannerId: number): Promise<{ status: string; scanner_id: number }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners/${scannerId}/disable`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Enable all passive scanners
+  enableAllPassiveScanners: async (): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners/enable-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Disable all passive scanners
+  disableAllPassiveScanners: async (): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners/disable-all`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set passive scanner threshold
+  setPassiveScannerThreshold: async (scannerId: number, threshold: string): Promise<{ status: string; scanner_id: number; threshold: string }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/scanners/${scannerId}/threshold?threshold=${encodeURIComponent(threshold)}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Set passive scan options
+  setPassiveScanOptions: async (options: { max_alerts_per_rule?: number; scan_only_in_scope?: boolean }): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/options`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(options),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear passive scan queue
+  clearPassiveScanQueue: async (): Promise<{ status: string }> => {
+    const resp = await fetch(`${API_URL}/zap/pscan/clear-queue`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // ===========================================================================
+  // Statistics & Progress Dashboard
+  // ===========================================================================
+
+  // Get comprehensive stats overview
+  getStatsOverview: async (): Promise<ZAPStatsOverview> => {
+    const resp = await fetch(`${API_URL}/zap/stats/overview`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get site statistics
+  getSiteStats: async (site?: string, inScope?: boolean): Promise<{ site?: string; stats?: Record<string, any>; sites_stats?: Record<string, any>[] }> => {
+    const params = new URLSearchParams();
+    if (site) params.append("site", site);
+    if (inScope) params.append("in_scope", "true");
+    const queryStr = params.toString();
+    const resp = await fetch(`${API_URL}/zap/stats/sites${queryStr ? `?${queryStr}` : ""}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get scan statistics
+  getScanStats: async (): Promise<{ active_scans: ZAPActiveScan[]; spider_progress: number }> => {
+    const resp = await fetch(`${API_URL}/zap/stats/scans`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get discovered URLs
+  getDiscoveredUrls: async (baseUrl?: string, limit?: number): Promise<{ total_urls: number; urls: string[] }> => {
+    const params = new URLSearchParams();
+    if (baseUrl) params.append("base_url", baseUrl);
+    if (limit) params.append("limit", limit.toString());
+    const queryStr = params.toString();
+    const resp = await fetch(`${API_URL}/zap/stats/urls${queryStr ? `?${queryStr}` : ""}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Clear statistics
+  clearStats: async (site?: string): Promise<{ status: string; site: string }> => {
+    const params = new URLSearchParams();
+    if (site) params.append("site", site);
+    const queryStr = params.toString();
+    const resp = await fetch(`${API_URL}/zap/stats/clear${queryStr ? `?${queryStr}` : ""}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get detailed scan progress
+  getScanProgress: async (scanId: string): Promise<ZAPScanProgress> => {
+    const resp = await fetch(`${API_URL}/zap/stats/progress/${encodeURIComponent(scanId)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};
+
 // TypeScript interface extension for low priority features
 declare module './client' {
   interface MITMClientLowPriority {
@@ -15840,3 +19145,299 @@ declare module './client' {
     deleteSharedSession: (sessionId: string) => Promise<{ status: string }>;
   }
 }
+
+// ===========================================================================
+// Dynamic Security Scanner Client
+// ===========================================================================
+
+export interface DynamicScanProgress {
+  phase: string;
+  phase_progress: number;
+  overall_progress: number;
+  message: string;
+  hosts_discovered: number;
+  web_targets: number;
+  network_targets: number;
+  findings_count: number;
+  errors: string[];
+}
+
+export interface DynamicScanHost {
+  ip: string;
+  hostname: string;
+  os: string;
+  state: string;
+  ports: {
+    port: number;
+    protocol: string;
+    state: string;
+    service: string;
+    product: string;
+    version: string;
+  }[];
+}
+
+export interface DynamicScanFinding {
+  source: string;
+  severity: string;
+  title: string;
+  description: string;
+  host: string;
+  port: number | null;
+  url: string | null;
+  cve_id: string | null;
+  cvss_score: number | null;
+  exploit_available: boolean;
+  exploit_info: Record<string, any> | null;
+  evidence: string | null;
+  remediation: string | null;
+  references: string[];
+}
+
+export interface DynamicScanExploitChain {
+  name: string;
+  description: string;
+  steps: string[];
+  impact: string;
+  likelihood: string;
+  findings_used: string[];
+}
+
+export interface DynamicScanResult {
+  scan_id: string;
+  target: string;
+  status: string;
+  progress: DynamicScanProgress;
+  hosts: DynamicScanHost[];
+  web_targets: any[];
+  network_targets: any[];
+  findings: DynamicScanFinding[];
+  attack_narrative: string;
+  executive_summary: string;
+  risk_summary: string;
+  exploit_chains: DynamicScanExploitChain[];
+  recommendations: string[];
+  exploit_commands: Record<string, string[]>;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  manual_guidance: string[];
+}
+
+export interface DynamicScanStartRequest {
+  scan_name?: string;  // Optional name for easy identification
+  target: string;
+  scan_type?: string;
+  ports?: string;
+  include_web_scan?: boolean;
+  include_cve_scan?: boolean;
+  include_exploit_mapping?: boolean;
+  include_openvas?: boolean;
+  include_directory_enum?: boolean;
+  directory_enum_engine?: "gobuster" | "dirbuster";
+  directory_enum_wordlist?: string;
+  directory_enum_extensions?: string[];
+  directory_enum_threads?: number;
+  include_sqlmap?: boolean;
+  sqlmap_level?: number;
+  sqlmap_risk?: number;
+  sqlmap_method?: "GET" | "POST";
+  sqlmap_data?: string;
+  sqlmap_threads?: number;
+  include_wapiti?: boolean;
+  wapiti_level?: number;
+  discover_js_endpoints?: boolean;
+  discover_parameters?: boolean;
+  aggressive_scan?: boolean;
+  // AI-led mode options
+  ai_led?: boolean;
+  user_context?: string;
+  zap_auth?: DynamicScanZapAuth;
+  zap_forced_browse?: boolean;
+  zap_wordlist?: string;
+}
+
+export interface ManualScanGuidanceRequest {
+  aggressive_scan?: boolean;
+  include_openvas?: boolean;
+  include_web_scan?: boolean;
+  include_cve_scan?: boolean;
+  include_directory_enum?: boolean;
+  include_sqlmap?: boolean;
+  include_wapiti?: boolean;
+}
+
+export interface ManualScanGuidanceResponse {
+  scan_profile: Record<string, any>;
+  manual_guidance: string[];
+}
+
+export interface DynamicScanZapAuth {
+  method: string;
+  login_url?: string;
+  login_request_data?: string;
+  json_template?: string;
+  hostname?: string;
+  realm?: string;
+  port?: number;
+  script_name?: string;
+  script_params?: Record<string, string>;
+  username?: string;
+  password?: string;
+  logged_in_indicator?: string;
+  logged_out_indicator?: string;
+  context_name?: string;
+}
+
+export const dynamicScannerClient = {
+  // Start a new dynamic security scan
+  startScan: async (request: DynamicScanStartRequest): Promise<{ scan_id: string; status: string }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/start`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get scan status
+  getScanStatus: async (scanId: string): Promise<{ scan_id: string; status: string; progress: DynamicScanProgress }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/status/${encodeURIComponent(scanId)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get full scan results
+  getScanResults: async (scanId: string): Promise<DynamicScanResult> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/results/${encodeURIComponent(scanId)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  getManualGuidance: async (request: ManualScanGuidanceRequest): Promise<ManualScanGuidanceResponse> => {
+    const params = new URLSearchParams();
+    if (request.aggressive_scan !== undefined) {
+      params.set("aggressive_scan", String(request.aggressive_scan));
+    }
+    if (request.include_openvas !== undefined) {
+      params.set("include_openvas", String(request.include_openvas));
+    }
+    if (request.include_web_scan !== undefined) {
+      params.set("include_web_scan", String(request.include_web_scan));
+    }
+    if (request.include_cve_scan !== undefined) {
+      params.set("include_cve_scan", String(request.include_cve_scan));
+    }
+    if (request.include_directory_enum !== undefined) {
+      params.set("include_directory_enum", String(request.include_directory_enum));
+    }
+    if (request.include_sqlmap !== undefined) {
+      params.set("include_sqlmap", String(request.include_sqlmap));
+    }
+    if (request.include_wapiti !== undefined) {
+      params.set("include_wapiti", String(request.include_wapiti));
+    }
+
+    const url = `${API_URL}/dynamic-scan/manual-guidance${params.toString() ? `?${params.toString()}` : ""}`;
+    const resp = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Cancel a running scan
+  cancelScan: async (scanId: string): Promise<{ status: string; scan_id: string }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/cancel/${encodeURIComponent(scanId)}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get findings with optional filter
+  getFindings: async (scanId: string, severity?: string, source?: string): Promise<{ findings: DynamicScanFinding[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (severity) params.append("severity", severity);
+    if (source) params.append("source", source);
+    const queryStr = params.toString();
+    const resp = await fetch(`${API_URL}/dynamic-scan/findings/${encodeURIComponent(scanId)}${queryStr ? `?${queryStr}` : ""}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Search exploit database
+  searchExploits: async (query: { cve_id?: string; product?: string; keyword?: string }): Promise<{ exploits: any[]; total: number }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/exploits/search`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(query),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Get AI explanation for a finding
+  explainFinding: async (scanId: string, findingIndex: number): Promise<{ explanation: string }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/finding/${encodeURIComponent(scanId)}/${findingIndex}/explain`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Export scan results
+  exportResults: async (scanId: string, format: "json" | "markdown" | "html" | "pdf" | "docx"): Promise<string | Record<string, any> | Blob> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/export/${encodeURIComponent(scanId)}?format=${format}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    if (format === "json") {
+      return resp.json();
+    }
+    if (format === "pdf" || format === "docx") {
+      return resp.blob();
+    }
+    return resp.text();
+  },
+
+  // Delete a saved scan
+  deleteScan: async (scanId: string): Promise<{ status: string; scan_id: string }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/delete/${encodeURIComponent(scanId)}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // List all saved scans
+  listScans: async (status?: string, limit?: number): Promise<{ active_scans: any[]; historical_scans: any[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (status) params.append("status", status);
+    if (limit) params.append("limit", limit.toString());
+    const queryStr = params.toString();
+    const resp = await fetch(`${API_URL}/dynamic-scan/list${queryStr ? `?${queryStr}` : ""}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  // Check scanner sidecar status
+  getScannerStatus: async (): Promise<{ status: string; scanner_url: string }> => {
+    const resp = await fetch(`${API_URL}/dynamic-scan/scanner/status`, {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+};

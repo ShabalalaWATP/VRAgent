@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import {
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   Box,
   Typography,
   Paper,
@@ -75,7 +78,16 @@ import {
   CloseFullscreen as CloseFullscreenIcon,
   SmartToy as SmartToyIcon,
   Person as PersonIcon,
+  Radar as RadarIcon,
+  Upload as UploadIcon,
+  Terminal as TerminalIcon,
+  AccountTree as TopologyIcon,
+  BugReport as FindingsIcon,
 } from "@mui/icons-material";
+import NmapNetworkGraph from "../components/NmapNetworkGraph";
+import NmapFindingsTab from "../components/NmapFindingsTab";
+import HostDetailsDrawer from "../components/HostDetailsDrawer";
+import NmapExportOptions from "../components/NmapExportOptions";
 import { Link } from "react-router-dom";
 import {
   apiClient,
@@ -91,8 +103,14 @@ import {
   BatchTracerouteResult,
   BatchTracerouteCombinedTopology,
   BatchTracerouteComparativeAnalysis,
+  NmapAnalysisResult,
+  NmapScanType,
+  SavedNetworkReport,
 } from "../api/client";
 import NetworkTopologyGraph, { TopologyNode, TopologyLink } from "../components/NetworkTopologyGraph";
+
+// Tool mode type
+type ToolMode = "traceroute" | "nmap-scan" | "nmap-analyze" | "nmap-command";
 
 // ============================================================================
 // Network Path Visualization Component
@@ -671,6 +689,9 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ analysis }) => {
 const TracerouteAnalyzerPage: React.FC = () => {
   const navigate = useNavigate();
 
+  // Tool mode selector
+  const [toolMode, setToolMode] = useState<ToolMode>("traceroute");
+
   // Status and configuration
   const [status, setStatus] = useState<TracerouteStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -728,10 +749,62 @@ const TracerouteAnalyzerPage: React.FC = () => {
   const [batchResult, setBatchResult] = useState<BatchTracerouteResponse | null>(null);
   const [batchScanning, setBatchScanning] = useState(false);
 
+  // =====================================================
+  // NMAP STATE
+  // =====================================================
+  const [nmapInstalled, setNmapInstalled] = useState(false);
+  const [nmapScanTypes, setNmapScanTypes] = useState<NmapScanType[]>([]);
+  const [nmapTarget, setNmapTarget] = useState("");
+  const [nmapSelectedScanType, setNmapSelectedScanType] = useState("basic");
+  const [nmapCustomPorts, setNmapCustomPorts] = useState("");
+  const [nmapScanTitle, setNmapScanTitle] = useState("");
+  const [nmapScanning, setNmapScanning] = useState(false);
+  const [nmapResult, setNmapResult] = useState<NmapAnalysisResult | null>(null);
+  const [nmapFiles, setNmapFiles] = useState<File[]>([]);
+  const [nmapAnalyzing, setNmapAnalyzing] = useState(false);
+  const [nmapSavedReports, setNmapSavedReports] = useState<SavedNetworkReport[]>([]);
+  const [nmapActiveTab, setNmapActiveTab] = useState(0);
+  const nmapFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Host details drawer state
+  const [hostDrawerOpen, setHostDrawerOpen] = useState(false);
+  const [selectedHost, setSelectedHost] = useState<any>(null);
+  
+  // NSE script options
+  const [nseScriptCategories, setNseScriptCategories] = useState<{ id: string; name: string; description: string; examples: string[]; warning?: string }[]>([]);
+  const [nseScripts, setNseScripts] = useState<{ id: string; name: string; description: string; category: string }[]>([]);
+  const [selectedScriptCategories, setSelectedScriptCategories] = useState<string[]>([]);
+  const [selectedScripts, setSelectedScripts] = useState<string[]>([]);
+  const [showScriptOptions, setShowScriptOptions] = useState(false);
+
+  // Command generator state
+  const [cmdGenTarget, setCmdGenTarget] = useState("");
+  const [cmdGenScanType, setCmdGenScanType] = useState("standard");
+  const [cmdGenPorts, setCmdGenPorts] = useState("");
+  const [cmdGenOutputFormat, setCmdGenOutputFormat] = useState<"xml" | "normal" | "grepable" | "all">("xml");
+  const [cmdGenOutputFile, setCmdGenOutputFile] = useState("");
+  const [cmdGenExtraFlags, setCmdGenExtraFlags] = useState("");
+
+  // Nmap scan type options
+  const nmapScanTypeOptions = useMemo(() => [
+    { id: "ping", name: "Ping Sweep (Host Discovery)", flags: "-sn", description: "Find live hosts without port scan" },
+    { id: "basic", name: "Basic Scan", flags: "", description: "Default top 1000 TCP ports" },
+    { id: "quick", name: "Quick Scan", flags: "-T4 -F", description: "Fast scan of top 100 ports" },
+    { id: "version", name: "Service Version Detection", flags: "-sV", description: "Detect service versions" },
+    { id: "default-scripts", name: "Default Scripts", flags: "-sC", description: "Run default NSE scripts" },
+    { id: "standard", name: "Standard (Version + Scripts)", flags: "-sV -sC", description: "Recommended for most scans" },
+    { id: "aggressive", name: "Aggressive Scan", flags: "-A", description: "OS + Version + Scripts + Traceroute" },
+    { id: "full", name: "Full Port Scan", flags: "-p-", description: "Scan all 65535 ports (slow)" },
+    { id: "vuln", name: "Vulnerability Scan", flags: "--script vuln", description: "Run vulnerability detection scripts" },
+    { id: "comprehensive", name: "Comprehensive", flags: "-sV -sC -O --script vuln", description: "Full security assessment" },
+  ], []);
+
   // Initialize
   useEffect(() => {
     loadStatus();
     loadSavedReports();
+    loadNmapStatus();
+    loadNmapReports();
   }, []);
 
   const loadStatus = async () => {
@@ -756,6 +829,172 @@ const TracerouteAnalyzerPage: React.FC = () => {
     } finally {
       setLoadingReports(false);
     }
+  };
+
+  // =====================================================
+  // NMAP FUNCTIONS
+  // =====================================================
+  const loadNmapStatus = async () => {
+    try {
+      const status = await apiClient.getNetworkStatus();
+      setNmapInstalled(status.nmap_installed);
+      // Also load scan types separately
+      const scanTypes = await apiClient.getNmapScanTypes();
+      setNmapScanTypes(scanTypes);
+      // Load NSE script categories and scripts
+      try {
+        const categories = await apiClient.getNseScriptCategories();
+        setNseScriptCategories(categories);
+        const scripts = await apiClient.getNseScripts();
+        setNseScripts(scripts);
+      } catch (err) {
+        console.error("Failed to load NSE scripts:", err);
+      }
+    } catch (err) {
+      console.error("Failed to load Nmap status:", err);
+    }
+  };
+
+  // Helper to extract summary statistics from NmapAnalysisResult
+  const getNmapSummary = (result: NmapAnalysisResult) => {
+    if (!result.analyses || result.analyses.length === 0) return null;
+    const analysis = result.analyses[0];
+    return {
+      summary: analysis.summary,
+      hosts: analysis.hosts || [],
+      ai_analysis: analysis.ai_analysis,
+      findings: analysis.findings || [],
+    };
+  };
+
+  const loadNmapReports = async () => {
+    try {
+      const reports = await apiClient.getNetworkReports("nmap");
+      setNmapSavedReports(reports);
+    } catch (err) {
+      console.error("Failed to load Nmap reports:", err);
+    }
+  };
+
+  const handleNmapFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const droppedFiles = Array.from(e.dataTransfer.files).filter(
+      f => f.name.endsWith('.xml') || f.name.endsWith('.nmap') || f.name.endsWith('.gnmap')
+    );
+    setNmapFiles(droppedFiles);
+  };
+
+  const handleNmapFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files).filter(
+        f => f.name.endsWith('.xml') || f.name.endsWith('.nmap') || f.name.endsWith('.gnmap')
+      );
+      setNmapFiles(selectedFiles);
+    }
+  };
+
+  const handleAnalyzeNmapFile = async () => {
+    if (nmapFiles.length === 0) {
+      setSnackbar({ open: true, message: "Please select an Nmap output file", severity: "error" });
+      return;
+    }
+
+    setNmapAnalyzing(true);
+    setError(null);
+    setNmapResult(null);
+
+    try {
+      const result = await apiClient.analyzeNmap(nmapFiles, true, true, nmapScanTitle || undefined);
+      setNmapResult(result);
+      setSnackbar({ open: true, message: "Nmap analysis complete!", severity: "success" });
+      loadNmapReports();
+    } catch (err: any) {
+      setError(err.message || "Failed to analyze Nmap file");
+    } finally {
+      setNmapAnalyzing(false);
+    }
+  };
+
+  const handleRunNmapScan = async () => {
+    if (!nmapTarget.trim()) {
+      setSnackbar({ open: true, message: "Please enter a target", severity: "error" });
+      return;
+    }
+
+    setNmapScanning(true);
+    setError(null);
+    setNmapResult(null);
+
+    try {
+      const result = await apiClient.runNmapScan({
+        target: nmapTarget.trim(),
+        scan_type: nmapSelectedScanType,
+        ports: nmapCustomPorts || undefined,
+        title: nmapScanTitle || undefined,
+        scripts: selectedScripts.length > 0 ? selectedScripts : undefined,
+        script_categories: selectedScriptCategories.length > 0 ? selectedScriptCategories : undefined,
+      });
+      setNmapResult(result);
+      setSnackbar({ open: true, message: "Nmap scan complete!", severity: "success" });
+      loadNmapReports();
+    } catch (err: any) {
+      setError(err.message || "Failed to run Nmap scan");
+    } finally {
+      setNmapScanning(false);
+    }
+  };
+
+  // Generate nmap command based on selected options
+  const generateNmapCommand = useCallback(() => {
+    const selectedScan = nmapScanTypeOptions.find(s => s.id === cmdGenScanType);
+    const parts = ["nmap"];
+    
+    // Add scan type flags
+    if (selectedScan?.flags) {
+      parts.push(selectedScan.flags);
+    }
+    
+    // Add custom ports
+    if (cmdGenPorts.trim()) {
+      parts.push(`-p ${cmdGenPorts.trim()}`);
+    }
+    
+    // Add output format
+    if (cmdGenOutputFile.trim()) {
+      switch (cmdGenOutputFormat) {
+        case "xml":
+          parts.push(`-oX ${cmdGenOutputFile.trim()}.xml`);
+          break;
+        case "normal":
+          parts.push(`-oN ${cmdGenOutputFile.trim()}.nmap`);
+          break;
+        case "grepable":
+          parts.push(`-oG ${cmdGenOutputFile.trim()}.gnmap`);
+          break;
+        case "all":
+          parts.push(`-oA ${cmdGenOutputFile.trim()}`);
+          break;
+      }
+    }
+    
+    // Add extra flags
+    if (cmdGenExtraFlags.trim()) {
+      parts.push(cmdGenExtraFlags.trim());
+    }
+    
+    // Add target
+    if (cmdGenTarget.trim()) {
+      parts.push(cmdGenTarget.trim());
+    } else {
+      parts.push("<target>");
+    }
+    
+    return parts.join(" ");
+  }, [cmdGenScanType, cmdGenTarget, cmdGenPorts, cmdGenOutputFormat, cmdGenOutputFile, cmdGenExtraFlags, nmapScanTypeOptions]);
+
+  const handleCopyCommand = () => {
+    navigator.clipboard.writeText(generateNmapCommand());
+    setSnackbar({ open: true, message: "Command copied to clipboard!", severity: "success" });
   };
 
   const handleRunTraceroute = async () => {
@@ -1094,20 +1333,34 @@ const TracerouteAnalyzerPage: React.FC = () => {
         <IconButton onClick={() => navigate("/network")}>
           <BackIcon />
         </IconButton>
-        <RouteIcon sx={{ fontSize: 40, color: "#ec4899" }} />
+        <Box sx={{ 
+          width: 48, 
+          height: 48, 
+          borderRadius: 2, 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center",
+          background: `linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)`,
+        }}>
+          {toolMode === "traceroute" ? (
+            <RouteIcon sx={{ fontSize: 28, color: "#fff" }} />
+          ) : (
+            <RadarIcon sx={{ fontSize: 28, color: "#fff" }} />
+          )}
+        </Box>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-            Traceroute Visualization
+            Traceroute & Nmap Analyzer
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Visualize network paths and analyze routing performance
+            Network path analysis, port scanning, and service detection
           </Typography>
         </Box>
         <Box sx={{ flex: 1 }} />
-        <Tooltip title="Learn about Traceroute">
+        <Tooltip title="Learn more">
           <Button
             component={Link}
-            to="/learn/traceroute"
+            to={toolMode === "traceroute" ? "/learn/traceroute" : "/learn/nmap"}
             startIcon={<LearnIcon />}
             variant="outlined"
             size="small"
@@ -1116,12 +1369,139 @@ const TracerouteAnalyzerPage: React.FC = () => {
             Learn
           </Button>
         </Tooltip>
-        <Chip
-          icon={status?.available ? <CheckIcon /> : <ErrorIcon />}
-          label={status?.available ? "Ready" : "Unavailable"}
-          color={status?.available ? "success" : "error"}
-        />
+        {toolMode === "traceroute" && (
+          <Chip
+            icon={status?.available ? <CheckIcon /> : <ErrorIcon />}
+            label={status?.available ? "Ready" : "Unavailable"}
+            color={status?.available ? "success" : "error"}
+          />
+        )}
+        {(toolMode === "nmap-scan" || toolMode === "nmap-analyze") && (
+          <Chip
+            icon={nmapInstalled ? <CheckIcon /> : <ErrorIcon />}
+            label={nmapInstalled ? "Nmap Ready" : "Nmap Not Found"}
+            color={nmapInstalled ? "success" : "warning"}
+          />
+        )}
       </Box>
+
+      {/* Tool Mode Selector */}
+      <Paper sx={{ p: 2, mb: 3, background: alpha(theme.palette.background.paper, 0.6) }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              onClick={() => setToolMode("traceroute")}
+              sx={{
+                p: 2,
+                cursor: "pointer",
+                border: toolMode === "traceroute" ? `2px solid #ec4899` : `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                background: toolMode === "traceroute" ? alpha("#ec4899", 0.1) : "transparent",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 4px 20px ${alpha("#ec4899", 0.2)}`,
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <RouteIcon sx={{ fontSize: 32, color: "#ec4899" }} />
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Traceroute
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Visualize network path & hops
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              onClick={() => setToolMode("nmap-scan")}
+              sx={{
+                p: 2,
+                cursor: "pointer",
+                border: toolMode === "nmap-scan" ? `2px solid #8b5cf6` : `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                background: toolMode === "nmap-scan" ? alpha("#8b5cf6", 0.1) : "transparent",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 4px 20px ${alpha("#8b5cf6", 0.2)}`,
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <RadarIcon sx={{ fontSize: 32, color: "#8b5cf6" }} />
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Launch Nmap Scan
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Port scanning & service detection
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              onClick={() => setToolMode("nmap-analyze")}
+              sx={{
+                p: 2,
+                cursor: "pointer",
+                border: toolMode === "nmap-analyze" ? `2px solid #06b6d4` : `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                background: toolMode === "nmap-analyze" ? alpha("#06b6d4", 0.1) : "transparent",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 4px 20px ${alpha("#06b6d4", 0.2)}`,
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <UploadIcon sx={{ fontSize: 32, color: "#06b6d4" }} />
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Analyze Nmap Output
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Upload & analyze XML/nmap files
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              onClick={() => setToolMode("nmap-command")}
+              sx={{
+                p: 2,
+                cursor: "pointer",
+                border: toolMode === "nmap-command" ? `2px solid #f59e0b` : `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                background: toolMode === "nmap-command" ? alpha("#f59e0b", 0.1) : "transparent",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 4px 20px ${alpha("#f59e0b", 0.2)}`,
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <TerminalIcon sx={{ fontSize: 32, color: "#f59e0b" }} />
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Nmap Command Builder
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Generate CLI commands for Nmap
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Error Alert */}
       {error && (
@@ -1130,49 +1510,54 @@ const TracerouteAnalyzerPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* Docker Network Notice */}
-      <Alert 
-        severity="warning" 
-        sx={{ mb: 3 }}
-        icon={<WarningIcon />}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          <strong>Docker Desktop Limitation:</strong> On Windows/macOS, Docker Desktop's NAT hides intermediate network hops. 
-          You'll see the Docker bridge (172.18.x.x) then the destination, but not your router or ISP hops. 
-          For full network path visibility, run <code>tracert [target]</code> (Windows) or <code>traceroute [target]</code> (macOS/Linux) 
-          directly from your terminal.
-        </Typography>
-      </Alert>
+      {/* ================================================================ */}
+      {/* TRACEROUTE MODE */}
+      {/* ================================================================ */}
+      {toolMode === "traceroute" && (
+        <>
+          {/* Docker Network Notice */}
+          <Alert 
+            severity="warning" 
+            sx={{ mb: 3 }}
+            icon={<WarningIcon />}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <strong>Docker Desktop Limitation:</strong> On Windows/macOS, Docker Desktop's NAT hides intermediate network hops. 
+              You'll see the Docker bridge (172.18.x.x) then the destination, but not your router or ISP hops. 
+              For full network path visibility, run <code>tracert [target]</code> (Windows) or <code>traceroute [target]</code> (macOS/Linux) 
+              directly from your terminal.
+            </Typography>
+          </Alert>
 
-      {/* Main Content */}
-      <Grid container spacing={3}>
-        {/* Left Panel - Configuration */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="h6">
-                Scan Configuration
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={batchMode}
-                    onChange={(e) => {
-                      setBatchMode(e.target.checked);
-                      setBatchResult(null);
-                      setResult(null);
-                    }}
-                    disabled={scanning || batchScanning}
-                    size="small"
-                  />
-                }
-                label={
-                  <Typography variant="caption" sx={{ fontWeight: "bold", color: batchMode ? "primary.main" : "text.secondary" }}>
-                    Batch Mode
+          {/* Main Content */}
+          <Grid container spacing={3}>
+            {/* Left Panel - Configuration */}
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3, mb: 3 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="h6">
+                    Scan Configuration
                   </Typography>
-                }
-              />
-            </Box>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={batchMode}
+                        onChange={(e) => {
+                          setBatchMode(e.target.checked);
+                          setBatchResult(null);
+                          setResult(null);
+                        }}
+                        disabled={scanning || batchScanning}
+                        size="small"
+                      />
+                    }
+                    label={
+                      <Typography variant="caption" sx={{ fontWeight: "bold", color: batchMode ? "primary.main" : "text.secondary" }}>
+                        Batch Mode
+                      </Typography>
+                    }
+                  />
+                </Box>
 
             {/* Single Target Mode */}
             {!batchMode && (
@@ -1332,28 +1717,19 @@ const TracerouteAnalyzerPage: React.FC = () => {
 
                 <Divider sx={{ my: 2 }} />
 
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={saveReport}
-                      onChange={(e) => setSaveReport(e.target.checked)}
-                      disabled={scanning}
-                    />
-                  }
-                  label="Save Report"
-                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  All scans are automatically saved
+                </Typography>
 
-                {saveReport && (
-                  <TextField
-                    fullWidth
-                    label="Report Title (optional)"
-                    value={reportTitle}
-                    onChange={(e) => setReportTitle(e.target.value)}
-                    size="small"
-                    disabled={scanning}
-                    sx={{ mt: 1 }}
-                  />
-                )}
+                <TextField
+                  fullWidth
+                  label="Report Title (optional)"
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  size="small"
+                  disabled={scanning}
+                  helperText="Give your scan a name for easy reference"
+                />
               </Box>
             </Collapse>
 
@@ -1905,9 +2281,1303 @@ const TracerouteAnalyzerPage: React.FC = () => {
           )}
         </Grid>
       </Grid>
+        </>
+      )}
+
+      {/* ================================================================ */}
+      {/* NMAP SCAN MODE */}
+      {/* ================================================================ */}
+      {toolMode === "nmap-scan" && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <RadarIcon sx={{ color: "#8b5cf6" }} />
+                Nmap Scan Configuration
+              </Typography>
+
+              {!nmapInstalled && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  Nmap is not installed on the server. You can still analyze existing Nmap output files.
+                </Alert>
+              )}
+
+              <TextField
+                fullWidth
+                label="Target (IP, hostname, or CIDR)"
+                value={nmapTarget}
+                onChange={(e) => setNmapTarget(e.target.value)}
+                placeholder="e.g., 192.168.1.1, scanme.nmap.org, 10.0.0.0/24"
+                sx={{ mb: 2 }}
+                disabled={nmapScanning || !nmapInstalled}
+              />
+
+              {/* Quick targets */}
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+                {[
+                  { label: "scanme.nmap.org", value: "scanme.nmap.org" },
+                  { label: "localhost", value: "127.0.0.1" },
+                  { label: "Google DNS", value: "8.8.8.8" },
+                ].map((qt) => (
+                  <Chip
+                    key={qt.value}
+                    label={qt.label}
+                    onClick={() => setNmapTarget(qt.value)}
+                    size="small"
+                    variant={nmapTarget === qt.value ? "filled" : "outlined"}
+                    color="secondary"
+                    disabled={nmapScanning || !nmapInstalled}
+                  />
+                ))}
+              </Box>
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Scan Type</InputLabel>
+                <Select
+                  value={nmapSelectedScanType}
+                  label="Scan Type"
+                  onChange={(e) => setNmapSelectedScanType(e.target.value)}
+                  disabled={nmapScanning || !nmapInstalled}
+                >
+                  {nmapScanTypeOptions.map((st) => (
+                    <MenuItem key={st.id} value={st.id}>
+                      <Box>
+                        <Typography variant="body2">{st.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {st.description}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Custom Ports (optional)"
+                value={nmapCustomPorts}
+                onChange={(e) => setNmapCustomPorts(e.target.value)}
+                placeholder="e.g., 22,80,443 or 1-1000"
+                sx={{ mb: 2 }}
+                disabled={nmapScanning || !nmapInstalled}
+              />
+
+              <TextField
+                fullWidth
+                label="Scan Title (optional)"
+                value={nmapScanTitle}
+                onChange={(e) => setNmapScanTitle(e.target.value)}
+                placeholder="e.g., Production Server Scan"
+                sx={{ mb: 2 }}
+                disabled={nmapScanning}
+              />
+
+              {/* NSE Script Options Accordion */}
+              <Accordion 
+                expanded={showScriptOptions}
+                onChange={(_, expanded) => setShowScriptOptions(expanded)}
+                sx={{ 
+                  mb: 2, 
+                  '&:before': { display: 'none' },
+                  boxShadow: 'none',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                  borderRadius: 1,
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SecurityIcon fontSize="small" sx={{ color: '#8b5cf6' }} />
+                    <Typography variant="subtitle2">
+                      NSE Scripts
+                      {(selectedScriptCategories.length > 0 || selectedScripts.length > 0) && (
+                        <Chip 
+                          label={`${selectedScriptCategories.length + selectedScripts.length} selected`}
+                          size="small"
+                          color="secondary"
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                    Add vulnerability detection and other NSE scripts to your scan
+                  </Typography>
+
+                  {/* Script Categories */}
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Script Categories</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                    {nseScriptCategories.map((cat) => (
+                      <Tooltip key={cat.id} title={
+                        <Box>
+                          <Typography variant="body2">{cat.description}</Typography>
+                          {cat.warning && (
+                            <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
+                              ⚠️ {cat.warning}
+                            </Typography>
+                          )}
+                        </Box>
+                      }>
+                        <Chip
+                          label={cat.name}
+                          size="small"
+                          variant={selectedScriptCategories.includes(cat.id) ? "filled" : "outlined"}
+                          color={cat.warning ? "warning" : "secondary"}
+                          onClick={() => {
+                            setSelectedScriptCategories(prev => 
+                              prev.includes(cat.id) 
+                                ? prev.filter(c => c !== cat.id)
+                                : [...prev, cat.id]
+                            );
+                          }}
+                          disabled={nmapScanning}
+                        />
+                      </Tooltip>
+                    ))}
+                  </Box>
+
+                  {/* Individual Popular Scripts */}
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Popular Scripts</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {nseScripts.slice(0, 15).map((script) => (
+                      <Tooltip key={script.id} title={script.description}>
+                        <Chip
+                          label={script.name}
+                          size="small"
+                          variant={selectedScripts.includes(script.id) ? "filled" : "outlined"}
+                          color={script.category === 'vuln' ? 'error' : 'default'}
+                          onClick={() => {
+                            setSelectedScripts(prev => 
+                              prev.includes(script.id) 
+                                ? prev.filter(s => s !== script.id)
+                                : [...prev, script.id]
+                            );
+                          }}
+                          disabled={nmapScanning}
+                        />
+                      </Tooltip>
+                    ))}
+                  </Box>
+
+                  {(selectedScriptCategories.length > 0 || selectedScripts.length > 0) && (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setSelectedScriptCategories([]);
+                        setSelectedScripts([]);
+                      }}
+                      sx={{ mt: 1 }}
+                    >
+                      Clear All Scripts
+                    </Button>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
+              <Button
+                fullWidth
+                variant="contained"
+                color="secondary"
+                startIcon={nmapScanning ? <CircularProgress size={20} color="inherit" /> : <PlayIcon />}
+                onClick={handleRunNmapScan}
+                disabled={nmapScanning || !nmapTarget.trim() || !nmapInstalled}
+                sx={{
+                  py: 1.5,
+                  background: `linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)`,
+                }}
+              >
+                {nmapScanning ? "Scanning..." : "Start Nmap Scan"}
+              </Button>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            {nmapScanning && (
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <CircularProgress size={24} />
+                  <Typography variant="h6">Scanning {nmapTarget}...</Typography>
+                </Box>
+                <LinearProgress />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                  This may take a while depending on the scan type and target size.
+                </Typography>
+              </Paper>
+            )}
+
+            {nmapResult && !nmapScanning && (
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Typography variant="h6" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CheckIcon sx={{ color: "success.main" }} />
+                    Scan Complete
+                  </Typography>
+                  <NmapExportOptions
+                    hosts={getNmapSummary(nmapResult)?.hosts || []}
+                    findings={(getNmapSummary(nmapResult)?.findings || []) as any}
+                    summary={getNmapSummary(nmapResult)?.summary}
+                    scanTarget={nmapTarget}
+                  />
+                </Box>
+
+                <Tabs value={nmapActiveTab} onChange={(_, v) => setNmapActiveTab(v)} sx={{ mb: 2 }}>
+                  <Tab label="Summary" />
+                  <Tab label="Network Map" icon={<TopologyIcon fontSize="small" />} iconPosition="start" />
+                  <Tab label="Hosts" />
+                  <Tab 
+                    label={
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        Findings
+                        {(() => {
+                          const data = getNmapSummary(nmapResult);
+                          const highCount = data?.findings?.filter((f: any) => f.severity === 'high' || f.severity === 'critical').length || 0;
+                          return highCount > 0 ? (
+                            <Chip label={highCount} size="small" color="error" sx={{ ml: 0.5, height: 20 }} />
+                          ) : null;
+                        })()}
+                      </Box>
+                    }
+                    icon={<FindingsIcon fontSize="small" />} 
+                    iconPosition="start" 
+                  />
+                  <Tab label="AI Analysis" />
+                </Tabs>
+
+                {nmapActiveTab === 0 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="primary">
+                                {data?.summary?.hosts_up || data?.hosts?.length || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Hosts Up
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="warning.main">
+                                {data?.summary?.open_ports || data?.hosts?.reduce((acc: number, h: any) => acc + (h.ports?.filter((p: any) => p.state === "open").length || 0), 0) || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Open Ports
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="error.main">
+                                {data?.findings?.filter((f: any) => f.severity === 'high' || f.severity === 'critical').length || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                High-Risk Findings
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="success.main">
+                                {Object.keys(data?.summary?.services_detected || {}).length || [...new Set(data?.hosts?.flatMap((h: any) => h.ports?.map((p: any) => p.service).filter(Boolean)) || [])].length}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Services
+                              </Typography>
+                            </Card>
+                          </Grid>
+                        </Grid>
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 1 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <NmapNetworkGraph
+                          hosts={data?.hosts || []}
+                          findings={data?.findings || []}
+                          onHostClick={(host) => {
+                            setSelectedHost(host);
+                            setHostDrawerOpen(true);
+                          }}
+                          height={500}
+                        />
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 2 && (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>IP Address</TableCell>
+                          <TableCell>Hostname</TableCell>
+                          <TableCell>OS</TableCell>
+                          <TableCell>State</TableCell>
+                          <TableCell>Open Ports</TableCell>
+                          <TableCell>Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(() => {
+                          const data = getNmapSummary(nmapResult);
+                          return (data?.hosts || []).map((host: any, idx: number) => (
+                            <TableRow key={idx} hover sx={{ cursor: "pointer" }} onClick={() => { setSelectedHost(host); setHostDrawerOpen(true); }}>
+                              <TableCell>
+                                <Typography sx={{ fontFamily: "monospace" }}>{host.ip || host.address || "-"}</Typography>
+                              </TableCell>
+                              <TableCell>{host.hostname || host.hostnames?.[0] || "-"}</TableCell>
+                              <TableCell>
+                                <Tooltip title={host.os_guess || "Unknown"}>
+                                  <Typography variant="body2" sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {host.os_guess ? (host.os_guess.length > 20 ? host.os_guess.substring(0, 20) + "..." : host.os_guess) : "-"}
+                                  </Typography>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={host.state || host.status || "up"}
+                                  size="small"
+                                  color={host.state === "up" || host.status === "up" || !host.state ? "success" : "default"}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={host.ports?.filter((p: any) => p.state === "open").length || host.open_ports || 0}
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setSelectedHost(host); setHostDrawerOpen(true); }}>
+                                  <ViewIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {nmapActiveTab === 3 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <NmapFindingsTab
+                          findings={data?.findings || []}
+                          onHostClick={(hostIp) => {
+                            const host = data?.hosts?.find((h: any) => h.ip === hostIp || h.address === hostIp);
+                            if (host) {
+                              setSelectedHost(host);
+                              setHostDrawerOpen(true);
+                            }
+                          }}
+                        />
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 4 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      if (!data?.ai_analysis) {
+                        return (
+                          <Typography color="text.secondary">
+                            No AI analysis available for this scan.
+                          </Typography>
+                        );
+                      }
+                      return (
+                        <ReactMarkdown
+                          components={{
+                            code: ({ className, children }) => (
+                              <ChatCodeBlock className={className} theme={theme}>
+                                {children}
+                              </ChatCodeBlock>
+                            ),
+                          }}
+                        >
+                          {typeof data.ai_analysis === 'string' ? data.ai_analysis : JSON.stringify(data.ai_analysis, null, 2)}
+                        </ReactMarkdown>
+                      );
+                    })()}
+                  </Box>
+                )}
+              </Paper>
+            )}
+
+            {!nmapScanning && !nmapResult && (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <RadarIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  Configure and run an Nmap scan
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Results will appear here with AI-powered analysis
+                </Typography>
+              </Paper>
+            )}
+          </Grid>
+        </Grid>
+      )}
+
+      {/* ================================================================ */}
+      {/* NMAP ANALYZE MODE */}
+      {/* ================================================================ */}
+      {toolMode === "nmap-analyze" && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <UploadIcon sx={{ color: "#06b6d4" }} />
+                Upload Nmap Output
+              </Typography>
+
+              <Box
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleNmapFileDrop}
+                sx={{
+                  border: `2px dashed ${alpha("#06b6d4", 0.4)}`,
+                  borderRadius: 2,
+                  p: 4,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    borderColor: "#06b6d4",
+                    bgcolor: alpha("#06b6d4", 0.05),
+                  },
+                  mb: 2,
+                }}
+                onClick={() => nmapFileInputRef.current?.click()}
+              >
+                <input
+                  type="file"
+                  ref={nmapFileInputRef}
+                  style={{ display: "none" }}
+                  accept=".xml,.nmap,.gnmap"
+                  onChange={handleNmapFileSelect}
+                />
+                <UploadIcon sx={{ fontSize: 48, color: "#06b6d4", mb: 1 }} />
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  Drag & drop Nmap files here
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  or click to browse (XML, .nmap, .gnmap)
+                </Typography>
+              </Box>
+
+              {nmapFiles.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  {nmapFiles.map((file, idx) => (
+                    <Chip
+                      key={idx}
+                      label={file.name}
+                      onDelete={() => setNmapFiles(nmapFiles.filter((_, i) => i !== idx))}
+                      sx={{ mr: 1, mb: 1 }}
+                    />
+                  ))}
+                </Box>
+              )}
+
+              <TextField
+                fullWidth
+                label="Report Title (optional)"
+                value={nmapScanTitle}
+                onChange={(e) => setNmapScanTitle(e.target.value)}
+                placeholder="e.g., Network Audit Q1 2026"
+                sx={{ mb: 3 }}
+                disabled={nmapAnalyzing}
+              />
+
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={nmapAnalyzing ? <CircularProgress size={20} color="inherit" /> : <PlayIcon />}
+                onClick={handleAnalyzeNmapFile}
+                disabled={nmapAnalyzing || nmapFiles.length === 0}
+                sx={{
+                  py: 1.5,
+                  background: `linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)`,
+                }}
+              >
+                {nmapAnalyzing ? "Analyzing..." : "Analyze File"}
+              </Button>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Supported Formats:
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon><CheckIcon sx={{ color: "success.main" }} /></ListItemIcon>
+                  <ListItemText primary="Nmap XML (-oX)" secondary="Full structured output" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckIcon sx={{ color: "success.main" }} /></ListItemIcon>
+                  <ListItemText primary="Nmap Normal (-oN)" secondary="Human-readable output" />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon><CheckIcon sx={{ color: "success.main" }} /></ListItemIcon>
+                  <ListItemText primary="Grepable (-oG)" secondary="Easy to parse format" />
+                </ListItem>
+              </List>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            {nmapAnalyzing && (
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <CircularProgress size={24} />
+                  <Typography variant="h6">Analyzing Nmap output...</Typography>
+                </Box>
+                <LinearProgress />
+              </Paper>
+            )}
+
+            {nmapResult && !nmapAnalyzing && (
+              <Paper sx={{ p: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Typography variant="h6" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CheckIcon sx={{ color: "success.main" }} />
+                    Analysis Complete
+                  </Typography>
+                  <NmapExportOptions
+                    hosts={getNmapSummary(nmapResult)?.hosts || []}
+                    findings={(getNmapSummary(nmapResult)?.findings || []) as any}
+                    summary={getNmapSummary(nmapResult)?.summary}
+                    scanTarget={nmapFiles[0]?.name || "Uploaded file"}
+                  />
+                </Box>
+
+                <Tabs value={nmapActiveTab} onChange={(_, v) => setNmapActiveTab(v)} sx={{ mb: 2 }}>
+                  <Tab label="Summary" />
+                  <Tab label="Network Map" icon={<TopologyIcon fontSize="small" />} iconPosition="start" />
+                  <Tab label="Hosts" />
+                  <Tab 
+                    label={
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        Findings
+                        {(() => {
+                          const data = getNmapSummary(nmapResult);
+                          const highCount = data?.findings?.filter((f: any) => f.severity === 'high' || f.severity === 'critical').length || 0;
+                          return highCount > 0 ? (
+                            <Chip label={highCount} size="small" color="error" sx={{ ml: 0.5, height: 20 }} />
+                          ) : null;
+                        })()}
+                      </Box>
+                    }
+                    icon={<FindingsIcon fontSize="small" />} 
+                    iconPosition="start" 
+                  />
+                  <Tab label="AI Analysis" />
+                </Tabs>
+
+                {nmapActiveTab === 0 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <Grid container spacing={2}>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="primary">
+                                {data?.summary?.hosts_up || data?.hosts?.length || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Hosts Up
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="warning.main">
+                                {data?.summary?.open_ports || data?.hosts?.reduce((acc: number, h: any) => acc + (h.ports?.filter((p: any) => p.state === "open").length || 0), 0) || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Open Ports
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="error.main">
+                                {data?.findings?.filter((f: any) => f.severity === 'high' || f.severity === 'critical').length || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                High-Risk Findings
+                              </Typography>
+                            </Card>
+                          </Grid>
+                          <Grid item xs={6} md={3}>
+                            <Card sx={{ p: 2, textAlign: "center" }}>
+                              <Typography variant="h4" color="success.main">
+                                {Object.keys(data?.summary?.services_detected || {}).length || [...new Set(data?.hosts?.flatMap((h: any) => h.ports?.map((p: any) => p.service).filter(Boolean)) || [])].length}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Services
+                              </Typography>
+                            </Card>
+                          </Grid>
+                        </Grid>
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 1 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <NmapNetworkGraph
+                          hosts={data?.hosts || []}
+                          findings={data?.findings || []}
+                          onHostClick={(host) => {
+                            setSelectedHost(host);
+                            setHostDrawerOpen(true);
+                          }}
+                          height={500}
+                        />
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 2 && (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>IP Address</TableCell>
+                          <TableCell>Hostname</TableCell>
+                          <TableCell>OS</TableCell>
+                          <TableCell>State</TableCell>
+                          <TableCell>Open Ports</TableCell>
+                          <TableCell>Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(() => {
+                          const data = getNmapSummary(nmapResult);
+                          return (data?.hosts || []).map((host: any, idx: number) => (
+                            <TableRow key={idx} hover sx={{ cursor: "pointer" }} onClick={() => { setSelectedHost(host); setHostDrawerOpen(true); }}>
+                              <TableCell>
+                                <Typography sx={{ fontFamily: "monospace" }}>{host.ip || host.address || "-"}</Typography>
+                              </TableCell>
+                              <TableCell>{host.hostname || host.hostnames?.[0] || "-"}</TableCell>
+                              <TableCell>
+                                <Tooltip title={host.os_guess || "Unknown"}>
+                                  <Typography variant="body2" sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {host.os_guess ? (host.os_guess.length > 20 ? host.os_guess.substring(0, 20) + "..." : host.os_guess) : "-"}
+                                  </Typography>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={host.state || host.status || "up"}
+                                  size="small"
+                                  color={host.state === "up" || host.status === "up" || !host.state ? "success" : "default"}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={host.ports?.filter((p: any) => p.state === "open").length || host.open_ports || 0}
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setSelectedHost(host); setHostDrawerOpen(true); }}>
+                                  <ViewIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {nmapActiveTab === 3 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      return (
+                        <NmapFindingsTab
+                          findings={data?.findings || []}
+                          onHostClick={(hostIp) => {
+                            const host = data?.hosts?.find((h: any) => h.ip === hostIp || h.address === hostIp);
+                            if (host) {
+                              setSelectedHost(host);
+                              setHostDrawerOpen(true);
+                            }
+                          }}
+                        />
+                      );
+                    })()}
+                  </Box>
+                )}
+
+                {nmapActiveTab === 4 && (
+                  <Box>
+                    {(() => {
+                      const data = getNmapSummary(nmapResult);
+                      if (!data?.ai_analysis) {
+                        return (
+                          <Typography color="text.secondary">
+                            No AI analysis available for this file.
+                          </Typography>
+                        );
+                      }
+                      return (
+                        <ReactMarkdown
+                          components={{
+                            code: ({ className, children }) => (
+                              <ChatCodeBlock className={className} theme={theme}>
+                                {children}
+                              </ChatCodeBlock>
+                            ),
+                          }}
+                        >
+                          {typeof data.ai_analysis === 'string' ? data.ai_analysis : JSON.stringify(data.ai_analysis, null, 2)}
+                        </ReactMarkdown>
+                      );
+                    })()}
+                  </Box>
+                )}
+              </Paper>
+            )}
+
+            {!nmapAnalyzing && !nmapResult && (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <UploadIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  Upload an Nmap output file to analyze
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Supports XML, normal (.nmap), and grepable (.gnmap) formats
+                </Typography>
+              </Paper>
+            )}
+          </Grid>
+        </Grid>
+      )}
+
+      {/* ================================================================ */}
+      {/* NMAP COMMAND BUILDER MODE */}
+      {/* ================================================================ */}
+      {toolMode === "nmap-command" && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={5}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <TerminalIcon sx={{ color: "#f59e0b" }} />
+                Nmap Command Builder
+              </Typography>
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <TextField
+                  label="Target (IP/hostname/range)"
+                  value={cmdGenTarget}
+                  onChange={(e) => setCmdGenTarget(e.target.value)}
+                  placeholder="e.g., 192.168.1.0/24, scanme.nmap.org"
+                  fullWidth
+                  size="small"
+                />
+
+                <FormControl fullWidth size="small">
+                  <InputLabel>Scan Type</InputLabel>
+                  <Select
+                    value={cmdGenScanType}
+                    onChange={(e) => setCmdGenScanType(e.target.value)}
+                    label="Scan Type"
+                  >
+                    {nmapScanTypeOptions.map((opt) => (
+                      <MenuItem key={opt.id} value={opt.id}>
+                        <Box>
+                          <Typography variant="body2">{opt.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {opt.flags || "(default)"} - {opt.description}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Custom Ports (optional)"
+                  value={cmdGenPorts}
+                  onChange={(e) => setCmdGenPorts(e.target.value)}
+                  placeholder="e.g., 22,80,443 or 1-1000"
+                  fullWidth
+                  size="small"
+                  helperText="Leave empty for default port selection"
+                />
+
+                <FormControl fullWidth size="small">
+                  <InputLabel>Output Format</InputLabel>
+                  <Select
+                    value={cmdGenOutputFormat}
+                    onChange={(e) => setCmdGenOutputFormat(e.target.value as any)}
+                    label="Output Format"
+                  >
+                    <MenuItem value="xml">XML (-oX) - Best for analysis</MenuItem>
+                    <MenuItem value="normal">Normal (-oN) - Human readable</MenuItem>
+                    <MenuItem value="grepable">Grepable (-oG) - Easy parsing</MenuItem>
+                    <MenuItem value="all">All formats (-oA)</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Output Filename (optional)"
+                  value={cmdGenOutputFile}
+                  onChange={(e) => setCmdGenOutputFile(e.target.value)}
+                  placeholder="e.g., scan_results"
+                  fullWidth
+                  size="small"
+                  helperText="Extension will be added automatically"
+                />
+
+                <TextField
+                  label="Extra Flags (optional)"
+                  value={cmdGenExtraFlags}
+                  onChange={(e) => setCmdGenExtraFlags(e.target.value)}
+                  placeholder="e.g., --reason -v"
+                  fullWidth
+                  size="small"
+                  helperText="Additional nmap flags to include"
+                />
+              </Box>
+            </Paper>
+
+            {/* Scan Type Reference */}
+            <Paper sx={{ p: 3, mt: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <LearnIcon sx={{ color: "#f59e0b" }} />
+                Scan Type Reference
+              </Typography>
+              <List dense>
+                {nmapScanTypeOptions.map((opt) => (
+                  <ListItem 
+                    key={opt.id}
+                    onClick={() => setCmdGenScanType(opt.id)}
+                    sx={{ 
+                      cursor: "pointer",
+                      borderRadius: 1,
+                      bgcolor: cmdGenScanType === opt.id ? alpha("#f59e0b", 0.1) : "transparent",
+                      "&:hover": { bgcolor: alpha("#f59e0b", 0.05) },
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {opt.name}
+                          </Typography>
+                          <Chip 
+                            label={opt.flags || "default"} 
+                            size="small" 
+                            sx={{ 
+                              fontFamily: "monospace",
+                              bgcolor: alpha("#f59e0b", 0.2),
+                            }}
+                          />
+                        </Box>
+                      }
+                      secondary={opt.description}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={7}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <TerminalIcon sx={{ color: "#f59e0b" }} />
+                Generated Command
+              </Typography>
+
+              <Paper
+                sx={{
+                  p: 2,
+                  bgcolor: "#1a1a2e",
+                  borderRadius: 2,
+                  fontFamily: "monospace",
+                  position: "relative",
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: "#4ade80",
+                    fontFamily: "monospace",
+                    fontSize: "0.95rem",
+                    wordBreak: "break-all",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  $ {generateNmapCommand()}
+                </Typography>
+                <Tooltip title="Copy command">
+                  <IconButton
+                    onClick={handleCopyCommand}
+                    sx={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      color: "#06b6d4",
+                    }}
+                  >
+                    <CopyIcon />
+                  </IconButton>
+                </Tooltip>
+              </Paper>
+
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<CopyIcon />}
+                onClick={handleCopyCommand}
+                sx={{
+                  mt: 2,
+                  background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                }}
+              >
+                Copy Command to Clipboard
+              </Button>
+
+              {/* Common Examples */}
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                  Common Nmap Examples
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { name: "Quick Host Discovery", cmd: "nmap -sn 192.168.1.0/24" },
+                    { name: "Full Service Scan", cmd: "nmap -sV -sC -p- target" },
+                    { name: "Stealth SYN Scan", cmd: "nmap -sS -T2 target" },
+                    { name: "UDP Scan", cmd: "nmap -sU --top-ports 100 target" },
+                    { name: "OS Detection", cmd: "nmap -O target" },
+                    { name: "Vulnerability Scan", cmd: "nmap --script vuln target" },
+                  ].map((ex, idx) => (
+                    <Grid item xs={12} sm={6} key={idx}>
+                      <Paper
+                        onClick={() => {
+                          navigator.clipboard.writeText(ex.cmd);
+                          setSnackbar({ open: true, message: `Copied: ${ex.cmd}`, severity: "success" });
+                        }}
+                        sx={{
+                          p: 2,
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: alpha("#f59e0b", 0.05) },
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                          {ex.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: "monospace", color: "#f59e0b" }}
+                        >
+                          {ex.cmd}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* ================================================================ */}
+      {/* SAVED SCANS SECTION */}
+      {/* ================================================================ */}
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <HistoryIcon sx={{ color: "#8b5cf6" }} />
+          Saved Scans & Analysis
+        </Typography>
+
+        <Tabs
+          value={nmapActiveTab}
+          onChange={(_, v) => setNmapActiveTab(v)}
+          sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
+        >
+          <Tab 
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <RouteIcon sx={{ fontSize: 18 }} />
+                Traceroute ({savedReports.length})
+              </Box>
+            } 
+          />
+          <Tab 
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <RadarIcon sx={{ fontSize: 18 }} />
+                Nmap ({nmapSavedReports.length})
+              </Box>
+            } 
+          />
+        </Tabs>
+
+        {/* Traceroute Reports */}
+        {nmapActiveTab === 0 && (
+          <Box>
+            {loadingReports ? (
+              <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : savedReports.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <RouteIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                <Typography color="text.secondary">
+                  No saved traceroute scans yet
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Run a traceroute scan to get started
+                </Typography>
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Title</TableCell>
+                      <TableCell>Target</TableCell>
+                      <TableCell>Risk Score</TableCell>
+                      <TableCell>Findings</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {savedReports.map((report) => (
+                      <TableRow key={report.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {report.title || "Untitled"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                            {report.filename || "-"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={`${report.risk_score}/10`}
+                            size="small"
+                            color={
+                              report.risk_score >= 7 ? "error" :
+                              report.risk_score >= 4 ? "warning" : "success"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{report.total_findings}</TableCell>
+                        <TableCell>
+                          {new Date(report.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="View Report">
+                            <IconButton
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  const detail = await apiClient.getTracerouteReport(report.id);
+                                  setSelectedReport(detail);
+                                  if (detail.report_data?.result) {
+                                    setResult(detail.report_data.result as any);
+                                  }
+                                  setToolMode("traceroute");
+                                } catch (err) {
+                                  console.error("Failed to load report:", err);
+                                }
+                              }}
+                            >
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  await apiClient.deleteTracerouteReport(report.id);
+                                  loadSavedReports();
+                                  setSnackbar({ open: true, message: "Report deleted", severity: "success" });
+                                } catch (err) {
+                                  console.error("Failed to delete report:", err);
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        )}
+
+        {/* Nmap Reports */}
+        {nmapActiveTab === 1 && (
+          <Box>
+            {nmapSavedReports.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <RadarIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                <Typography color="text.secondary">
+                  No saved Nmap scans yet
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Run an Nmap scan or upload a file for analysis
+                </Typography>
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Title</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Risk Level</TableCell>
+                      <TableCell>Findings</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {nmapSavedReports.map((report) => (
+                      <TableRow key={report.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {report.title || "Untitled"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={report.analysis_type}
+                            size="small"
+                            sx={{ textTransform: "capitalize" }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={report.risk_level || "Unknown"}
+                            size="small"
+                            color={
+                              report.risk_level === "critical" || report.risk_level === "high" ? "error" :
+                              report.risk_level === "medium" ? "warning" : "success"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{report.findings_count}</TableCell>
+                        <TableCell>
+                          {new Date(report.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="View Report">
+                            <IconButton
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  const detail = await apiClient.getNetworkReport(report.id);
+                                  // Transform to NmapAnalysisResult format
+                                  setNmapResult({
+                                    analysis_type: detail.analysis_type,
+                                    total_files: 1,
+                                    total_findings: detail.findings_data?.length || 0,
+                                    analyses: [{
+                                      analysis_type: detail.analysis_type,
+                                      filename: detail.filename || "",
+                                      summary: detail.summary_data || {},
+                                      findings: detail.findings_data || [],
+                                      ai_analysis: detail.ai_report,
+                                    }],
+                                    report_id: detail.id,
+                                  });
+                                  setToolMode("nmap-analyze");
+                                  setNmapActiveTab(0);
+                                } catch (err) {
+                                  console.error("Failed to load report:", err);
+                                }
+                              }}
+                            >
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  await apiClient.deleteNetworkReport(report.id);
+                                  loadNmapReports();
+                                  setSnackbar({ open: true, message: "Report deleted", severity: "success" });
+                                } catch (err) {
+                                  console.error("Failed to delete report:", err);
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        )}
+
+        <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end", gap: 1 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              loadSavedReports();
+              loadNmapReports();
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
+      </Paper>
 
       {/* Floating Chat Window */}
-      {result && (
+      {result && toolMode === "traceroute" && (
         <Paper
           elevation={8}
           sx={{
@@ -2104,6 +3774,17 @@ const TracerouteAnalyzerPage: React.FC = () => {
           </Collapse>
         </Paper>
       )}
+
+      {/* Host Details Drawer */}
+      <HostDetailsDrawer
+        open={hostDrawerOpen}
+        onClose={() => {
+          setHostDrawerOpen(false);
+          setSelectedHost(null);
+        }}
+        host={selectedHost}
+        findings={(nmapResult ? getNmapSummary(nmapResult)?.findings || [] : []) as any}
+      />
 
       {/* Snackbar */}
       <Snackbar

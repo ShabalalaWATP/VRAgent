@@ -46,6 +46,7 @@ import {
   Code as CodeIcon,
 } from "@mui/icons-material";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { formatMarkdownSafe } from "../utils/sanitizeHtml";
 import type { BinaryAnalysisResult } from "../api/client";
 
 // Error Boundary to catch rendering crashes
@@ -231,27 +232,18 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
   }), [theme]);
   
   // Convert markdown-style content to displayable format - memoized
+  // Uses safe sanitization to prevent XSS attacks
   const formatMarkdownContent = useCallback((content: string): string => {
     if (!content) return '';
-    
-    // Convert markdown headers to HTML
-    let html = content
-      .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/^- (.*$)/gm, '<li>$1</li>')
-      .replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br/>');
-    
-    // Wrap in paragraphs
-    if (!html.startsWith('<')) {
+
+    // Use sanitized markdown conversion to prevent XSS
+    let html = formatMarkdownSafe(content);
+
+    // Wrap in paragraphs if needed
+    if (html && !html.startsWith('<')) {
       html = '<p>' + html + '</p>';
     }
-    
+
     return html;
   }, []);
 

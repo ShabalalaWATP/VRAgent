@@ -8,6 +8,7 @@ import os
 import io
 import json
 import logging
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import asyncio
@@ -18,6 +19,21 @@ try:
     HAS_PYPDF = True
 except ImportError:
     HAS_PYPDF = False
+
+try:
+    import fitz  # PyMuPDF
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
+try:
+    import pytesseract
+    from PIL import Image
+    HAS_PYTESSERACT = True
+except ImportError:
+    HAS_PYTESSERACT = False
+    pytesseract = None
+    Image = None
 
 try:
     from docx import Document as DocxDocument
@@ -60,8 +76,11 @@ class DocumentAIService:
         'text/xml': 'xml',
     }
     
-    MAX_TEXT_LENGTH = 500000  # Max characters for AI analysis
-    CHUNK_SIZE = 4000  # Characters per chunk for context
+    MAX_TEXT_LENGTH = 500000  # Max characters for standard AI analysis
+    MAX_DEEP_TEXT_LENGTH = 2000000  # Max characters for deep analysis
+    CHUNK_SIZE = 4000  # Characters per chunk for standard context
+    DEEP_CHUNK_SIZE = 8000  # Characters per chunk for deep analysis
+    MAX_DEEP_CHUNKS = 60  # Max chunks to process in deep mode
     
     def __init__(self):
         """Initialize the document AI service."""
@@ -76,18 +95,24 @@ class DocumentAIService:
                 logger.warning("google-genai not installed - document AI features disabled")
             else:
                 logger.warning("GEMINI_API_KEY not set - document AI features disabled")
+        self._has_pymupdf = HAS_PYMUPDF
+        self._has_pytesseract = HAS_PYTESSERACT
+        self._has_tesseract = self._has_pytesseract and shutil.which("tesseract") is not None
+        if not self._has_tesseract and self._has_pytesseract:
+            logger.info("pytesseract installed but tesseract binary not found in PATH")
     
     def is_supported(self, mime_type: str) -> bool:
         """Check if a file type is supported for text extraction."""
         return mime_type in self.SUPPORTED_MIME_TYPES
     
-    def extract_text(self, file_path: str, mime_type: str) -> str:
+    def extract_text(self, file_path: str, mime_type: str, ocr_languages: Optional[str] = None) -> str:
         """
         Extract text content from a document file.
         
         Args:
             file_path: Path to the file
             mime_type: MIME type of the file
+            ocr_languages: Optional tesseract language codes (e.g., "eng", "rus+eng")
             
         Returns:
             Extracted text content
@@ -96,7 +121,7 @@ class DocumentAIService:
         
         try:
             if file_type == 'pdf':
-                return self._extract_pdf(file_path)
+                return self._extract_pdf(file_path, ocr_languages)
             elif file_type in ('docx', 'doc'):
                 return self._extract_docx(file_path)
             elif file_type in ('pptx', 'ppt'):
@@ -109,12 +134,29 @@ class DocumentAIService:
             logger.error(f"Error extracting text from {file_path}: {e}")
             raise
     
-    def _extract_pdf(self, file_path: str) -> str:
+    def _extract_pdf(self, file_path: str, ocr_languages: Optional[str] = None) -> str:
         """Extract text from PDF file."""
+        text_parts = []
+        ocr_langs = ocr_languages or "eng"
+
+        if self._has_pymupdf:
+            try:
+                pdf = fitz.open(file_path)
+                for page_num, page in enumerate(pdf):
+                    page_text = page.get_text() or ""
+                    if not page_text.strip() and self._has_tesseract:
+                        page_text = self._ocr_pdf_page(page, ocr_langs)
+                    if page_text:
+                        text_parts.append(f"--- Page {page_num + 1} ---\n{page_text}")
+                pdf.close()
+                if text_parts:
+                    return "\n\n".join(text_parts)
+            except Exception as e:
+                logger.warning(f"PyMuPDF extraction failed, falling back to PyPDF2: {e}")
+
         if not HAS_PYPDF:
             raise ImportError("PyPDF2 not installed. Install with: pip install PyPDF2")
         
-        text_parts = []
         with open(file_path, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
             for page_num, page in enumerate(reader.pages):
@@ -126,6 +168,22 @@ class DocumentAIService:
                     logger.warning(f"Error extracting page {page_num + 1}: {e}")
         
         return "\n\n".join(text_parts)
+
+    def _ocr_pdf_page(self, page: "fitz.Page", ocr_languages: str) -> str:
+        """Run OCR on a PyMuPDF page if tesseract is available."""
+        if not self._has_tesseract or not self._has_pytesseract:
+            return ""
+        try:
+            pix = page.get_pixmap(dpi=300)
+            mode = "RGB" if pix.alpha == 0 else "RGBA"
+            image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+            if mode == "RGBA":
+                image = image.convert("RGB")
+            config = "--oem 3 --psm 6"
+            return pytesseract.image_to_string(image, lang=ocr_languages, config=config) or ""
+        except Exception as e:
+            logger.warning(f"OCR failed for PDF page: {e}")
+            return ""
     
     def _extract_docx(self, file_path: str) -> str:
         """Extract text from Word document."""
@@ -247,19 +305,28 @@ class DocumentAIService:
         
         return chunks
     
-    async def generate_summary(self, text: str, filename: str) -> Dict[str, Any]:
+    async def generate_summary(
+        self,
+        text: str,
+        filename: str,
+        analysis_depth: str = "standard",
+    ) -> Dict[str, Any]:
         """
         Generate AI summary of document content.
         
         Args:
             text: Extracted text content
             filename: Original filename for context
+            analysis_depth: "standard" or "deep"
             
         Returns:
             Dict with summary and key_points
         """
         if not self.client:
             raise ValueError("Gemini API key not configured or google-genai not installed")
+
+        if analysis_depth.lower() == "deep":
+            return await self._generate_deep_summary(text, filename)
         
         # Truncate if too long
         if len(text) > self.MAX_TEXT_LENGTH:
@@ -306,7 +373,7 @@ Remember: Accuracy is paramount. Only report what the document actually says.
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=2000,
                 )
             )
@@ -341,11 +408,195 @@ Remember: Accuracy is paramount. Only report what the document actually says.
         except Exception as e:
             logger.error(f"Error generating summary: {e}")
             raise
+
+    async def _generate_deep_summary(self, text: str, filename: str) -> Dict[str, Any]:
+        """Generate a detailed summary using chunked analysis."""
+        if len(text) > self.MAX_DEEP_TEXT_LENGTH:
+            text = text[:self.MAX_DEEP_TEXT_LENGTH] + "\n\n[Content truncated due to length...]"
+            truncated = True
+        else:
+            truncated = False
+
+        chunks = self.chunk_text(text, chunk_size=self.DEEP_CHUNK_SIZE)
+        if len(chunks) > self.MAX_DEEP_CHUNKS:
+            chunks = chunks[:self.MAX_DEEP_CHUNKS]
+            truncated = True
+
+        chunk_summaries = []
+        all_key_points: List[str] = []
+        detected_language = "Unknown"
+        was_translated = False
+
+        for idx, chunk in enumerate(chunks, 1):
+            result = await self._summarize_chunk(chunk, filename, idx, len(chunks))
+            chunk_summary = result.get("chunk_summary", "").strip()
+            if chunk_summary:
+                chunk_summaries.append(f"### Section {idx}\n{chunk_summary}")
+            key_points = result.get("key_points", [])
+            if isinstance(key_points, list):
+                all_key_points.extend(key_points)
+            if detected_language == "Unknown" and result.get("language_detected"):
+                detected_language = result.get("language_detected") or detected_language
+            if result.get("was_translated"):
+                was_translated = True
+
+        exec_summary = await self._synthesize_chunk_summaries(chunk_summaries, filename)
+        detailed_summary = "\n\n".join(chunk_summaries)
+
+        summary_parts = []
+        if exec_summary:
+            summary_parts.append("## Executive Summary\n" + exec_summary)
+        summary_parts.append("## Detailed Analysis\n" + detailed_summary)
+        if truncated:
+            summary_parts.append("\n\n[Content truncated due to length...]")
+
+        summary_text = "\n\n".join(summary_parts).strip()
+        key_points = self._dedupe_key_points(all_key_points, limit=40)
+
+        return {
+            "summary": summary_text,
+            "key_points": key_points,
+            "language_detected": detected_language,
+            "was_translated": was_translated,
+        }
+
+    async def _summarize_chunk(
+        self,
+        chunk: str,
+        filename: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> Dict[str, Any]:
+        """Summarize a document chunk with strict, extractive guidance."""
+        prompt = f"""Analyze this chunk from a document and provide an extractive summary.
+
+**CRITICAL INSTRUCTIONS:**
+- ONLY include information explicitly stated in the chunk
+- Do NOT invent, assume, or hallucinate
+- If the chunk is not in English, translate its content to English
+- Keep wording close to the source where possible (extractive summary)
+
+Document: {filename}
+Chunk: {chunk_index} of {total_chunks}
+
+---
+{chunk}
+---
+
+Provide JSON only:
+{{
+  "chunk_summary": "1-2 paragraphs summarizing only this chunk",
+  "key_points": [
+    "• Key point 1",
+    "• Key point 2",
+    "• 5-10 points total"
+  ],
+  "language_detected": "Language name",
+  "was_translated": true/false
+}}
+"""
+        try:
+            from google.genai import types
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="low"),
+                    max_output_tokens=1500,
+                )
+            )
+            return self._parse_json_response(response.text)
+        except Exception as e:
+            logger.error(f"Chunk summary failed: {e}")
+            return {"chunk_summary": "", "key_points": []}
+
+    async def _synthesize_chunk_summaries(self, chunk_summaries: List[str], filename: str) -> str:
+        """Generate an executive summary from chunk summaries."""
+        if not chunk_summaries:
+            return ""
+        summary_text = "\n\n".join(chunk_summaries)
+        if len(summary_text) > self.MAX_TEXT_LENGTH:
+            summary_text = summary_text[:self.MAX_TEXT_LENGTH] + "\n\n[Content truncated due to length...]"
+
+        prompt = f"""Create an executive summary using ONLY the provided chunk summaries.
+
+**CRITICAL INSTRUCTIONS:**
+- Do NOT invent or add details not present
+- Summarize in 2-3 paragraphs
+- Keep the summary faithful to the source
+
+Document: {filename}
+
+---
+{summary_text}
+---
+
+Return JSON only:
+{{
+  "summary": "Executive summary here",
+  "key_points": [
+    "• Key point 1",
+    "• Key point 2",
+    "• 8-12 points total"
+  ]
+}}
+"""
+        try:
+            from google.genai import types
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="low"),
+                    max_output_tokens=1200,
+                )
+            )
+            result = self._parse_json_response(response.text)
+            return result.get("summary", "").strip()
+        except Exception as e:
+            logger.error(f"Executive summary synthesis failed: {e}")
+            return ""
+
+    def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse JSON from a model response, handling code fences."""
+        if not response_text:
+            return {}
+        text = response_text.strip()
+        if text.startswith('```json'):
+            text = text[7:]
+        if text.startswith('```'):
+            text = text[3:]
+        if text.endswith('```'):
+            text = text[:-3]
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            return {}
+
+    def _dedupe_key_points(self, points: List[str], limit: int = 40) -> List[str]:
+        """Deduplicate key points while preserving order."""
+        seen = set()
+        deduped = []
+        for point in points:
+            clean = point.strip()
+            if not clean:
+                continue
+            key = clean.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(clean)
+            if len(deduped) >= limit:
+                break
+        return deduped
     
     async def generate_multi_document_summary(
-        self, 
-        documents: List[Dict[str, str]], 
-        custom_prompt: str = ""
+        self,
+        documents: List[Dict[str, str]],
+        custom_prompt: str = "",
+        analysis_depth: str = "standard",
     ) -> Dict[str, Any]:
         """
         Generate AI summary across multiple documents.
@@ -353,12 +604,16 @@ Remember: Accuracy is paramount. Only report what the document actually says.
         Args:
             documents: List of dicts with 'filename' and 'text' keys
             custom_prompt: User-provided additional instructions
+            analysis_depth: "standard" or "deep"
             
         Returns:
             Dict with combined_summary and combined_key_points
         """
         if not self.client:
             raise ValueError("Gemini API key not configured or google-genai not installed")
+
+        if analysis_depth.lower() == "deep":
+            return await self._generate_deep_multi_document_summary(documents, custom_prompt)
         
         # Build combined document text
         combined_parts = []
@@ -424,7 +679,7 @@ Remember: Accuracy is paramount. Only report what the documents actually say.
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=4000,
                 )
             )
@@ -458,6 +713,53 @@ Remember: Accuracy is paramount. Only report what the documents actually say.
         except Exception as e:
             logger.error(f"Error generating multi-document summary: {e}")
             raise
+
+    async def _generate_deep_multi_document_summary(
+        self,
+        documents: List[Dict[str, str]],
+        custom_prompt: str = "",
+    ) -> Dict[str, Any]:
+        """Generate a detailed combined summary using deep per-document analysis."""
+        doc_summaries = []
+        all_key_points: List[str] = []
+        languages_detected = set()
+
+        for doc in documents:
+            filename = doc.get("filename", "Unknown")
+            text = doc.get("text", "")
+            result = await self._generate_deep_summary(text, filename)
+            summary = result.get("summary", "").strip()
+            if summary:
+                doc_summaries.append(f"### {filename}\n{summary}")
+            key_points = result.get("key_points", [])
+            if isinstance(key_points, list):
+                all_key_points.extend(key_points)
+            language = result.get("language_detected")
+            if language:
+                languages_detected.add(language)
+
+        combined_exec_summary = ""
+        if doc_summaries:
+            combined_exec_summary = await self._synthesize_chunk_summaries(doc_summaries, "Combined Documents")
+
+        combined_summary_parts = []
+        if combined_exec_summary:
+            combined_summary_parts.append("## Executive Summary\n" + combined_exec_summary)
+
+        if custom_prompt and custom_prompt.strip():
+            combined_summary_parts.append(
+                f"## User Requirements\n{custom_prompt.strip()}"
+            )
+
+        combined_summary_parts.append("## Detailed Document Analysis\n" + "\n\n".join(doc_summaries))
+        combined_summary = "\n\n".join(combined_summary_parts).strip()
+
+        return {
+            "combined_summary": combined_summary,
+            "combined_key_points": self._dedupe_key_points(all_key_points, limit=60),
+            "documents_analyzed": len(documents),
+            "languages_detected": sorted(languages_detected),
+        }
     
     async def answer_question(
         self, 
@@ -533,7 +835,7 @@ Provide a helpful, accurate, well-formatted answer based ONLY on the document co
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.4,
+                    thinking_config=types.ThinkingConfig(thinking_level="high"),
                     max_output_tokens=1500,
                 )
             )
@@ -626,7 +928,7 @@ Provide a helpful, accurate answer based ONLY on the document content."""
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.4,
+                    thinking_config=types.ThinkingConfig(thinking_level="high"),
                     max_output_tokens=2000,
                 )
             )

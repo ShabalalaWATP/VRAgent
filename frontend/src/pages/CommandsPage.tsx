@@ -67,6 +67,8 @@ import DownloadIcon from "@mui/icons-material/Download";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import InfoIcon from "@mui/icons-material/Info";
 import LearnPageLayout from "../components/LearnPageLayout";
+import AICommandConverter, { toolPresets, ToolType } from "../components/AICommandConverter";
+import NmapCommandBuilder from "../components/NmapCommandBuilder";
 
 // Page context for AI chat
 const pageContext = `This is an enhanced Security Commands Reference page containing 700+ essential commands for security professionals organized into 8 main categories:
@@ -1149,6 +1151,21 @@ export default function CommandsPage() {
         </Tabs>
 
         <Box sx={{ p: 3 }}>
+          {/* AI Command Converter - Only for tabs 0-2 and 4 (Linux, PowerShell, Wireshark, Metasploit) */}
+          {selectedTab < 5 && selectedTab !== 3 && (
+            <AICommandConverter
+              key={`ai-converter-${selectedTab}`}
+              toolType={(['linux', 'powershell', 'wireshark', 'nmap', 'metasploit'] as ToolType[])[selectedTab]}
+              accentColor={getTabColor()}
+              presets={toolPresets[(['linux', 'powershell', 'wireshark', 'nmap', 'metasploit'] as ToolType[])[selectedTab]]}
+            />
+          )}
+
+          {/* Nmap Command Builder - Only for Nmap tab (tab 3) */}
+          {selectedTab === 3 && (
+            <NmapCommandBuilder />
+          )}
+
           {/* Search */}
           <TextField
             fullWidth

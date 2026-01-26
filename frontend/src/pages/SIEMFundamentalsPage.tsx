@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -7,7 +7,6 @@ import {
   Typography,
   Paper,
   Chip,
-  Button,
   Grid,
   List,
   ListItem,
@@ -15,8 +14,6 @@ import {
   ListItemText,
   alpha,
   useTheme,
-  Tabs,
-  Tab,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -30,6 +27,9 @@ import {
   CardContent,
   Alert,
   Divider,
+  useMediaQuery,
+  Drawer,
+  Fab,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import StorageIcon from "@mui/icons-material/Storage";
@@ -50,7 +50,36 @@ import SpeedIcon from "@mui/icons-material/Speed";
 import ScienceIcon from "@mui/icons-material/Science";
 import DnsIcon from "@mui/icons-material/Dns";
 import QuizIcon from "@mui/icons-material/Quiz";
-import { Link, useNavigate } from "react-router-dom";
+import MenuIcon from "@mui/icons-material/Menu";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import InfoIcon from "@mui/icons-material/Info";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import { Link } from "react-router-dom";
+
+// Theme colors for consistent styling
+const themeColors = {
+  primary: "#3b82f6",
+  primaryLight: "#60a5fa",
+  secondary: "#8b5cf6",
+  accent: "#10b981",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(59, 130, 246, 0.2)",
+  textMuted: "#94a3b8",
+};
+
+// Section navigation items for sidebar
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <InfoIcon fontSize="small" /> },
+  { id: "overview", label: "Overview", icon: <DashboardIcon fontSize="small" /> },
+  { id: "log-sources", label: "Log Sources", icon: <DnsIcon fontSize="small" /> },
+  { id: "query-examples", label: "Query Examples", icon: <CodeIcon fontSize="small" /> },
+  { id: "detection-rules", label: "Detection Rules", icon: <SecurityIcon fontSize="small" /> },
+  { id: "architecture", label: "Architecture", icon: <AccountTreeIcon fontSize="small" /> },
+  { id: "soc-metrics", label: "SOC Metrics", icon: <SpeedIcon fontSize="small" /> },
+  { id: "labs", label: "Labs", icon: <ScienceIcon fontSize="small" /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon fontSize="small" /> },
+];
 
 // CodeBlock component
 const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> = ({
@@ -87,20 +116,7 @@ const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> =
   );
 };
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box>{children}</Box>}
-    </div>
-  );
-}
 
 interface CoreConcept {
   title: string;
@@ -1150,120 +1166,273 @@ const quizQuestions: QuizQuestion[] = [
 ];
 
 export default function SIEMFundamentalsPage() {
-  const navigate = useNavigate();
   const theme = useTheme();
-  const [tabValue, setTabValue] = useState(0);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width:900px)");
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const yOffset = -80;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+    setMobileNavOpen(false);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sectionIds = sectionNavItems.map((item) => item.id);
+      for (const id of sectionIds) {
+        const element = document.getElementById(id);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 120 && rect.bottom >= 120) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const sidebarNav = (
+    <Box sx={{ position: "sticky", top: 90 }}>
+      <Paper sx={{ p: 2, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+        <Typography variant="subtitle2" sx={{ color: themeColors.primary, fontWeight: 700, mb: 2, px: 1 }}>
+          CONTENTS
+        </Typography>
+        <List dense disablePadding>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              component="button"
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1,
+                mb: 0.5,
+                cursor: "pointer",
+                border: "none",
+                width: "100%",
+                textAlign: "left",
+                bgcolor: activeSection === item.id ? `${themeColors.primary}20` : "transparent",
+                "&:hover": { bgcolor: `${themeColors.primary}15` },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? themeColors.primary : themeColors.textMuted }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  variant: "body2",
+                  fontWeight: activeSection === item.id ? 600 : 400,
+                  color: activeSection === item.id ? themeColors.primary : themeColors.textMuted,
+                }}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
+    </Box>
+  );
 
   const pageContext = `SIEM Fundamentals Guide - Comprehensive Security Information and Event Management training. Covers core concepts (log collection, normalization, correlation, alerting, dashboards, retention), log source categories (endpoints with Windows Events/Sysmon/EDR, network with firewall/DNS/proxy, identity with AD/Azure AD/VPN, cloud with AWS CloudTrail/Azure/GCP, applications). Includes platform comparison (Splunk SPL, Elastic KQL, Microsoft Sentinel KQL, QRadar AQL, Wazuh, Chronicle YARA-L). Features detection rule examples mapped to MITRE ATT&CK (brute force T1110, PowerShell T1059.001, lateral movement T1021, DNS tunneling T1071.004, Kerberoasting T1558.003, credential dumping T1003). Covers SIEM architecture (collection, processing, storage tiers, analysis layer), SOC metrics (MTTD, MTTR, true positive rate, coverage), and hands-on labs from beginner to advanced.`;
 
   return (
     <LearnPageLayout pageTitle="SIEM Fundamentals" pageContext={pageContext}>
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Chip
-            component={Link}
-            to="/learn"
-            icon={<ArrowBackIcon />}
-            label="Back to Learning Hub"
-            clickable
-            variant="outlined"
-            sx={{ borderRadius: 2, mb: 2 }}
-          />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: 2,
-                bgcolor: alpha("#3b82f6", 0.1),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <StorageIcon sx={{ fontSize: 36, color: "#3b82f6" }} />
-            </Box>
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                SIEM Fundamentals
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Security Information and Event Management
-              </Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip label="Blue Team" color="primary" size="small" />
-            <Chip label="Detection" size="small" sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981" }} />
-            <Chip label="Monitoring" size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6" }} />
-            <Chip label="MITRE ATT&CK" size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />
-          </Box>
-        </Box>
-
-        {/* Stats */}
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          {[
-            { label: "Log Sources", value: "20+", color: "#3b82f6" },
-            { label: "Detection Rules", value: "8", color: "#ef4444" },
-            { label: "Query Examples", value: "10+", color: "#f59e0b" },
-            { label: "Lab Exercises", value: "6", color: "#22c55e" },
-          ].map((stat) => (
-            <Grid item xs={6} sm={3} key={stat.label}>
-              <Paper sx={{ p: 2, textAlign: "center", borderTop: `3px solid ${stat.color}` }}>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>{stat.value}</Typography>
-                <Typography variant="body2" color="text.secondary">{stat.label}</Typography>
-              </Paper>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+          {/* Left Sidebar Navigation */}
+          {!isMobile && (
+            <Grid item md={2.5}>
+              {sidebarNav}
             </Grid>
-          ))}
-        </Grid>
+          )}
 
-        {/* Tabs */}
-        <Paper sx={{ borderRadius: 3, overflow: "hidden", mb: 4 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ borderBottom: 1, borderColor: "divider", bgcolor: alpha(theme.palette.background.paper, 0.5) }}
-          >
-            <Tab icon={<StorageIcon />} label="Overview" iconPosition="start" />
-            <Tab icon={<DnsIcon />} label="Log Sources" iconPosition="start" />
-            <Tab icon={<CodeIcon />} label="Query Examples" iconPosition="start" />
-            <Tab icon={<SecurityIcon />} label="Detection Rules" iconPosition="start" />
-            <Tab icon={<AccountTreeIcon />} label="Architecture" iconPosition="start" />
-            <Tab icon={<SpeedIcon />} label="SOC Metrics" iconPosition="start" />
-            <Tab icon={<ScienceIcon />} label="Labs" iconPosition="start" />
-          </Tabs>
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            {/* Introduction Section */}
+            <Paper id="intro" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Chip
+                component={Link}
+                to="/learn"
+                icon={<ArrowBackIcon />}
+                label="Back to Learning Hub"
+                clickable
+                variant="outlined"
+                sx={{ borderRadius: 2, mb: 2, borderColor: themeColors.border, color: themeColors.textMuted }}
+              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 2,
+                    bgcolor: alpha(themeColors.primary, 0.1),
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <StorageIcon sx={{ fontSize: 36, color: themeColors.primary }} />
+                </Box>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: "#fff" }}>
+                    SIEM Fundamentals
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: themeColors.textMuted }}>
+                    Security Information and Event Management
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip label="Blue Team" size="small" sx={{ bgcolor: alpha(themeColors.primary, 0.2), color: themeColors.primary }} />
+                <Chip label="Detection" size="small" sx={{ bgcolor: alpha(themeColors.accent, 0.1), color: themeColors.accent }} />
+                <Chip label="Monitoring" size="small" sx={{ bgcolor: alpha(themeColors.secondary, 0.1), color: themeColors.secondary }} />
+                <Chip label="MITRE ATT&CK" size="small" sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />
+              </Box>
 
-          {/* Tab 0: Overview */}
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              {/* Overview */}
-              <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                  <StorageIcon color="primary" /> What is a SIEM?
+              {/* Stats */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {[
+                  { label: "Log Sources", value: "20+", color: themeColors.primary },
+                  { label: "Detection Rules", value: "8", color: "#ef4444" },
+                  { label: "Query Examples", value: "10+", color: "#f59e0b" },
+                  { label: "Lab Exercises", value: "6", color: themeColors.accent },
+                ].map((stat) => (
+                  <Grid item xs={6} sm={3} key={stat.label}>
+                    <Paper sx={{ p: 2, textAlign: "center", bgcolor: themeColors.bgNested, borderTop: `3px solid ${stat.color}` }}>
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>{stat.value}</Typography>
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{stat.label}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* What You'll Learn */}
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <SchoolIcon /> What You'll Learn
                 </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 2 }}>
+                <Grid container spacing={1}>
+                  {[
+                    "SIEM core concepts and architecture",
+                    "Critical log sources for security monitoring",
+                    "Query languages (SPL, KQL, Lucene)",
+                    "Detection rule development with MITRE mapping",
+                    "SOC metrics and KPIs",
+                    "Hands-on lab exercises",
+                  ].map((item) => (
+                    <Grid item xs={12} sm={6} key={item}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: themeColors.accent }} />
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{item}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Paper>
+
+            {/* Overview Section */}
+            <Paper id="overview" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DashboardIcon /> Overview
+              </Typography>
+
+              {/* What is a SIEM */}
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
+                  <StorageIcon sx={{ color: themeColors.primary }} /> What is a SIEM?
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
                   A SIEM (Security Information and Event Management) system collects, normalizes, and analyzes log data 
                   from across your environment to detect threats, support investigations, and meet compliance requirements. 
                   It's the central nervous system of a Security Operations Center (SOC).
                 </Typography>
-                <Alert severity="info">
+                <Alert severity="info" sx={{ bgcolor: alpha(themeColors.primary, 0.1), border: `1px solid ${alpha(themeColors.primary, 0.3)}` }}>
                   Modern SIEMs often include SOAR (Security Orchestration, Automation and Response) capabilities 
                   and UEBA (User and Entity Behavior Analytics) for advanced threat detection.
                 </Alert>
               </Paper>
 
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  🧭 The SIEM Data Journey (End-to-End)
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  Think of a SIEM as a factory line for security signals. Raw events enter from dozens of sources, get cleaned up,
+                  enriched, and then turned into actionable alerts. Beginners often get stuck because they only see the alert,
+                  not the path it took to get there. Understanding this journey helps you troubleshoot missing detections,
+                  reduce noise, and explain results to stakeholders.
+                </Typography>
+                <List dense>
+                  {[
+                    "Collection: agents, syslog, or APIs gather events and deliver them to the SIEM.",
+                    "Parsing: the SIEM extracts fields like user, host, IP, process, and action.",
+                    "Normalization: fields are mapped to a consistent schema so queries work across sources.",
+                    "Enrichment: add context (asset criticality, geo-IP, threat intel, user role).",
+                    "Correlation: multiple events are linked to reveal a pattern or tactic.",
+                    "Alerting: rules create notifications when thresholds or behaviors match.",
+                    "Response: analysts triage, investigate, contain, and document the incident.",
+                    "Retention: logs are stored for compliance, audits, and historical investigations.",
+                  ].map((step) => (
+                    <ListItem key={step} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <TimelineIcon sx={{ fontSize: 16, color: themeColors.accent }} />
+                      </ListItemIcon>
+                      <ListItemText primary={step} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 1 }}>
+                  If any stage is weak (for example, missing DNS logs or poor parsing), the whole detection chain suffers.
+                  This is why SIEM engineers spend as much time on data quality as they do on detection logic.
+                </Typography>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  📘 Beginner Glossary (Plain-Language)
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { term: "Event", desc: "A single record like a logon, file write, or firewall decision." },
+                    { term: "Alert", desc: "A rule-based notification that something looks suspicious." },
+                    { term: "Incident", desc: "A confirmed security issue that needs containment and remediation." },
+                    { term: "False Positive", desc: "An alert that looks bad but turns out to be normal behavior." },
+                    { term: "Baseline", desc: "A model of what 'normal' looks like for a user or system." },
+                    { term: "EPS", desc: "Events per second, a rough measure of log volume and SIEM load." },
+                  ].map((item) => (
+                    <Grid item xs={12} sm={6} key={item.term}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgCard, borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff", mb: 0.5 }}>
+                          {item.term}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          {item.desc}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
               {/* Core Concepts */}
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>🎯 Core Concepts</Typography>
-              <Grid container spacing={2} sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>🎯 Core Concepts</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
                 {coreConcepts.map((concept) => (
                   <Grid item xs={12} sm={6} md={4} key={concept.title}>
                     <Paper
                       sx={{
                         p: 2,
                         height: "100%",
+                        bgcolor: themeColors.bgNested,
                         borderRadius: 2,
                         border: `1px solid ${alpha(concept.color, 0.2)}`,
                         "&:hover": { borderColor: concept.color },
@@ -1272,7 +1441,7 @@ export default function SIEMFundamentalsPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 700, color: concept.color, mb: 0.5 }}>
                         {concept.title}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
                         {concept.description}
                       </Typography>
                     </Paper>
@@ -1283,26 +1452,26 @@ export default function SIEMFundamentalsPage() {
               {/* Platforms */}
               <Paper
                 sx={{
-                  p: 3,
-                  mb: 4,
-                  borderRadius: 3,
-                  background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.05)}, ${alpha("#6366f1", 0.05)})`,
-                  border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+                  p: 2.5,
+                  mb: 3,
+                  bgcolor: themeColors.bgNested,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(themeColors.primary, 0.2)}`,
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                  <BuildIcon sx={{ color: "#3b82f6" }} /> Popular SIEM Platforms
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
+                  <BuildIcon sx={{ color: themeColors.primary }} /> Popular SIEM Platforms
                 </Typography>
                 <Grid container spacing={2}>
                   {platforms.map((p) => (
                     <Grid item xs={12} sm={6} md={4} key={p.name}>
-                      <Paper sx={{ p: 2, borderRadius: 2 }}>
+                      <Paper sx={{ p: 2, borderRadius: 2, bgcolor: themeColors.bgCard }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{p.name}</Typography>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff" }}>{p.name}</Typography>
                           <Chip label={p.type} size="small" sx={{ height: 18, fontSize: "0.65rem" }} />
                         </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{p.note}</Typography>
-                        <Chip label={p.queryLang} size="small" sx={{ mt: 1, bgcolor: alpha("#3b82f6", 0.1), color: "#3b82f6" }} />
+                        <Typography variant="caption" sx={{ display: "block", color: themeColors.textMuted }}>{p.note}</Typography>
+                        <Chip label={p.queryLang} size="small" sx={{ mt: 1, bgcolor: alpha(themeColors.primary, 0.1), color: themeColors.primary }} />
                       </Paper>
                     </Grid>
                   ))}
@@ -1310,20 +1479,93 @@ export default function SIEMFundamentalsPage() {
               </Paper>
 
               {/* Use Cases */}
-              <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                  <NotificationsActiveIcon sx={{ color: "#10b981" }} /> Common Detection Use Cases
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
+                  <NotificationsActiveIcon sx={{ color: themeColors.accent }} /> Common Detection Use Cases
                 </Typography>
                 <Grid container spacing={1}>
                   {useCases.map((uc, i) => (
                     <Grid item xs={12} sm={6} key={i}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
-                        <Typography variant="body2">{uc}</Typography>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: themeColors.accent }} />
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{uc}</Typography>
                       </Box>
                     </Grid>
                   ))}
                 </Grid>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2, border: `1px solid ${alpha(themeColors.accent, 0.15)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  🧠 Lesson: Signal vs. Noise for Beginners
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  A common beginner mistake is to collect everything and alert on anything unusual. Real environments are noisy:
+                  software updates, admin scripts, and automated jobs can trigger hundreds of "suspicious" events every day.
+                  The goal of a SIEM is not to alert on everything, but to prioritize the most meaningful signals.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  Start with behaviors that are rare and high-impact (for example, new admin creation or credential dumping),
+                  then build coverage outward. When you tune a rule, document the decision so future analysts understand why
+                  a specific host, process, or service account is excluded.
+                </Typography>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  🧭 Walkthrough: From Alert to Confirmed Incident
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  This is a realistic, beginner-friendly flow of how a SOC analyst handles a single alert. The goal is to
+                  show you how to move from "something happened" to a documented incident with evidence and actions.
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    {
+                      title: "1) Alert Triggered",
+                      desc: "The SIEM fires a brute-force alert: 25 failed logins from 203.0.113.77 against user j.smith in 5 minutes.",
+                    },
+                    {
+                      title: "2) Quick Triage",
+                      desc: "Check severity, asset value, and time. The target is a finance workstation, so this gets priority.",
+                    },
+                    {
+                      title: "3) Verify the Signal",
+                      desc: "Confirm the event pattern: same source IP, consistent username, and authentication failures (4625).",
+                    },
+                    {
+                      title: "4) Pivot for Context",
+                      desc: "Search for successful logins (4624) from the same IP or user. Look for VPN access, MFA failures, or password resets.",
+                    },
+                    {
+                      title: "5) Build a Timeline",
+                      desc: "Create a timeline of login attempts, host activity, and any process launches after the attempts.",
+                    },
+                    {
+                      title: "6) Decide: True or False",
+                      desc: "If there is a successful login followed by unusual activity, treat it as a real incident.",
+                    },
+                    {
+                      title: "7) Contain & Document",
+                      desc: "Block the source IP, reset the account, and document evidence and actions in the case record.",
+                    },
+                  ].map((step) => (
+                    <Grid item xs={12} md={6} key={step.title}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgCard, borderRadius: 2, height: "100%" }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff", mb: 0.5 }}>
+                          {step.title}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          {step.desc}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                  The key lesson: a single alert is not an incident by itself. It becomes an incident only after you confirm
+                  impact and gather evidence. Your goal is to connect the alert to real risk.
+                </Typography>
               </Paper>
 
               {/* Tip */}
@@ -1339,49 +1581,51 @@ export default function SIEMFundamentalsPage() {
                 }}
               >
                 <TipsAndUpdatesIcon sx={{ color: "#f59e0b" }} />
-                <Typography variant="body2">
-                  <strong>Tip:</strong> Start with high-fidelity, low-volume alerts and tune from there. Alert fatigue kills SOCs.
+                <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                  <strong style={{ color: "#fff" }}>Tip:</strong> Start with high-fidelity, low-volume alerts and tune from there. Alert fatigue kills SOCs.
                 </Typography>
               </Paper>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 1: Log Sources */}
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3 }}>
+            {/* Log Sources Section */}
+            <Paper id="log-sources" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DnsIcon /> Log Sources
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(themeColors.primary, 0.1), border: `1px solid ${alpha(themeColors.primary, 0.3)}` }}>
                 Comprehensive log coverage is essential for effective threat detection. Prioritize critical sources first, then expand coverage based on risk.
               </Alert>
 
               {logSources.map((category) => (
-                <Paper key={category.category} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                <Paper key={category.category} sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
                     <span>{category.icon}</span> {category.category}
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>Source</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
+                          <TableCell sx={{ fontWeight: 700, color: themeColors.textMuted, borderColor: themeColors.border }}>Source</TableCell>
+                          <TableCell sx={{ fontWeight: 700, color: themeColors.textMuted, borderColor: themeColors.border }}>Description</TableCell>
+                          <TableCell sx={{ fontWeight: 700, color: themeColors.textMuted, borderColor: themeColors.border }}>Priority</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {category.sources.map((source) => (
                           <TableRow key={source.name}>
-                            <TableCell sx={{ fontWeight: 600 }}>{source.name}</TableCell>
-                            <TableCell>{source.description}</TableCell>
-                            <TableCell>
+                            <TableCell sx={{ fontWeight: 600, color: "#fff", borderColor: themeColors.border }}>{source.name}</TableCell>
+                            <TableCell sx={{ color: themeColors.textMuted, borderColor: themeColors.border }}>{source.description}</TableCell>
+                            <TableCell sx={{ borderColor: themeColors.border }}>
                               <Chip
                                 label={source.priority}
                                 size="small"
                                 sx={{
                                   bgcolor: source.priority === "Critical" ? alpha("#ef4444", 0.1) :
                                            source.priority === "High" ? alpha("#f59e0b", 0.1) :
-                                           alpha("#3b82f6", 0.1),
+                                           alpha(themeColors.primary, 0.1),
                                   color: source.priority === "Critical" ? "#ef4444" :
-                                         source.priority === "High" ? "#f59e0b" : "#3b82f6",
+                                         source.priority === "High" ? "#f59e0b" : themeColors.primary,
                                 }}
                               />
                             </TableCell>
@@ -1393,8 +1637,38 @@ export default function SIEMFundamentalsPage() {
                 </Paper>
               ))}
 
-              <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  ✅ Lesson: Log Quality Matters
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  A SIEM is only as good as the data it receives. If timestamps are missing, user fields are inconsistent,
+                  or logs are delayed by hours, your detections will be unreliable. Before building complex rules, validate
+                  that logs arrive on time, fields are populated, and critical events are not being filtered out.
+                </Typography>
+                <List dense>
+                  {[
+                    "Check time sync: if hosts are off by minutes, correlation breaks.",
+                    "Verify field completeness: user, host, IP, process, and outcome should be present.",
+                    "Measure latency: know the typical delay from event generation to SIEM ingestion.",
+                    "Validate volume baselines: sudden drops can mean broken agents or blocked sources.",
+                    "Confirm parsing: raw logs should map cleanly to your schema fields.",
+                  ].map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 28 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: themeColors.accent }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  Treat log validation as a repeatable checklist. When a detection fails, data quality is the first thing to check.
+                </Typography>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                   📋 Log Source Checklist
                 </Typography>
                 <List dense>
@@ -1410,132 +1684,208 @@ export default function SIEMFundamentalsPage() {
                   ].map((item) => (
                     <ListItem key={item} sx={{ py: 0.25 }}>
                       <ListItemIcon sx={{ minWidth: 28 }}>
-                        <CheckCircleIcon sx={{ fontSize: 16, color: "#8b5cf6" }} />
+                        <CheckCircleIcon sx={{ fontSize: 16, color: themeColors.secondary }} />
                       </ListItemIcon>
-                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
                     </ListItem>
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 2: Query Examples */}
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="warning" sx={{ mb: 3 }}>
+            {/* Query Examples Section */}
+            <Paper id="query-examples" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <CodeIcon /> Query Examples
+              </Typography>
+
+              <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
                 Query syntax varies by platform. These examples are templates - adjust field names for your environment.
               </Alert>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  🧩 How to Read a SIEM Query
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  A query is a set of filters and transformations that turn raw logs into evidence. Start by identifying
+                  the data source (index/table), then add filters for event types, and finally group or summarize results
+                  to highlight patterns. Most SIEM queries follow this sequence even if the syntax looks different.
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                  When you copy an example query, always verify the field names. For example, a source IP might be
+                  `src_ip`, `source.ip`, or `IpAddress` depending on your platform and schema.
+                </Typography>
+              </Paper>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
+                  🧪 Mini Labs: Query Practice With Expected Results
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                  These short labs help you practice reading and tuning queries. Each lab lists a goal, the query to run,
+                  and what you should expect to see in the results.
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    {
+                      title: "Lab 1: Brute Force Pattern",
+                      goal: "Find users targeted by repeated failed logins in the last hour.",
+                      query: queryExamples.sentinel.bruteForce,
+                      expected: "A table of TargetAccount and IpAddress with FailedAttempts above the threshold.",
+                    },
+                    {
+                      title: "Lab 2: Suspicious Process Launch",
+                      goal: "Identify command-line tools launched by PowerShell or cmd.",
+                      query: queryExamples.sentinel.suspiciousProcess,
+                      expected: "Rows showing DeviceName, AccountName, and command lines for utilities like whoami or net.",
+                    },
+                    {
+                      title: "Lab 3: DNS Exfiltration Signal",
+                      goal: "Detect long subdomains that could encode data.",
+                      query: queryExamples.sentinel.dnsExfil,
+                      expected: "Domains with unusually long subdomains and a high query count from a single client.",
+                    },
+                    {
+                      title: "Lab 4: Splunk Lateral Movement",
+                      goal: "Spot a host making multiple network logons in a short period.",
+                      query: queryExamples.splunk.lateralMovement,
+                      expected: "Hosts with a burst of LogonType=3 or explicit credential usage.",
+                    },
+                  ].map((lab) => (
+                    <Grid item xs={12} md={6} key={lab.title}>
+                      <Paper sx={{ p: 2, bgcolor: themeColors.bgCard, borderRadius: 2, height: "100%" }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff", mb: 1 }}>
+                          {lab.title}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted, display: "block", mb: 1 }}>
+                          Goal: {lab.goal}
+                        </Typography>
+                        <CodeBlock code={lab.query} language="kql" title="Run This Query" />
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted, display: "block" }}>
+                          Expected: {lab.expected}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                  If your results are empty, validate data ingestion and field names first. Then reduce the thresholds to
+                  confirm you can see low-volume activity before tuning upward.
+                </Typography>
+              </Paper>
 
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
                 Splunk (SPL)
               </Typography>
-              <Accordion defaultExpanded sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Brute Force Detection</Typography>
+              <Accordion defaultExpanded sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Brute Force Detection</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.splunk.bruteForce} language="spl" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Privilege Escalation Events</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Privilege Escalation Events</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.splunk.privilegeEsc} language="spl" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Suspicious Process Execution</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Suspicious Process Execution</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.splunk.suspiciousProcess} language="spl" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 3 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Lateral Movement Detection</Typography>
+              <Accordion sx={{ mb: 3, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Lateral Movement Detection</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.splunk.lateralMovement} language="spl" />
                 </AccordionDetails>
               </Accordion>
 
-              <Divider sx={{ my: 3 }} />
+              <Divider sx={{ my: 3, borderColor: themeColors.border }} />
 
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
                 Microsoft Sentinel (KQL)
               </Typography>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Brute Force Detection</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Brute Force Detection</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.sentinel.bruteForce} language="kql" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Privilege Escalation Events</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Privilege Escalation Events</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.sentinel.privilegeEsc} language="kql" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Suspicious Process Execution</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Suspicious Process Execution</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.sentinel.suspiciousProcess} language="kql" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 3 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>DNS Exfiltration Detection</Typography>
+              <Accordion sx={{ mb: 3, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>DNS Exfiltration Detection</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.sentinel.dnsExfil} language="kql" />
                 </AccordionDetails>
               </Accordion>
 
-              <Divider sx={{ my: 3 }} />
+              <Divider sx={{ my: 3, borderColor: themeColors.border }} />
 
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.accent }}>
                 Elastic (Lucene/JSON DSL)
               </Typography>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Brute Force Detection</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Brute Force Detection</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.elastic.bruteForce} language="json" />
                 </AccordionDetails>
               </Accordion>
-              <Accordion sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Malware Indicators</Typography>
+              <Accordion sx={{ mb: 2, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#fff" }}>Malware Indicators</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <CodeBlock code={queryExamples.elastic.malwareIndicator} language="json" />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 3: Detection Rules */}
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3 }}>
+            {/* Detection Rules Section */}
+            <Paper id="detection-rules" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SecurityIcon /> Detection Rules
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(themeColors.primary, 0.1), border: `1px solid ${alpha(themeColors.primary, 0.3)}` }}>
                 Detection rules should be mapped to MITRE ATT&CK techniques for coverage analysis. 
                 Always document false positive scenarios for tuning.
               </Alert>
 
               {detectionRules.map((rule, idx) => (
-                <Accordion key={idx} sx={{ mb: 1, "&:before": { display: "none" } }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Accordion key={idx} sx={{ mb: 1, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
                       <Chip
                         label={rule.severity}
@@ -1543,29 +1893,29 @@ export default function SIEMFundamentalsPage() {
                         sx={{
                           bgcolor: rule.severity === "Critical" ? alpha("#ef4444", 0.1) :
                                    rule.severity === "High" ? alpha("#f59e0b", 0.1) :
-                                   alpha("#3b82f6", 0.1),
+                                   alpha(themeColors.primary, 0.1),
                           color: rule.severity === "Critical" ? "#ef4444" :
-                                 rule.severity === "High" ? "#f59e0b" : "#3b82f6",
+                                 rule.severity === "High" ? "#f59e0b" : themeColors.primary,
                           fontWeight: 700,
                         }}
                       />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>{rule.name}</Typography>
-                      <Chip label={rule.mitre} size="small" variant="outlined" sx={{ mr: 2 }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1, color: "#fff" }}>{rule.name}</Typography>
+                      <Chip label={rule.mitre} size="small" variant="outlined" sx={{ mr: 2, borderColor: themeColors.border, color: themeColors.textMuted }} />
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                           {rule.description}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(themeColors.primary, 0.05), borderRadius: 2 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.primary, mb: 1 }}>
                             Detection Logic
                           </Typography>
-                          <Typography variant="body2">{rule.logic}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{rule.logic}</Typography>
                         </Paper>
                       </Grid>
                       <Grid item xs={12} md={6}>
@@ -1573,17 +1923,17 @@ export default function SIEMFundamentalsPage() {
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>
                             Threshold
                           </Typography>
-                          <Typography variant="body2">{rule.threshold}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{rule.threshold}</Typography>
                         </Paper>
                       </Grid>
                       <Grid item xs={12}>
-                        <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
+                        <Paper sx={{ p: 2, bgcolor: alpha(themeColors.secondary, 0.05), borderRadius: 2 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.secondary, mb: 1 }}>
                             False Positives
                           </Typography>
                           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                             {rule.falsePositives.map((fp) => (
-                              <Chip key={fp} label={fp} size="small" variant="outlined" />
+                              <Chip key={fp} label={fp} size="small" variant="outlined" sx={{ borderColor: themeColors.border, color: themeColors.textMuted }} />
                             ))}
                           </Box>
                         </Paper>
@@ -1593,8 +1943,8 @@ export default function SIEMFundamentalsPage() {
                 </Accordion>
               ))}
 
-              <Paper sx={{ p: 3, mt: 3, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              <Paper sx={{ p: 2.5, mt: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                   📝 Detection Rule Best Practices
                 </Typography>
                 <List dense>
@@ -1610,38 +1960,40 @@ export default function SIEMFundamentalsPage() {
                   ].map((item) => (
                     <ListItem key={item} sx={{ py: 0.25 }}>
                       <ListItemIcon sx={{ minWidth: 28 }}>
-                        <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                        <CheckCircleIcon sx={{ fontSize: 16, color: themeColors.accent }} />
                       </ListItemIcon>
-                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
                     </ListItem>
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 4: Architecture */}
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3 }}>
+            {/* Architecture Section */}
+            <Paper id="architecture" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <AccountTreeIcon /> Architecture
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(themeColors.primary, 0.1), border: `1px solid ${alpha(themeColors.primary, 0.3)}` }}>
                 A well-designed SIEM architecture balances performance, cost, and data retention requirements.
               </Alert>
 
               {architectureComponents.map((layer, idx) => (
-                <Paper key={layer.layer} sx={{ p: 3, mb: 3, borderRadius: 3, borderLeft: `4px solid ${
-                  idx === 0 ? "#3b82f6" : idx === 1 ? "#8b5cf6" : idx === 2 ? "#f59e0b" : "#22c55e"
+                <Paper key={layer.layer} sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2, borderLeft: `4px solid ${
+                  idx === 0 ? themeColors.primary : idx === 1 ? themeColors.secondary : idx === 2 ? "#f59e0b" : themeColors.accent
                 }` }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                     {idx + 1}. {layer.layer}
                   </Typography>
                   <Grid container spacing={2}>
                     {layer.components.map((comp) => (
                       <Grid item xs={12} sm={6} key={comp.name}>
                         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-                          <CheckCircleIcon sx={{ fontSize: 18, color: "#3b82f6", mt: 0.3 }} />
+                          <CheckCircleIcon sx={{ fontSize: 18, color: themeColors.primary, mt: 0.3 }} />
                           <Box>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{comp.name}</Typography>
-                            <Typography variant="caption" color="text.secondary">{comp.description}</Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff" }}>{comp.name}</Typography>
+                            <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{comp.description}</Typography>
                           </Box>
                         </Box>
                       </Grid>
@@ -1650,8 +2002,8 @@ export default function SIEMFundamentalsPage() {
                 </Paper>
               ))}
 
-              <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#6366f1", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                   🔧 Architecture Considerations
                 </Typography>
                 <Grid container spacing={2}>
@@ -1664,49 +2016,51 @@ export default function SIEMFundamentalsPage() {
                     { title: "Backup/DR", desc: "Regular config backups, cross-region replication", icon: "💾" },
                   ].map((item) => (
                     <Grid item xs={12} sm={6} md={4} key={item.title}>
-                      <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      <Paper sx={{ p: 2, borderRadius: 2, height: "100%", bgcolor: themeColors.bgCard }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff" }}>
                           {item.icon} {item.title}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{item.desc}</Typography>
                       </Paper>
                     </Grid>
                   ))}
                 </Grid>
               </Paper>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 5: SOC Metrics */}
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 3 }}>
+            {/* SOC Metrics Section */}
+            <Paper id="soc-metrics" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SpeedIcon /> SOC Metrics
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(themeColors.primary, 0.1), border: `1px solid ${alpha(themeColors.primary, 0.3)}` }}>
                 Measure what matters. These metrics help demonstrate SOC effectiveness and identify improvement areas.
               </Alert>
 
-              <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid container spacing={3} sx={{ mb: 3 }}>
                 {socMetrics.map((metric) => (
                   <Grid item xs={12} sm={6} md={4} key={metric.name}>
-                    <Card sx={{ height: "100%", borderTop: `3px solid #3b82f6` }}>
+                    <Card sx={{ height: "100%", bgcolor: themeColors.bgNested, borderTop: `3px solid ${themeColors.primary}` }}>
                       <CardContent>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: "#3b82f6", mb: 0.5 }}>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: themeColors.primary, mb: 0.5 }}>
                           {metric.name}
                         </Typography>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: "#fff" }}>
                           {metric.fullName}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
                           {metric.description}
                         </Typography>
-                        <Chip label={`Target: ${metric.target}`} size="small" sx={{ bgcolor: alpha("#22c55e", 0.1), color: "#22c55e" }} />
+                        <Chip label={`Target: ${metric.target}`} size="small" sx={{ bgcolor: alpha(themeColors.accent, 0.1), color: themeColors.accent }} />
                       </CardContent>
                     </Card>
                   </Grid>
                 ))}
               </Grid>
 
-              <Paper sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                   📊 Dashboard KPIs
                 </Typography>
                 <Grid container spacing={2}>
@@ -1721,16 +2075,16 @@ export default function SIEMFundamentalsPage() {
                     "Log ingestion rate (EPS/GB)",
                   ].map((kpi) => (
                     <Grid item xs={12} sm={6} md={3} key={kpi}>
-                      <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{kpi}</Typography>
+                      <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: themeColors.bgCard }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: themeColors.textMuted }}>{kpi}</Typography>
                       </Paper>
                     </Grid>
                   ))}
                 </Grid>
               </Paper>
 
-              <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#fff" }}>
                   <WarningIcon sx={{ color: "#f59e0b" }} /> Common Pitfalls
                 </Typography>
                 <List dense>
@@ -1747,58 +2101,61 @@ export default function SIEMFundamentalsPage() {
                       <ListItemIcon sx={{ minWidth: 28 }}>
                         <WarningIcon sx={{ fontSize: 16, color: "#f59e0b" }} />
                       </ListItemIcon>
-                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
                     </ListItem>
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+            </Paper>
 
-          {/* Tab 6: Labs */}
-          <TabPanel value={tabValue} index={6}>
-            <Box sx={{ p: 3 }}>
-              <Alert severity="warning" sx={{ mb: 3 }}>
+            {/* Labs Section */}
+            <Paper id="labs" sx={{ p: 3, mb: 4, bgcolor: themeColors.bgCard, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+              <Typography variant="h5" sx={{ color: themeColors.primary, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <ScienceIcon /> Labs
+              </Typography>
+
+              <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
                 Practice in lab environments. Use tools like Splunk Free, Elastic Free, or cloud free tiers for hands-on learning.
               </Alert>
 
-              <Grid container spacing={3}>
+              <Grid container spacing={3} sx={{ mb: 3 }}>
                 {labExercises.map((lab) => (
                   <Grid item xs={12} md={6} key={lab.name}>
                     <Card sx={{ 
                       height: "100%",
+                      bgcolor: themeColors.bgNested,
                       borderLeft: `4px solid ${
-                        lab.difficulty === "Beginner" ? "#22c55e" :
+                        lab.difficulty === "Beginner" ? themeColors.accent :
                         lab.difficulty === "Intermediate" ? "#f59e0b" : "#ef4444"
                       }` 
                     }}>
                       <CardContent>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>{lab.name}</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: "#fff" }}>{lab.name}</Typography>
                           <Box sx={{ display: "flex", gap: 1 }}>
                             <Chip
                               label={lab.difficulty}
                               size="small"
                               sx={{
-                                bgcolor: lab.difficulty === "Beginner" ? alpha("#22c55e", 0.1) :
+                                bgcolor: lab.difficulty === "Beginner" ? alpha(themeColors.accent, 0.1) :
                                          lab.difficulty === "Intermediate" ? alpha("#f59e0b", 0.1) :
                                          alpha("#ef4444", 0.1),
-                                color: lab.difficulty === "Beginner" ? "#22c55e" :
+                                color: lab.difficulty === "Beginner" ? themeColors.accent :
                                        lab.difficulty === "Intermediate" ? "#f59e0b" : "#ef4444",
                                 fontWeight: 700,
                               }}
                             />
-                            <Chip label={lab.duration} size="small" variant="outlined" />
+                            <Chip label={lab.duration} size="small" variant="outlined" sx={{ borderColor: themeColors.border, color: themeColors.textMuted }} />
                           </Box>
                         </Box>
-                        <Divider sx={{ my: 1.5 }} />
+                        <Divider sx={{ my: 1.5, borderColor: themeColors.border }} />
                         <List dense>
                           {lab.objectives.map((obj, i) => (
                             <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
                               <ListItemIcon sx={{ minWidth: 24 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 700, color: "#3b82f6" }}>{i + 1}.</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: themeColors.primary }}>{i + 1}.</Typography>
                               </ListItemIcon>
-                              <ListItemText primary={obj} primaryTypographyProps={{ variant: "body2" }} />
+                              <ListItemText primary={obj} primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }} />
                             </ListItem>
                           ))}
                         </List>
@@ -1808,8 +2165,8 @@ export default function SIEMFundamentalsPage() {
                 ))}
               </Grid>
 
-              <Paper sx={{ p: 3, mt: 3, borderRadius: 3, bgcolor: alpha("#6366f1", 0.03) }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#fff" }}>
                   🛠️ Free Lab Resources
                 </Typography>
                 <Grid container spacing={2}>
@@ -1822,62 +2179,122 @@ export default function SIEMFundamentalsPage() {
                     { name: "Atomic Red Team", desc: "MITRE ATT&CK technique simulations" },
                   ].map((resource) => (
                     <Grid item xs={12} sm={6} md={4} key={resource.name}>
-                      <Paper sx={{ p: 2, borderRadius: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{resource.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{resource.desc}</Typography>
+                      <Paper sx={{ p: 2, borderRadius: 2, bgcolor: themeColors.bgCard }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#fff" }}>{resource.name}</Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{resource.desc}</Typography>
                       </Paper>
                     </Grid>
                   ))}
                 </Grid>
               </Paper>
-            </Box>
-          </TabPanel>
-        </Paper>
+            </Paper>
 
-        {/* Related */}
-        <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📚 Related Learning</Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip label="SOC Analyst Workflow →" clickable onClick={() => navigate("/learn/soc-workflow")} sx={{ fontWeight: 600 }} />
-            <Chip label="Threat Hunting →" clickable onClick={() => navigate("/learn/threat-hunting")} sx={{ fontWeight: 600 }} />
-            <Chip label="Incident Response →" clickable onClick={() => navigate("/learn/incident-response")} sx={{ fontWeight: 600 }} />
-            <Chip label="Log Analysis →" clickable onClick={() => navigate("/learn/log-analysis")} sx={{ fontWeight: 600 }} />
-          </Box>
-        </Paper>
+            {/* Quiz Section */}
+            <Paper
+              id="quiz-section"
+              sx={{
+                p: 3,
+                mb: 4,
+                bgcolor: themeColors.bgCard,
+                borderRadius: 2,
+                border: `1px solid ${themeColors.border}`,
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2, color: themeColors.primary }}>
+                <QuizIcon /> Knowledge Check
+              </Typography>
+              <QuizSection
+                questions={quizQuestions}
+                accentColor={QUIZ_ACCENT_COLOR}
+                title="SIEM Fundamentals Knowledge Check"
+                description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                questionsPerQuiz={QUIZ_QUESTION_COUNT}
+              />
+            </Paper>
+          </Grid>
+        </Grid>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
+        {/* Mobile Navigation Drawer */}
+        <Drawer
+          anchor="left"
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          sx={{ display: { md: "none" } }}
+          PaperProps={{ sx: { bgcolor: themeColors.bgCard, width: 280 } }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="SIEM Fundamentals Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="subtitle2" sx={{ color: themeColors.primary, fontWeight: 700, mb: 2 }}>
+              CONTENTS
+            </Typography>
+            <List dense>
+              {sectionNavItems.map((item) => (
+                <ListItem
+                  key={item.id}
+                  component="button"
+                  onClick={() => scrollToSection(item.id)}
+                  sx={{
+                    borderRadius: 1,
+                    mb: 0.5,
+                    cursor: "pointer",
+                    border: "none",
+                    width: "100%",
+                    textAlign: "left",
+                    bgcolor: activeSection === item.id ? `${themeColors.primary}20` : "transparent",
+                    "&:hover": { bgcolor: `${themeColors.primary}15` },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? themeColors.primary : themeColors.textMuted }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      variant: "body2",
+                      fontWeight: activeSection === item.id ? 600 : 400,
+                      color: activeSection === item.id ? themeColors.primary : themeColors.textMuted,
+                    }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        </Drawer>
 
-        {/* Bottom Navigation */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
-          >
-            Back to Learning Hub
-          </Button>
-        </Box>
+        {/* Mobile FABs */}
+        {isMobile && (
+          <>
+            <Fab
+              size="small"
+              onClick={() => setMobileNavOpen(true)}
+              sx={{
+                position: "fixed",
+                bottom: 80,
+                right: 16,
+                bgcolor: themeColors.bgCard,
+                color: themeColors.primary,
+                border: `1px solid ${themeColors.border}`,
+                "&:hover": { bgcolor: themeColors.bgNested },
+              }}
+            >
+              <MenuIcon />
+            </Fab>
+            <Fab
+              size="small"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              sx={{
+                position: "fixed",
+                bottom: 16,
+                right: 16,
+                bgcolor: themeColors.bgCard,
+                color: themeColors.primary,
+                border: `1px solid ${themeColors.border}`,
+                "&:hover": { bgcolor: themeColors.bgNested },
+              }}
+            >
+              <KeyboardArrowUpIcon />
+            </Fab>
+          </>
+        )}
       </Container>
     </LearnPageLayout>
   );

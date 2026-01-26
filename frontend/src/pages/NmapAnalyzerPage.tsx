@@ -1100,7 +1100,7 @@ const NmapAnalyzerPage: React.FC = () => {
     <Box>
       {/* Breadcrumbs */}
       <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3 }}>
-        <MuiLink component={Link} to="/network" color="inherit" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <MuiLink component={Link} to="/dynamic" color="inherit" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <HubIcon fontSize="small" />
           Network Analysis
         </MuiLink>

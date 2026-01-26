@@ -150,6 +150,386 @@ const cloudProviders = [
   { name: "Others", fullName: "IBM, Oracle, Alibaba, etc.", marketShare: "~35%", strengths: "Specialized offerings, regional presence, niche markets", flagship: "Various specialized services", color: "#6b7280" },
 ];
 
+// ========== AWS DEEP DIVE ==========
+const awsServiceCategories = [
+  {
+    category: "Compute",
+    color: "#ff9900",
+    icon: "🖥️",
+    services: [
+      { name: "EC2", fullName: "Elastic Compute Cloud", description: "Resizable virtual servers in the cloud. Choose from 400+ instance types optimized for different workloads.", keyFeatures: "Auto Scaling, Spot Instances (90% discount), Dedicated Hosts, Graviton (ARM) processors", useCase: "Web servers, application hosting, batch processing, HPC" },
+      { name: "Lambda", fullName: "AWS Lambda", description: "Run code without provisioning servers. Pay only for compute time consumed.", keyFeatures: "Event-driven, 15-min max execution, 10GB memory, supports Python/Node/Java/Go/C#/.NET", useCase: "APIs, data processing, automation, real-time file processing" },
+      { name: "ECS/EKS", fullName: "Container Services", description: "Run Docker containers at scale. ECS is AWS-native, EKS is managed Kubernetes.", keyFeatures: "Fargate (serverless containers), deep AWS integration, service discovery", useCase: "Microservices, batch jobs, ML workloads, CI/CD pipelines" },
+      { name: "Lightsail", fullName: "Amazon Lightsail", description: "Simple virtual private servers with predictable pricing. Easy for beginners.", keyFeatures: "Fixed monthly pricing, pre-configured apps (WordPress, LAMP), managed databases", useCase: "Simple websites, dev/test environments, small business apps" },
+      { name: "Batch", fullName: "AWS Batch", description: "Run batch computing workloads at any scale without managing infrastructure.", keyFeatures: "Automatic scaling, spot integration, job queues, multi-node parallel jobs", useCase: "Financial modeling, drug discovery, genomics, rendering" },
+      { name: "Outposts", fullName: "AWS Outposts", description: "Run AWS infrastructure on-premises for hybrid workloads.", keyFeatures: "Same APIs as AWS, local data processing, low latency", useCase: "Data residency, low-latency local processing, hybrid apps" },
+    ]
+  },
+  {
+    category: "Storage",
+    color: "#22c55e",
+    icon: "💾",
+    services: [
+      { name: "S3", fullName: "Simple Storage Service", description: "Object storage with industry-leading durability (99.999999999%). The backbone of AWS.", keyFeatures: "Storage classes (Standard/IA/Glacier), versioning, lifecycle policies, event notifications", useCase: "Data lakes, backups, static websites, content distribution" },
+      { name: "EBS", fullName: "Elastic Block Store", description: "Persistent block storage for EC2. Like a virtual hard drive.", keyFeatures: "SSD/HDD options, snapshots, encryption, up to 64TB volumes, multi-attach", useCase: "Databases, boot volumes, throughput-intensive workloads" },
+      { name: "EFS", fullName: "Elastic File System", description: "Managed NFS file system that scales automatically.", keyFeatures: "Petabyte scale, multi-AZ, POSIX-compliant, lifecycle management", useCase: "Content management, web serving, shared home directories" },
+      { name: "S3 Glacier", fullName: "S3 Glacier & Deep Archive", description: "Ultra-low cost archive storage. Retrieval from minutes to hours.", keyFeatures: "Vault Lock for compliance, retrieval tiers, 99.999999999% durability", useCase: "Compliance archives, digital preservation, long-term backups" },
+      { name: "FSx", fullName: "Amazon FSx", description: "Fully managed file systems: Windows File Server, Lustre, NetApp ONTAP, OpenZFS.", keyFeatures: "Native protocol support, high performance, AWS integration", useCase: "Windows workloads, HPC, machine learning, financial analytics" },
+      { name: "Storage Gateway", fullName: "AWS Storage Gateway", description: "Hybrid storage connecting on-premises to AWS cloud storage.", keyFeatures: "File/Volume/Tape gateways, local caching, seamless integration", useCase: "Backup to cloud, disaster recovery, data migration" },
+    ]
+  },
+  {
+    category: "Database",
+    color: "#3b82f6",
+    icon: "🗄️",
+    services: [
+      { name: "RDS", fullName: "Relational Database Service", description: "Managed relational databases: MySQL, PostgreSQL, MariaDB, Oracle, SQL Server.", keyFeatures: "Automated backups, Multi-AZ, read replicas, auto-scaling storage", useCase: "Traditional applications, e-commerce, content management" },
+      { name: "Aurora", fullName: "Amazon Aurora", description: "MySQL/PostgreSQL-compatible with 5x performance, 1/10th the cost of commercial DBs.", keyFeatures: "Auto-scaling storage to 128TB, 15 read replicas, serverless option, global database", useCase: "Enterprise apps, SaaS, gaming, high-availability workloads" },
+      { name: "DynamoDB", fullName: "Amazon DynamoDB", description: "Fully managed NoSQL database with single-digit millisecond performance.", keyFeatures: "Serverless, auto-scaling, global tables, ACID transactions, on-demand mode", useCase: "Gaming, IoT, mobile backends, real-time analytics" },
+      { name: "ElastiCache", fullName: "Amazon ElastiCache", description: "Managed Redis and Memcached for in-memory caching.", keyFeatures: "Sub-millisecond latency, cluster mode, data tiering", useCase: "Session management, caching, real-time analytics, leaderboards" },
+      { name: "Redshift", fullName: "Amazon Redshift", description: "Petabyte-scale data warehouse. Fast analytics on structured data.", keyFeatures: "Columnar storage, Redshift Serverless, ML integration, data sharing", useCase: "Business intelligence, data warehousing, log analytics" },
+      { name: "DocumentDB", fullName: "Amazon DocumentDB", description: "MongoDB-compatible document database for JSON workloads.", keyFeatures: "Fully managed, auto-scaling, MongoDB compatibility", useCase: "Content management, catalogs, user profiles" },
+    ]
+  },
+  {
+    category: "Networking",
+    color: "#8b5cf6",
+    icon: "🌐",
+    services: [
+      { name: "VPC", fullName: "Virtual Private Cloud", description: "Isolated virtual network where you launch AWS resources.", keyFeatures: "Subnets, route tables, security groups, NACLs, VPC peering, Transit Gateway", useCase: "All workloads — foundation of AWS networking" },
+      { name: "CloudFront", fullName: "Amazon CloudFront", description: "Global CDN with 400+ edge locations for low-latency content delivery.", keyFeatures: "Origin Shield, real-time logs, Lambda@Edge, WebSocket support", useCase: "Websites, APIs, video streaming, software distribution" },
+      { name: "Route 53", fullName: "Amazon Route 53", description: "Highly available DNS service with advanced routing policies.", keyFeatures: "Health checks, geo routing, latency routing, weighted routing, failover", useCase: "Domain registration, DNS management, traffic routing" },
+      { name: "ELB", fullName: "Elastic Load Balancing", description: "Distribute traffic across targets. ALB (Layer 7), NLB (Layer 4), GLB (Layer 3).", keyFeatures: "Auto-scaling, health checks, SSL termination, sticky sessions", useCase: "High availability, fault tolerance, scaling" },
+      { name: "Direct Connect", fullName: "AWS Direct Connect", description: "Dedicated private network connection from your premises to AWS.", keyFeatures: "Consistent network performance, reduced bandwidth costs, private connectivity", useCase: "Hybrid cloud, data migration, compliance workloads" },
+      { name: "API Gateway", fullName: "Amazon API Gateway", description: "Create, publish, and manage APIs at any scale.", keyFeatures: "REST/WebSocket APIs, throttling, caching, authorization, monitoring", useCase: "Serverless backends, mobile backends, microservices APIs" },
+    ]
+  },
+  {
+    category: "Security & Identity",
+    color: "#ef4444",
+    icon: "🔐",
+    services: [
+      { name: "IAM", fullName: "Identity and Access Management", description: "Control access to AWS resources. Foundation of AWS security.", keyFeatures: "Users, groups, roles, policies, MFA, identity federation, access analyzer", useCase: "All workloads — required for security" },
+      { name: "Cognito", fullName: "Amazon Cognito", description: "Add user sign-up, sign-in, and access control to apps.", keyFeatures: "User pools, identity pools, social login, SAML, OAuth 2.0", useCase: "Mobile apps, web apps, API authentication" },
+      { name: "KMS", fullName: "Key Management Service", description: "Create and manage encryption keys for your data.", keyFeatures: "AWS-managed keys, customer-managed keys, automatic rotation, audit via CloudTrail", useCase: "Encryption at rest, envelope encryption, digital signing" },
+      { name: "Secrets Manager", fullName: "AWS Secrets Manager", description: "Securely store, rotate, and retrieve secrets like API keys and passwords.", keyFeatures: "Automatic rotation, fine-grained access control, cross-account sharing", useCase: "Database credentials, API keys, certificates" },
+      { name: "WAF", fullName: "Web Application Firewall", description: "Protect web apps from common exploits like SQL injection and XSS.", keyFeatures: "Managed rules, custom rules, bot control, rate limiting, integration with CloudFront/ALB", useCase: "Web application security, DDoS mitigation" },
+      { name: "GuardDuty", fullName: "Amazon GuardDuty", description: "Intelligent threat detection using ML to analyze AWS account activity.", keyFeatures: "Anomaly detection, VPC flow logs analysis, DNS logs, malware protection", useCase: "Threat detection, security monitoring, compliance" },
+      { name: "Security Hub", fullName: "AWS Security Hub", description: "Centralized security findings and compliance checks across AWS accounts.", keyFeatures: "Aggregated findings, compliance standards (CIS, PCI-DSS), automated remediation", useCase: "Security posture management, compliance reporting" },
+    ]
+  },
+  {
+    category: "AI & Machine Learning",
+    color: "#ec4899",
+    icon: "🤖",
+    services: [
+      { name: "SageMaker", fullName: "Amazon SageMaker", description: "Build, train, and deploy ML models at scale.", keyFeatures: "Jupyter notebooks, built-in algorithms, AutoML, model monitoring, MLOps", useCase: "Custom ML models, MLOps pipelines, model training" },
+      { name: "Bedrock", fullName: "Amazon Bedrock", description: "Access foundation models (Claude, Llama, Titan) via API.", keyFeatures: "Multiple FMs, fine-tuning, RAG, guardrails, agents", useCase: "Generative AI apps, chatbots, content generation" },
+      { name: "Rekognition", fullName: "Amazon Rekognition", description: "Image and video analysis using deep learning.", keyFeatures: "Object detection, facial analysis, content moderation, celebrity recognition", useCase: "Security, media analysis, content moderation" },
+      { name: "Comprehend", fullName: "Amazon Comprehend", description: "Natural language processing to extract insights from text.", keyFeatures: "Sentiment analysis, entity recognition, key phrases, language detection", useCase: "Customer feedback analysis, document processing" },
+      { name: "Transcribe", fullName: "Amazon Transcribe", description: "Automatic speech recognition (speech-to-text).", keyFeatures: "Real-time/batch, speaker identification, custom vocabulary, medical transcription", useCase: "Call center analytics, meeting transcription, subtitles" },
+      { name: "Polly", fullName: "Amazon Polly", description: "Turn text into lifelike speech with neural voices.", keyFeatures: "60+ languages, SSML support, neural TTS, custom lexicons", useCase: "Voice assistants, e-learning, accessibility" },
+    ]
+  },
+  {
+    category: "DevOps & Management",
+    color: "#14b8a6",
+    icon: "⚙️",
+    services: [
+      { name: "CloudFormation", fullName: "AWS CloudFormation", description: "Infrastructure as Code — define AWS resources using templates.", keyFeatures: "Stacks, change sets, drift detection, nested stacks, StackSets", useCase: "IaC, environment replication, disaster recovery" },
+      { name: "CloudWatch", fullName: "Amazon CloudWatch", description: "Monitoring and observability for AWS resources and applications.", keyFeatures: "Metrics, logs, alarms, dashboards, insights, anomaly detection", useCase: "Monitoring, alerting, troubleshooting, capacity planning" },
+      { name: "CloudTrail", fullName: "AWS CloudTrail", description: "Audit all API calls made in your AWS account.", keyFeatures: "Event history, trails, insights, Lake (query engine), organization trails", useCase: "Compliance auditing, security analysis, troubleshooting" },
+      { name: "Systems Manager", fullName: "AWS Systems Manager", description: "Operational hub for managing AWS and on-premises resources.", keyFeatures: "Session Manager, Patch Manager, Parameter Store, Run Command, Automation", useCase: "Operations management, patching, automation, compliance" },
+      { name: "CodePipeline", fullName: "AWS CodePipeline", description: "Continuous delivery service for fast and reliable application updates.", keyFeatures: "Visual workflow, integration with CodeBuild/CodeDeploy, third-party tools", useCase: "CI/CD pipelines, automated deployments" },
+      { name: "Config", fullName: "AWS Config", description: "Track resource configuration changes and compliance.", keyFeatures: "Configuration history, compliance rules, remediation, aggregators", useCase: "Compliance auditing, security analysis, change management" },
+    ]
+  },
+];
+
+const awsGlobalInfrastructure = {
+  regions: "33+ regions worldwide",
+  azs: "105+ Availability Zones",
+  edgeLocations: "400+ CloudFront edge locations",
+  localZones: "30+ Local Zones for ultra-low latency",
+  wavelengthZones: "29+ Wavelength Zones for 5G edge",
+  outposts: "On-premises AWS infrastructure",
+};
+
+const awsFreeTierHighlights = [
+  { service: "EC2", offer: "750 hours/month t2.micro or t3.micro", duration: "12 months" },
+  { service: "S3", offer: "5 GB standard storage", duration: "12 months" },
+  { service: "RDS", offer: "750 hours/month db.t2.micro", duration: "12 months" },
+  { service: "Lambda", offer: "1 million requests/month", duration: "Always free" },
+  { service: "DynamoDB", offer: "25 GB storage, 25 WCU/RCU", duration: "Always free" },
+  { service: "CloudWatch", offer: "10 custom metrics, 10 alarms", duration: "Always free" },
+  { service: "SNS", offer: "1 million publishes/month", duration: "Always free" },
+  { service: "SQS", offer: "1 million requests/month", duration: "Always free" },
+];
+
+// ========== AZURE DEEP DIVE ==========
+const azureServiceCategories = [
+  {
+    category: "Compute",
+    color: "#0078d4",
+    icon: "🖥️",
+    services: [
+      { name: "Virtual Machines", fullName: "Azure Virtual Machines", description: "On-demand, scalable computing with 700+ VM sizes and types.", keyFeatures: "Spot VMs (90% discount), Reserved Instances, Azure Hybrid Benefit, Confidential VMs", useCase: "Windows/Linux workloads, lift-and-shift, dev/test, enterprise apps" },
+      { name: "Functions", fullName: "Azure Functions", description: "Event-driven serverless compute. Pay only when code runs.", keyFeatures: "Durable Functions (stateful), Premium plan (no cold start), Consumption plan", useCase: "APIs, webhooks, scheduled tasks, event processing" },
+      { name: "AKS", fullName: "Azure Kubernetes Service", description: "Fully managed Kubernetes cluster with automated upgrades and scaling.", keyFeatures: "Azure AD integration, Azure Policy, GitOps with Flux, virtual nodes (ACI)", useCase: "Microservices, CI/CD, ML workloads, multi-cloud with Arc" },
+      { name: "Container Instances", fullName: "Azure Container Instances", description: "Run containers without managing servers. Fastest way to run a container.", keyFeatures: "Per-second billing, GPU support, virtual network deployment", useCase: "Simple containers, batch jobs, burstable workloads" },
+      { name: "App Service", fullName: "Azure App Service", description: "Fully managed PaaS for web apps, APIs, and mobile backends.", keyFeatures: "Auto-scale, deployment slots, custom domains, managed certificates, WebJobs", useCase: "Web apps, REST APIs, mobile backends" },
+      { name: "Azure Arc", fullName: "Azure Arc", description: "Extend Azure management to any infrastructure (on-prem, multi-cloud, edge).", keyFeatures: "Unified management, Azure Policy, GitOps, Azure services anywhere", useCase: "Hybrid cloud, multi-cloud, edge computing" },
+    ]
+  },
+  {
+    category: "Storage",
+    color: "#22c55e",
+    icon: "💾",
+    services: [
+      { name: "Blob Storage", fullName: "Azure Blob Storage", description: "Object storage for unstructured data. Hot/Cool/Archive tiers.", keyFeatures: "Immutable storage, lifecycle management, blob versioning, data lake integration", useCase: "Backups, big data, static websites, media storage" },
+      { name: "Managed Disks", fullName: "Azure Managed Disks", description: "Block storage for VMs with automatic management and redundancy.", keyFeatures: "Premium SSD v2, Ultra Disk, shared disks, disk encryption, snapshots", useCase: "VM disks, databases, high-performance workloads" },
+      { name: "Azure Files", fullName: "Azure Files", description: "Fully managed SMB and NFS file shares in the cloud.", keyFeatures: "SMB 3.0, NFS 4.1, Azure File Sync, identity-based authentication", useCase: "Lift-and-shift, shared application settings, dev/test" },
+      { name: "Data Lake Storage", fullName: "Azure Data Lake Storage Gen2", description: "Massively scalable data lake with hierarchical namespace on Blob.", keyFeatures: "HDFS compatibility, fine-grained ACLs, analytics integration", useCase: "Big data analytics, data lakes, machine learning" },
+      { name: "NetApp Files", fullName: "Azure NetApp Files", description: "Enterprise-grade file storage powered by NetApp.", keyFeatures: "Ultra-low latency, snapshots, cross-region replication", useCase: "SAP, HPC, VDI, enterprise file shares" },
+      { name: "StorSimple", fullName: "Azure StorSimple", description: "Hybrid cloud storage solution for data tiering.", keyFeatures: "Automatic tiering, local caching, backup integration", useCase: "Hybrid storage, disaster recovery" },
+    ]
+  },
+  {
+    category: "Database",
+    color: "#3b82f6",
+    icon: "🗄️",
+    services: [
+      { name: "SQL Database", fullName: "Azure SQL Database", description: "Intelligent, fully managed SQL database with AI-powered features.", keyFeatures: "Hyperscale (100TB+), serverless, auto-tuning, intelligent insights, geo-replication", useCase: "Modern cloud apps, SaaS, data-driven apps" },
+      { name: "Cosmos DB", fullName: "Azure Cosmos DB", description: "Globally distributed, multi-model database with guaranteed single-digit ms latency.", keyFeatures: "5 consistency levels, 5 APIs (SQL, MongoDB, Cassandra, Gremlin, Table), turnkey global distribution", useCase: "Global apps, IoT, gaming, personalization, real-time analytics" },
+      { name: "SQL Managed Instance", fullName: "Azure SQL Managed Instance", description: "100% SQL Server compatibility with PaaS benefits.", keyFeatures: "Native VNet, SQL Agent, cross-database queries, link feature", useCase: "SQL Server migration, lift-and-shift" },
+      { name: "Database for PostgreSQL", fullName: "Azure Database for PostgreSQL", description: "Fully managed PostgreSQL with Flexible Server and Hyperscale (Citus).", keyFeatures: "Built-in HA, intelligent performance, pgvector for AI", useCase: "Web/mobile apps, geospatial, time-series, AI apps" },
+      { name: "Cache for Redis", fullName: "Azure Cache for Redis", description: "Fully managed Redis cache for lightning-fast data access.", keyFeatures: "Redis 6.0, active geo-replication, Enterprise tier with RediSearch/RedisBloom", useCase: "Caching, session store, messaging, leaderboards" },
+      { name: "Synapse Analytics", fullName: "Azure Synapse Analytics", description: "Limitless analytics service combining data integration, warehousing, and big data.", keyFeatures: "Serverless SQL, Spark pools, Data Explorer pools, Power BI integration", useCase: "Data warehousing, big data analytics, machine learning" },
+    ]
+  },
+  {
+    category: "Networking",
+    color: "#8b5cf6",
+    icon: "🌐",
+    services: [
+      { name: "Virtual Network", fullName: "Azure Virtual Network", description: "Private network in Azure for secure resource communication.", keyFeatures: "Subnets, NSGs, peering, private endpoints, service endpoints, NAT Gateway", useCase: "All Azure workloads — networking foundation" },
+      { name: "CDN", fullName: "Azure CDN", description: "Global content delivery network with multiple providers.", keyFeatures: "Microsoft, Verizon, Akamai options, rules engine, real-time analytics", useCase: "Web content, streaming, software distribution" },
+      { name: "Front Door", fullName: "Azure Front Door", description: "Global load balancer with WAF, caching, and SSL termination.", keyFeatures: "Anycast, intelligent routing, URL-based routing, WAF integration", useCase: "Global web apps, API acceleration, multi-region failover" },
+      { name: "Load Balancer", fullName: "Azure Load Balancer", description: "Layer 4 load balancing for VMs with high availability.", keyFeatures: "Public/internal LB, health probes, HA ports, zone redundancy", useCase: "VM scaling, high availability, network traffic distribution" },
+      { name: "ExpressRoute", fullName: "Azure ExpressRoute", description: "Private, dedicated connection between on-premises and Azure.", keyFeatures: "Up to 100 Gbps, Global Reach, direct peering, ExpressRoute Direct", useCase: "Hybrid connectivity, large data transfers, compliance" },
+      { name: "Private Link", fullName: "Azure Private Link", description: "Access Azure services over a private endpoint in your VNet.", keyFeatures: "No public internet exposure, private IP connectivity, cross-region access", useCase: "Secure access to PaaS services, data exfiltration prevention" },
+    ]
+  },
+  {
+    category: "Security & Identity",
+    color: "#ef4444",
+    icon: "🔐",
+    services: [
+      { name: "Entra ID", fullName: "Microsoft Entra ID (Azure AD)", description: "Cloud-based identity and access management. Foundation of Azure security.", keyFeatures: "SSO, MFA, Conditional Access, Privileged Identity Management, B2B/B2C", useCase: "All Azure workloads, Microsoft 365, third-party SaaS" },
+      { name: "Key Vault", fullName: "Azure Key Vault", description: "Securely store and manage keys, secrets, and certificates.", keyFeatures: "HSM-backed keys, secret rotation, certificate management, RBAC", useCase: "Encryption keys, application secrets, certificates" },
+      { name: "Defender for Cloud", fullName: "Microsoft Defender for Cloud", description: "Cloud security posture management and workload protection.", keyFeatures: "Secure Score, compliance dashboards, threat protection, vulnerability scanning", useCase: "Security posture, compliance, threat protection" },
+      { name: "Sentinel", fullName: "Microsoft Sentinel", description: "Cloud-native SIEM and SOAR powered by AI.", keyFeatures: "200+ connectors, KQL queries, automated playbooks, threat hunting", useCase: "Security monitoring, threat detection, incident response" },
+      { name: "DDoS Protection", fullName: "Azure DDoS Protection", description: "Protection against volumetric, protocol, and application layer attacks.", keyFeatures: "Always-on monitoring, adaptive tuning, attack analytics, SLA credit", useCase: "Web applications, public-facing workloads" },
+      { name: "Firewall", fullName: "Azure Firewall", description: "Cloud-native network firewall with built-in high availability.", keyFeatures: "Threat intelligence, FQDN filtering, network/application rules, Premium SKU with IDS/IPS", useCase: "Network security, compliance, threat prevention" },
+    ]
+  },
+  {
+    category: "AI & Machine Learning",
+    color: "#ec4899",
+    icon: "🤖",
+    services: [
+      { name: "Azure OpenAI", fullName: "Azure OpenAI Service", description: "Access to GPT-4, GPT-4o, DALL-E, Whisper with enterprise security.", keyFeatures: "Private networking, content filtering, fine-tuning, Azure AI Search integration", useCase: "Chatbots, content generation, code assistance, document analysis" },
+      { name: "Machine Learning", fullName: "Azure Machine Learning", description: "End-to-end ML platform for building, training, and deploying models.", keyFeatures: "AutoML, designer (no-code), MLOps, responsible AI dashboard, managed endpoints", useCase: "Custom ML models, MLOps, model management" },
+      { name: "Cognitive Services", fullName: "Azure AI Services", description: "Pre-built AI capabilities for vision, speech, language, and decision.", keyFeatures: "Vision, Speech, Language, Decision APIs, custom models", useCase: "Image analysis, speech recognition, translation, content moderation" },
+      { name: "AI Search", fullName: "Azure AI Search", description: "AI-powered search service with vector search and semantic ranking.", keyFeatures: "Vector search, semantic search, hybrid search, knowledge mining, RAG", useCase: "Enterprise search, RAG applications, e-commerce" },
+      { name: "Bot Service", fullName: "Azure Bot Service", description: "Build and connect intelligent bots across multiple channels.", keyFeatures: "Bot Framework SDK, Power Virtual Agents, multiple channels", useCase: "Customer service bots, virtual assistants" },
+      { name: "Document Intelligence", fullName: "Azure AI Document Intelligence", description: "Extract information from documents using AI.", keyFeatures: "Pre-built models (invoices, receipts), custom models, layout analysis", useCase: "Invoice processing, form extraction, document automation" },
+    ]
+  },
+  {
+    category: "DevOps & Management",
+    color: "#14b8a6",
+    icon: "⚙️",
+    services: [
+      { name: "Azure DevOps", fullName: "Azure DevOps Services", description: "Complete DevOps toolchain: repos, pipelines, boards, artifacts, test plans.", keyFeatures: "Git repos, YAML pipelines, Kanban boards, package management", useCase: "CI/CD, project management, source control" },
+      { name: "Monitor", fullName: "Azure Monitor", description: "Full-stack monitoring for applications, infrastructure, and network.", keyFeatures: "Metrics, logs, Application Insights, Log Analytics, alerts, workbooks", useCase: "Observability, troubleshooting, capacity planning" },
+      { name: "Resource Manager", fullName: "Azure Resource Manager (ARM)", description: "Deploy and manage Azure resources using templates and Bicep.", keyFeatures: "ARM templates, Bicep, deployment stacks, what-if, rollback", useCase: "IaC, environment replication, governance" },
+      { name: "Policy", fullName: "Azure Policy", description: "Enforce organizational standards and assess compliance at scale.", keyFeatures: "Built-in policies, custom policies, initiatives, remediation tasks", useCase: "Governance, compliance, cost management" },
+      { name: "Automation", fullName: "Azure Automation", description: "Process automation and configuration management.", keyFeatures: "Runbooks, DSC, Update Management, Start/Stop VMs", useCase: "Automation, patching, configuration management" },
+      { name: "Blueprints", fullName: "Azure Blueprints", description: "Package ARM templates, policies, and RBAC for repeatable deployments.", keyFeatures: "Versioned blueprints, locking, audit trail", useCase: "Landing zones, compliance, governance" },
+    ]
+  },
+];
+
+const azureGlobalInfrastructure = {
+  regions: "60+ regions worldwide (more than any cloud)",
+  azs: "Availability Zones in 50+ regions",
+  edgeLocations: "190+ Azure CDN edge locations",
+  edgeZones: "Azure Edge Zones for low-latency",
+  stack: "Azure Stack for on-premises/edge",
+  expressRoute: "ExpressRoute in 60+ peering locations",
+};
+
+const azureFreeTierHighlights = [
+  { service: "Virtual Machines", offer: "B1S VM 750 hours/month (Linux), B1S 750 hours/month (Windows)", duration: "12 months" },
+  { service: "Blob Storage", offer: "5 GB LRS hot block blob storage", duration: "12 months" },
+  { service: "SQL Database", offer: "250 GB S0 database", duration: "12 months" },
+  { service: "Functions", offer: "1 million requests/month", duration: "Always free" },
+  { service: "Cosmos DB", offer: "1000 RU/s, 25 GB storage", duration: "Always free" },
+  { service: "Azure DevOps", offer: "5 users, unlimited private repos", duration: "Always free" },
+  { service: "App Service", offer: "10 web/mobile/API apps, 1 GB storage", duration: "Always free" },
+  { service: "Cognitive Services", offer: "Various free tiers per service", duration: "Always free" },
+];
+
+const azureEnterpriseIntegration = [
+  { feature: "Microsoft 365 Integration", description: "Seamless integration with Office 365, Teams, SharePoint, and Outlook" },
+  { feature: "Active Directory", description: "Azure AD syncs with on-premises AD for hybrid identity" },
+  { feature: "Windows Server", description: "Azure Hybrid Benefit: use existing Windows licenses in Azure" },
+  { feature: "SQL Server", description: "Azure Hybrid Benefit for SQL, plus easy migration paths" },
+  { feature: "Power Platform", description: "Power BI, Power Apps, Power Automate integrate with Azure" },
+  { feature: "Dynamics 365", description: "Enterprise apps running on Azure infrastructure" },
+  { feature: "GitHub", description: "Microsoft owns GitHub — deep integration with Azure DevOps" },
+  { feature: "Visual Studio", description: "First-class Azure tooling in Visual Studio and VS Code" },
+];
+
+// ========== GCP DEEP DIVE ==========
+const gcpServiceCategories = [
+  {
+    category: "Compute",
+    color: "#4285f4",
+    icon: "🖥️",
+    services: [
+      { name: "Compute Engine", fullName: "Google Compute Engine", description: "Virtual machines running on Google's infrastructure with custom machine types.", keyFeatures: "Preemptible VMs (80% discount), custom machine types, live migration, confidential VMs", useCase: "Web servers, batch processing, ML training, Windows/Linux workloads" },
+      { name: "Cloud Functions", fullName: "Google Cloud Functions", description: "Event-driven serverless compute for building and connecting cloud services.", keyFeatures: "2nd gen (Cloud Run-based), event triggers, 60-min timeout, VPC connector", useCase: "Webhooks, real-time data processing, IoT backends, microservices" },
+      { name: "GKE", fullName: "Google Kubernetes Engine", description: "Managed Kubernetes — GCP invented Kubernetes, so GKE is the gold standard.", keyFeatures: "Autopilot mode, multi-cluster management, Anthos, release channels", useCase: "Microservices, ML pipelines, CI/CD, multi-cloud with Anthos" },
+      { name: "Cloud Run", fullName: "Google Cloud Run", description: "Fully managed serverless containers — deploy containers without managing infrastructure.", keyFeatures: "Scale to zero, any language/library, request-based billing, Cloud Run Jobs", useCase: "APIs, web apps, background jobs, event-driven processing" },
+      { name: "App Engine", fullName: "Google App Engine", description: "Fully managed PaaS for building scalable web applications.", keyFeatures: "Standard (sandbox) & Flexible (Docker) environments, auto-scaling, traffic splitting", useCase: "Web applications, mobile backends, APIs" },
+      { name: "Cloud Batch", fullName: "Google Cloud Batch", description: "Fully managed batch processing at any scale.", keyFeatures: "Job scheduling, GPU support, Spot VMs integration, container support", useCase: "Scientific computing, VFX rendering, genomics, financial modeling" },
+    ]
+  },
+  {
+    category: "Storage",
+    color: "#34a853",
+    icon: "💾",
+    services: [
+      { name: "Cloud Storage", fullName: "Google Cloud Storage", description: "Object storage with global edge-caching and multiple storage classes.", keyFeatures: "Multi-regional/Regional/Nearline/Coldline/Archive classes, signed URLs, versioning", useCase: "Data lakes, backups, content distribution, ML training data" },
+      { name: "Persistent Disk", fullName: "Google Persistent Disk", description: "Block storage for VMs with automatic encryption and snapshots.", keyFeatures: "SSD/HDD options, regional disks (HA), snapshots, resize online", useCase: "VM boot disks, databases, enterprise applications" },
+      { name: "Filestore", fullName: "Google Cloud Filestore", description: "Managed NFS file storage for applications requiring a file system interface.", keyFeatures: "Basic/High Scale/Enterprise tiers, multi-share support, snapshots", useCase: "Content management, web serving, shared storage for GKE" },
+      { name: "Cloud Storage Nearline/Coldline", fullName: "Archive Storage Classes", description: "Low-cost archive storage for infrequently accessed data.", keyFeatures: "Nearline (monthly), Coldline (quarterly), Archive (yearly) access patterns", useCase: "Long-term backups, compliance archives, disaster recovery" },
+      { name: "Transfer Service", fullName: "Storage Transfer Service", description: "Transfer data from AWS S3, Azure, or other sources to Cloud Storage.", keyFeatures: "Scheduled transfers, bandwidth management, integrity validation", useCase: "Cloud migration, data synchronization, multi-cloud workflows" },
+    ]
+  },
+  {
+    category: "Database",
+    color: "#ea4335",
+    icon: "🗄️",
+    services: [
+      { name: "Cloud SQL", fullName: "Google Cloud SQL", description: "Fully managed MySQL, PostgreSQL, and SQL Server databases.", keyFeatures: "Automated backups, read replicas, high availability, Cloud SQL Auth Proxy", useCase: "Web applications, CMS, traditional SQL workloads" },
+      { name: "Cloud Spanner", fullName: "Google Cloud Spanner", description: "Globally distributed, horizontally scalable relational database with strong consistency.", keyFeatures: "99.999% SLA, automatic sharding, SQL + ACID at scale", useCase: "Global financial systems, gaming, inventory management" },
+      { name: "Firestore", fullName: "Google Cloud Firestore", description: "NoSQL document database with real-time sync and offline support.", keyFeatures: "Real-time listeners, offline mode, automatic scaling, Firebase integration", useCase: "Mobile apps, real-time collaboration, user profiles" },
+      { name: "Bigtable", fullName: "Google Cloud Bigtable", description: "Petabyte-scale, low-latency NoSQL database for analytical and operational workloads.", keyFeatures: "Single-digit ms latency, HBase compatible, autoscaling", useCase: "IoT time-series, ad tech, financial data, personalization" },
+      { name: "BigQuery", fullName: "Google BigQuery", description: "Serverless, highly scalable data warehouse with built-in ML capabilities.", keyFeatures: "Serverless, separation of storage/compute, BigQuery ML, BI Engine", useCase: "Data warehousing, analytics, ML, real-time dashboards" },
+      { name: "Memorystore", fullName: "Google Cloud Memorystore", description: "Fully managed Redis and Memcached for in-memory data store.", keyFeatures: "Sub-millisecond latency, 300GB capacity, automatic failover", useCase: "Caching, session management, gaming leaderboards" },
+    ]
+  },
+  {
+    category: "Networking",
+    color: "#fbbc04",
+    icon: "🌐",
+    services: [
+      { name: "VPC", fullName: "Virtual Private Cloud", description: "Global virtual network spanning all regions without cross-region charges.", keyFeatures: "Global by default, Shared VPC, VPC peering, Private Google Access", useCase: "All workloads — foundation of GCP networking" },
+      { name: "Cloud CDN", fullName: "Google Cloud CDN", description: "Content delivery network using Google's global edge network.", keyFeatures: "Same network as YouTube/Gmail, signed URLs, cache invalidation", useCase: "Web acceleration, video streaming, API caching" },
+      { name: "Cloud DNS", fullName: "Google Cloud DNS", description: "Scalable, reliable DNS serving from Google's global network.", keyFeatures: "100% SLA, DNSSEC, private zones, DNS policies", useCase: "Domain management, private DNS, hybrid connectivity" },
+      { name: "Cloud Load Balancing", fullName: "Google Cloud Load Balancing", description: "Global load balancing with single anycast IP — no pre-warming needed.", keyFeatures: "Global external (HTTP/TCP), regional, internal, traffic management", useCase: "High availability, global apps, auto-scaling, traffic steering" },
+      { name: "Cloud Interconnect", fullName: "Google Cloud Interconnect", description: "Dedicated or partner connections to GCP for hybrid cloud.", keyFeatures: "Dedicated (10-200 Gbps), Partner (50 Mbps-10 Gbps), lower egress costs", useCase: "Hybrid connectivity, data migration, low-latency access" },
+      { name: "Cloud Armor", fullName: "Google Cloud Armor", description: "DDoS protection and WAF for applications using global load balancing.", keyFeatures: "Managed rules (OWASP), custom rules, rate limiting, adaptive protection", useCase: "DDoS mitigation, WAF, bot management, geo-blocking" },
+    ]
+  },
+  {
+    category: "Security & Identity",
+    color: "#ea4335",
+    icon: "🔐",
+    services: [
+      { name: "IAM", fullName: "Identity and Access Management", description: "Fine-grained access control for GCP resources.", keyFeatures: "Predefined roles, custom roles, conditions, recommender, policy analyzer", useCase: "Access control, least privilege, compliance" },
+      { name: "Identity Platform", fullName: "Google Identity Platform", description: "Add authentication to apps with support for multiple identity providers.", keyFeatures: "Multi-factor auth, social login, SAML/OIDC, blocking functions", useCase: "User authentication, B2C apps, migration from Firebase Auth" },
+      { name: "Cloud KMS", fullName: "Cloud Key Management Service", description: "Manage cryptographic keys for cloud services.", keyFeatures: "HSM-backed keys, external key manager, automatic rotation, Cloud EKM", useCase: "Encryption key management, BYOK, regulatory compliance" },
+      { name: "Secret Manager", fullName: "Google Secret Manager", description: "Store and manage sensitive data like API keys, passwords, and certificates.", keyFeatures: "Versioning, automatic rotation, IAM integration, audit logging", useCase: "Secrets management, configuration, certificate storage" },
+      { name: "Security Command Center", fullName: "Security Command Center", description: "Centralized security and risk management platform for GCP.", keyFeatures: "Asset discovery, vulnerability scanning, threat detection, compliance", useCase: "Security posture management, compliance reporting, threat detection" },
+      { name: "BeyondCorp Enterprise", fullName: "BeyondCorp Enterprise", description: "Zero-trust access solution based on Google's internal security model.", keyFeatures: "Context-aware access, threat protection, data protection, VPN-less access", useCase: "Zero-trust security, remote workforce, secure app access" },
+    ]
+  },
+  {
+    category: "AI & Machine Learning",
+    color: "#673ab7",
+    icon: "🤖",
+    services: [
+      { name: "Vertex AI", fullName: "Google Vertex AI", description: "Unified ML platform to build, deploy, and scale ML models.", keyFeatures: "AutoML, custom training, model registry, feature store, MLOps", useCase: "Custom ML models, MLOps pipelines, enterprise AI" },
+      { name: "Gemini", fullName: "Google Gemini", description: "Google's most capable AI model family for multimodal understanding.", keyFeatures: "Multimodal (text, images, video, audio), 1M+ token context, function calling", useCase: "Generative AI apps, chatbots, content generation, code assistance" },
+      { name: "Document AI", fullName: "Google Document AI", description: "Extract structured data from documents using pre-trained or custom models.", keyFeatures: "Invoice, receipt, contract processors, custom models, human-in-the-loop", useCase: "Document processing, invoice automation, contract analysis" },
+      { name: "Vision AI", fullName: "Google Cloud Vision", description: "Image analysis with pre-trained models for object detection, OCR, and more.", keyFeatures: "Label detection, OCR, face detection, SafeSearch, product search", useCase: "Image classification, content moderation, visual search" },
+      { name: "Speech-to-Text/Text-to-Speech", fullName: "Cloud Speech & TTS", description: "Convert audio to text and text to natural speech.", keyFeatures: "125+ languages, real-time streaming, speaker diarization, WaveNet voices", useCase: "Transcription, voice assistants, accessibility, call analytics" },
+      { name: "Translation AI", fullName: "Cloud Translation", description: "Dynamic translation supporting 130+ languages.", keyFeatures: "AutoML Translation (custom), glossaries, batch translation, adaptive translation", useCase: "Website localization, document translation, customer support" },
+    ]
+  },
+  {
+    category: "DevOps & Management",
+    color: "#0097a7",
+    icon: "⚙️",
+    services: [
+      { name: "Cloud Build", fullName: "Google Cloud Build", description: "Serverless CI/CD platform for building, testing, and deploying.", keyFeatures: "120 free build-minutes/day, custom workers, private pools, triggers", useCase: "CI/CD pipelines, container builds, automated testing" },
+      { name: "Cloud Deploy", fullName: "Google Cloud Deploy", description: "Managed continuous delivery to GKE and Cloud Run.", keyFeatures: "Delivery pipelines, canary deployments, rollbacks, approval gates", useCase: "CD for Kubernetes, progressive delivery, release management" },
+      { name: "Cloud Monitoring", fullName: "Google Cloud Monitoring", description: "Full-stack monitoring with metrics, dashboards, and alerting.", keyFeatures: "Custom metrics, uptime checks, SLO monitoring, MQL query language", useCase: "Infrastructure monitoring, application monitoring, SLI/SLO tracking" },
+      { name: "Cloud Logging", fullName: "Google Cloud Logging", description: "Real-time log management and analysis at scale.", keyFeatures: "Log Explorer, log-based metrics, log sinks, Error Reporting integration", useCase: "Centralized logging, debugging, compliance, audit trails" },
+      { name: "Terraform on GCP", fullName: "Terraform / Deployment Manager", description: "Infrastructure as Code using Terraform (recommended) or Deployment Manager.", keyFeatures: "GCP provider, Cloud Foundation Toolkit, blueprints, modules", useCase: "IaC, environment replication, compliance as code" },
+      { name: "Cloud Trace", fullName: "Google Cloud Trace", description: "Distributed tracing for applications to find latency bottlenecks.", keyFeatures: "Automatic instrumentation, latency analysis, integration with OpenTelemetry", useCase: "Performance debugging, microservices tracing, latency optimization" },
+    ]
+  },
+  {
+    category: "Data Analytics",
+    color: "#ff5722",
+    icon: "📊",
+    services: [
+      { name: "BigQuery", fullName: "Google BigQuery", description: "Serverless enterprise data warehouse with built-in ML and BI.", keyFeatures: "Serverless, real-time analytics, BigQuery ML, BI Engine, data sharing", useCase: "Data warehousing, analytics, dashboards, ML on data" },
+      { name: "Dataflow", fullName: "Google Cloud Dataflow", description: "Unified stream and batch data processing based on Apache Beam.", keyFeatures: "Autoscaling, exactly-once processing, templates, Dataflow Prime", useCase: "ETL, real-time analytics, event processing, ML pipelines" },
+      { name: "Dataproc", fullName: "Google Cloud Dataproc", description: "Managed Spark and Hadoop for big data processing.", keyFeatures: "90-second cluster spin-up, preemptible VMs, autoscaling, Dataproc Serverless", useCase: "Spark/Hadoop workloads, data science, migration from on-prem Hadoop" },
+      { name: "Pub/Sub", fullName: "Google Cloud Pub/Sub", description: "Real-time messaging service for event-driven architectures.", keyFeatures: "Global by default, exactly-once delivery, push/pull, dead-letter queues", useCase: "Event streaming, microservices integration, data ingestion" },
+      { name: "Looker", fullName: "Google Looker", description: "Enterprise BI and embedded analytics with semantic modeling.", keyFeatures: "LookML modeling, embedded analytics, data actions, Looker Studio integration", useCase: "Business intelligence, embedded analytics, data apps" },
+      { name: "Dataplex", fullName: "Google Dataplex", description: "Intelligent data fabric for unified data management and governance.", keyFeatures: "Data lakes, data mesh, data quality, data lineage, data catalog", useCase: "Data governance, data mesh, unified analytics" },
+    ]
+  },
+];
+
+const gcpGlobalInfrastructure = {
+  regions: "40+ regions worldwide",
+  zones: "120+ zones across all regions",
+  edgeLocations: "187+ network edge locations",
+  submarineCables: "Private global fiber network with 20+ subsea cables",
+  premiumNetwork: "Premium tier uses Google's private backbone",
+  carbonNeutral: "Carbon neutral since 2007, 100% renewable energy",
+};
+
+const gcpFreeTierHighlights = [
+  { service: "Compute Engine", offer: "1 e2-micro instance/month (US regions)", duration: "Always free" },
+  { service: "Cloud Storage", offer: "5 GB Regional Storage", duration: "Always free" },
+  { service: "BigQuery", offer: "1 TB queries/month, 10 GB storage", duration: "Always free" },
+  { service: "Cloud Functions", offer: "2 million invocations/month", duration: "Always free" },
+  { service: "Firestore", offer: "1 GB storage, 50K reads/day", duration: "Always free" },
+  { service: "Cloud Run", offer: "2 million requests/month", duration: "Always free" },
+  { service: "Vision AI", offer: "1,000 units/month", duration: "Always free" },
+  { service: "Cloud Build", offer: "120 build-minutes/day", duration: "Always free" },
+];
+
+const gcpDifferentiators = [
+  { feature: "Data & Analytics Leadership", description: "BigQuery pioneered serverless data warehouses; GCP excels at analytics and ML" },
+  { feature: "Kubernetes Originator", description: "Google created Kubernetes — GKE is considered the best managed K8s service" },
+  { feature: "Global Network", description: "Premium tier uses Google's private fiber backbone (same as Google Search/YouTube)" },
+  { feature: "AI/ML Innovation", description: "TensorFlow, JAX, Gemini — Google leads in AI research and tooling" },
+  { feature: "Sustainability", description: "Carbon neutral since 2007, matches 100% energy with renewable sources" },
+  { feature: "Pricing Innovation", description: "Sustained use discounts (automatic), committed use discounts, preemptible VMs" },
+  { feature: "Live Migration", description: "VMs can be moved between hosts with zero downtime during maintenance" },
+  { feature: "Open Source Friendly", description: "Strong support for open source: Kubernetes, TensorFlow, gRPC, Istio" },
+];
+
 // ========== CORE CLOUD SERVICES ==========
 const coreServices = [
   { category: "Compute", description: "Virtual machines, containers, serverless functions", awsExample: "EC2, Lambda, ECS", azureExample: "VMs, Functions, AKS", gcpExample: "Compute Engine, Cloud Run", icon: <SettingsIcon /> },
@@ -1273,6 +1653,9 @@ const CloudComputingPage: React.FC = () => {
     { id: "service-models", label: "Service Models", icon: <CloudIcon /> },
     { id: "deployment", label: "Deployment", icon: <DevicesIcon /> },
     { id: "providers", label: "Providers", icon: <BusinessIcon /> },
+    { id: "aws-deepdive", label: "AWS Deep Dive", icon: <CloudIcon /> },
+    { id: "azure-deepdive", label: "Azure Deep Dive", icon: <CloudIcon /> },
+    { id: "gcp-deepdive", label: "GCP Deep Dive", icon: <CloudIcon /> },
     { id: "core-services", label: "Core Services", icon: <SettingsIcon /> },
     { id: "virtualization", label: "Virtualization", icon: <DataUsageIcon /> },
     { id: "containers", label: "Containers", icon: <StorageIcon /> },
@@ -1890,6 +2273,536 @@ const CloudComputingPage: React.FC = () => {
                   <TableCell sx={{ fontWeight: 600 }}>{provider.marketShare}</TableCell>
                   <TableCell sx={{ fontSize: "0.85rem" }}>{provider.strengths}</TableCell>
                   <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{provider.flagship}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* ==================== AWS DEEP DIVE ==================== */}
+        <Box id="aws-deepdive" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5, scrollMarginTop: 80 }}>
+          <Divider sx={{ flex: 1, borderColor: "#ff9900" }} />
+          <Typography variant="overline" sx={{ fontWeight: 700, color: "#ff9900", fontSize: "0.9rem" }}>☁️ AMAZON WEB SERVICES (AWS)</Typography>
+          <Divider sx={{ flex: 1, borderColor: "#ff9900" }} />
+        </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#ff9900", 0.08)} 0%, ${alpha("#ff9900", 0.02)} 100%)`,
+            border: `2px solid ${alpha("#ff9900", 0.2)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Box sx={{ 
+              width: 60, 
+              height: 60, 
+              borderRadius: 2, 
+              bgcolor: "#ff9900", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              fontSize: "1.8rem"
+            }}>
+              ☁️
+            </Box>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#ff9900" }}>
+                Amazon Web Services
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                The pioneer and market leader in cloud computing since 2006
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="body1" sx={{ lineHeight: 1.9, mb: 3 }}>
+            <strong>AWS</strong> launched with S3 and EC2 in 2006 and has been the dominant cloud provider ever since. 
+            With <strong>200+ services</strong> across compute, storage, database, analytics, machine learning, IoT, and more, 
+            AWS offers the most comprehensive and mature cloud platform. It's the default choice for many startups and 
+            enterprises, with the largest community, most extensive documentation, and widest talent pool.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>{awsGlobalInfrastructure.regions.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Regions</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>{awsGlobalInfrastructure.azs.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">AZs</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>{awsGlobalInfrastructure.edgeLocations.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Edge Locations</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>200+</Typography>
+                <Typography variant="caption" color="text.secondary">Services</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>~32%</Typography>
+                <Typography variant="caption" color="text.secondary">Market Share</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#ff9900", 0.05), border: `1px solid ${alpha("#ff9900", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#ff9900" }}>#1</Typography>
+                <Typography variant="caption" color="text.secondary">Since 2006</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {["Widest service offering", "Most mature ecosystem", "Largest community", "Best documentation", "Most certifications", "Global infrastructure leader"].map((strength) => (
+              <Chip key={strength} label={strength} size="small" sx={{ bgcolor: alpha("#ff9900", 0.1), color: "#ff9900", fontWeight: 600 }} />
+            ))}
+          </Box>
+        </Paper>
+
+        {/* AWS Service Categories */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "#ff9900" }}>
+          AWS Service Categories
+        </Typography>
+
+        {awsServiceCategories.map((category) => (
+          <Accordion key={category.category} sx={{ mb: 2, borderRadius: 2, "&:before": { display: "none" }, border: `1px solid ${alpha(category.color, 0.2)}` }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(category.color, 0.03) }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Typography sx={{ fontSize: "1.5rem" }}>{category.icon}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: category.color }}>{category.category}</Typography>
+                <Chip label={`${category.services.length} services`} size="small" sx={{ bgcolor: alpha(category.color, 0.1), fontSize: "0.7rem" }} />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {category.services.map((service) => (
+                  <Grid item xs={12} md={6} key={service.name}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha(category.color, 0.15)}`, bgcolor: alpha(category.color, 0.01) }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Chip label={service.name} size="small" sx={{ fontWeight: 700, bgcolor: category.color, color: "white" }} />
+                        <Typography variant="caption" color="text.secondary">{service.fullName}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.7 }}>{service.description}</Typography>
+                      <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                        <strong>Key Features:</strong> {service.keyFeatures}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: "block", color: category.color }}>
+                        <strong>Use Cases:</strong> {service.useCase}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        {/* AWS Free Tier */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#22c55e" }}>
+            🎁 AWS Free Tier Highlights
+          </Typography>
+          <Grid container spacing={2}>
+            {awsFreeTierHighlights.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.service}>
+                <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ff9900" }}>{item.service}</Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>{item.offer}</Typography>
+                  <Chip label={item.duration} size="small" sx={{ mt: 0.5, height: 18, fontSize: "0.65rem", bgcolor: item.duration === "Always free" ? alpha("#22c55e", 0.2) : alpha("#3b82f6", 0.2) }} />
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* ==================== AZURE DEEP DIVE ==================== */}
+        <Box id="azure-deepdive" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5, scrollMarginTop: 80 }}>
+          <Divider sx={{ flex: 1, borderColor: "#0078d4" }} />
+          <Typography variant="overline" sx={{ fontWeight: 700, color: "#0078d4", fontSize: "0.9rem" }}>☁️ MICROSOFT AZURE</Typography>
+          <Divider sx={{ flex: 1, borderColor: "#0078d4" }} />
+        </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#0078d4", 0.08)} 0%, ${alpha("#0078d4", 0.02)} 100%)`,
+            border: `2px solid ${alpha("#0078d4", 0.2)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Box sx={{ 
+              width: 60, 
+              height: 60, 
+              borderRadius: 2, 
+              bgcolor: "#0078d4", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              fontSize: "1.8rem"
+            }}>
+              ☁️
+            </Box>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#0078d4" }}>
+                Microsoft Azure
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Enterprise cloud leader with deep Microsoft ecosystem integration
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="body1" sx={{ lineHeight: 1.9, mb: 3 }}>
+            <strong>Microsoft Azure</strong> launched in 2010 and has grown to become the #2 cloud provider with 
+            <strong> 200+ services</strong>. Azure's key differentiator is its seamless integration with the Microsoft ecosystem — 
+            Windows Server, SQL Server, Active Directory, Microsoft 365, Dynamics 365, and Power Platform. For enterprises 
+            already invested in Microsoft, Azure provides the smoothest hybrid cloud experience with Azure Arc, Azure Stack, 
+            and the Azure Hybrid Benefit for Windows and SQL Server licenses.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>{azureGlobalInfrastructure.regions.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Regions</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>50+</Typography>
+                <Typography variant="caption" color="text.secondary">AZ Regions</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>190+</Typography>
+                <Typography variant="caption" color="text.secondary">Edge Locations</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>200+</Typography>
+                <Typography variant="caption" color="text.secondary">Services</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>~23%</Typography>
+                <Typography variant="caption" color="text.secondary">Market Share</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#0078d4", 0.05), border: `1px solid ${alpha("#0078d4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0078d4" }}>#2</Typography>
+                <Typography variant="caption" color="text.secondary">Growing Fast</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {["Microsoft ecosystem", "Enterprise leader", "Hybrid cloud", "Azure AD", "OpenAI partnership", "Most regions worldwide"].map((strength) => (
+              <Chip key={strength} label={strength} size="small" sx={{ bgcolor: alpha("#0078d4", 0.1), color: "#0078d4", fontWeight: 600 }} />
+            ))}
+          </Box>
+        </Paper>
+
+        {/* Azure Enterprise Integration */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#0078d4", 0.02), border: `1px solid ${alpha("#0078d4", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0078d4", display: "flex", alignItems: "center", gap: 1 }}>
+            🏢 Microsoft Ecosystem Integration
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Azure's killer feature for enterprises is its native integration with the entire Microsoft stack:
+          </Typography>
+          <Grid container spacing={2}>
+            {azureEnterpriseIntegration.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.feature}>
+                <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "background.paper", border: `1px solid ${alpha("#0078d4", 0.1)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0078d4", mb: 0.5 }}>{item.feature}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Azure Service Categories */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "#0078d4" }}>
+          Azure Service Categories
+        </Typography>
+
+        {azureServiceCategories.map((category) => (
+          <Accordion key={category.category} sx={{ mb: 2, borderRadius: 2, "&:before": { display: "none" }, border: `1px solid ${alpha(category.color, 0.2)}` }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(category.color, 0.03) }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Typography sx={{ fontSize: "1.5rem" }}>{category.icon}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: category.color }}>{category.category}</Typography>
+                <Chip label={`${category.services.length} services`} size="small" sx={{ bgcolor: alpha(category.color, 0.1), fontSize: "0.7rem" }} />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {category.services.map((service) => (
+                  <Grid item xs={12} md={6} key={service.name}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha(category.color, 0.15)}`, bgcolor: alpha(category.color, 0.01) }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Chip label={service.name} size="small" sx={{ fontWeight: 700, bgcolor: category.color, color: "white" }} />
+                        <Typography variant="caption" color="text.secondary">{service.fullName}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.7 }}>{service.description}</Typography>
+                      <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                        <strong>Key Features:</strong> {service.keyFeatures}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: "block", color: category.color }}>
+                        <strong>Use Cases:</strong> {service.useCase}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        {/* Azure Free Tier */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#22c55e" }}>
+            🎁 Azure Free Tier Highlights
+          </Typography>
+          <Grid container spacing={2}>
+            {azureFreeTierHighlights.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.service}>
+                <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0078d4" }}>{item.service}</Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>{item.offer}</Typography>
+                  <Chip label={item.duration} size="small" sx={{ mt: 0.5, height: 18, fontSize: "0.65rem", bgcolor: item.duration === "Always free" ? alpha("#22c55e", 0.2) : alpha("#3b82f6", 0.2) }} />
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* ==================== GCP DEEP DIVE ==================== */}
+        <Box id="gcp-deepdive" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5, scrollMarginTop: 80 }}>
+          <Divider sx={{ flex: 1, borderColor: "#4285f4" }} />
+          <Typography variant="overline" sx={{ fontWeight: 700, color: "#4285f4", fontSize: "0.9rem" }}>☁️ GOOGLE CLOUD PLATFORM (GCP)</Typography>
+          <Divider sx={{ flex: 1, borderColor: "#4285f4" }} />
+        </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 3,
+            background: `linear-gradient(135deg, ${alpha("#4285f4", 0.08)} 0%, ${alpha("#4285f4", 0.02)} 100%)`,
+            border: `2px solid ${alpha("#4285f4", 0.2)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Box sx={{ 
+              width: 60, 
+              height: 60, 
+              borderRadius: 2, 
+              bgcolor: "#4285f4", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              fontSize: "1.8rem"
+            }}>
+              ☁️
+            </Box>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#4285f4" }}>
+                Google Cloud Platform
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Data analytics powerhouse and Kubernetes originator
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="body1" sx={{ lineHeight: 1.9, mb: 3 }}>
+            <strong>Google Cloud Platform</strong> (launched 2008) leverages Google's decades of experience running 
+            global-scale services like Search, Gmail, and YouTube. GCP is known for <strong>data analytics excellence</strong> (BigQuery 
+            pioneered serverless data warehouses), <strong>AI/ML leadership</strong> (TensorFlow, Gemini), and 
+            <strong> Kubernetes mastery</strong> — Google created Kubernetes and GKE is considered the gold standard. 
+            While smaller in market share (~10%), GCP leads in innovation, sustainability, and is often the choice for 
+            data-heavy and ML-focused workloads.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#4285f4", 0.05), border: `1px solid ${alpha("#4285f4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#4285f4" }}>{gcpGlobalInfrastructure.regions.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Regions</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#4285f4", 0.05), border: `1px solid ${alpha("#4285f4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#4285f4" }}>{gcpGlobalInfrastructure.zones.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Zones</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#4285f4", 0.05), border: `1px solid ${alpha("#4285f4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#4285f4" }}>{gcpGlobalInfrastructure.edgeLocations.split(" ")[0]}</Typography>
+                <Typography variant="caption" color="text.secondary">Edge Locations</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#4285f4", 0.05), border: `1px solid ${alpha("#4285f4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#4285f4" }}>200+</Typography>
+                <Typography variant="caption" color="text.secondary">Services</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#4285f4", 0.05), border: `1px solid ${alpha("#4285f4", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#4285f4" }}>~10%</Typography>
+                <Typography variant="caption" color="text.secondary">Market Share</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={4} md={2}>
+              <Paper sx={{ p: 1.5, textAlign: "center", bgcolor: alpha("#34a853", 0.05), border: `1px solid ${alpha("#34a853", 0.2)}` }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#34a853" }}>100%</Typography>
+                <Typography variant="caption" color="text.secondary">Renewable Energy</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {["Kubernetes originator", "BigQuery leader", "AI/ML innovation", "Global private network", "Carbon neutral", "Sustained use discounts", "Live VM migration", "Open source friendly"].map((strength) => (
+              <Chip key={strength} label={strength} size="small" sx={{ bgcolor: alpha("#4285f4", 0.1), color: "#4285f4", fontWeight: 600 }} />
+            ))}
+          </Box>
+        </Paper>
+
+        {/* GCP Differentiators */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#4285f4", 0.02), border: `1px solid ${alpha("#4285f4", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#4285f4", display: "flex", alignItems: "center", gap: 1 }}>
+            🚀 What Makes GCP Different
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            GCP's unique advantages come from Google's infrastructure and innovation culture:
+          </Typography>
+          <Grid container spacing={2}>
+            {gcpDifferentiators.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.feature}>
+                <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "background.paper", border: `1px solid ${alpha("#4285f4", 0.1)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#4285f4", mb: 0.5 }}>{item.feature}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* GCP Service Categories */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "#4285f4" }}>
+          GCP Service Categories
+        </Typography>
+
+        {gcpServiceCategories.map((category) => (
+          <Accordion key={category.category} sx={{ mb: 2, borderRadius: 2, "&:before": { display: "none" }, border: `1px solid ${alpha(category.color, 0.2)}` }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(category.color, 0.03) }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Typography sx={{ fontSize: "1.5rem" }}>{category.icon}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: category.color }}>{category.category}</Typography>
+                <Chip label={`${category.services.length} services`} size="small" sx={{ bgcolor: alpha(category.color, 0.1), fontSize: "0.7rem" }} />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                {category.services.map((service) => (
+                  <Grid item xs={12} md={6} key={service.name}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%", border: `1px solid ${alpha(category.color, 0.15)}`, bgcolor: alpha(category.color, 0.01) }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <Chip label={service.name} size="small" sx={{ fontWeight: 700, bgcolor: category.color, color: "white" }} />
+                        <Typography variant="caption" color="text.secondary">{service.fullName}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.7 }}>{service.description}</Typography>
+                      <Typography variant="caption" sx={{ display: "block", mb: 0.5 }}>
+                        <strong>Key Features:</strong> {service.keyFeatures}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: "block", color: category.color }}>
+                        <strong>Use Cases:</strong> {service.useCase}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+
+        {/* GCP Free Tier */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: "#22c55e" }}>
+            🎁 GCP Free Tier Highlights
+          </Typography>
+          <Grid container spacing={2}>
+            {gcpFreeTierHighlights.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.service}>
+                <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: alpha("#22c55e", 0.05), border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#4285f4" }}>{item.service}</Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: "text.secondary" }}>{item.offer}</Typography>
+                  <Chip label={item.duration} size="small" sx={{ mt: 0.5, height: 18, fontSize: "0.65rem", bgcolor: item.duration === "Always free" ? alpha("#22c55e", 0.2) : alpha("#3b82f6", 0.2) }} />
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* AWS vs Azure vs GCP Comparison */}
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          🔄 AWS vs Azure vs GCP: Quick Comparison
+        </Typography>
+        <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha("#8b5cf6", 0.1) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Aspect</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: "#ff9900" }}>AWS</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: "#0078d4" }}>Azure</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: "#4285f4" }}>GCP</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {[
+                { aspect: "Market Position", aws: "Leader since 2006, ~32% share", azure: "Strong #2, ~23% share", gcp: "Growing #3, ~10% share" },
+                { aspect: "Best For", aws: "Startups, web-native, broadest needs", azure: "Microsoft shops, enterprise, hybrid", gcp: "Data/ML workloads, K8s, analytics" },
+                { aspect: "Compute", aws: "EC2, Lambda, ECS/EKS", azure: "VMs, Functions, AKS", gcp: "Compute Engine, Cloud Run, GKE" },
+                { aspect: "Storage", aws: "S3, EBS, EFS", azure: "Blob, Managed Disks, Files", gcp: "Cloud Storage, Persistent Disk" },
+                { aspect: "Database", aws: "RDS, Aurora, DynamoDB", azure: "SQL Database, Cosmos DB", gcp: "Cloud SQL, Spanner, BigQuery" },
+                { aspect: "Identity", aws: "IAM + Cognito for users", azure: "Entra ID (Azure AD) — SSO leader", gcp: "Cloud IAM, Identity Platform" },
+                { aspect: "AI/ML", aws: "SageMaker, Bedrock (Claude)", azure: "Azure OpenAI (GPT-4)", gcp: "Vertex AI, Gemini, TensorFlow" },
+                { aspect: "Hybrid Cloud", aws: "Outposts, EKS Anywhere", azure: "Arc, Stack — deep on-prem", gcp: "Anthos for multi/hybrid cloud" },
+                { aspect: "DevOps", aws: "CodePipeline, CodeBuild", azure: "Azure DevOps, GitHub Actions", gcp: "Cloud Build, Cloud Deploy" },
+                { aspect: "Enterprise", aws: "Partner integrations", azure: "Native M365, Dynamics, Power", gcp: "Google Workspace, Looker" },
+                { aspect: "Pricing", aws: "More granular, complex", azure: "Hybrid Benefit savings", gcp: "Sustained/committed discounts" },
+                { aspect: "Regions", aws: "33+ regions", azure: "60+ regions (most)", gcp: "40+ regions, premium network" },
+              ].map((row) => (
+                <TableRow key={row.aspect} sx={{ "&:hover": { bgcolor: alpha("#8b5cf6", 0.02) } }}>
+                  <TableCell sx={{ fontWeight: 600 }}>{row.aspect}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{row.aws}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{row.azure}</TableCell>
+                  <TableCell sx={{ fontSize: "0.8rem" }}>{row.gcp}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

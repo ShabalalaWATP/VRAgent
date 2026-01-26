@@ -3,11 +3,13 @@ from typing import Optional
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -94,7 +96,7 @@ class Project(Base):
     description = Column(Text, nullable=True)
     git_url = Column(String, nullable=True)
     upload_path = Column(String, nullable=True)
-    is_shared = Column(String, nullable=False, default="false")  # 'true' or 'false' - whether project is shared
+    is_shared = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -826,6 +828,9 @@ class DocumentAnalysisReport(Base):
     
     # User-provided context for AI analysis
     custom_prompt = Column(Text, nullable=True)  # Additional instructions for AI
+
+    # Analysis depth (standard or deep)
+    analysis_depth = Column(String, nullable=False, default="deep")
     
     # Combined analysis results (for multi-doc analysis)
     combined_summary = Column(Text, nullable=True)
@@ -879,6 +884,57 @@ class ProjectDocument(Base):
     report = relationship("DocumentAnalysisReport", back_populates="documents")
     uploader = relationship("User", backref="uploaded_documents")
     chat_messages = relationship("DocumentChatMessage", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentTranslation(Base):
+    """Documents uploaded for translation with OCR support."""
+    __tablename__ = "document_translations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    filename = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+    mime_type = Column(String, nullable=True)
+
+    output_filename = Column(String, nullable=True)
+    output_path = Column(String, nullable=True)
+    output_url = Column(String, nullable=True)
+
+    source_language = Column(String, nullable=True)
+    target_language = Column(String, nullable=False, default="English")
+    ocr_languages = Column(String, nullable=True)
+
+    status = Column(String, nullable=False, default="pending")  # pending, processing, completed, failed
+    error_message = Column(Text, nullable=True)
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+
+    ocr_used = Column(Boolean, default=False)
+    page_count = Column(Integer, nullable=True)
+    chars_extracted = Column(Integer, nullable=True)
+    chars_translated = Column(Integer, nullable=True)
+    translate_images = Column(Boolean, default=False)  # OCR and translate text within images
+    image_text_regions_translated = Column(Integer, nullable=True)
+    # Quick Win metrics
+    headers_footers_skipped = Column(Integer, nullable=True)
+    code_blocks_skipped = Column(Integer, nullable=True)
+    links_preserved = Column(Integer, nullable=True)
+    # Medium effort metrics
+    multi_column_pages = Column(Integer, nullable=True)
+    quality_score = Column(Float, nullable=True)
+    # Large effort metrics
+    exact_fonts_used = Column(Integer, nullable=True)
+    tables_stitched = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    project = relationship("Project", backref="translations")
+    uploader = relationship("User", backref="document_translations")
 
 
 class DocumentChatMessage(Base):
@@ -1139,6 +1195,126 @@ class AgenticScanReport(Base):
     # Relationships
     user = relationship("User", backref="agentic_scan_reports")
     project = relationship("Project", backref="agentic_scan_reports")
+
+
+class BinaryFuzzerSession(Base):
+    """Stores binary/AFL++ fuzzing session data including crashes and coverage."""
+    __tablename__ = "binary_fuzzer_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Session metadata
+    name = Column(String, nullable=False)
+    binary_path = Column(String, nullable=False)
+    binary_name = Column(String, nullable=True)  # Just the filename
+    architecture = Column(String, nullable=True)  # x86, x64, arm, etc.
+    
+    # Configuration
+    mode = Column(String, nullable=False, default="coverage")  # coverage, dumb, qemu
+    mutation_strategy = Column(String, nullable=True)
+    input_format = Column(String, nullable=True)
+    timeout_ms = Column(Integer, nullable=True)
+    memory_limit_mb = Column(Integer, nullable=True)
+    
+    # Status
+    status = Column(String, nullable=False, default="created", index=True)  # created, running, paused, completed, failed
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    stopped_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Statistics
+    total_executions = Column(Integer, default=0)
+    executions_per_second = Column(Float, nullable=True)
+    total_crashes = Column(Integer, default=0)
+    unique_crashes = Column(Integer, default=0)
+    hangs = Column(Integer, default=0)
+    coverage_edges = Column(Integer, default=0)
+    coverage_percentage = Column(Float, nullable=True)
+    corpus_size = Column(Integer, default=0)
+    
+    # Findings by severity
+    crashes_critical = Column(Integer, default=0)  # Exploitable crashes
+    crashes_high = Column(Integer, default=0)  # Likely exploitable
+    crashes_medium = Column(Integer, default=0)  # Possibly exploitable
+    crashes_low = Column(Integer, default=0)  # Unlikely exploitable
+    
+    # Detailed data (JSON)
+    crashes = Column(JSON, nullable=True)  # Array of crash details
+    coverage_data = Column(JSON, nullable=True)  # Coverage map/info
+    corpus_entries = Column(JSON, nullable=True)  # Interesting inputs
+    memory_errors = Column(JSON, nullable=True)  # ASAN/MSAN findings
+    config = Column(JSON, nullable=True)  # Full configuration
+    
+    # AI Analysis
+    ai_analysis = Column(JSON, nullable=True)  # AI-generated crash analysis
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="binary_fuzzer_sessions")
+    project = relationship("Project", backref="binary_fuzzer_sessions")
+
+
+class FuzzingCampaignReport(Base):
+    """AI-generated reports for agentic fuzzing campaigns."""
+    __tablename__ = "fuzzing_campaign_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Binary info
+    binary_name = Column(String(255), nullable=False, index=True)
+    binary_hash = Column(String(64), nullable=True)
+    binary_type = Column(String(32), nullable=True)  # ELF, PE, Mach-O
+    architecture = Column(String(32), nullable=True)  # x86, x64, arm, arm64
+
+    # Campaign metadata
+    status = Column(String(32), nullable=False)  # completed, failed
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+
+    # Key metrics
+    total_executions = Column(BigInteger, default=0)
+    executions_per_second = Column(Float, nullable=True)
+    final_coverage = Column(Float, nullable=True)
+    unique_crashes = Column(Integer, default=0)
+    exploitable_crashes = Column(Integer, default=0)
+    total_decisions = Column(Integer, default=0)
+
+    # AI Report content (structured JSON)
+    report_data = Column(JSON, nullable=True)
+
+    # Report sections (for quick access without parsing full JSON)
+    executive_summary = Column(Text, nullable=True)
+    findings_summary = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+
+    # Full markdown report (pre-rendered for export)
+    markdown_report = Column(Text, nullable=True)
+
+    # Decision history
+    decisions = Column(JSON, nullable=True)
+
+    # Crash details
+    crashes = Column(JSON, nullable=True)
+
+    # Coverage data
+    coverage_data = Column(JSON, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", backref="fuzzing_campaign_reports")
+    project = relationship("Project", backref="fuzzing_campaign_reports")
 
 
 class Whiteboard(Base):
@@ -1682,3 +1858,436 @@ class APICookieJar(Base):
     
     # Relationships
     user = relationship("User", backref="api_cookie_jars")
+
+
+class ZAPScan(Base):
+    """
+    Saved OWASP ZAP scan results.
+    Stores scan metadata and findings from ZAP DAST scans.
+    """
+    __tablename__ = "zap_scans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(255), unique=True, nullable=False, index=True)  # ZAP session ID
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    title = Column(String(500), nullable=True)
+    target_url = Column(Text, nullable=False)
+    scan_type = Column(String(50), nullable=False)  # spider, ajax_spider, active_scan, passive_scan, full_scan
+    status = Column(String(50), nullable=False)  # not_started, running, completed, failed, stopped
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Results summary
+    urls_found = Column(Integer, default=0)
+    alerts_high = Column(Integer, default=0)
+    alerts_medium = Column(Integer, default=0)
+    alerts_low = Column(Integer, default=0)
+    alerts_info = Column(Integer, default=0)
+    
+    # Full data (JSON)
+    alerts_data = Column(JSON, nullable=True)  # List of alert findings
+    urls_data = Column(JSON, nullable=True)  # List of discovered URLs
+    stats = Column(JSON, nullable=True)  # Scan statistics
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="zap_scans")
+    project = relationship("Project", backref="zap_scans")
+
+
+class DynamicScan(Base):
+    """
+    Dynamic Security Scanner scan records.
+    Stores results from the unified Nmap + ZAP + Nuclei + ExploitDB scanner.
+    """
+    __tablename__ = "dynamic_scans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_id = Column(String(50), unique=True, nullable=False, index=True)  # dscan-XXXXXXXX
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Scan identification
+    scan_name = Column(String(200), nullable=True)  # User-provided name for easy identification
+    
+    target = Column(Text, nullable=False)  # IP, CIDR, or hostname
+    scan_type = Column(String(50), nullable=False)  # ping, basic, service, comprehensive
+    status = Column(String(50), nullable=False, default="pending")  # pending, running, completed, failed, cancelled
+    
+    # Configuration
+    config = Column(JSON, nullable=True)  # Scan configuration options
+    
+    # Progress tracking
+    current_phase = Column(String(50), nullable=True)  # reconnaissance, routing, web_scanning, etc.
+    progress_percent = Column(Integer, default=0)
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    
+    # Summary counts
+    hosts_discovered = Column(Integer, default=0)
+    web_targets = Column(Integer, default=0)
+    network_targets = Column(Integer, default=0)
+    total_findings = Column(Integer, default=0)
+    critical_findings = Column(Integer, default=0)
+    high_findings = Column(Integer, default=0)
+    exploitable_findings = Column(Integer, default=0)
+    
+    # AI Analysis
+    attack_narrative = Column(Text, nullable=True)
+    exploit_chains = Column(JSON, nullable=True)  # List of attack chains
+    recommendations = Column(JSON, nullable=True)  # List of recommendations
+    exploit_commands = Column(JSON, nullable=True)  # Dict of tool -> commands
+    
+    # Full results (JSON blob for complete data)
+    results = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="dynamic_scans")
+    project = relationship("Project", backref="dynamic_scans")
+    findings = relationship("DynamicScanFinding", back_populates="scan", cascade="all, delete-orphan")
+
+
+class DynamicScanFinding(Base):
+    """
+    Individual findings from Dynamic Security Scanner.
+    Normalized storage for querying and filtering findings.
+    """
+    __tablename__ = "dynamic_scan_findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_id = Column(Integer, ForeignKey("dynamic_scans.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    source = Column(String(50), nullable=False, index=True)  # nmap, zap, nuclei, exploit_db
+    severity = Column(String(20), nullable=False, index=True)  # critical, high, medium, low, info
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Target info
+    host = Column(String(255), nullable=False, index=True)
+    port = Column(Integer, nullable=True)
+    url = Column(Text, nullable=True)
+    
+    # CVE info
+    cve_id = Column(String(50), nullable=True, index=True)
+    cvss_score = Column(Float, nullable=True)
+    
+    # Exploit info
+    exploit_available = Column(Boolean, default=False)
+    exploit_id = Column(String(100), nullable=True)
+    msf_module = Column(String(255), nullable=True)
+    
+    # Evidence and remediation
+    evidence = Column(Text, nullable=True)
+    remediation = Column(Text, nullable=True)
+    references = Column(JSON, nullable=True)  # List of reference URLs
+    
+    # Raw data from scanner
+    raw_data = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    scan = relationship("DynamicScan", back_populates="findings")
+
+
+class MalwareAnalysisSession(Base):
+    """
+    Malware analysis session with Frida instrumentation.
+    Tracks dynamic analysis of Windows PE and Linux ELF binaries.
+    """
+    __tablename__ = "malware_analysis_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Binary information
+    binary_name = Column(String(255), nullable=False)
+    binary_hash_sha256 = Column(String(64), nullable=False, index=True)
+    binary_hash_md5 = Column(String(32), nullable=False)
+    binary_size = Column(Integer, nullable=True)
+    binary_path = Column(String(512), nullable=True)
+
+    # Platform and architecture
+    platform = Column(String(32), nullable=False, index=True)  # windows, linux, macos
+    architecture = Column(String(32), nullable=False)  # x86, x64, arm, arm64
+
+    # Sandbox information
+    container_id = Column(String(128), nullable=True)
+    sandbox_ip = Column(String(45), nullable=True)
+    frida_session_id = Column(String(128), nullable=True)
+
+    # Analysis status
+    status = Column(String(32), default='created', index=True)  # created, running, analyzing, completed, failed, stopped
+    phase = Column(String(64), nullable=True)  # Current analysis phase
+    progress = Column(Float, default=0.0)
+
+    # Malware classification
+    is_malicious = Column(Boolean, default=False, index=True)
+    malware_family = Column(String(128), nullable=True, index=True)
+    malware_category = Column(String(64), nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    threat_score = Column(Integer, nullable=True)  # 0-100
+    severity = Column(String(32), nullable=True)  # low, medium, high, critical
+
+    # Capabilities detected
+    capabilities = Column(JSON, nullable=True)  # List of malware capabilities
+
+    # MITRE ATT&CK mapping
+    mitre_tactics = Column(JSON, nullable=True)  # List of tactics
+    mitre_techniques = Column(JSON, nullable=True)  # List of techniques
+
+    # Indicators of Compromise
+    iocs = Column(JSON, nullable=True)  # {"ips": [], "domains": [], "urls": [], "file_hashes": [], "registry_keys": []}
+
+    # Error information
+    error = Column(Text, nullable=True)
+
+    # Timestamps
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", backref="malware_analyses")
+    project = relationship("Project", backref="malware_analyses")
+    behaviors = relationship("RuntimeBehavior", back_populates="session", cascade="all, delete-orphan")
+    artifacts = relationship("MalwareArtifact", back_populates="session", cascade="all, delete-orphan")
+
+
+class RuntimeBehavior(Base):
+    """
+    Runtime behavior captured during malware execution.
+    Stores API calls, network activity, file operations, etc.
+    """
+    __tablename__ = "runtime_behaviors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(64), ForeignKey("malware_analysis_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Process information
+    process_id = Column(Integer, nullable=True)
+    process_name = Column(String(255), nullable=True)
+    parent_process_id = Column(Integer, nullable=True)
+    command_line = Column(Text, nullable=True)
+
+    # Behavior categories (JSONB for flexibility and performance)
+    api_calls = Column(JSON, nullable=True)  # [{"api": "CreateFileW", "args": [...], "retval": ..., "timestamp": ...}]
+    network_connections = Column(JSON, nullable=True)  # [{"protocol": "tcp", "ip": "1.2.3.4", "port": 80, "timestamp": ...}]
+    dns_queries = Column(JSON, nullable=True)  # [{"domain": "evil.com", "timestamp": ...}]
+    files_read = Column(JSON, nullable=True)  # [{"path": "...", "timestamp": ...}]
+    files_written = Column(JSON, nullable=True)  # [{"path": "...", "size": ..., "timestamp": ...}]
+    files_deleted = Column(JSON, nullable=True)  # [{"path": "...", "timestamp": ...}]
+    registry_read = Column(JSON, nullable=True)  # [{"key": "...", "value": "...", "timestamp": ...}]
+    registry_written = Column(JSON, nullable=True)  # [{"key": "...", "value": "...", "data": "...", "timestamp": ...}]
+    processes_created = Column(JSON, nullable=True)  # [{"name": "...", "pid": ..., "cmdline": "...", "timestamp": ...}]
+    crypto_operations = Column(JSON, nullable=True)  # [{"operation": "encrypt/decrypt", "algorithm": "...", "timestamp": ...}]
+    memory_allocations = Column(JSON, nullable=True)  # [{"address": "...", "size": ..., "protection": "...", "timestamp": ...}]
+    decrypted_strings = Column(JSON, nullable=True)  # [{"string": "...", "address": "...", "timestamp": ...}]
+
+    # Suspicious behaviors detected
+    suspicious_behaviors = Column(JSON, nullable=True)  # [{"type": "anti_debug", "description": "...", "severity": "..."}]
+
+    # MITRE ATT&CK techniques observed
+    mitre_techniques = Column(JSON, nullable=True)  # ["T1055", "T1012", ...]
+
+    # Execution timeline (consolidated chronological view)
+    execution_timeline = Column(JSON, nullable=True)  # [{type: "api_call", data: {...}, timestamp: ...}, ...]
+
+    # Summary statistics
+    total_api_calls = Column(Integer, default=0)
+    total_network_connections = Column(Integer, default=0)
+    total_files_accessed = Column(Integer, default=0)
+
+    # Timestamps
+    captured_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    session = relationship("MalwareAnalysisSession", back_populates="behaviors")
+
+
+class MalwareArtifact(Base):
+    """
+    Artifacts generated or discovered during malware analysis.
+    Includes dropped files, memory dumps, network captures, etc.
+    """
+    __tablename__ = "malware_artifacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(64), ForeignKey("malware_analysis_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Artifact information
+    artifact_type = Column(String(64), nullable=False, index=True)  # dropped_file, memory_dump, pcap, screenshot, log
+    artifact_name = Column(String(255), nullable=False)
+    artifact_path = Column(String(512), nullable=True)  # Path to stored artifact
+    artifact_size = Column(Integer, nullable=True)
+    artifact_hash = Column(String(64), nullable=True, index=True)
+
+    # Classification
+    is_malicious = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+
+    # Metadata (flexible JSON for different artifact types)
+    artifact_metadata = Column(JSON, nullable=True)  # {"file_type": "...", "mime_type": "...", "entropy": ..., etc.}
+
+    # Analysis results
+    analysis_results = Column(JSON, nullable=True)  # {"static_analysis": {...}, "string_analysis": {...}, etc.}
+
+    # Timestamps
+    discovered_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    session = relationship("MalwareAnalysisSession", back_populates="artifacts")
+
+
+class MITMAnalysisReport(Base):
+    """
+    MITM traffic analysis report - persists analysis results and associates with projects.
+    Stores the results of the 3-pass AI analysis system.
+    """
+    __tablename__ = "mitm_analysis_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Session reference
+    proxy_id = Column(String(64), nullable=False)
+    session_id = Column(String(128), nullable=True)  # Optional: linked to saved session
+    
+    # Report metadata
+    title = Column(String(500), nullable=True)
+    description = Column(Text, nullable=True)
+    
+    # Analysis summary
+    traffic_analyzed = Column(Integer, default=0)
+    rules_active = Column(Integer, default=0)
+    findings_count = Column(Integer, default=0)
+    risk_score = Column(Integer, nullable=True)  # 0-100
+    risk_level = Column(String(20), nullable=True)  # Critical, High, Medium, Low, Clean
+    summary = Column(Text, nullable=True)  # AI-generated summary
+    
+    # 3-Pass Analysis Statistics
+    analysis_passes = Column(Integer, default=3)
+    pass1_findings = Column(Integer, default=0)  # Pattern-based detection
+    pass2_ai_findings = Column(Integer, default=0)  # AI contextual analysis
+    after_dedup = Column(Integer, default=0)  # After deduplication
+    false_positives_removed = Column(Integer, default=0)  # FPs identified and removed
+    
+    # Full analysis data (JSON)
+    findings = Column(JSON, nullable=True)  # List of findings with full details
+    attack_paths = Column(JSON, nullable=True)  # Attack chains identified
+    recommendations = Column(JSON, nullable=True)  # Security recommendations
+    exploit_references = Column(JSON, nullable=True)  # External exploit references
+    cve_references = Column(JSON, nullable=True)  # CVE references
+    
+    # AI writeups
+    ai_exploitation_writeup = Column(Text, nullable=True)  # Pentest-style exploitation guide
+    ai_remediation_writeup = Column(Text, nullable=True)  # Remediation guidance
+    
+    # Traffic snapshot (optional, for reproducibility)
+    traffic_snapshot = Column(JSON, nullable=True)  # Sampled traffic entries used in analysis
+    
+    # Export tracking
+    pdf_exported = Column(Boolean, default=False)
+    docx_exported = Column(Boolean, default=False)
+    markdown_exported = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", backref="mitm_analysis_reports")
+    user = relationship("User", backref="mitm_analysis_reports")
+
+
+class MITMAgentMemoryEntry(Base):
+    """
+    Persisted memory entry for MITM agent learning.
+    Stores attack decisions and outcomes for cross-session learning.
+    """
+    __tablename__ = "mitm_agent_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    memory_id = Column(String(36), unique=True, nullable=False, index=True)
+
+    # Context
+    tool_id = Column(String(64), nullable=False, index=True)
+    target_host = Column(String(255), nullable=False, index=True)
+    target_type = Column(String(64), nullable=True)  # web_app, api, websocket, network
+    attack_surface_snapshot = Column(JSON, nullable=True)
+
+    # Reasoning
+    reasoning_chain_id = Column(String(36), nullable=True)
+    reasoning_steps = Column(JSON, nullable=True)  # List of reasoning step strings
+    confidence = Column(Float, default=0.0)
+
+    # Outcomes
+    attack_succeeded = Column(Boolean, default=False)
+    credentials_captured = Column(Integer, default=0)
+    tokens_captured = Column(Integer, default=0)
+    sessions_hijacked = Column(Integer, default=0)
+    findings_generated = Column(Integer, default=0)
+    effectiveness_score = Column(Float, default=0.0)  # -1.0 to 1.0
+
+    # Metadata
+    phase = Column(String(32), nullable=True)
+    chain_triggered = Column(String(64), nullable=True)
+    execution_time_ms = Column(Float, default=0.0)
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Index for efficient queries
+    __table_args__ = (
+        Index('ix_mitm_agent_memories_target_tool', 'target_host', 'tool_id'),
+        Index('ix_mitm_agent_memories_created', 'created_at'),
+    )
+
+
+class MITMToolPerformanceStats(Base):
+    """
+    Persisted tool performance statistics for Bayesian learning.
+    Enables cross-session Thompson Sampling.
+    """
+    __tablename__ = "mitm_tool_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tool_id = Column(String(64), nullable=False, index=True)
+    target_type = Column(String(64), nullable=False, index=True)
+
+    # Beta distribution parameters per target type
+    successes = Column(Integer, default=0)
+    failures = Column(Integer, default=0)
+
+    # Overall statistics
+    total_executions = Column(Integer, default=0)
+    total_findings = Column(Integer, default=0)
+    total_credentials = Column(Integer, default=0)
+
+    # Effectiveness tracking (store last 100 as JSON array)
+    effectiveness_history = Column(JSON, nullable=True)
+
+    # Timestamps
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('ix_mitm_tool_performance_tool_target', 'tool_id', 'target_type', unique=True),
+    )

@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     nvd_api_key: str = Field("", validation_alias="NVD_API_KEY")
     
     # File upload settings
-    max_upload_size: int = Field(100 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 100MB default
+    # Increased to 2GB to support large binaries (firmware, game engines, containers)
+    # Can be increased to 5GB via environment variable for very large files
+    max_upload_size: int = Field(2 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_SIZE")  # 2GB default (was 100MB)
     upload_dir: str = Field("/tmp/uploads", validation_alias="UPLOAD_DIR")  # Base upload directory
 
     # MITM storage settings
@@ -52,6 +54,13 @@ class Settings(BaseSettings):
     yara_rules_path: str = Field("backend/yara_rules", validation_alias="YARA_RULES_PATH")
     capa_path: str = Field("capa", validation_alias="CAPA_PATH")
     enable_capa: bool = Field(True, validation_alias="ENABLE_CAPA")
+    
+    # OWASP ZAP settings
+    zap_url: str = Field("http://zap:8080", validation_alias="ZAP_URL")  # ZAP daemon URL
+    zap_api_key: str = Field("", validation_alias="ZAP_API_KEY")  # Empty = API key disabled
+    
+    # Scanner sidecar settings (for Dynamic Security Scanner)
+    SCANNER_URL: str = Field("http://localhost:9999", validation_alias="SCANNER_URL")  # Scanner sidecar URL
     
     # LLM cost optimization settings
     max_embedding_chunks: int = Field(500, validation_alias="MAX_EMBEDDING_CHUNKS")  # Max chunks to embed
@@ -68,6 +77,17 @@ class Settings(BaseSettings):
     # Scanner settings for large codebases
     scanner_timeout: int = Field(600, validation_alias="SCANNER_TIMEOUT")  # Per-scanner timeout (10 min)
     max_parallel_scanners: int = Field(4, validation_alias="MAX_PARALLEL_SCANNERS")  # Parallel scanner limit
+    max_concurrent_dynamic_scans: int = Field(2, validation_alias="MAX_CONCURRENT_DYNAMIC_SCANS")
+
+    # Dynamic Scanner agentic loop settings
+    dynamic_scan_agent_max_steps: int = Field(12, validation_alias="DYNAMIC_SCAN_AGENT_MAX_STEPS")
+    dynamic_scan_agent_max_minutes: int = Field(45, validation_alias="DYNAMIC_SCAN_AGENT_MAX_MINUTES")
+    dynamic_scan_agent_max_no_progress: int = Field(3, validation_alias="DYNAMIC_SCAN_AGENT_MAX_NO_PROGRESS")
+    dynamic_scan_agent_action_timeout: int = Field(1200, validation_alias="DYNAMIC_SCAN_AGENT_ACTION_TIMEOUT")
+    
+    # Dynamic Scanner security settings
+    allow_localhost_scans: bool = Field(False, validation_alias="ALLOW_LOCALHOST_SCANS")  # Enable for dev/testing
+    allow_private_ip_scans: bool = Field(False, validation_alias="ALLOW_PRIVATE_IP_SCANS")  # Enable for internal networks
     
     # AI Analysis settings for large codebases
     max_findings_for_ai: int = Field(500, validation_alias="MAX_FINDINGS_FOR_AI")  # Max findings for AI analysis
@@ -86,6 +106,7 @@ class Settings(BaseSettings):
         case_sensitive = False
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()

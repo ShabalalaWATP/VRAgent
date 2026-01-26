@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.core.config import settings
 from backend.core.logging import get_logger
@@ -311,6 +311,32 @@ class LayerSecretFinding:
     attack_vector: str = ""
 
 
+def _extract_layer_id(layer_tar_path: str) -> str:
+    """Extract a stable layer identifier from a docker save layer path."""
+    normalized = layer_tar_path.replace("\\", "/")
+    parts = normalized.split("/")
+
+    # OCI layout: blobs/sha256/<hash>
+    if "blobs" in parts:
+        try:
+            idx = parts.index("blobs")
+            if idx + 2 < len(parts):
+                digest = parts[idx + 2]
+                if digest.startswith("sha256:"):
+                    digest = digest.split(":", 1)[1]
+                if digest:
+                    return digest[:12]
+        except ValueError:
+            pass
+
+    base = os.path.basename(normalized)
+    if base == "layer.tar" and len(parts) >= 2:
+        return parts[-2][:12]
+    if base:
+        return base[:12]
+    return normalized[:12]
+
+
 def extract_and_scan_layers(
     image_name: str,
     max_layers: int = 20,
@@ -325,7 +351,7 @@ def extract_and_scan_layers(
 
     Args:
         image_name: Docker image name to scan
-        max_layers: Maximum number of layers to scan
+        max_layers: Maximum number of most recent layers to scan (<= 0 or None for all)
         scan_content: Whether to scan file contents for secrets
         max_file_size: Maximum file size to scan contents
 
@@ -335,9 +361,16 @@ def extract_and_scan_layers(
     findings: List[LayerSecretFinding] = []
     metadata = {
         "layers_scanned": 0,
+        "layers_total": 0,
+        "layers_start_index": 0,
+        "layers_end_index": 0,
+        "layers_truncated": False,
         "files_scanned": 0,
         "total_size_scanned": 0,
         "deleted_secrets_found": 0,
+        "deleted_files_total": 0,
+        "deleted_files_truncated": False,
+        "deleted_files": [],
     }
 
     # Check if docker is available
@@ -367,9 +400,63 @@ def extract_and_scan_layers(
             logger.error(f"Failed to save image: {result.stderr}")
             return findings, {"error": f"Failed to export image: {result.stderr}"}
 
-        # Track files across layers to detect "deleted" files
-        files_in_layers: Dict[str, List[int]] = {}  # file_path -> list of layer indices
-        layer_contents: Dict[int, set] = {}  # layer_index -> set of file paths
+        # Track file existence across layers (overlay semantics)
+        current_files: Set[str] = set()
+        deleted_files: List[Dict[str, Any]] = []
+        deleted_files_total = 0
+        deleted_files_limit = 500
+        deleted_files_truncated = False
+
+        def record_deleted(path: str, reason: str, removed_count: int = 1) -> None:
+            nonlocal deleted_files_total, deleted_files_truncated
+            deleted_files_total += max(removed_count, 0)
+            if len(deleted_files) >= deleted_files_limit:
+                deleted_files_truncated = True
+                return
+            entry = {"path": path, "reason": reason}
+            if removed_count > 1:
+                entry["removed_count"] = removed_count
+            deleted_files.append(entry)
+
+        def normalize_layer_path(path: str) -> str:
+            path = path.replace("\\", "/")
+            if path.startswith("./"):
+                path = path[2:]
+            return path.lstrip("/")
+
+        def apply_whiteout(path: str) -> None:
+            nonlocal current_files
+            name = os.path.basename(path)
+            dir_path = os.path.dirname(path)
+
+            if name == ".wh..wh..opq":
+                # Opaque directory: hides all lower-layer entries in this dir
+                if dir_path:
+                    prefix = f"{dir_path}/"
+                    to_remove = {p for p in current_files if p.startswith(prefix)}
+                    current_files = {p for p in current_files if p not in to_remove}
+                    record_deleted(dir_path, "opaque_dir", removed_count=len(to_remove))
+                else:
+                    removed_count = len(current_files)
+                    current_files.clear()
+                    record_deleted("/", "opaque_dir", removed_count=removed_count)
+                return
+
+            if not name.startswith(".wh."):
+                return
+
+            target_name = name[len(".wh."):]
+            if not target_name:
+                return
+
+            target_path = f"{dir_path}/{target_name}" if dir_path else target_name
+            to_remove = {
+                p for p in current_files
+                if p == target_path or p.startswith(f"{target_path}/")
+            }
+            removed_count = len(to_remove)
+            current_files = {p for p in current_files if p not in to_remove}
+            record_deleted(target_path, "whiteout", removed_count=removed_count or 1)
 
         # Extract and scan the tar
         with tarfile.open(tar_path, 'r') as tar:
@@ -386,12 +473,25 @@ def extract_and_scan_layers(
                 logger.warning("Could not find layer manifest")
                 return findings, {"error": "Could not parse image manifest"}
 
-            layers = manifest[0]["Layers"][:max_layers]
+            all_layers = manifest[0]["Layers"]
+            metadata["layers_total"] = len(all_layers)
+
+            use_all_layers = not max_layers or max_layers <= 0
+            if use_all_layers or len(all_layers) <= max_layers:
+                layers = all_layers
+                metadata["layers_truncated"] = False
+                metadata["layers_start_index"] = 0
+            else:
+                layers = all_layers[-max_layers:]
+                metadata["layers_truncated"] = True
+                metadata["layers_start_index"] = len(all_layers) - max_layers
+
             metadata["layers_scanned"] = len(layers)
+            metadata["layers_end_index"] = metadata["layers_start_index"] + len(layers) - 1
 
             # Scan each layer
             for layer_idx, layer_tar_path in enumerate(layers):
-                layer_contents[layer_idx] = set()
+                global_layer_index = metadata["layers_start_index"] + layer_idx
 
                 # Extract layer tar
                 try:
@@ -407,18 +507,30 @@ def extract_and_scan_layers(
 
                     # Scan the layer tar
                     with tarfile.open(layer_tar_file, 'r') as layer_tar:
+                        whiteouts: List[str] = []
+                        file_members: List[Tuple[tarfile.TarInfo, str]] = []
+
                         for member in layer_tar.getmembers():
                             if not member.isfile():
                                 continue
 
-                            file_path = member.name
-                            layer_contents[layer_idx].add(file_path)
-                            metadata["files_scanned"] += 1
+                            file_path = normalize_layer_path(member.name)
+                            if not file_path:
+                                continue
 
-                            # Track file across layers
-                            if file_path not in files_in_layers:
-                                files_in_layers[file_path] = []
-                            files_in_layers[file_path].append(layer_idx)
+                            # Collect whiteouts first to apply before additions
+                            if os.path.basename(file_path).startswith(".wh."):
+                                whiteouts.append(file_path)
+                                continue
+
+                            file_members.append((member, file_path))
+
+                        for whiteout in whiteouts:
+                            apply_whiteout(whiteout)
+
+                        for member, file_path in file_members:
+                            current_files.add(file_path)
+                            metadata["files_scanned"] += 1
 
                             # Check against sensitive patterns
                             for pattern_info in LAYER_SENSITIVE_PATTERNS:
@@ -446,8 +558,8 @@ def extract_and_scan_layers(
                                             logger.debug(f"Could not read file content: {e}")
 
                                     findings.append(LayerSecretFinding(
-                                        layer_id=layer_tar_path.split("/")[0][:12],
-                                        layer_index=layer_idx,
+                                        layer_id=_extract_layer_id(layer_tar_path),
+                                        layer_index=global_layer_index,
                                         file_path=file_path,
                                         file_type=pattern_info["type"],
                                         severity=pattern_info["severity"],
@@ -455,7 +567,7 @@ def extract_and_scan_layers(
                                         is_deleted=False,  # Will be updated later
                                         content_preview=content_preview,
                                         entropy=entropy,
-                                        attack_vector=f"Extractable from layer {layer_idx} with 'docker save' + tar",
+                                        attack_vector=f"Extractable from layer {global_layer_index} with 'docker save' + tar",
                                     ))
                                     break
 
@@ -463,15 +575,18 @@ def extract_and_scan_layers(
                     logger.debug(f"Error scanning layer {layer_idx}: {e}")
                     continue
 
-        # Identify "deleted" files (present in earlier layer, not in final)
-        final_layer_idx = len(layers) - 1
-        final_layer_files = layer_contents.get(final_layer_idx, set())
-
+        # Identify "deleted" files based on overlay semantics and whiteouts
         for finding in findings:
-            if finding.file_path not in final_layer_files and finding.layer_index < final_layer_idx:
+            if finding.file_path not in current_files:
                 finding.is_deleted = True
-                finding.attack_vector = f"DELETED but recoverable! File removed in later layer but still in layer {finding.layer_index}"
+                finding.attack_vector = (
+                    f"DELETED but recoverable! File removed in later layer but still in layer {finding.layer_index}"
+                )
                 metadata["deleted_secrets_found"] += 1
+
+        metadata["deleted_files"] = deleted_files
+        metadata["deleted_files_total"] = deleted_files_total
+        metadata["deleted_files_truncated"] = deleted_files_truncated
 
         logger.info(f"Layer scan complete: {len(findings)} sensitive files found, {metadata['deleted_secrets_found']} deleted but recoverable")
 
@@ -2074,7 +2189,7 @@ Mark as false positive if the context clearly makes it benign, but confirm real 
         "low": """You are a thorough security reviewer. Only mark obvious false positives.""",
     }
 
-    prompt = f"""{skepticism_instructions.get(skepticism_level, skepticism_instructions["high"])}
+    base_prompt = f"""{skepticism_instructions.get(skepticism_level, skepticism_instructions["high"])}
 
 ## Dockerfile Content:
 ```dockerfile
@@ -2083,30 +2198,19 @@ Mark as false positive if the context clearly makes it benign, but confirm real 
 """
 
     if compose_content:
-        prompt += f"""
+        base_prompt += f"""
 ## Docker Compose Content:
 ```yaml
 {compose_content}
 ```
 """
 
-    prompt += """
+    base_prompt += """
 ## Findings to Adjudicate:
 For each finding, determine: FALSE_POSITIVE or CONFIRMED
 
 """
-
-    for i, finding in enumerate(findings[:15]):  # Limit to 15 findings
-        prompt += f"""
-### Finding {i+1}:
-- Rule: {finding.get('rule_id', 'N/A')}
-- Severity: {finding.get('severity', 'N/A')}
-- Message: {finding.get('message', 'N/A')}
-- Line: {finding.get('line_number', 'N/A')}
-- Category: {finding.get('category', 'N/A')}
-"""
-
-    prompt += """
+    response_format = """
 
 ## Your Response:
 For each finding, respond in this exact format:
@@ -2118,36 +2222,63 @@ FINDING_2: [FALSE_POSITIVE|CONFIRMED] | Confidence: [high|medium|low] | Reason: 
 Then provide a brief SUMMARY of your adjudication.
 """
 
-    try:
-        response = await generate_with_ai(
-            prompt=prompt,
-            system_prompt="You are a skeptical security auditor focused on eliminating false positives. Be concise.",
-            max_tokens=1500,
-        )
+    confirmed_findings: List[Dict[str, Any]] = []
+    rejected_findings: List[Dict[str, Any]] = []
+    batch_summaries: List[str] = []
+    failed_batches = 0
+
+    batch_size = 15
+    total_batches = max(1, math.ceil(len(findings) / batch_size))
+
+    for batch_index, start in enumerate(range(0, len(findings), batch_size), start=1):
+        chunk = findings[start:start + batch_size]
+
+        prompt = base_prompt
+        for i, finding in enumerate(chunk):
+            prompt += f"""
+### Finding {i+1}:
+- Rule: {finding.get('rule_id', 'N/A')}
+- Severity: {finding.get('severity', 'N/A')}
+- Message: {finding.get('message', 'N/A')}
+- Line: {finding.get('line_number', 'N/A')}
+- Category: {finding.get('category', 'N/A')}
+"""
+        prompt += response_format
+
+        try:
+            response = await generate_with_ai(
+                prompt=prompt,
+                system_prompt="You are a skeptical security auditor focused on eliminating false positives. Be concise.",
+                max_tokens=1500,
+            )
+        except Exception as e:
+            failed_batches += 1
+            logger.error(f"AI adjudication failed for batch {batch_index}: {e}")
+            confirmed_findings.extend(chunk)
+            continue
 
         # Parse the AI response
-        confirmed_findings: List[Dict[str, Any]] = []
-        rejected_findings: List[Dict[str, Any]] = []
+        chunk_confirmed: List[Dict[str, Any]] = []
+        chunk_rejected: List[Dict[str, Any]] = []
 
-        lines = response.strip().split('\n')
+        lines = (response or "").strip().split('\n')
         finding_index = 0
 
         for line in lines:
             line = line.strip()
             if line.startswith('FINDING_'):
-                if finding_index < len(findings):
-                    finding = findings[finding_index].copy()
+                if finding_index < len(chunk):
+                    finding = chunk[finding_index].copy()
 
                     # Parse the verdict
                     if 'FALSE_POSITIVE' in line.upper():
-                        # Extract reasoning
                         reason_match = re.search(r'Reason:\s*(.+)', line, re.IGNORECASE)
                         reason = reason_match.group(1) if reason_match else "Marked as false positive by AI adjudicator"
                         finding['_adjudication'] = {
                             'verdict': 'false_positive',
                             'reason': reason,
                         }
-                        rejected_findings.append(finding)
+                        chunk_rejected.append(finding)
                     elif 'CONFIRMED' in line.upper():
                         reason_match = re.search(r'Reason:\s*(.+)', line, re.IGNORECASE)
                         reason = reason_match.group(1) if reason_match else "Confirmed as real issue by AI adjudicator"
@@ -2155,28 +2286,37 @@ Then provide a brief SUMMARY of your adjudication.
                             'verdict': 'confirmed',
                             'reason': reason,
                         }
-                        confirmed_findings.append(finding)
+                        chunk_confirmed.append(finding)
                     else:
                         # Default to confirmed if unclear
-                        confirmed_findings.append(finding)
+                        chunk_confirmed.append(finding)
 
                     finding_index += 1
 
         # Handle any findings not in the response (keep them)
-        for i in range(finding_index, len(findings)):
-            confirmed_findings.append(findings[i])
+        for i in range(finding_index, len(chunk)):
+            chunk_confirmed.append(chunk[i])
 
-        # Extract summary
-        summary_match = re.search(r'(?:SUMMARY|Summary)[:\s]+(.+)', response, re.IGNORECASE | re.DOTALL)
-        summary = summary_match.group(1).strip()[:500] if summary_match else f"Adjudicated {len(findings)} findings: {len(confirmed_findings)} confirmed, {len(rejected_findings)} rejected as false positives."
+        summary_match = re.search(r'(?:SUMMARY|Summary)[:\s]+(.+)', response or "", re.IGNORECASE | re.DOTALL)
+        if summary_match:
+            batch_summaries.append(summary_match.group(1).strip()[:500])
 
-        logger.info(f"AI adjudication: {len(confirmed_findings)} confirmed, {len(rejected_findings)} false positives from {len(findings)} total")
+        confirmed_findings.extend(chunk_confirmed)
+        rejected_findings.extend(chunk_rejected)
 
-        return confirmed_findings, rejected_findings, summary
+    if total_batches == 1 and batch_summaries:
+        summary = batch_summaries[0]
+    else:
+        summary = (
+            f"Adjudicated {len(findings)} findings in {total_batches} batch(es): "
+            f"{len(confirmed_findings)} confirmed, {len(rejected_findings)} rejected as false positives."
+        )
+        if failed_batches:
+            summary += f" {failed_batches} batch(es) failed; those findings were kept."
 
-    except Exception as e:
-        logger.error(f"AI adjudication failed: {e}")
-        return findings, [], f"AI adjudication failed: {e}. Returning all findings."
+    logger.info(f"AI adjudication: {len(confirmed_findings)} confirmed, {len(rejected_findings)} false positives from {len(findings)} total")
+
+    return confirmed_findings, rejected_findings, summary
 
 
 def scan_docker_resources(
@@ -2458,3 +2598,432 @@ def convert_to_findings(
         })
 
     return findings
+
+
+# =============================================================================
+# DOCKER IMAGE CVE INTEGRATION
+# Extracts packages from Docker images and enriches with CVE/NVD/EPSS/KEV data
+# =============================================================================
+
+# Package ecosystem mapping for OSV
+PACKAGE_MANAGER_TO_ECOSYSTEM = {
+    # Debian/Ubuntu
+    "dpkg": "Debian",
+    "deb": "Debian",
+    "debian": "Debian",
+    "ubuntu": "Debian",
+    # Alpine
+    "apk": "Alpine",
+    "alpine": "Alpine",
+    # RHEL/CentOS/Rocky/Alma
+    "rpm": "Rocky Linux",
+    "centos": "Rocky Linux",
+    "rhel": "Rocky Linux",
+    "fedora": "Rocky Linux",
+    "rocky": "Rocky Linux",
+    "almalinux": "Rocky Linux",
+    # Language ecosystems
+    "pip": "PyPI",
+    "python": "PyPI",
+    "pypi": "PyPI",
+    "npm": "npm",
+    "node": "npm",
+    "nodejs": "npm",
+    "gem": "RubyGems",
+    "ruby": "RubyGems",
+    "bundler": "RubyGems",
+    "cargo": "crates.io",
+    "rust": "crates.io",
+    "go": "Go",
+    "golang": "Go",
+    "gomod": "Go",
+    "composer": "Packagist",
+    "php": "Packagist",
+    "nuget": "NuGet",
+    "dotnet": "NuGet",
+    "maven": "Maven",
+    "gradle": "Maven",
+    "java": "Maven",
+    "jar": "Maven",
+}
+
+
+@dataclass
+class DockerPackage:
+    """A package installed in a Docker image."""
+    name: str
+    version: str
+    ecosystem: str  # OSV ecosystem name (Debian, Alpine, PyPI, npm, etc.)
+    pkg_type: str  # Original package type from Trivy (os, library, etc.)
+    layer: Optional[str] = None  # Which layer introduced this package
+    locations: List[str] = field(default_factory=list)  # File paths where package was found
+
+
+@dataclass
+class DockerCVEResult:
+    """Result of CVE scanning for a Docker image."""
+    image_name: str
+    packages_scanned: int
+    packages_with_vulns: int
+    vulnerabilities: List[Dict[str, Any]]
+    # Severity counts
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    # Special indicators
+    kev_count: int = 0  # Count of CVEs in CISA KEV catalog
+    high_epss_count: int = 0  # Count of CVEs with EPSS > 0.5
+    # Metadata
+    scan_duration_seconds: float = 0.0
+    trivy_available: bool = False
+    enrichment_applied: bool = False
+    error: Optional[str] = None
+
+
+def _normalize_ecosystem(pkg_type: str, target: str = "") -> str:
+    """
+    Normalize package type to OSV ecosystem name.
+
+    Args:
+        pkg_type: Package type from Trivy (os, library, npm, pip, etc.)
+        target: Target string from Trivy (may contain OS info)
+
+    Returns:
+        OSV ecosystem name
+    """
+    pkg_type_lower = pkg_type.lower()
+    target_lower = target.lower()
+
+    # Check pkg_type first
+    if pkg_type_lower in PACKAGE_MANAGER_TO_ECOSYSTEM:
+        return PACKAGE_MANAGER_TO_ECOSYSTEM[pkg_type_lower]
+
+    # Check target for OS hints
+    if "alpine" in target_lower:
+        return "Alpine"
+    if "debian" in target_lower or "ubuntu" in target_lower:
+        return "Debian"
+    if "centos" in target_lower or "rhel" in target_lower or "rocky" in target_lower:
+        return "Rocky Linux"
+
+    # Common language package types
+    if pkg_type_lower == "python-pkg":
+        return "PyPI"
+    if pkg_type_lower == "node-pkg":
+        return "npm"
+    if pkg_type_lower == "gemspec":
+        return "RubyGems"
+    if pkg_type_lower == "gobinary" or pkg_type_lower == "gomod":
+        return "Go"
+    if pkg_type_lower == "rust-binary" or pkg_type_lower == "cargo":
+        return "crates.io"
+    if pkg_type_lower == "jar" or pkg_type_lower == "pom":
+        return "Maven"
+    if pkg_type_lower == "composer":
+        return "Packagist"
+    if pkg_type_lower == "dotnet-deps" or pkg_type_lower == "nuget":
+        return "NuGet"
+
+    # Default to OS package based on target
+    if pkg_type_lower == "os":
+        if "alpine" in target_lower:
+            return "Alpine"
+        elif "debian" in target_lower or "ubuntu" in target_lower:
+            return "Debian"
+        else:
+            return "Debian"  # Default fallback
+
+    # Unknown - return as-is
+    return pkg_type
+
+
+async def extract_packages_from_image(
+    image_name: str,
+    timeout: int = 300
+) -> Tuple[List[DockerPackage], Dict[str, Any]]:
+    """
+    Extract installed packages from a Docker image using Trivy.
+
+    Uses Trivy with --list-all-pkgs to get a complete package inventory.
+    Falls back to basic layer extraction if Trivy is not available.
+
+    Args:
+        image_name: Docker image name (e.g., "python:3.9-slim")
+        timeout: Timeout in seconds for Trivy execution
+
+    Returns:
+        Tuple of (list of DockerPackage, metadata dict)
+    """
+    metadata = {
+        "trivy_available": is_trivy_available(),
+        "extraction_method": "trivy" if is_trivy_available() else "none",
+        "os_detected": None,
+        "packages_by_type": {},
+    }
+
+    if not is_trivy_available():
+        logger.warning("Trivy not available for package extraction")
+        return [], metadata
+
+    packages: List[DockerPackage] = []
+
+    try:
+        # Run Trivy with --list-all-pkgs to get ALL packages (not just vulnerable ones)
+        cmd = [
+            "trivy", "image",
+            "--format", "json",
+            "--list-all-pkgs",  # This is key - shows all packages
+            "--quiet",
+            image_name
+        ]
+
+        logger.info(f"Extracting packages from {image_name} using Trivy")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        if result.returncode != 0:
+            if "No such image" in result.stderr:
+                logger.warning(f"Image {image_name} not found locally")
+                metadata["error"] = f"Image not found: {image_name}"
+                return [], metadata
+            else:
+                logger.warning(f"Trivy command failed: {result.stderr[:500]}")
+                metadata["error"] = result.stderr[:500]
+                return [], metadata
+
+        if not result.stdout:
+            logger.warning("Trivy returned empty output")
+            return [], metadata
+
+        data = json.loads(result.stdout)
+
+        # Extract OS information
+        if data.get("Metadata"):
+            os_info = data["Metadata"].get("OS", {})
+            metadata["os_detected"] = f"{os_info.get('Family', 'unknown')} {os_info.get('Name', '')}"
+
+        # Parse packages from Results
+        pkg_type_counts: Dict[str, int] = {}
+        seen_packages: Set[str] = set()  # Dedupe by name+version+ecosystem
+
+        for result_item in data.get("Results", []):
+            target = result_item.get("Target", "")
+            pkg_class = result_item.get("Class", "")
+            pkg_type = result_item.get("Type", "os")
+
+            # Get packages from this result
+            for pkg in result_item.get("Packages", []):
+                pkg_name = pkg.get("Name", "")
+                pkg_version = pkg.get("Version", "")
+
+                if not pkg_name or not pkg_version:
+                    continue
+
+                # Normalize ecosystem
+                ecosystem = _normalize_ecosystem(pkg_type, target)
+
+                # Dedupe
+                dedup_key = f"{pkg_name}:{pkg_version}:{ecosystem}"
+                if dedup_key in seen_packages:
+                    continue
+                seen_packages.add(dedup_key)
+
+                # Get file locations if available
+                locations = pkg.get("Locations", [])
+                if isinstance(locations, list):
+                    locations = [loc.get("Path", "") if isinstance(loc, dict) else str(loc) for loc in locations]
+                else:
+                    locations = []
+
+                packages.append(DockerPackage(
+                    name=pkg_name,
+                    version=pkg_version,
+                    ecosystem=ecosystem,
+                    pkg_type=pkg_type,
+                    layer=pkg.get("Layer", {}).get("DiffID") if pkg.get("Layer") else None,
+                    locations=locations,
+                ))
+
+                # Track counts by type
+                pkg_type_counts[ecosystem] = pkg_type_counts.get(ecosystem, 0) + 1
+
+        metadata["packages_by_type"] = pkg_type_counts
+        logger.info(f"Extracted {len(packages)} packages from {image_name}: {pkg_type_counts}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Trivy package extraction timed out for {image_name}")
+        metadata["error"] = "Timeout during package extraction"
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse Trivy output: {e}")
+        metadata["error"] = f"JSON parse error: {e}"
+    except Exception as e:
+        logger.error(f"Error extracting packages from {image_name}: {e}")
+        metadata["error"] = str(e)
+
+    return packages, metadata
+
+
+async def scan_image_packages_for_cves(
+    image_name: str,
+    include_nvd_enrichment: bool = True,
+    include_kev: bool = True,
+    include_epss: bool = True,
+    timeout: int = 300,
+) -> DockerCVEResult:
+    """
+    Scan Docker image packages for known CVEs using the existing CVE infrastructure.
+
+    This function:
+    1. Extracts packages from the Docker image using Trivy
+    2. Converts packages to Dependency models for cve_service
+    3. Looks up CVEs via OSV API (with local database fallback)
+    4. Enriches with NVD data (CVSS v3/v4 vectors, CWEs)
+    5. Adds EPSS exploit probability scores
+    6. Checks CISA KEV status
+
+    Args:
+        image_name: Docker image name to scan
+        include_nvd_enrichment: Whether to enrich with NVD data
+        include_kev: Whether to check CISA KEV status
+        include_epss: Whether to include EPSS scores
+        timeout: Timeout for package extraction
+
+    Returns:
+        DockerCVEResult with all vulnerabilities and enrichment data
+    """
+    import time
+    start_time = time.time()
+
+    result = DockerCVEResult(
+        image_name=image_name,
+        packages_scanned=0,
+        packages_with_vulns=0,
+        vulnerabilities=[],
+        trivy_available=is_trivy_available(),
+    )
+
+    try:
+        # 1. Extract packages from image
+        packages, pkg_metadata = await extract_packages_from_image(image_name, timeout=timeout)
+
+        if pkg_metadata.get("error"):
+            result.error = pkg_metadata["error"]
+            return result
+
+        if not packages:
+            logger.info(f"No packages found in {image_name}")
+            result.scan_duration_seconds = time.time() - start_time
+            return result
+
+        result.packages_scanned = len(packages)
+        logger.info(f"Looking up CVEs for {len(packages)} packages from {image_name}")
+
+        # 2. Convert to Dependency models for cve_service
+        from backend import models
+        from backend.services import cve_service
+
+        deps = [
+            models.Dependency(
+                id=idx,
+                project_id=0,  # No project context for Docker scan
+                name=pkg.name,
+                version=pkg.version,
+                ecosystem=pkg.ecosystem,
+            )
+            for idx, pkg in enumerate(packages)
+        ]
+
+        # 3. Lookup CVEs using existing service (OSV API + local DB fallback)
+        vulns = await cve_service.lookup_dependencies(deps)
+
+        if not vulns:
+            logger.info(f"No CVEs found for packages in {image_name}")
+            result.scan_duration_seconds = time.time() - start_time
+            return result
+
+        logger.info(f"Found {len(vulns)} CVEs for packages in {image_name}")
+
+        # 4. Convert vulnerabilities to dict format for enrichment
+        vuln_dicts = []
+        pkg_lookup = {idx: pkg for idx, pkg in enumerate(packages)}
+
+        for vuln in vulns:
+            pkg = pkg_lookup.get(vuln.dependency_id)
+            vuln_dict = {
+                "external_id": vuln.external_id,
+                "title": vuln.title,
+                "description": vuln.description,
+                "severity": vuln.severity,
+                "cvss_score": vuln.cvss_score,
+                "source": vuln.source,
+                # Package context
+                "package_name": pkg.name if pkg else None,
+                "package_version": pkg.version if pkg else None,
+                "package_ecosystem": pkg.ecosystem if pkg else None,
+                "package_type": pkg.pkg_type if pkg else None,
+            }
+            vuln_dicts.append(vuln_dict)
+
+        # 5. Enrich with NVD/EPSS/KEV if requested
+        if include_nvd_enrichment or include_kev or include_epss:
+            from backend.services import nvd_service
+
+            # Use the full enrichment function
+            if include_nvd_enrichment and include_kev and include_epss:
+                vuln_dicts = await nvd_service.enrich_all_parallel(vuln_dicts)
+                result.enrichment_applied = True
+            elif include_nvd_enrichment:
+                vuln_dicts = await nvd_service.enrich_vulnerabilities_with_nvd(
+                    vuln_dicts,
+                    include_kev=include_kev
+                )
+                result.enrichment_applied = True
+
+        # 6. Calculate statistics
+        packages_with_vulns = set()
+        for vuln in vuln_dicts:
+            severity = (vuln.get("severity") or "").lower()
+
+            if severity == "critical":
+                result.critical_count += 1
+            elif severity == "high":
+                result.high_count += 1
+            elif severity == "medium":
+                result.medium_count += 1
+            elif severity == "low":
+                result.low_count += 1
+
+            # Track KEV hits
+            if vuln.get("in_kev"):
+                result.kev_count += 1
+
+            # Track high EPSS scores (> 50% exploitation probability)
+            epss_score = vuln.get("epss_score")
+            if epss_score and epss_score > 0.5:
+                result.high_epss_count += 1
+
+            # Track packages with vulns
+            pkg_key = f"{vuln.get('package_name')}:{vuln.get('package_version')}"
+            packages_with_vulns.add(pkg_key)
+
+        result.packages_with_vulns = len(packages_with_vulns)
+        result.vulnerabilities = vuln_dicts
+
+        logger.info(
+            f"CVE scan complete for {image_name}: "
+            f"{len(vuln_dicts)} CVEs ({result.critical_count} critical, {result.high_count} high), "
+            f"{result.kev_count} in KEV, {result.high_epss_count} with high EPSS"
+        )
+
+    except Exception as e:
+        logger.error(f"Error scanning {image_name} for CVEs: {e}")
+        result.error = str(e)
+
+    result.scan_duration_seconds = time.time() - start_time
+    return result

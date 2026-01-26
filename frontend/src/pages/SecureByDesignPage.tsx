@@ -831,6 +831,56 @@ export default function SecureByDesignPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               Secure by Design encompasses security principles, threat modeling, secure coding practices, security testing, and secure operations. It's not just about writing secure code—it's about creating systems that remain secure even as they evolve and face new threats.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Think Like an Architect
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The House Analogy:</strong><br/>
+                Imagine you're building a house. You can either:<br/><br/>
+                
+                <strong>Option A (Insecure):</strong> Build the house first, then try to add a security system, reinforced doors, and window bars afterward. This is expensive, ugly, and leaves gaps.<br/><br/>
+                
+                <strong>Option B (Secure by Design):</strong> Design the house with security in mind from the start. Plan where sensors go, use reinforced materials, design entry points thoughtfully. The result is seamlessly secure.<br/><br/>
+                
+                <strong>Real Software Examples:</strong><br/>
+                • A banking app that stores passwords in plain text must be completely rebuilt to fix it<br/>
+                • An API that doesn't validate input on every endpoint requires touching hundreds of files<br/>
+                • A system that trusts all internal network traffic can't easily adopt Zero Trust<br/><br/>
+                
+                <strong>The Cost Multiplier:</strong><br/>
+                • Bug found in design: $100 to fix<br/>
+                • Bug found in development: $1,000 to fix<br/>
+                • Bug found in testing: $10,000 to fix<br/>
+                • Bug found in production: $100,000+ to fix
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                The Three Pillars of Application Security
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { pillar: "Confidentiality", desc: "Only authorized people can access data. Encryption, access controls, data classification.", icon: "🔒" },
+                  { pillar: "Integrity", desc: "Data hasn't been tampered with. Hashing, digital signatures, input validation.", icon: "✓" },
+                  { pillar: "Availability", desc: "Systems work when needed. DDoS protection, redundancy, disaster recovery.", icon: "⏰" },
+                ].map((item) => (
+                  <Grid item xs={12} md={4} key={item.pillar}>
+                    <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05), textAlign: "center" }}>
+                      <Typography variant="h4" sx={{ mb: 1 }}>{item.icon}</Typography>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6" }}>{item.pillar}</Typography>
+                      <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+              <Typography variant="body2" sx={{ mt: 2, fontStyle: "italic", color: "text.secondary" }}>
+                This is called the <strong>CIA Triad</strong> - the foundation of all security thinking. Every security control ultimately protects one or more of these pillars.
+              </Typography>
+            </Box>
+
             <Alert severity="info" sx={{ borderRadius: 2 }}>
               <AlertTitle sx={{ fontWeight: 700 }}>Key Insight</AlertTitle>
               Security is not a feature you add—it's a property of how you build. Just like you can't make a building earthquake-resistant by adding supports afterward, you can't make software truly secure by patching it later.
@@ -846,7 +896,7 @@ export default function SecureByDesignPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               These foundational principles guide secure system design. Apply them consistently across all layers of your application.
             </Typography>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
               {securityPrinciples.map((principle) => (
                 <Grid item xs={12} sm={6} md={4} key={principle.name}>
                   <Paper sx={{ p: 3, borderRadius: 3, height: "100%", bgcolor: alpha(principle.color, 0.08), border: `1px solid ${alpha(principle.color, 0.2)}` }}>
@@ -859,6 +909,121 @@ export default function SecureByDesignPage() {
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#7c3aed", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#7c3aed", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#7c3aed" }}>
+                Principle Deep Dives
+              </Typography>
+              
+              <Accordion sx={{ mb: 1, bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>🔐 Least Privilege Explained</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                    <strong>Real-World Analogy:</strong> A hotel maid has a master key card that only works during their shift, only on floors they're assigned to, and doesn't work on the manager's office. That's least privilege.<br/><br/>
+                    
+                    <strong>In Practice:</strong><br/>
+                    • Database accounts should have SELECT only, not DELETE or DROP<br/>
+                    • API keys should be scoped to specific endpoints<br/>
+                    • User accounts should have roles, not all be admins<br/>
+                    • Containers should run as non-root users<br/>
+                    • File system permissions should be as restrictive as possible<br/><br/>
+                    
+                    <strong>The Test:</strong> If removing a permission breaks something, the permission was needed. If removing it doesn't break anything, it was excessive.
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={{ mb: 1, bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>🛡️ Defense in Depth Explained</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                    <strong>Real-World Analogy:</strong> A castle has a moat, walls, guards, locked doors, and a safe. Even if attackers cross the moat, they still face walls. Even past the walls, there are guards. Multiple layers mean no single breach is fatal.<br/><br/>
+                    
+                    <strong>In Practice:</strong><br/>
+                    • Firewall (network layer) + WAF (application layer) + Input validation (code layer)<br/>
+                    • Authentication + Authorization + Audit logging<br/>
+                    • HTTPS + Encrypted databases + Encrypted backups<br/>
+                    • Rate limiting + CAPTCHAs + Account lockout<br/><br/>
+                    
+                    <strong>Example Stack:</strong><br/>
+                    1. CDN/WAF (Cloudflare) - Block known bad traffic<br/>
+                    2. Load Balancer - Rate limiting, DDoS protection<br/>
+                    3. Firewall - Only allow required ports<br/>
+                    4. Application - Input validation, authentication<br/>
+                    5. Database - Encrypted at rest, parameterized queries<br/>
+                    6. Monitoring - Detect anomalies, alert on breaches
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={{ mb: 1, bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>🔍 Zero Trust Explained</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                    <strong>The Old Model:</strong> "Castle and Moat" - Once you're inside the network, you're trusted. VPN = full access.<br/><br/>
+                    
+                    <strong>Why It's Broken:</strong><br/>
+                    • Attackers who get inside have free reign<br/>
+                    • Insider threats are invisible<br/>
+                    • Remote work makes "inside" meaningless<br/>
+                    • Cloud resources aren't "inside" anything<br/><br/>
+                    
+                    <strong>Zero Trust Principles:</strong><br/>
+                    1. <strong>Verify explicitly:</strong> Every request, every time, regardless of source<br/>
+                    2. <strong>Least privilege:</strong> JIT (Just-In-Time) access, not permanent permissions<br/>
+                    3. <strong>Assume breach:</strong> Design as if you're already compromised<br/><br/>
+                    
+                    <strong>Implementation:</strong><br/>
+                    • Every API call requires authentication<br/>
+                    • Services verify each other (mTLS)<br/>
+                    • Access based on identity + device + context, not network location<br/>
+                    • Continuous validation, not just at login
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion sx={{ bgcolor: "transparent", boxShadow: "none", "&:before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>🚫 Fail Secure vs Fail Open</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                    <strong>Fail Secure:</strong> When something goes wrong, deny access. Example: If the authentication server is down, users can't log in (frustrating but safe).<br/><br/>
+                    
+                    <strong>Fail Open:</strong> When something goes wrong, allow access. Example: If the firewall crashes, all traffic is allowed (convenient but dangerous).<br/><br/>
+                    
+                    <strong>Code Example:</strong><br/><br/>
+                    
+                    <Paper sx={{ p: 2, bgcolor: "#1a1a2e", fontFamily: "monospace", mb: 2 }}>
+                      <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre" }}>
+{`// FAIL OPEN (BAD)
+try {
+  return auth.check(token);
+} catch (e) {
+  return true; // If auth fails, just let them in!
+}
+
+// FAIL SECURE (GOOD)
+try {
+  return auth.check(token);
+} catch (e) {
+  log.error("Auth check failed", e);
+  return false; // If auth fails, deny access
+}`}
+                      </Typography>
+                    </Paper>
+                    
+                    <strong>When to Fail Open:</strong> Only when availability is more critical than security AND you have detection in place. Example: Fire alarm door locks - fail open because people need to escape.
+                  </Typography>
+                </AccordionDetails>
+              </Accordion>
+            </Box>
           </Paper>
 
           {/* Threat Modeling */}
@@ -870,6 +1035,29 @@ export default function SecureByDesignPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               Threat modeling is a structured approach to identifying what can go wrong with your system's security, what you're going to do about it, and how to prioritize efforts. It helps you think like an attacker to find vulnerabilities before they do.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Think Like an Attacker
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What is Threat Modeling?</strong><br/>
+                Imagine you're a burglar casing a building. You'd look at: doors, windows, schedules, security cameras, guards. You'd think: "If I wanted to break in, how would I do it?" Threat modeling is doing this for your software.<br/><br/>
+                
+                <strong>The Four Key Questions:</strong><br/>
+                1. <strong>What are we building?</strong> Draw diagrams, understand data flow<br/>
+                2. <strong>What can go wrong?</strong> Use STRIDE, brainstorm attacks<br/>
+                3. <strong>What are we going to do about it?</strong> Prioritize and mitigate<br/>
+                4. <strong>Did we do a good job?</strong> Review and validate<br/><br/>
+                
+                <strong>When to Threat Model:</strong><br/>
+                • Starting a new project or major feature<br/>
+                • Making significant architectural changes<br/>
+                • Before security reviews or pen tests<br/>
+                • Periodically for existing systems (annually or after incidents)
+              </Typography>
+            </Box>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Threat Modeling Process</Typography>
@@ -911,6 +1099,27 @@ export default function SecureByDesignPage() {
                 </Paper>
               </Grid>
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Data Flow Diagrams (DFDs) Made Simple
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                DFDs visualize how data moves through your system. This helps identify where attacks might happen.<br/><br/>
+                
+                <strong>DFD Elements:</strong><br/>
+                • <strong>Processes:</strong> Circles - things that process data (your app, APIs)<br/>
+                • <strong>Data Stores:</strong> Parallel lines - where data lives (databases, files)<br/>
+                • <strong>External Entities:</strong> Rectangles - outside actors (users, external APIs)<br/>
+                • <strong>Data Flows:</strong> Arrows - how data moves between elements<br/>
+                • <strong>Trust Boundaries:</strong> Dashed lines - where trust levels change<br/><br/>
+                
+                <strong>Example - Simple Web App:</strong><br/>
+                User (External) → [Trust Boundary] → Web Server (Process) → [Trust Boundary] → Database (Store)<br/><br/>
+                
+                <strong>Where Threats Live:</strong> Most threats occur at trust boundaries - where data crosses from one trust level to another. Every trust boundary needs validation.
+              </Typography>
+            </Box>
           </Paper>
 
           {/* STRIDE Framework */}
@@ -922,7 +1131,25 @@ export default function SecureByDesignPage() {
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               STRIDE is a threat classification system developed by Microsoft. Each letter represents a category of security threat, helping you systematically identify potential vulnerabilities.
             </Typography>
-            <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                How to Use STRIDE
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                For each component in your system, ask: "Can this be affected by Spoofing? Tampering? Repudiation?" etc.<br/><br/>
+                
+                <strong>Example: User Login Form</strong><br/>
+                • <strong>Spoofing:</strong> Can someone pretend to be another user? (→ Use strong passwords + MFA)<br/>
+                • <strong>Tampering:</strong> Can the login request be modified? (→ Use HTTPS)<br/>
+                • <strong>Repudiation:</strong> Can a user deny they logged in? (→ Log all logins with IP/timestamp)<br/>
+                • <strong>Information Disclosure:</strong> Are credentials exposed? (→ Hash passwords, don't log them)<br/>
+                • <strong>Denial of Service:</strong> Can login be flooded? (→ Rate limiting)<br/>
+                • <strong>Elevation of Privilege:</strong> Can a user become admin? (→ Validate roles server-side)
+              </Typography>
+            </Box>
+
+            <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 3 }}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: alpha(accent, 0.08) }}>
@@ -946,6 +1173,24 @@ export default function SecureByDesignPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+
+            <Box sx={{ bgcolor: alpha("#7c3aed", 0.08), p: 3, borderRadius: 2, border: `1px solid ${alpha("#7c3aed", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#7c3aed" }}>
+                DREAD: Rating Threat Severity
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                Once you identify threats, prioritize them using DREAD (rate each 1-10):<br/><br/>
+                
+                <strong>D</strong>amage: How bad if it's exploited?<br/>
+                <strong>R</strong>eproducibility: How easy to reproduce the attack?<br/>
+                <strong>E</strong>xploitability: How easy to launch the attack?<br/>
+                <strong>A</strong>ffected users: How many users impacted?<br/>
+                <strong>D</strong>iscoverability: How easy to find the vulnerability?<br/><br/>
+                
+                <strong>Score = (D + R + E + A + D) / 5</strong><br/>
+                • 1-3: Low priority • 4-6: Medium priority • 7-10: High priority (fix immediately)
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Secure Coding */}
@@ -979,39 +1224,77 @@ export default function SecureByDesignPage() {
               <GppBadIcon sx={{ color: accent }} />
               Preventing Injection Attacks
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: What is Injection?
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The Core Problem:</strong> Your application takes user input and uses it as part of a command. If the input isn't properly handled, attackers can inject their own commands.<br/><br/>
+                
+                <strong>Simple Analogy:</strong> Imagine a form letter:<br/>
+                "Dear [NAME], thank you for your order."<br/><br/>
+                
+                If someone enters their name as: <code>Bob. PS: Send me $1000</code><br/>
+                The letter becomes: "Dear Bob. PS: Send me $1000, thank you for your order."<br/><br/>
+                
+                They "injected" text into your message! SQL injection works the same way, but with database commands.
+              </Typography>
+            </Box>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>SQL Injection</Typography>
                 <Typography variant="body2" sx={{ mb: 2 }}>
-                  SQL Injection occurs when malicious SQL is inserted through user input. Always use parameterized queries.
+                  SQL Injection occurs when malicious SQL is inserted through user input. This can read, modify, or delete entire databases.
                 </Typography>
                 <Paper sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
-                  <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                  <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre-wrap" }}>
                     <span style={{ color: "#6272a4" }}>// BAD - vulnerable to SQL injection</span>{"\n"}
                     <span style={{ color: "#ff79c6" }}>query</span> = <span style={{ color: "#f1fa8c" }}>"SELECT * FROM users WHERE id = "</span> + userId;{"\n"}
+                    <span style={{ color: "#6272a4" }}>// If userId = "1 OR 1=1" → returns ALL users!</span>{"\n"}
+                    <span style={{ color: "#6272a4" }}>// If userId = "1; DROP TABLE users" → deletes table!</span>{"\n"}
                     {"\n"}
                     <span style={{ color: "#6272a4" }}>// GOOD - parameterized query</span>{"\n"}
                     <span style={{ color: "#ff79c6" }}>query</span> = <span style={{ color: "#f1fa8c" }}>"SELECT * FROM users WHERE id = ?"</span>;{"\n"}
-                    stmt.<span style={{ color: "#50fa7b" }}>setParameter</span>(<span style={{ color: "#bd93f9" }}>1</span>, userId);
+                    stmt.<span style={{ color: "#50fa7b" }}>setParameter</span>(<span style={{ color: "#bd93f9" }}>1</span>, userId);{"\n"}
+                    <span style={{ color: "#6272a4" }}>// Now "1 OR 1=1" is treated as literal text, not SQL</span>
                   </Typography>
                 </Paper>
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  <AlertTitle sx={{ fontWeight: 700 }}>Defense Summary</AlertTitle>
+                  1. Always use parameterized queries/prepared statements<br/>
+                  2. Use ORMs properly (they parameterize by default)<br/>
+                  3. Validate input type (if expecting number, ensure it's numeric)<br/>
+                  4. Use least privilege DB accounts
+                </Alert>
               </Grid>
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: accent }}>Command Injection</Typography>
                 <Typography variant="body2" sx={{ mb: 2 }}>
-                  Command Injection occurs when OS commands are constructed from user input. Avoid shell execution with user data.
+                  Command Injection occurs when OS commands are constructed from user input. Attackers can run any command on your server.
                 </Typography>
                 <Paper sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
-                  <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
+                  <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre-wrap" }}>
                     <span style={{ color: "#6272a4" }}>// BAD - command injection</span>{"\n"}
                     <span style={{ color: "#50fa7b" }}>exec</span>(<span style={{ color: "#f1fa8c" }}>"ping "</span> + userHost);{"\n"}
+                    <span style={{ color: "#6272a4" }}>// If userHost = "google.com; rm -rf /"</span>{"\n"}
+                    <span style={{ color: "#6272a4" }}>// Runs: ping google.com; rm -rf /</span>{"\n"}
                     {"\n"}
                     <span style={{ color: "#6272a4" }}>// GOOD - validate input, use safe APIs</span>{"\n"}
                     <span style={{ color: "#ff79c6" }}>if</span> (isValidHostname(userHost)) {"{"}{"\n"}
+                    {"  "}<span style={{ color: "#6272a4" }}>// Use library function, not shell</span>{"\n"}
                     {"  "}pingService.<span style={{ color: "#50fa7b" }}>ping</span>(userHost);{"\n"}
                     {"}"}
                   </Typography>
                 </Paper>
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  <AlertTitle sx={{ fontWeight: 700 }}>Defense Summary</AlertTitle>
+                  1. Avoid shell execution with user input entirely<br/>
+                  2. Use language APIs instead of system commands<br/>
+                  3. If unavoidable, use strict allowlisting<br/>
+                  4. Never construct command strings from input
+                </Alert>
               </Grid>
             </Grid>
           </Paper>
@@ -1022,16 +1305,38 @@ export default function SecureByDesignPage() {
               <HttpsIcon sx={{ color: accent }} />
               XSS and CSRF Prevention
             </Typography>
-            <Grid container spacing={3}>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: XSS Explained
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What is XSS?</strong> Cross-Site Scripting lets attackers inject JavaScript into web pages viewed by other users.<br/><br/>
+                
+                <strong>Simple Example:</strong> A comment form that displays comments to all users:<br/>
+                User posts: <code>&lt;script&gt;steal(document.cookie)&lt;/script&gt;</code><br/>
+                Every visitor now runs the attacker's JavaScript in their browser!<br/><br/>
+                
+                <strong>Types of XSS:</strong><br/>
+                • <strong>Stored:</strong> Script saved in database, affects everyone who views it (most dangerous)<br/>
+                • <strong>Reflected:</strong> Script in URL, affects users who click malicious link<br/>
+                • <strong>DOM-based:</strong> Client-side JavaScript processes unsafe input<br/><br/>
+                
+                <strong>What Attackers Can Do:</strong> Steal sessions, redirect users, modify page content, phish credentials
+              </Typography>
+            </Box>
+
+            <Grid container spacing={3} sx={{ mb: 3 }}>
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Cross-Site Scripting (XSS)</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Cross-Site Scripting (XSS) Prevention</Typography>
                 <List dense>
                   {[
-                    "Encode all output for the correct context (HTML, JS, CSS)",
-                    "Use Content Security Policy (CSP) headers",
-                    "Validate and sanitize input",
-                    "Use HttpOnly cookies for session tokens",
-                    "Avoid dangerouslySetInnerHTML and similar APIs",
+                    "Encode all output for the correct context (HTML, JS, CSS, URL)",
+                    "Use Content Security Policy (CSP) headers to restrict script sources",
+                    "Validate and sanitize input (but encoding is the real defense)",
+                    "Use HttpOnly cookies so JavaScript can't access session tokens",
+                    "Avoid dangerouslySetInnerHTML and similar APIs (or sanitize first)",
+                    "Use modern frameworks that auto-escape (React, Vue, Angular)",
                   ].map((item) => (
                     <ListItem key={item} sx={{ px: 0 }}>
                       <ListItemIcon sx={{ minWidth: 28 }}><CheckCircleIcon sx={{ color: "#22c55e", fontSize: 20 }} /></ListItemIcon>
@@ -1041,14 +1346,51 @@ export default function SecureByDesignPage() {
                 </List>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Cross-Site Request Forgery (CSRF)</Typography>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+                  <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre-wrap" }}>
+                    <span style={{ color: "#6272a4" }}>// BAD - XSS vulnerability</span>{"\n"}
+                    element.innerHTML = userInput;{"\n"}
+                    <span style={{ color: "#6272a4" }}>// If userInput = "&lt;script&gt;evil()&lt;/script&gt;"</span>{"\n"}
+                    {"\n"}
+                    <span style={{ color: "#6272a4" }}>// GOOD - use textContent or encode</span>{"\n"}
+                    element.textContent = userInput;{"\n"}
+                    <span style={{ color: "#6272a4" }}>// Script tags become harmless text</span>{"\n"}
+                    {"\n"}
+                    <span style={{ color: "#6272a4" }}>// React is safe by default:</span>{"\n"}
+                    {"<div>{userInput}</div>"} <span style={{ color: "#6272a4" }}>// auto-escaped</span>
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Beginner's Guide: CSRF Explained
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>What is CSRF?</strong> Cross-Site Request Forgery tricks users into performing unwanted actions on sites where they're logged in.<br/><br/>
+                
+                <strong>How It Works:</strong><br/>
+                1. You're logged into your bank (have session cookie)<br/>
+                2. You visit attacker's site which has: <code>&lt;img src="bank.com/transfer?to=attacker&amount=1000"&gt;</code><br/>
+                3. Your browser sends the request WITH your bank cookies (you're logged in!)<br/>
+                4. Money transferred without your knowledge<br/><br/>
+                
+                <strong>Why Cookies Are Vulnerable:</strong> Browsers automatically send cookies for a domain, even for requests initiated by other sites.
+              </Typography>
+            </Box>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Cross-Site Request Forgery (CSRF) Prevention</Typography>
                 <List dense>
                   {[
-                    "Use anti-CSRF tokens on state-changing requests",
-                    "Set SameSite cookie attribute (Strict or Lax)",
-                    "Verify Origin/Referer headers",
-                    "Require re-authentication for sensitive actions",
-                    "Use custom headers for API requests",
+                    "Use anti-CSRF tokens - unique per session, submitted with forms",
+                    "Set SameSite cookie attribute (Strict or Lax) to block cross-site requests",
+                    "Verify Origin/Referer headers for sensitive actions",
+                    "Require re-authentication for critical actions (password change, wire transfer)",
+                    "Use custom headers for API requests (AJAX) since browsers add them only same-origin",
+                    "Don't use GET for state-changing operations",
                   ].map((item) => (
                     <ListItem key={item} sx={{ px: 0 }}>
                       <ListItemIcon sx={{ minWidth: 28 }}><CheckCircleIcon sx={{ color: "#22c55e", fontSize: 20 }} /></ListItemIcon>
@@ -1056,6 +1398,24 @@ export default function SecureByDesignPage() {
                     </ListItem>
                   ))}
                 </List>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace" }}>
+                  <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre-wrap" }}>
+                    <span style={{ color: "#6272a4" }}>// Anti-CSRF token in form</span>{"\n"}
+                    {"<form method='POST'>"}{"\n"}
+                    {"  <input type='hidden'"}{"\n"}
+                    {"    name='csrf_token'"}{"\n"}
+                    {"    value='random-token-per-session'/>"}{"\n"}
+                    {"  ..."}{"\n"}
+                    {"</form>"}{"\n"}
+                    {"\n"}
+                    <span style={{ color: "#6272a4" }}>// Server validates token matches session</span>{"\n"}
+                    <span style={{ color: "#ff79c6" }}>if</span> (request.csrf_token !== session.csrf_token) {"{"}{"\n"}
+                    {"  "}reject(<span style={{ color: "#f1fa8c" }}>"CSRF validation failed"</span>);{"\n"}
+                    {"}"}
+                  </Typography>
+                </Paper>
               </Grid>
             </Grid>
           </Paper>
@@ -1090,6 +1450,36 @@ export default function SecureByDesignPage() {
               <KeyIcon sx={{ color: accent }} />
               Authentication Best Practices
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Authentication vs Authorization
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Authentication:</strong> "Who are you?" - Proving your identity (login with username/password)<br/>
+                <strong>Authorization:</strong> "What can you do?" - What permissions you have after login<br/><br/>
+                
+                <strong>Analogy:</strong> At an office building, your ID badge proves who you are (authentication). But the badge also determines which floors and rooms you can access (authorization).
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Password Storage</Typography>
+            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+              <AlertTitle>NEVER Store Plaintext Passwords</AlertTitle>
+              Use bcrypt, Argon2, or scrypt with proper salting. If your database is breached, hashed passwords are much harder to crack.
+            </Alert>
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1a1a2e", fontFamily: "monospace", mb: 3 }}>
+              <Typography variant="body2" sx={{ color: "#f8f8f2", whiteSpace: "pre-wrap" }}>
+                <span style={{ color: "#ff5555" }}>// WRONG</span>{"\n"}
+                db.store(password);       <span style={{ color: "#6272a4" }}>// plaintext</span>{"\n"}
+                db.store(sha256(password)); <span style={{ color: "#6272a4" }}>// no salt</span>{"\n"}
+                {"\n"}
+                <span style={{ color: "#50fa7b" }}>// CORRECT</span>{"\n"}
+                hash = bcrypt.hash(password, 12);{"\n"}
+                db.store(hash);
+              </Typography>
+            </Paper>
+
             <Grid container spacing={2}>
               {authBestPractices.map((item) => (
                 <Grid item xs={12} md={6} key={item}>
@@ -1110,9 +1500,27 @@ export default function SecureByDesignPage() {
               <VisibilityOffIcon sx={{ color: accent }} />
               Cryptography Essentials
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Crypto Concepts
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Encryption:</strong> Scrambles data so only those with the key can read it<br/>
+                <strong>Hashing:</strong> One-way transformation - you can't reverse it (good for passwords)<br/>
+                <strong>Signing:</strong> Proves data wasn't tampered with and came from you<br/><br/>
+                
+                <strong>Symmetric vs Asymmetric:</strong><br/>
+                • <strong>Symmetric (AES):</strong> Same key encrypts and decrypts. Fast, but how do you share the key?<br/>
+                • <strong>Asymmetric (RSA, EC):</strong> Public key encrypts, private key decrypts. Solves key sharing but slower<br/><br/>
+                
+                <strong>Rule #1:</strong> Never implement your own cryptographic algorithms. Use established, audited libraries.
+              </Typography>
+            </Box>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Do</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>Do ✓</Typography>
                 <List dense>
                   {[
                     "Use established libraries (don't roll your own crypto)",
@@ -1130,14 +1538,14 @@ export default function SecureByDesignPage() {
                 </List>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Don't</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>Don't ✗</Typography>
                 <List dense>
                   {[
-                    "Use MD5 or SHA1 for passwords",
+                    "Use MD5 or SHA1 for passwords (too fast to brute force)",
                     "Store encryption keys in code",
-                    "Use ECB mode for encryption",
+                    "Use ECB mode (patterns remain visible)",
                     "Implement custom cryptographic algorithms",
-                    "Use predictable IVs or nonces",
+                    "Use predictable IVs or nonces (reuse = disaster)",
                     "Ignore cryptographic library updates",
                   ].map((item) => (
                     <ListItem key={item} sx={{ px: 0 }}>
@@ -1156,15 +1564,38 @@ export default function SecureByDesignPage() {
               <StorageIcon sx={{ color: accent }} />
               Secrets Management
             </Typography>
+
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+              <AlertTitle>Common Mistake</AlertTitle>
+              Secrets committed to Git remain in history forever, even after deletion. Use tools like git-secrets or truffleHog to scan for accidentally committed secrets.
+            </Alert>
+
+            <Box sx={{ bgcolor: alpha("#7c3aed", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#7c3aed", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#7c3aed" }}>
+                Where Secrets Should Live
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Development:</strong> .env files (gitignored) or local secrets manager<br/>
+                <strong>CI/CD:</strong> Pipeline secrets (GitHub Secrets, GitLab CI Variables)<br/>
+                <strong>Production:</strong> Secrets manager (HashiCorp Vault, AWS Secrets Manager, Azure Key Vault)<br/><br/>
+                
+                <strong>Never in:</strong><br/>
+                • Source code (even in "private" repos)<br/>
+                • Docker images (can be extracted with docker inspect)<br/>
+                • Environment variables in Dockerfile<br/>
+                • Config files committed to git
+              </Typography>
+            </Box>
+
             <List>
               {[
                 "Never commit secrets to version control",
-                "Use environment variables for configuration",
+                "Use environment variables for runtime configuration",
                 "Use a secrets manager (HashiCorp Vault, AWS Secrets Manager, Azure Key Vault)",
-                "Rotate secrets regularly and after incidents",
+                "Rotate secrets regularly and immediately after incidents",
                 "Audit secret access and usage",
-                "Limit secret scope to what's needed",
-                "Use different secrets per environment",
+                "Limit secret scope to only what's needed (least privilege)",
+                "Use different secrets per environment (dev/staging/prod)",
               ].map((item) => (
                 <ListItem key={item} sx={{ px: 0 }}>
                   <ListItemIcon><CheckCircleIcon sx={{ color: accent }} /></ListItemIcon>
@@ -1180,6 +1611,22 @@ export default function SecureByDesignPage() {
               <BugReportIcon sx={{ color: accent }} />
               Security Testing
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Testing Types Explained
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>SAST (Static):</strong> Scans source code without running it. Fast, integrates into CI/CD, finds common bugs. But: false positives, can't find runtime issues.<br/><br/>
+                
+                <strong>DAST (Dynamic):</strong> Tests the running application like an attacker. Finds real exploitable issues. But: slower, needs running app, misses code paths.<br/><br/>
+                
+                <strong>SCA (Composition):</strong> Scans dependencies for known vulnerabilities. Essential since 80%+ of code is third-party.<br/><br/>
+                
+                <strong>Pen Testing:</strong> Human experts try to break your system. Most thorough but expensive. Use for critical systems or before major launches.
+              </Typography>
+            </Box>
+
             <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
               <Table>
                 <TableHead>
@@ -1210,6 +1657,18 @@ export default function SecureByDesignPage() {
               <CloudIcon sx={{ color: accent }} />
               Secure Software Development Lifecycle
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Shift Left Security
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Traditional approach:</strong> Security review happens at the end, before release. Problems: expensive fixes, release delays, overlooked issues.<br/><br/>
+                
+                <strong>Shift Left:</strong> Move security activities earlier in the lifecycle. Design reviews catch architecture flaws. Code scanning catches vulnerabilities during development. Result: cheaper fixes, faster releases, better security.
+              </Typography>
+            </Box>
+
             <Grid container spacing={2}>
               {[
                 { phase: "Requirements", security: "Define security requirements, abuse cases, compliance needs" },

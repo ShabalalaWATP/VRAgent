@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { kanbanApi, KanbanCard, KanbanColumn } from '../api/client';
+import logger from '../utils/logger';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -198,10 +199,10 @@ export function useKanbanWebSocket({
           break;
 
         default:
-          console.log('Unknown Kanban WebSocket message type:', type);
+          logger.debug('Unknown Kanban WebSocket message type:', type);
       }
     } catch (err) {
-      console.error('Failed to parse Kanban WebSocket message:', err);
+      logger.error('Failed to parse Kanban WebSocket message:', err);
     }
   }, [
     onCardCreated, onCardUpdated, onCardMoved, onCardDeleted,
@@ -216,13 +217,13 @@ export function useKanbanWebSocket({
     }
 
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      console.log('Max Kanban WebSocket reconnection attempts reached');
+      logger.debug('Max Kanban WebSocket reconnection attempts reached');
       setStatus('error');
       return;
     }
 
     const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-    console.log(`Attempting Kanban WebSocket reconnection in ${delay}ms...`);
+    logger.debug(`Attempting Kanban WebSocket reconnection in ${delay}ms...`);
 
     reconnectTimeoutRef.current = setTimeout(() => {
       reconnectAttemptsRef.current += 1;
@@ -249,7 +250,7 @@ export function useKanbanWebSocket({
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('Kanban WebSocket connected');
+        logger.debug('Kanban WebSocket connected');
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
 
@@ -269,7 +270,7 @@ export function useKanbanWebSocket({
       };
 
       ws.onclose = (event) => {
-        console.log('Kanban WebSocket closed:', event.code, event.reason);
+        logger.debug('Kanban WebSocket closed:', event.code, event.reason);
         setStatus('disconnected');
         clearTimeouts();
         setActiveUsers([]);

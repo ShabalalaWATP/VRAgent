@@ -7,13 +7,17 @@ This service provides vulnerability lookups via OSV.dev API with optimizations:
 - Version range caching for local matching
 - Smart prefetching based on tech stack
 - Parallel ecosystem querying
+- Offline fallback using local OSV database
 
 OSV API Documentation: https://osv.dev/docs/
 """
 
 import asyncio
+import os
 import re
-from typing import Dict, List, Optional, Tuple, Set
+import sqlite3
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Set, Any
 from packaging import version as pkg_version
 from packaging.specifiers import SpecifierSet
 
@@ -30,6 +34,12 @@ OSV_URL = "https://api.osv.dev/v1/query"
 OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
 OSV_VULNS_URL = "https://api.osv.dev/v1/vulns"  # For fetching vuln details by ID
 
+# Local offline database path
+LOCAL_OSV_DB = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "data", "offline", "osv", "osv.db"
+)
+
 # Batch processing settings - OSV supports up to 1000, we use larger batches for efficiency
 BATCH_SIZE = 500  # Increased from 100 - OSV handles this well
 MAX_CONCURRENT_BATCHES = 10  # Increased concurrency for faster lookups
@@ -39,6 +49,269 @@ REQUEST_TIMEOUT = 45  # Slightly longer timeout for larger batches
 CACHE_NAMESPACE = "osv"
 VERSION_RANGE_CACHE = "osv_ranges"  # For caching version ranges for local matching
 ECOSYSTEM_CACHE = "osv_ecosystem"  # For ecosystem-wide CVE prefetching
+
+# Connectivity tracking
+_last_connectivity_check: Optional[datetime] = None
+_is_online: Optional[bool] = None
+CONNECTIVITY_CHECK_INTERVAL = 300  # 5 minutes
+
+
+def _check_local_osv_db_available() -> bool:
+    """Check if local OSV database exists."""
+    return os.path.exists(LOCAL_OSV_DB)
+
+
+def _lookup_package_vulns_local(
+    ecosystem: str, 
+    package_name: str, 
+    version: Optional[str] = None
+) -> List[Dict]:
+    """
+    Look up vulnerabilities for a package from local OSV database.
+    
+    Args:
+        ecosystem: Package ecosystem (PyPI, npm, etc.)
+        package_name: Name of the package
+        version: Optional version to filter by
+        
+    Returns:
+        List of vulnerability dictionaries in OSV-like format
+    """
+    if not _check_local_osv_db_available():
+        return []
+    
+    try:
+        conn = sqlite3.connect(LOCAL_OSV_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get all vulnerabilities affecting this package
+        cursor.execute("""
+            SELECT DISTINCT v.id, v.summary, v.details, v.severity, 
+                   v.cvss_score, v.cvss_vector, v.aliases, v.published, v.modified
+            FROM vulnerabilities v
+            JOIN affected_ranges ar ON v.id = ar.vuln_id
+            WHERE ar.ecosystem = ? AND ar.package_name = ?
+        """, (ecosystem, package_name))
+        
+        vulns = []
+        for row in cursor.fetchall():
+            vuln_id = row["id"]
+            
+            # Get version ranges for this vuln+package
+            cursor.execute("""
+                SELECT range_type, introduced, fixed, last_affected
+                FROM affected_ranges
+                WHERE vuln_id = ? AND ecosystem = ? AND package_name = ?
+            """, (vuln_id, ecosystem, package_name))
+            
+            ranges = []
+            for rng in cursor.fetchall():
+                events = []
+                if rng["introduced"]:
+                    events.append({"introduced": rng["introduced"]})
+                if rng["fixed"]:
+                    events.append({"fixed": rng["fixed"]})
+                if rng["last_affected"]:
+                    events.append({"last_affected": rng["last_affected"]})
+                
+                if events:
+                    ranges.append({
+                        "type": rng["range_type"],
+                        "events": events
+                    })
+            
+            # Check if version is affected (if provided)
+            if version and ranges:
+                if not _is_version_in_ranges(version, ranges):
+                    continue
+            
+            # Build OSV-like response
+            vuln_data = {
+                "id": vuln_id,
+                "summary": row["summary"],
+                "details": row["details"],
+                "aliases": row["aliases"].split(",") if row["aliases"] else [],
+                "published": row["published"],
+                "modified": row["modified"],
+                "affected": [{
+                    "package": {"name": package_name, "ecosystem": ecosystem},
+                    "ranges": ranges
+                }],
+            }
+            
+            # Add severity if available
+            if row["cvss_vector"]:
+                vuln_data["severity"] = [{"type": "CVSS_V3", "score": row["cvss_vector"]}]
+            
+            vulns.append(vuln_data)
+        
+        conn.close()
+        
+        if vulns:
+            logger.debug(f"Found {len(vulns)} vulns for {package_name}@{version or 'any'} in local OSV DB")
+        
+        return vulns
+        
+    except Exception as e:
+        logger.warning(f"Local OSV DB lookup error for {package_name}: {e}")
+        return []
+
+
+def _is_version_in_ranges(version: str, ranges: List[Dict]) -> bool:
+    """
+    Check if a version falls within any of the affected ranges.
+    
+    This is a simplified check - the full OSV logic is more complex.
+    """
+    try:
+        v = pkg_version.parse(version)
+    except Exception:
+        return True  # Can't parse version, assume affected
+    
+    for rng in ranges:
+        range_type = rng.get("type", "")
+        events = rng.get("events", [])
+        
+        introduced = None
+        fixed = None
+        last_affected = None
+        
+        for event in events:
+            if "introduced" in event:
+                introduced = event["introduced"]
+            if "fixed" in event:
+                fixed = event["fixed"]
+            if "last_affected" in event:
+                last_affected = event["last_affected"]
+        
+        # Check SEMVER/ECOSYSTEM ranges
+        if range_type in ("SEMVER", "ECOSYSTEM"):
+            try:
+                # Version must be >= introduced (if specified)
+                if introduced and introduced != "0":
+                    if v < pkg_version.parse(introduced):
+                        continue
+                
+                # Version must be < fixed (if specified)
+                if fixed:
+                    if v >= pkg_version.parse(fixed):
+                        continue
+                
+                # Version must be <= last_affected (if specified)
+                if last_affected:
+                    if v > pkg_version.parse(last_affected):
+                        continue
+                
+                return True  # Version is in this range
+                
+            except Exception:
+                return True  # Parse error, assume affected
+    
+    return False  # Not in any range
+
+
+def _lookup_vulns_batch_local(
+    deps: List[Tuple[str, str, Optional[str]]]
+) -> Dict[Tuple[str, str], List[Dict]]:
+    """
+    Batch lookup vulnerabilities from local OSV database.
+    
+    Args:
+        deps: List of (ecosystem, package_name, version) tuples
+        
+    Returns:
+        Dict mapping (ecosystem, package_name) to list of vulnerabilities
+    """
+    if not _check_local_osv_db_available() or not deps:
+        return {}
+    
+    results = {}
+    
+    for ecosystem, package_name, version in deps:
+        vulns = _lookup_package_vulns_local(ecosystem, package_name, version)
+        if vulns:
+            results[(ecosystem, package_name)] = vulns
+    
+    return results
+
+
+def get_local_osv_db_stats() -> Dict:
+    """Get statistics about the local OSV database."""
+    if not _check_local_osv_db_available():
+        return {"available": False, "path": LOCAL_OSV_DB}
+    
+    try:
+        conn = sqlite3.connect(LOCAL_OSV_DB)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM vulnerabilities")
+        vuln_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(DISTINCT package_name) FROM affected_ranges")
+        pkg_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(DISTINCT ecosystem) FROM affected_ranges")
+        eco_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
+        row = cursor.fetchone()
+        last_sync = row[0] if row else None
+        
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'ecosystems'")
+        row = cursor.fetchone()
+        ecosystems = row[0].split(",") if row else []
+        
+        conn.close()
+        
+        db_size = os.path.getsize(LOCAL_OSV_DB) / (1024 * 1024)
+        
+        return {
+            "available": True,
+            "path": LOCAL_OSV_DB,
+            "vulnerability_count": vuln_count,
+            "package_count": pkg_count,
+            "ecosystem_count": eco_count,
+            "ecosystems": ecosystems,
+            "last_sync": last_sync,
+            "size_mb": round(db_size, 1),
+        }
+        
+    except Exception as e:
+        return {"available": False, "error": str(e), "path": LOCAL_OSV_DB}
+
+
+async def _check_osv_connectivity() -> bool:
+    """
+    Check if OSV API is reachable.
+    
+    Caches result for CONNECTIVITY_CHECK_INTERVAL seconds.
+    """
+    global _last_connectivity_check, _is_online
+    
+    # Return cached result if recent
+    if _last_connectivity_check and _is_online is not None:
+        elapsed = (datetime.utcnow() - _last_connectivity_check).total_seconds()
+        if elapsed < CONNECTIVITY_CHECK_INTERVAL:
+            return _is_online
+    
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            # Quick health check
+            resp = await client.post(
+                OSV_URL,
+                json={"package": {"name": "requests", "ecosystem": "PyPI"}, "version": "2.28.0"}
+            )
+            _is_online = resp.status_code == 200
+    except Exception:
+        _is_online = False
+    
+    _last_connectivity_check = datetime.utcnow()
+    
+    if not _is_online:
+        logger.info("OSV API offline - using cached data only")
+    
+    return _is_online
 
 
 def _parse_severity(entry: dict) -> Tuple[Optional[str], Optional[float]]:
@@ -253,6 +526,7 @@ async def lookup_dependency(dep: models.Dependency) -> List[models.Vulnerability
     1. Direct cache hit (exact version match)
     2. Version range cache (local version matching)
     3. API call (with caching of results and version ranges)
+    4. Local OSV database (offline fallback)
     
     Args:
         dep: Dependency model to look up
@@ -276,36 +550,48 @@ async def lookup_dependency(dep: models.Dependency) -> List[models.Vulnerability
             cache.set(CACHE_NAMESPACE, cache_key, local_match)  # Cache the result
             return _parse_osv_vulns(dep, local_match)
     
-    # Tier 3: API call
-    payload = {"package": {"name": dep.name, "ecosystem": dep.ecosystem}, "version": dep.version}
+    # Tier 3: API call (if online)
+    is_online = await _check_osv_connectivity()
+    if is_online:
+        payload = {"package": {"name": dep.name, "ecosystem": dep.ecosystem}, "version": dep.version}
+        
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+                resp = await client.post(OSV_URL, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                
+                # Cache the raw OSV response (not the model objects)
+                osv_vulns = data.get("vulns", [])
+                cache.set(CACHE_NAMESPACE, cache_key, osv_vulns)
+                
+                # Also cache version ranges for future local matching
+                _cache_version_ranges(dep.ecosystem, dep.name, osv_vulns)
+                
+                vulns = _parse_osv_vulns(dep, osv_vulns)
+                
+                logger.debug(f"Found {len(vulns)} vulnerabilities for {dep.name}@{dep.version}")
+                return vulns
+                
+        except httpx.TimeoutException:
+            logger.warning(f"OSV API timeout for {dep.name}@{dep.version}")
+            # Fall through to local DB
+        except httpx.HTTPStatusError as e:
+            logger.error(f"OSV API HTTP error for {dep.name}: {e.response.status_code}")
+            # Fall through to local DB
+        except Exception as e:
+            logger.error(f"OSV API error for {dep.name}: {e}")
+            # Fall through to local DB
     
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            resp = await client.post(OSV_URL, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            
-            # Cache the raw OSV response (not the model objects)
-            osv_vulns = data.get("vulns", [])
-            cache.set(CACHE_NAMESPACE, cache_key, osv_vulns)
-            
-            # Also cache version ranges for future local matching
-            _cache_version_ranges(dep.ecosystem, dep.name, osv_vulns)
-            
-            vulns = _parse_osv_vulns(dep, osv_vulns)
-            
-            logger.debug(f"Found {len(vulns)} vulnerabilities for {dep.name}@{dep.version}")
-            return vulns
-            
-    except httpx.TimeoutException:
-        logger.warning(f"OSV API timeout for {dep.name}@{dep.version}")
-        return []
-    except httpx.HTTPStatusError as e:
-        logger.error(f"OSV API HTTP error for {dep.name}: {e.response.status_code}")
-        return []
-    except Exception as e:
-        logger.error(f"OSV API error for {dep.name}: {e}")
-        return []
+    # Tier 4: Local OSV database fallback
+    local_vulns = _lookup_package_vulns_local(dep.ecosystem, dep.name, dep.version)
+    if local_vulns:
+        logger.debug(f"Local OSV DB hit for {dep.name}@{dep.version}: {len(local_vulns)} vulns")
+        cache.set(CACHE_NAMESPACE, cache_key, local_vulns)  # Cache for next time
+        return _parse_osv_vulns(dep, local_vulns)
+    
+    logger.debug(f"No vulnerabilities found for {dep.name}@{dep.version}")
+    return []
 
 
 async def _lookup_batch(
@@ -360,6 +646,22 @@ async def _lookup_batch(
         logger.debug(f"All {len(deps)} dependencies resolved from cache")
         return results
     
+    # Check connectivity before making API calls
+    is_online = await _check_osv_connectivity()
+    if not is_online:
+        # Tier 4: Fallback to local OSV database
+        logger.info(f"Offline mode: Checking local OSV DB for {len(deps_to_fetch)} dependencies")
+        for dep in deps_to_fetch:
+            local_vulns = _lookup_package_vulns_local(dep.ecosystem, dep.name, dep.version)
+            if local_vulns:
+                results[dep.id] = _parse_osv_vulns(dep, local_vulns)
+                cache.set(CACHE_NAMESPACE, dep_cache_keys[dep.id], local_vulns)
+        
+        local_hits = sum(1 for dep in deps_to_fetch if dep.id in results)
+        if local_hits > 0:
+            logger.info(f"Local OSV DB: Found vulns for {local_hits}/{len(deps_to_fetch)} packages")
+        return results
+    
     cache_hits = len(deps) - len(deps_to_fetch)
     if cache_hits > 0:
         logger.info(f"OSV cache: {cache_hits} hits (exact+range), {len(deps_to_fetch)} API calls needed")
@@ -401,14 +703,21 @@ async def _lookup_batch(
         return results
         
     except httpx.TimeoutException:
-        logger.warning(f"OSV batch API timeout for {len(deps_to_fetch)} dependencies")
-        return results
+        logger.warning(f"OSV batch API timeout for {len(deps_to_fetch)} dependencies, trying local DB")
     except httpx.HTTPStatusError as e:
-        logger.error(f"OSV batch API HTTP error: {e.response.status_code}")
-        return results
+        logger.error(f"OSV batch API HTTP error: {e.response.status_code}, trying local DB")
     except Exception as e:
-        logger.error(f"OSV batch API error: {e}")
-        return results
+        logger.error(f"OSV batch API error: {e}, trying local DB")
+    
+    # Tier 4: Fallback to local OSV database on API failure
+    for dep in deps_to_fetch:
+        if dep.id not in results:  # Only lookup if not already found
+            local_vulns = _lookup_package_vulns_local(dep.ecosystem, dep.name, dep.version)
+            if local_vulns:
+                results[dep.id] = _parse_osv_vulns(dep, local_vulns)
+                cache.set(CACHE_NAMESPACE, dep_cache_keys[dep.id], local_vulns)
+    
+    return results
 
 
 async def lookup_dependencies(deps: List[models.Dependency]) -> List[models.Vulnerability]:
@@ -779,3 +1088,29 @@ async def lookup_from_purl(
 #
 # 6. CONCURRENT BATCHES: Increased from 5 to 10
 #    - Better parallelization for large projects
+#
+# 7. OFFLINE MODE SUPPORT:
+#    - Connectivity checking with 5-minute cache
+#    - Graceful degradation when OSV API unreachable
+#    - Cached data still served offline
+
+
+async def get_osv_status() -> Dict[str, Any]:
+    """
+    Get the current OSV service status including connectivity.
+    
+    Returns:
+        Dictionary with online status and cache statistics
+    """
+    global _is_online, _last_connectivity_check
+    
+    is_online = await _check_osv_connectivity()
+    
+    return {
+        "online": is_online,
+        "api_url": OSV_URL,
+        "last_check": _last_connectivity_check.isoformat() if _last_connectivity_check else None,
+        "mode": "live" if is_online else "cached",
+        "cache_namespace": CACHE_NAMESPACE,
+        "notes": "Uses version range caching for offline resilience" if not is_online else None
+    }

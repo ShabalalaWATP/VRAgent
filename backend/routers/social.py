@@ -118,6 +118,7 @@ from backend.services.messaging_service import (
     get_pinned_messages,
     forward_message,
     update_read_receipt,
+    str_to_bool,  # Helper for string->bool conversion
     get_conversation_read_receipts,
     get_message_read_by,
     resolve_mentions,
@@ -485,8 +486,8 @@ async def send_message_endpoint(
         attachment_data=message.attachment_data,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        is_edited=message.is_edited == "true",
-        is_deleted=message.is_deleted == "true",
+        is_edited=str_to_bool(message.is_edited),
+        is_deleted=str_to_bool(message.is_deleted),
         is_own_message=True
     )
 
@@ -550,8 +551,8 @@ async def edit_message_endpoint(
         attachment_data=message.attachment_data,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        is_edited=message.is_edited == "true",
-        is_deleted=message.is_deleted == "true",
+        is_edited=str_to_bool(message.is_edited),
+        is_deleted=str_to_bool(message.is_deleted),
         is_own_message=True
     )
 
@@ -924,10 +925,11 @@ async def get_reactions(
 ):
     """Get all reactions for a message."""
     reactions, total = get_message_reactions(db, message_id, current_user.id)
-    
+
+    # reactions is now a List, not a Dict
     return MessageReactionsResponse(
         message_id=message_id,
-        reactions=[ReactionSummary(**r) for r in reactions.values()],
+        reactions=[ReactionSummary(**r) for r in reactions],
         total_count=total
     )
 
@@ -1135,14 +1137,14 @@ async def upload_chat_file(
     
     # For images, the file itself can be the thumbnail
     if is_image:
-        thumbnail_url = f"/api/uploads/chat/{safe_filename}"
+        thumbnail_url = f"/api/files/chat/{safe_filename}"
     
     # Get mime type - use overrides for special file types
     import mimetypes
     mime_type = MIME_TYPE_OVERRIDES.get(ext) or mimetypes.guess_type(filename)[0] or "application/octet-stream"
     
     return FileUploadResponse(
-        file_url=f"/api/uploads/chat/{safe_filename}",
+        file_url=f"/api/files/chat/{safe_filename}",
         filename=filename,
         file_size=len(content),
         mime_type=mime_type,
@@ -1221,8 +1223,8 @@ async def reply_to_message(
         attachment_data=message.attachment_data,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        is_edited=message.is_edited == "true",
-        is_deleted=message.is_deleted == "true",
+        is_edited=str_to_bool(message.is_edited),
+        is_deleted=str_to_bool(message.is_deleted),
         is_own_message=True,
         reply_to=reply_to,
         reactions=reactions,

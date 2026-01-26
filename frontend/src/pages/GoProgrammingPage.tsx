@@ -70,6 +70,10 @@ const moduleNavItems = [
   { id: "web", label: "Web Development", icon: <HttpIcon /> },
   { id: "cli", label: "CLI Applications", icon: <TerminalIcon /> },
   { id: "cloud", label: "Cloud & Microservices", icon: <CloudIcon /> },
+  { id: "security", label: "Security Tools", icon: <SecurityIcon /> },
+  { id: "database", label: "Database Operations", icon: <StorageIcon /> },
+  { id: "context", label: "Context & Cancellation", icon: <AutoFixHighIcon /> },
+  { id: "files", label: "Files & Embedding", icon: <LayersIcon /> },
   { id: "advanced", label: "Advanced Topics", icon: <DeveloperBoardIcon /> },
   { id: "quiz", label: "Knowledge Quiz", icon: <QuizIcon /> },
 ];
@@ -82,7 +86,7 @@ const quickStats = [
   { label: "Latest Ver", value: "Go 1.22", color: "#FBBC05" },
 ];
 
-// Quiz question bank - 75 questions covering all Go topics
+// Quiz question bank - 95 questions covering all Go topics
 interface QuizQuestion {
   id: number;
   question: string;
@@ -189,6 +193,34 @@ const questionBank: QuizQuestion[] = [
   // Packages & Modules (4 questions)
   { id: 74, question: "What makes an identifier exported (public) in Go?", options: ["Using 'public' keyword", "Starting with uppercase letter", "Using 'export' keyword", "Placing in a public package"], correct: 1, explanation: "Identifiers starting with uppercase are exported; lowercase are unexported (package-private).", topic: "Packages" },
   { id: 75, question: "What is special about the 'internal' directory?", options: ["It contains configuration", "Code can only be imported by parent package tree", "It's for internal testing", "It's hidden from git"], correct: 1, explanation: "Go enforces that code in internal/ can only be imported by code in the parent directory tree.", topic: "Packages" },
+
+  // Context & Cancellation (5 questions)
+  { id: 76, question: "What function creates a context with a timeout?", options: ["context.Timeout()", "context.WithTimeout()", "context.SetTimeout()", "context.NewTimeout()"], correct: 1, explanation: "context.WithTimeout() creates a context that automatically cancels after the specified duration.", topic: "Context" },
+  { id: 77, question: "Why should you always call the cancel function returned by WithTimeout?", options: ["To stop the timeout", "To release resources associated with the context", "To commit the operation", "It's optional"], correct: 1, explanation: "Calling cancel() releases resources. Use defer cancel() immediately after creating the context.", topic: "Context" },
+  { id: 78, question: "What does ctx.Done() return?", options: ["A boolean", "An error", "A channel that closes when context is cancelled", "The context value"], correct: 2, explanation: "ctx.Done() returns a channel that's closed when the context is cancelled or times out.", topic: "Context" },
+  { id: 79, question: "Where should context.Context appear in function parameters?", options: ["Last parameter", "First parameter", "As a struct field", "Anywhere is fine"], correct: 1, explanation: "By convention, context.Context should be the first parameter, named ctx.", topic: "Context" },
+  { id: 80, question: "What's the difference between context.Background() and context.TODO()?", options: ["Background is for main, TODO is for tests", "Both are root contexts, TODO indicates uncertainty about which context to use", "TODO times out automatically", "Background is deprecated"], correct: 1, explanation: "Both are empty root contexts. Use TODO() when unsure which context to use; Background() when you know it's the root.", topic: "Context" },
+
+  // Database Operations (5 questions)
+  { id: 81, question: "What happens if you try to write to a nil map in Go?", options: ["It creates the map", "It returns an error", "It panics", "It does nothing"], correct: 2, explanation: "Writing to a nil map causes a panic. Always initialize maps with make() before writing.", topic: "Database" },
+  { id: 82, question: "What is sql.ErrNoRows?", options: ["A network error", "Error when query returns no results", "Error when database is full", "SQL syntax error"], correct: 1, explanation: "sql.ErrNoRows is returned by QueryRow().Scan() when the query returns no rows.", topic: "Database" },
+  { id: 83, question: "Why should you defer rows.Close() after db.Query()?", options: ["To commit the transaction", "To release database connections back to the pool", "To save the results", "It's not necessary"], correct: 1, explanation: "rows.Close() releases the connection back to the pool. Forgetting this causes connection leaks.", topic: "Database" },
+  { id: 84, question: "What does db.SetMaxOpenConns() configure?", options: ["Query timeout", "Maximum number of connections in the pool", "Transaction isolation level", "Buffer size"], correct: 1, explanation: "SetMaxOpenConns limits the maximum number of open connections to the database.", topic: "Database" },
+  { id: 85, question: "What happens if a transaction's Rollback is called after Commit?", options: ["Panic", "Error", "Nothing (it's a no-op)", "Rolls back the commit"], correct: 2, explanation: "Calling Rollback after Commit is safe - it's a no-op. This allows defer tx.Rollback() pattern.", topic: "Database" },
+
+  // Security Tools (5 questions)
+  { id: 86, question: "Why is Go popular for security tools?", options: ["It has built-in hacking libraries", "Single binary distribution, cross-compilation, and fast execution", "It's the only language that supports networking", "Security tools must be written in Go"], correct: 1, explanation: "Go's single-binary output, easy cross-compilation, and concurrent networking make it ideal for security tools.", topic: "Security" },
+  { id: 87, question: "What Go security tool is used for subdomain discovery?", options: ["nuclei", "subfinder", "nmap", "wireshark"], correct: 1, explanation: "subfinder by ProjectDiscovery is a popular Go tool for subdomain enumeration.", topic: "Security" },
+  { id: 88, question: "How do you skip TLS certificate verification in Go HTTP client?", options: ["http.SkipVerify = true", "Transport.TLSClientConfig.InsecureSkipVerify = true", "http.InsecureTLS()", "It's not possible"], correct: 1, explanation: "Set InsecureSkipVerify: true in the Transport's TLSClientConfig. Use only for testing!", topic: "Security" },
+  { id: 89, question: "What does http.ErrUseLastResponse do in CheckRedirect?", options: ["Returns the last error", "Follows all redirects", "Prevents following redirects", "Uses cached response"], correct: 2, explanation: "Returning http.ErrUseLastResponse from CheckRedirect stops redirect following, useful for security scanning.", topic: "Security" },
+  { id: 90, question: "What's the purpose of a semaphore pattern in concurrent scanning?", options: ["Encrypt communications", "Limit concurrent operations", "Store scan results", "Generate random data"], correct: 1, explanation: "A semaphore (buffered channel) limits concurrent operations to prevent overwhelming targets or resources.", topic: "Security" },
+
+  // Files & Embedding (5 questions)
+  { id: 91, question: "What directive embeds a file as a string in Go?", options: ["//go:include", "//go:embed", "//go:file", "//embed:string"], correct: 1, explanation: "The //go:embed directive embeds files at compile time. Use with string, []byte, or embed.FS.", topic: "Files" },
+  { id: 92, question: "What package provides the embedded filesystem type?", options: ["io/fs", "embed", "os", "filepath"], correct: 1, explanation: "The embed package provides embed.FS type for accessing embedded files and directories.", topic: "Files" },
+  { id: 93, question: "How do you read a file line by line efficiently?", options: ["os.ReadFile then split", "bufio.Scanner", "io.ReadAll", "ioutil.ReadLines"], correct: 1, explanation: "bufio.Scanner reads line by line without loading the entire file into memory.", topic: "Files" },
+  { id: 94, question: "What does os.MkdirAll do?", options: ["Creates a single directory", "Creates directory and all parent directories", "Lists all directories", "Removes all directories"], correct: 1, explanation: "os.MkdirAll creates a directory along with any necessary parent directories (like mkdir -p).", topic: "Files" },
+  { id: 95, question: "How do you serve embedded static files via HTTP?", options: ["http.ServeContent", "http.FileServer(http.FS(embeddedFS))", "http.StaticFiles", "embed.Serve"], correct: 1, explanation: "Use http.FileServer with http.FS() to serve files from an embed.FS filesystem.", topic: "Files" },
 ];
 
 // Placeholder component for sections to be expanded
@@ -4343,6 +4375,1403 @@ httpRequestsTotal.WithLabelValues("GET", "/users", "200").Inc()`}
             </Paper>
           </Paper>
 
+          {/* Security Tools Section */}
+          <Paper id="security" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#E91E63", 0.15), color: "#E91E63", width: 48, height: 48 }}>
+                <SecurityIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Go for Security Tools
+              </Typography>
+            </Box>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              Go has become the dominant language for security tools. Its single-binary distribution, cross-compilation, 
+              excellent networking libraries, and concurrent execution make it perfect for building scanners, fuzzers, 
+              and penetration testing tools. Many of the most popular security tools are written in Go.
+            </Typography>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E91E63" }}>
+              Popular Security Tools in Go
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {[
+                { name: "Nuclei", desc: "Fast vulnerability scanner with YAML templates", url: "projectdiscovery/nuclei" },
+                { name: "Subfinder", desc: "Subdomain discovery tool", url: "projectdiscovery/subfinder" },
+                { name: "httpx", desc: "Fast HTTP toolkit for probing", url: "projectdiscovery/httpx" },
+                { name: "naabu", desc: "Port scanner written in Go", url: "projectdiscovery/naabu" },
+                { name: "ffuf", desc: "Web fuzzer for directory discovery", url: "ffuf/ffuf" },
+                { name: "gobuster", desc: "Directory/DNS/vhost busting tool", url: "OJ/gobuster" },
+                { name: "Amass", desc: "Network mapping and attack surface discovery", url: "owasp-amass/amass" },
+                { name: "Trivy", desc: "Container vulnerability scanner", url: "aquasecurity/trivy" },
+              ].map((tool) => (
+                <Grid item xs={12} sm={6} md={3} key={tool.name}>
+                  <Paper sx={{ p: 2, textAlign: "center", borderRadius: 2, height: "100%", bgcolor: alpha("#E91E63", 0.03) }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#E91E63" }}>{tool.name}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{tool.desc}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E91E63" }}>
+              Building an HTTP Scanner
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "bufio"
+    "crypto/tls"
+    "fmt"
+    "net/http"
+    "os"
+    "sync"
+    "time"
+)
+
+// Scanner configuration
+type Scanner struct {
+    Client      *http.Client
+    Concurrency int
+    Timeout     time.Duration
+}
+
+func NewScanner(concurrency int, timeout time.Duration) *Scanner {
+    // Configure HTTP client for security scanning
+    transport := &http.Transport{
+        TLSClientConfig: &tls.Config{
+            InsecureSkipVerify: true,  // Accept self-signed certs
+        },
+        MaxIdleConns:        concurrency,
+        MaxIdleConnsPerHost: concurrency,
+        DisableKeepAlives:   false,
+    }
+    
+    return &Scanner{
+        Client: &http.Client{
+            Transport: transport,
+            Timeout:   timeout,
+            CheckRedirect: func(req *http.Request, via []*http.Request) error {
+                return http.ErrUseLastResponse  // Don't follow redirects
+            },
+        },
+        Concurrency: concurrency,
+        Timeout:     timeout,
+    }
+}
+
+// Result of scanning a URL
+type Result struct {
+    URL        string
+    StatusCode int
+    Size       int64
+    Error      error
+}
+
+// Scan a single URL
+func (s *Scanner) Scan(url string) Result {
+    resp, err := s.Client.Get(url)
+    if err != nil {
+        return Result{URL: url, Error: err}
+    }
+    defer resp.Body.Close()
+    
+    return Result{
+        URL:        url,
+        StatusCode: resp.StatusCode,
+        Size:       resp.ContentLength,
+    }
+}
+
+// Concurrent scanning with worker pool
+func (s *Scanner) ScanMany(urls <-chan string) <-chan Result {
+    results := make(chan Result)
+    var wg sync.WaitGroup
+    
+    // Start worker goroutines
+    for i := 0; i < s.Concurrency; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for url := range urls {
+                results <- s.Scan(url)
+            }
+        }()
+    }
+    
+    // Close results when all workers done
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+    
+    return results
+}
+
+func main() {
+    scanner := NewScanner(50, 10*time.Second)
+    
+    // Read URLs from stdin or file
+    urls := make(chan string)
+    go func() {
+        scanner := bufio.NewScanner(os.Stdin)
+        for scanner.Scan() {
+            urls <- scanner.Text()
+        }
+        close(urls)
+    }()
+    
+    // Process results
+    for result := range scanner.ScanMany(urls) {
+        if result.Error == nil {
+            fmt.Printf("[%d] %s (%d bytes)\\n", 
+                result.StatusCode, result.URL, result.Size)
+        }
+    }
+}
+
+// Usage:
+// cat urls.txt | ./scanner
+// echo "https://example.com" | ./scanner`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E91E63" }}>
+              Port Scanner
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "fmt"
+    "net"
+    "sort"
+    "sync"
+    "time"
+)
+
+type PortScanner struct {
+    Host        string
+    Timeout     time.Duration
+    Concurrency int
+}
+
+func (ps *PortScanner) Scan(port int) bool {
+    address := fmt.Sprintf("%s:%d", ps.Host, port)
+    conn, err := net.DialTimeout("tcp", address, ps.Timeout)
+    if err != nil {
+        return false
+    }
+    conn.Close()
+    return true
+}
+
+func (ps *PortScanner) ScanRange(start, end int) []int {
+    var openPorts []int
+    var mu sync.Mutex
+    var wg sync.WaitGroup
+    
+    // Semaphore for concurrency control
+    sem := make(chan struct{}, ps.Concurrency)
+    
+    for port := start; port <= end; port++ {
+        wg.Add(1)
+        go func(p int) {
+            defer wg.Done()
+            sem <- struct{}{}        // Acquire
+            defer func() { <-sem }() // Release
+            
+            if ps.Scan(p) {
+                mu.Lock()
+                openPorts = append(openPorts, p)
+                mu.Unlock()
+            }
+        }(port)
+    }
+    
+    wg.Wait()
+    sort.Ints(openPorts)
+    return openPorts
+}
+
+func main() {
+    scanner := &PortScanner{
+        Host:        "scanme.nmap.org",
+        Timeout:     500 * time.Millisecond,
+        Concurrency: 100,
+    }
+    
+    fmt.Printf("Scanning %s...\\n", scanner.Host)
+    start := time.Now()
+    
+    openPorts := scanner.ScanRange(1, 1024)
+    
+    fmt.Printf("\\nOpen ports: %v\\n", openPorts)
+    fmt.Printf("Scan completed in %v\\n", time.Since(start))
+}
+
+// Service banner grabbing
+func GrabBanner(host string, port int, timeout time.Duration) string {
+    address := fmt.Sprintf("%s:%d", host, port)
+    conn, err := net.DialTimeout("tcp", address, timeout)
+    if err != nil {
+        return ""
+    }
+    defer conn.Close()
+    
+    conn.SetReadDeadline(time.Now().Add(timeout))
+    buffer := make([]byte, 1024)
+    n, _ := conn.Read(buffer)
+    return string(buffer[:n])
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#E91E63" }}>
+              Subdomain Enumeration
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "bufio"
+    "context"
+    "fmt"
+    "net"
+    "os"
+    "sync"
+    "time"
+)
+
+type SubdomainEnumerator struct {
+    Domain      string
+    Resolver    *net.Resolver
+    Concurrency int
+    Timeout     time.Duration
+}
+
+func NewSubdomainEnumerator(domain string, concurrency int) *SubdomainEnumerator {
+    return &SubdomainEnumerator{
+        Domain: domain,
+        Resolver: &net.Resolver{
+            PreferGo: true,
+            Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+                d := net.Dialer{Timeout: 5 * time.Second}
+                return d.DialContext(ctx, "udp", "8.8.8.8:53")
+            },
+        },
+        Concurrency: concurrency,
+        Timeout:     5 * time.Second,
+    }
+}
+
+type SubdomainResult struct {
+    Subdomain string
+    IPs       []string
+    Error     error
+}
+
+func (se *SubdomainEnumerator) Check(subdomain string) SubdomainResult {
+    fqdn := fmt.Sprintf("%s.%s", subdomain, se.Domain)
+    
+    ctx, cancel := context.WithTimeout(context.Background(), se.Timeout)
+    defer cancel()
+    
+    ips, err := se.Resolver.LookupHost(ctx, fqdn)
+    if err != nil {
+        return SubdomainResult{Subdomain: fqdn, Error: err}
+    }
+    
+    return SubdomainResult{
+        Subdomain: fqdn,
+        IPs:       ips,
+    }
+}
+
+func (se *SubdomainEnumerator) Enumerate(wordlist <-chan string) <-chan SubdomainResult {
+    results := make(chan SubdomainResult)
+    var wg sync.WaitGroup
+    
+    for i := 0; i < se.Concurrency; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for word := range wordlist {
+                result := se.Check(word)
+                if result.Error == nil {
+                    results <- result
+                }
+            }
+        }()
+    }
+    
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+    
+    return results
+}
+
+func main() {
+    enum := NewSubdomainEnumerator("example.com", 50)
+    
+    wordlist := make(chan string)
+    go func() {
+        words := []string{"www", "mail", "ftp", "admin", "api", "dev", "staging"}
+        for _, word := range words {
+            wordlist <- word
+        }
+        close(wordlist)
+    }()
+    
+    for result := range enum.Enumerate(wordlist) {
+        fmt.Printf("[+] %s -> %v\\n", result.Subdomain, result.IPs)
+    }
+}
+
+// DNS zone transfer attempt
+func TryZoneTransfer(domain, ns string) ([]string, error) {
+    // Note: Most servers block zone transfers
+    // This is for educational/authorized testing only
+    conn, err := net.Dial("tcp", ns+":53")
+    if err != nil {
+        return nil, err
+    }
+    defer conn.Close()
+    // Build and send AXFR query...
+    return nil, nil
+}`}
+              </Typography>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#E91E63", 0.1), border: `1px solid ${alpha("#E91E63", 0.3)}` }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <SecurityIcon sx={{ color: "#E91E63" }} />
+                Security Tool Best Practices
+              </Typography>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {[
+                  { tip: "Rate Limiting", desc: "Implement delays and respect rate limits. Don't DoS your targets." },
+                  { tip: "User-Agent", desc: "Use identifiable User-Agent strings so targets can contact you." },
+                  { tip: "Error Handling", desc: "Handle network errors gracefully. Timeouts, DNS failures, connection resets." },
+                  { tip: "Authorization", desc: "Only scan systems you own or have explicit permission to test." },
+                ].map((item) => (
+                  <Grid item xs={12} sm={6} key={item.tip}>
+                    <Typography variant="body2">
+                      <strong>{item.tip}:</strong> {item.desc}
+                    </Typography>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Paper>
+
+          {/* Database Operations Section */}
+          <Paper id="database" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#FF9800", 0.15), color: "#FF9800", width: 48, height: 48 }}>
+                <StorageIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Database Operations
+              </Typography>
+            </Box>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              Go's <code>database/sql</code> package provides a generic interface for SQL databases. It handles 
+              connection pooling, prepared statements, and transactions. For NoSQL databases, use driver-specific 
+              packages. Let's explore both SQL and NoSQL operations.
+            </Typography>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#FF9800" }}>
+              SQL Databases (PostgreSQL/MySQL)
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "log"
+    "time"
+    
+    _ "github.com/lib/pq"           // PostgreSQL driver
+    // _ "github.com/go-sql-driver/mysql"  // MySQL driver
+)
+
+// Database connection
+func ConnectDB() (*sql.DB, error) {
+    connStr := "host=localhost port=5432 user=postgres password=secret dbname=myapp sslmode=disable"
+    
+    db, err := sql.Open("postgres", connStr)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Configure connection pool
+    db.SetMaxOpenConns(25)                  // Max open connections
+    db.SetMaxIdleConns(5)                   // Max idle connections
+    db.SetConnMaxLifetime(5 * time.Minute)  // Max connection lifetime
+    
+    // Verify connection
+    if err := db.Ping(); err != nil {
+        return nil, err
+    }
+    
+    return db, nil
+}
+
+// User model
+type User struct {
+    ID        int
+    Name      string
+    Email     string
+    CreatedAt time.Time
+}
+
+// Create table
+func CreateTable(db *sql.DB) error {
+    query := \`
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    \`
+    _, err := db.Exec(query)
+    return err
+}
+
+// Insert with returning ID
+func CreateUser(db *sql.DB, name, email string) (int, error) {
+    var id int
+    query := "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id"
+    err := db.QueryRow(query, name, email).Scan(&id)
+    return id, err
+}
+
+// Query single row
+func GetUser(db *sql.DB, id int) (*User, error) {
+    user := &User{}
+    query := "SELECT id, name, email, created_at FROM users WHERE id = $1"
+    
+    err := db.QueryRow(query, id).Scan(
+        &user.ID, &user.Name, &user.Email, &user.CreatedAt,
+    )
+    if err == sql.ErrNoRows {
+        return nil, nil  // Not found
+    }
+    return user, err
+}
+
+// Query multiple rows
+func GetAllUsers(db *sql.DB) ([]User, error) {
+    query := "SELECT id, name, email, created_at FROM users ORDER BY id"
+    
+    rows, err := db.Query(query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()  // Always close rows!
+    
+    var users []User
+    for rows.Next() {
+        var u User
+        if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.CreatedAt); err != nil {
+            return nil, err
+        }
+        users = append(users, u)
+    }
+    
+    return users, rows.Err()  // Check for iteration errors
+}
+
+// Update
+func UpdateUser(db *sql.DB, id int, name string) error {
+    query := "UPDATE users SET name = $1 WHERE id = $2"
+    result, err := db.Exec(query, name, id)
+    if err != nil {
+        return err
+    }
+    
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        return sql.ErrNoRows
+    }
+    return nil
+}
+
+// Delete
+func DeleteUser(db *sql.DB, id int) error {
+    query := "DELETE FROM users WHERE id = $1"
+    _, err := db.Exec(query, id)
+    return err
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#FF9800" }}>
+              Transactions
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`// Transactions ensure atomicity
+func TransferFunds(db *sql.DB, fromID, toID int, amount float64) error {
+    ctx := context.Background()
+    
+    // Start transaction
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    
+    // Defer rollback (no-op if committed)
+    defer tx.Rollback()
+    
+    // Deduct from sender
+    _, err = tx.ExecContext(ctx, 
+        "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
+        amount, fromID)
+    if err != nil {
+        return err
+    }
+    
+    // Add to receiver
+    _, err = tx.ExecContext(ctx,
+        "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+        amount, toID)
+    if err != nil {
+        return err
+    }
+    
+    // Commit transaction
+    return tx.Commit()
+}
+
+// Transaction helper with automatic rollback
+func WithTransaction(db *sql.DB, fn func(*sql.Tx) error) error {
+    tx, err := db.Begin()
+    if err != nil {
+        return err
+    }
+    
+    defer func() {
+        if p := recover(); p != nil {
+            tx.Rollback()
+            panic(p)  // Re-throw
+        }
+    }()
+    
+    if err := fn(tx); err != nil {
+        tx.Rollback()
+        return err
+    }
+    
+    return tx.Commit()
+}
+
+// Usage
+err := WithTransaction(db, func(tx *sql.Tx) error {
+    // All operations in tx...
+    return nil
+})`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#FF9800" }}>
+              Context with Timeouts
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`// Always use context for database operations in production!
+
+func GetUserWithTimeout(db *sql.DB, id int) (*User, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    
+    user := &User{}
+    query := "SELECT id, name, email FROM users WHERE id = $1"
+    
+    err := db.QueryRowContext(ctx, query, id).Scan(
+        &user.ID, &user.Name, &user.Email,
+    )
+    
+    if ctx.Err() == context.DeadlineExceeded {
+        return nil, fmt.Errorf("query timed out")
+    }
+    
+    return user, err
+}
+
+// Prepared statements for repeated queries
+func PreparedQueries(db *sql.DB) {
+    // Prepare once, use many times
+    stmt, err := db.Prepare("SELECT name FROM users WHERE id = $1")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer stmt.Close()
+    
+    // Use prepared statement
+    for _, id := range []int{1, 2, 3, 4, 5} {
+        var name string
+        err := stmt.QueryRow(id).Scan(&name)
+        if err == nil {
+            fmt.Println(name)
+        }
+    }
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#FF9800" }}>
+              ORMs & Query Builders
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`// GORM - Full-featured ORM
+import "gorm.io/gorm"
+import "gorm.io/driver/postgres"
+
+type User struct {
+    gorm.Model           // Adds ID, CreatedAt, UpdatedAt, DeletedAt
+    Name  string
+    Email string \`gorm:"uniqueIndex"\`
+}
+
+func GormExample() {
+    dsn := "host=localhost user=postgres password=secret dbname=myapp port=5432"
+    db, _ := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+    
+    // Auto migrate
+    db.AutoMigrate(&User{})
+    
+    // Create
+    user := User{Name: "Alice", Email: "alice@example.com"}
+    db.Create(&user)
+    
+    // Read
+    var result User
+    db.First(&result, 1)                  // By ID
+    db.First(&result, "email = ?", "alice@example.com")  // By condition
+    
+    // Update
+    db.Model(&result).Update("Name", "Alice Updated")
+    
+    // Delete (soft delete with gorm.Model)
+    db.Delete(&result)
+    
+    // Query builder
+    var users []User
+    db.Where("name LIKE ?", "%Alice%").
+        Order("created_at desc").
+        Limit(10).
+        Find(&users)
+}
+
+// sqlx - Extensions to database/sql
+import "github.com/jmoiron/sqlx"
+
+func SqlxExample() {
+    db, _ := sqlx.Connect("postgres", "...")
+    
+    // Named queries
+    user := User{Name: "Bob", Email: "bob@example.com"}
+    _, err := db.NamedExec(
+        "INSERT INTO users (name, email) VALUES (:name, :email)", 
+        user,
+    )
+    
+    // Select into struct
+    var users []User
+    db.Select(&users, "SELECT * FROM users WHERE name = $1", "Bob")
+    
+    // Get single row
+    var u User
+    db.Get(&u, "SELECT * FROM users WHERE id = $1", 1)
+}`}
+              </Typography>
+            </Paper>
+
+            <Grid container spacing={2}>
+              {[
+                { title: "database/sql", desc: "Standard library. Connection pooling built-in. Use with drivers (pq, mysql)." },
+                { title: "GORM", desc: "Full ORM. Auto-migrations, associations, hooks. Most popular Go ORM." },
+                { title: "sqlx", desc: "Extensions to database/sql. Named queries, struct scanning. Lightweight." },
+                { title: "sqlc", desc: "Generates type-safe Go from SQL. Compile-time checked queries." },
+                { title: "ent", desc: "Entity framework from Facebook. Schema-first, code generation." },
+                { title: "Connection Pooling", desc: "database/sql handles pooling. Configure max connections and lifetime." },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.title}>
+                  <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#FF9800", 0.05), height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#FF9800", mb: 0.5 }}>
+                      {item.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {item.desc}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Context & Cancellation Section */}
+          <Paper id="context" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#673AB7", 0.15), color: "#673AB7", width: 48, height: 48 }}>
+                <AutoFixHighIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Context & Cancellation
+              </Typography>
+            </Box>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              The <code>context</code> package is essential for writing production Go code. It provides a 
+              standardized way to carry deadlines, cancellation signals, and request-scoped values across 
+              API boundaries and between goroutines. Every long-running operation should accept a context.
+            </Typography>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#673AB7" }}>
+              Context Basics
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+// Context is the first parameter by convention
+func doWork(ctx context.Context, data string) error {
+    select {
+    case <-ctx.Done():
+        return ctx.Err()  // context.Canceled or context.DeadlineExceeded
+    default:
+        // Do work...
+        fmt.Println("Processing:", data)
+        return nil
+    }
+}
+
+func main() {
+    // context.Background() - root context, never cancelled
+    ctx := context.Background()
+    
+    // context.TODO() - placeholder when unsure what context to use
+    // _ = context.TODO()
+    
+    // WithCancel - manual cancellation
+    ctx, cancel := context.WithCancel(context.Background())
+    
+    go func() {
+        time.Sleep(2 * time.Second)
+        cancel()  // Signal cancellation
+    }()
+    
+    doWork(ctx, "task")
+    
+    // WithTimeout - automatic cancellation after duration
+    ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()  // Always call cancel to release resources!
+    
+    // WithDeadline - cancellation at specific time
+    deadline := time.Now().Add(10 * time.Second)
+    ctx, cancel = context.WithDeadline(context.Background(), deadline)
+    defer cancel()
+    
+    // Check remaining time
+    if dl, ok := ctx.Deadline(); ok {
+        fmt.Printf("Deadline in %v\\n", time.Until(dl))
+    }
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#673AB7" }}>
+              Context in Long-Running Operations
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`// HTTP handler with timeout
+func slowHandler(w http.ResponseWriter, r *http.Request) {
+    // r.Context() is cancelled when client disconnects
+    ctx := r.Context()
+    
+    result := make(chan string)
+    go func() {
+        // Simulate slow operation
+        time.Sleep(10 * time.Second)
+        result <- "done"
+    }()
+    
+    select {
+    case res := <-result:
+        fmt.Fprintln(w, res)
+    case <-ctx.Done():
+        // Client disconnected or timeout
+        http.Error(w, "Request cancelled", http.StatusServiceUnavailable)
+        return
+    }
+}
+
+// Database query with context
+func queryWithContext(ctx context.Context, db *sql.DB) ([]User, error) {
+    rows, err := db.QueryContext(ctx, "SELECT * FROM users")
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    
+    var users []User
+    for rows.Next() {
+        // Check context between iterations for long results
+        if ctx.Err() != nil {
+            return users, ctx.Err()
+        }
+        // Scan row...
+    }
+    return users, nil
+}
+
+// HTTP client with timeout
+func fetchWithTimeout(url string) ([]byte, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    
+    req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        if ctx.Err() == context.DeadlineExceeded {
+            return nil, fmt.Errorf("request timed out")
+        }
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    return io.ReadAll(resp.Body)
+}
+
+// Worker with graceful shutdown
+func worker(ctx context.Context, jobs <-chan Job) {
+    for {
+        select {
+        case <-ctx.Done():
+            fmt.Println("Worker shutting down")
+            return
+        case job := <-jobs:
+            processJob(ctx, job)
+        }
+    }
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#673AB7" }}>
+              Context Values
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`// WithValue - carry request-scoped data
+// Use sparingly! Only for request-scoped data that crosses API boundaries
+
+// Define typed keys to avoid collisions
+type contextKey string
+
+const (
+    userIDKey    contextKey = "userID"
+    requestIDKey contextKey = "requestID"
+)
+
+// Middleware that adds request ID
+func requestIDMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        requestID := uuid.New().String()
+        ctx := context.WithValue(r.Context(), requestIDKey, requestID)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// Middleware that adds user from auth
+func authMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        userID := authenticateRequest(r)
+        ctx := context.WithValue(r.Context(), userIDKey, userID)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// Helper to extract values
+func GetUserID(ctx context.Context) (string, bool) {
+    userID, ok := ctx.Value(userIDKey).(string)
+    return userID, ok
+}
+
+func GetRequestID(ctx context.Context) string {
+    if id, ok := ctx.Value(requestIDKey).(string); ok {
+        return id
+    }
+    return "unknown"
+}
+
+// Usage in handler
+func handler(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    
+    userID, _ := GetUserID(ctx)
+    requestID := GetRequestID(ctx)
+    
+    log.Printf("[%s] User %s made request", requestID, userID)
+    
+    // Pass context to downstream calls
+    data, err := fetchData(ctx, userID)
+    // ...
+}
+
+// BEST PRACTICE: Don't use context.Value for:
+// - Optional parameters (use function arguments)
+// - Configuration (use struct fields)
+// - Dependency injection (use struct fields)
+// 
+// DO use context.Value for:
+// - Request IDs / Trace IDs
+// - User authentication info
+// - Request-scoped logging metadata`}
+              </Typography>
+            </Paper>
+
+            <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#673AB7", 0.1), border: `1px solid ${alpha("#673AB7", 0.3)}` }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <AutoFixHighIcon sx={{ color: "#673AB7" }} />
+                Context Best Practices
+              </Typography>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {[
+                  { tip: "First parameter", desc: "Context should be the first parameter named ctx." },
+                  { tip: "Don't store in structs", desc: "Pass context explicitly through call chain. Don't store in structs." },
+                  { tip: "Always call cancel", desc: "Use defer cancel() to prevent resource leaks." },
+                  { tip: "Don't pass nil", desc: "Use context.TODO() or context.Background() instead." },
+                ].map((item) => (
+                  <Grid item xs={12} sm={6} key={item.tip}>
+                    <Typography variant="body2">
+                      <strong>{item.tip}:</strong> {item.desc}
+                    </Typography>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Paper>
+
+          {/* Files & Embedding Section */}
+          <Paper id="files" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+              <Avatar sx={{ bgcolor: alpha("#009688", 0.15), color: "#009688", width: 48, height: 48 }}>
+                <LayersIcon />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Files & Embedding
+              </Typography>
+            </Box>
+
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+              Go provides powerful file handling through the <code>os</code> and <code>io</code> packages. 
+              Go 1.16 introduced the <code>embed</code> package, allowing you to include files directly in 
+              your binary—perfect for templates, static assets, and configuration.
+            </Typography>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#009688" }}>
+              File Operations
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "bufio"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+)
+
+// Reading files
+func readFile(path string) {
+    // Read entire file into memory
+    data, err := os.ReadFile(path)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(data))
+    
+    // Read with more control
+    file, err := os.Open(path)
+    if err != nil {
+        panic(err)
+    }
+    defer file.Close()
+    
+    // Read in chunks
+    buffer := make([]byte, 1024)
+    for {
+        n, err := file.Read(buffer)
+        if err == io.EOF {
+            break
+        }
+        fmt.Print(string(buffer[:n]))
+    }
+    
+    // Line by line (memory efficient for large files)
+    file.Seek(0, 0)  // Reset to beginning
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        line := scanner.Text()
+        fmt.Println(line)
+    }
+}
+
+// Writing files
+func writeFile(path string) {
+    // Simple write (overwrites)
+    data := []byte("Hello, Go!")
+    err := os.WriteFile(path, data, 0644)
+    if err != nil {
+        panic(err)
+    }
+    
+    // Write with more control
+    file, err := os.Create(path)  // Creates or truncates
+    if err != nil {
+        panic(err)
+    }
+    defer file.Close()
+    
+    file.WriteString("Line 1\\n")
+    file.Write([]byte("Line 2\\n"))
+    
+    // Buffered writing (more efficient)
+    writer := bufio.NewWriter(file)
+    writer.WriteString("Buffered line\\n")
+    writer.Flush()  // Don't forget to flush!
+    
+    // Append to file
+    file, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+    if err != nil {
+        panic(err)
+    }
+    defer file.Close()
+    file.WriteString("Appended line\\n")
+}
+
+// File information
+func fileInfo(path string) {
+    info, err := os.Stat(path)
+    if os.IsNotExist(err) {
+        fmt.Println("File does not exist")
+        return
+    }
+    
+    fmt.Println("Name:", info.Name())
+    fmt.Println("Size:", info.Size())
+    fmt.Println("Mode:", info.Mode())
+    fmt.Println("ModTime:", info.ModTime())
+    fmt.Println("IsDir:", info.IsDir())
+}
+
+// Directory operations
+func dirOps() {
+    // Create directory
+    os.Mkdir("mydir", 0755)
+    os.MkdirAll("path/to/nested/dir", 0755)  // Like mkdir -p
+    
+    // List directory
+    entries, _ := os.ReadDir(".")
+    for _, entry := range entries {
+        info, _ := entry.Info()
+        fmt.Printf("%s %d %s\\n", 
+            entry.Type(), info.Size(), entry.Name())
+    }
+    
+    // Walk directory tree
+    filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        fmt.Println(path)
+        return nil
+    })
+    
+    // Remove
+    os.Remove("file.txt")           // Single file
+    os.RemoveAll("dir")             // Directory and contents
+    os.Rename("old.txt", "new.txt") // Rename/move
+}`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#009688" }}>
+              Embedding Files (Go 1.16+)
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "embed"
+    "fmt"
+    "io/fs"
+    "net/http"
+)
+
+// Embed single file as string
+//go:embed version.txt
+var version string
+
+// Embed single file as bytes
+//go:embed config.json
+var configData []byte
+
+// Embed multiple files
+//go:embed templates/*.html
+var templates embed.FS
+
+// Embed entire directory
+//go:embed static/*
+var staticFiles embed.FS
+
+// Embed with patterns
+//go:embed images/*.png images/*.jpg
+var images embed.FS
+
+func main() {
+    // Use embedded string
+    fmt.Println("Version:", version)
+    
+    // Use embedded bytes
+    fmt.Println("Config:", string(configData))
+    
+    // Read from embedded FS
+    data, _ := templates.ReadFile("templates/index.html")
+    fmt.Println(string(data))
+    
+    // List embedded files
+    entries, _ := fs.ReadDir(templates, "templates")
+    for _, entry := range entries {
+        fmt.Println(entry.Name())
+    }
+    
+    // Walk embedded filesystem
+    fs.WalkDir(staticFiles, ".", func(path string, d fs.DirEntry, err error) error {
+        fmt.Println(path)
+        return nil
+    })
+    
+    // Serve embedded files via HTTP
+    // Remove "static" prefix from paths
+    stripped, _ := fs.Sub(staticFiles, "static")
+    http.Handle("/static/", http.StripPrefix("/static/", 
+        http.FileServer(http.FS(stripped))))
+    
+    http.ListenAndServe(":8080", nil)
+}
+
+// Project structure:
+// main.go
+// version.txt
+// config.json
+// templates/
+//   index.html
+//   about.html
+// static/
+//   css/
+//     style.css
+//   js/
+//     app.js
+
+// Benefits of embed:
+// - Single binary deployment
+// - No external file dependencies
+// - Files checked at compile time
+// - Works great for:
+//   - HTML templates
+//   - Static web assets
+//   - SQL migrations
+//   - Default configurations
+//   - License files`}
+              </Typography>
+            </Paper>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#009688" }}>
+              JSON & YAML Configuration
+            </Typography>
+
+            <Paper sx={{ p: 2, borderRadius: 2, bgcolor: "#1e1e1e", mb: 3 }}>
+              <Typography component="pre" sx={{ fontFamily: "monospace", fontSize: 13, color: "#d4d4d4", m: 0, overflow: "auto" }}>
+{`package main
+
+import (
+    "encoding/json"
+    "os"
+    
+    "gopkg.in/yaml.v3"
+)
+
+type Config struct {
+    Server   ServerConfig   \`json:"server" yaml:"server"\`
+    Database DatabaseConfig \`json:"database" yaml:"database"\`
+}
+
+type ServerConfig struct {
+    Host string \`json:"host" yaml:"host"\`
+    Port int    \`json:"port" yaml:"port"\`
+}
+
+type DatabaseConfig struct {
+    URL      string \`json:"url" yaml:"url"\`
+    MaxConns int    \`json:"max_conns" yaml:"max_conns"\`
+}
+
+// Load JSON config
+func LoadJSONConfig(path string) (*Config, error) {
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+    
+    var config Config
+    if err := json.Unmarshal(data, &config); err != nil {
+        return nil, err
+    }
+    return &config, nil
+}
+
+// Load YAML config
+func LoadYAMLConfig(path string) (*Config, error) {
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+    
+    var config Config
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, err
+    }
+    return &config, nil
+}
+
+// Save config
+func SaveConfig(config *Config, path string) error {
+    data, err := json.MarshalIndent(config, "", "  ")
+    if err != nil {
+        return err
+    }
+    return os.WriteFile(path, data, 0644)
+}
+
+// Combine embedded defaults with file config
+//go:embed default_config.yaml
+var defaultConfig []byte
+
+func LoadConfigWithDefaults(path string) (*Config, error) {
+    var config Config
+    
+    // Load defaults
+    if err := yaml.Unmarshal(defaultConfig, &config); err != nil {
+        return nil, err
+    }
+    
+    // Override with file if exists
+    if data, err := os.ReadFile(path); err == nil {
+        if err := yaml.Unmarshal(data, &config); err != nil {
+            return nil, err
+        }
+    }
+    
+    return &config, nil
+}`}
+              </Typography>
+            </Paper>
+
+            <Grid container spacing={2}>
+              {[
+                { title: "os.ReadFile/WriteFile", desc: "Simple read/write for small files. Loads entire file into memory." },
+                { title: "bufio Scanner", desc: "Line-by-line reading. Memory efficient for large files." },
+                { title: "embed.FS", desc: "Embed files in binary at compile time. Perfect for assets." },
+                { title: "io.Copy", desc: "Stream data between Reader and Writer. Memory efficient." },
+                { title: "filepath.Walk", desc: "Recursively traverse directories. Use WalkDir for better performance." },
+                { title: "fs.FS Interface", desc: "Abstract filesystem. Works with embed.FS, os.DirFS, zip archives." },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.title}>
+                  <Paper sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#009688", 0.05), height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#009688", mb: 0.5 }}>
+                      {item.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {item.desc}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
           {/* Advanced Topics Section */}
           <Paper id="advanced" sx={{ p: 4, mb: 4, borderRadius: 4 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
@@ -4610,7 +6039,7 @@ fmt.Printf("NumGC: %d\\n", m.NumGC)`}
                   Go Knowledge Quiz
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Test your understanding with 10 random questions from our bank of 75
+                  Test your understanding with 10 random questions from our bank of 95
                 </Typography>
               </Box>
             </Box>
@@ -4639,12 +6068,12 @@ fmt.Printf("NumGC: %d\\n", m.NumGC)`}
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: "auto" }}>
                   This quiz covers all aspects of Go programming: syntax, types, functions, interfaces,
                   concurrency, channels, error handling, testing, and more. Each attempt randomly selects
-                  10 questions from our bank of 75.
+                  10 questions from our bank of 95.
                 </Typography>
                 <Grid container spacing={2} sx={{ maxWidth: 400, mx: "auto", mb: 4 }}>
                   {[
                     { label: "Questions", value: "10" },
-                    { label: "Question Bank", value: "75" },
+                    { label: "Question Bank", value: "95" },
                     { label: "Topics", value: "12+" },
                     { label: "Time Limit", value: "None" },
                   ].map((stat) => (

@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import ipaddress
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
@@ -213,60 +213,165 @@ VULNERABLE_VERSIONS = {
     "openssh": [
         (r"OpenSSH[_ ]([0-6]\.|7\.[0-3])", "high", "OpenSSH < 7.4 - Multiple vulnerabilities including user enumeration (CVE-2016-6210)"),
         (r"OpenSSH[_ ]7\.[4-6]", "medium", "OpenSSH 7.4-7.6 - Check for CVE-2017-15906 (readonly bypass)"),
+        (r"OpenSSH[_ ]8\.[0-4]", "medium", "OpenSSH 8.0-8.4 - CVE-2021-28041 double-free vulnerability"),
+        (r"OpenSSH[_ ]9\.0", "low", "OpenSSH 9.0 - CVE-2023-38408 PKCS#11 vulnerability in ssh-agent"),
+        (r"OpenSSH[_ ]9\.[0-6]", "medium", "OpenSSH 9.x - CVE-2024-6387 RegreSSHion race condition RCE (check specific version)"),
     ],
     "apache": [
         (r"Apache[/ ]2\.4\.([0-9]|[1-3][0-9]|4[0-9])(?![0-9])", "high", "Apache < 2.4.50 - Multiple vulnerabilities including path traversal (CVE-2021-41773, CVE-2021-42013)"),
+        (r"Apache[/ ]2\.4\.(50|51|52)", "medium", "Apache 2.4.50-2.4.52 - CVE-2022-22719, CVE-2022-22720, CVE-2022-22721"),
+        (r"Apache[/ ]2\.4\.5[3-4]", "medium", "Apache 2.4.53-2.4.54 - CVE-2022-31813 mod_proxy X-Forwarded-For bypass"),
         (r"Apache[/ ]2\.2\.", "high", "Apache 2.2.x - End of life, multiple known vulnerabilities"),
     ],
     "nginx": [
         (r"nginx/1\.([0-9]|1[0-7])\.", "medium", "nginx < 1.18 - Multiple vulnerabilities"),
+        (r"nginx/1\.18\.[0-1]", "low", "nginx 1.18.x - CVE-2021-23017 DNS resolver vulnerability"),
+        (r"nginx/1\.(19|20|21)\.", "low", "nginx 1.19-1.21 - Check for HTTP/2 vulnerabilities"),
         (r"nginx/0\.", "high", "nginx 0.x - Very old, multiple vulnerabilities"),
     ],
     "mysql": [
         (r"MySQL[/ ]5\.[0-5]\.", "high", "MySQL 5.0-5.5 - End of life, multiple vulnerabilities"),
         (r"MySQL[/ ]5\.6\.", "medium", "MySQL 5.6 - Consider upgrading, EOL"),
+        (r"MySQL[/ ]5\.7\.([0-2][0-9]|3[0-5])", "medium", "MySQL 5.7 < 5.7.36 - Multiple CVEs including privilege escalation"),
+        (r"MySQL[/ ]8\.0\.([0-2][0-9])", "medium", "MySQL 8.0 < 8.0.30 - Multiple security fixes in later versions"),
         (r"MariaDB[/ ]5\.", "high", "MariaDB 5.x - Very old, multiple vulnerabilities"),
+        (r"MariaDB[/ ]10\.[0-3]\.", "medium", "MariaDB 10.0-10.3 - End of life"),
     ],
     "microsoft-ds": [
         (r"Windows Server 200[38]", "critical", "Windows Server 2003/2008 - End of life, EternalBlue vulnerable"),
         (r"Windows XP", "critical", "Windows XP - End of life, critical vulnerabilities"),
         (r"Windows 7", "high", "Windows 7 - End of life since Jan 2020"),
+        (r"Windows Server 2012", "high", "Windows Server 2012 - End of life Oct 2023"),
+        (r"Windows 8\.1", "high", "Windows 8.1 - End of life Jan 2023"),
     ],
     "proftpd": [
         (r"ProFTPD[/ ]1\.[23]\.", "critical", "ProFTPD < 1.3.6 - Multiple critical vulnerabilities including backdoor"),
+        (r"ProFTPD[/ ]1\.3\.[0-5]", "high", "ProFTPD < 1.3.6 - CVE-2019-12815 mod_copy vulnerability"),
     ],
     "vsftpd": [
         (r"vsftpd[/ ]2\.3\.4", "critical", "vsftpd 2.3.4 - Backdoor vulnerability (CVE-2011-2523)"),
+        (r"vsftpd[/ ]2\.[0-3]", "medium", "vsftpd 2.x - Consider upgrading to 3.x"),
     ],
     "exim": [
-        (r"Exim[/ ]4\.([0-8][0-9]|9[0-1])", "critical", "Exim < 4.92 - Multiple RCE vulnerabilities"),
+        (r"Exim[/ ]4\.([0-8][0-9]|9[0-1])", "critical", "Exim < 4.92 - Multiple RCE vulnerabilities (CVE-2019-15846)"),
+        (r"Exim[/ ]4\.9[2-4]", "high", "Exim 4.92-4.94 - CVE-2020-28007 to CVE-2020-28026 (21Nails)"),
     ],
     "postfix": [
         (r"Postfix[/ ]2\.", "medium", "Postfix 2.x - Consider upgrading"),
+        (r"Postfix[/ ]3\.[0-4]\.", "low", "Postfix 3.0-3.4 - Check for security updates"),
     ],
     "iis": [
         (r"IIS[/ ]([5-7])\.", "high", "IIS 5-7 - Multiple known vulnerabilities"),
+        (r"IIS[/ ]8\.[05]", "medium", "IIS 8.x - Check for HTTP/2 vulnerabilities"),
+        (r"IIS[/ ]10\.0", "low", "IIS 10 - Ensure latest patches applied"),
     ],
     "tomcat": [
         (r"Tomcat[/ ]([5-7])\.", "high", "Tomcat 5-7 - End of life, multiple vulnerabilities"),
         (r"Tomcat[/ ]8\.[0-4]\.", "medium", "Tomcat 8.0-8.4 - Consider upgrading"),
+        (r"Tomcat[/ ]9\.0\.([0-4][0-9]|5[0-9]|6[0-5])", "medium", "Tomcat 9.0 < 9.0.65 - CVE-2022-42252 request smuggling"),
+        (r"Tomcat[/ ]10\.0\.([0-1][0-9]|2[0-3])", "medium", "Tomcat 10.0 < 10.0.23 - CVE-2022-42252"),
     ],
     "php": [
         (r"PHP[/ ]5\.", "high", "PHP 5.x - End of life, multiple vulnerabilities"),
         (r"PHP[/ ]7\.[0-3]\.", "medium", "PHP 7.0-7.3 - End of life"),
+        (r"PHP[/ ]7\.4\.([0-2][0-9])", "low", "PHP 7.4 < 7.4.30 - Multiple security fixes in later versions"),
+        (r"PHP[/ ]8\.0\.([0-1][0-9]|2[0-2])", "low", "PHP 8.0 < 8.0.23 - Multiple security fixes"),
+        (r"PHP[/ ]8\.1\.([0-9]|1[0-1])", "low", "PHP 8.1 < 8.1.12 - Multiple security fixes"),
     ],
     "openssl": [
         (r"OpenSSL[/ ]0\.", "critical", "OpenSSL 0.x - Heartbleed and many other vulnerabilities"),
-        (r"OpenSSL[/ ]1\.0\.[01]", "high", "OpenSSL 1.0.0-1.0.1 - Multiple vulnerabilities including Heartbleed"),
+        (r"OpenSSL[/ ]1\.0\.[01]", "high", "OpenSSL 1.0.0-1.0.1 - Multiple vulnerabilities including Heartbleed (CVE-2014-0160)"),
+        (r"OpenSSL[/ ]1\.0\.2[a-t]", "medium", "OpenSSL 1.0.2 < 1.0.2u - Multiple CVEs, EOL Dec 2019"),
+        (r"OpenSSL[/ ]1\.1\.0", "medium", "OpenSSL 1.1.0 - EOL, upgrade to 1.1.1 or 3.x"),
+        (r"OpenSSL[/ ]1\.1\.1[a-n]", "low", "OpenSSL 1.1.1 < 1.1.1o - Check for recent CVEs"),
+        (r"OpenSSL[/ ]3\.0\.[0-6]", "medium", "OpenSSL 3.0 < 3.0.7 - CVE-2022-3602, CVE-2022-3786 buffer overflows"),
     ],
     "redis": [
         (r"Redis[/ ]([0-5])\.", "high", "Redis < 6 - Consider upgrading, check for auth"),
+        (r"Redis[/ ]6\.[0-1]\.", "medium", "Redis 6.0-6.1 - CVE-2021-32625 to CVE-2021-32761"),
+        (r"Redis[/ ]7\.0\.[0-4]", "medium", "Redis 7.0 < 7.0.5 - CVE-2022-35951 integer overflow"),
     ],
     "elasticsearch": [
         (r"Elasticsearch[/ ]([0-6])\.", "high", "Elasticsearch < 7 - Multiple vulnerabilities, check authentication"),
+        (r"Elasticsearch[/ ]7\.([0-9]|1[0-5])\.", "medium", "Elasticsearch 7 < 7.16 - Log4j vulnerability (CVE-2021-44228)"),
+        (r"Elasticsearch[/ ]8\.[0-5]\.", "low", "Elasticsearch 8 < 8.6 - Check for security updates"),
     ],
     "jenkins": [
         (r"Jenkins[/ ]([01]\.|2\.[0-9]{1,2}(?![0-9]))", "high", "Jenkins < 2.100 - Multiple vulnerabilities"),
+        (r"Jenkins[/ ]2\.(1[0-9]{2}|2[0-9]{2}|3[0-2][0-9])", "medium", "Jenkins < 2.330 - Multiple CVEs"),
+        (r"Jenkins[/ ]2\.(3[3-5][0-9]|36[0-5])", "low", "Jenkins < 2.366 - Check for security updates"),
+    ],
+    "mongodb": [
+        (r"MongoDB[/ ]([0-3])\.", "high", "MongoDB < 4 - Multiple vulnerabilities, consider upgrading"),
+        (r"MongoDB[/ ]4\.[0-2]\.", "medium", "MongoDB 4.0-4.2 - CVE-2020-7928 to CVE-2020-7929"),
+        (r"MongoDB[/ ]4\.[4-6]\.", "low", "MongoDB 4.4-4.6 - Check for authentication, security updates"),
+    ],
+    "postgresql": [
+        (r"PostgreSQL[/ ]([0-9]|1[0-1])\.", "high", "PostgreSQL < 12 - Multiple EOL versions with known CVEs"),
+        (r"PostgreSQL[/ ]12\.([0-9]|1[0-2])", "medium", "PostgreSQL 12 < 12.13 - Multiple security fixes"),
+        (r"PostgreSQL[/ ]13\.([0-8])", "low", "PostgreSQL 13 < 13.9 - Multiple security fixes"),
+        (r"PostgreSQL[/ ]14\.([0-5])", "low", "PostgreSQL 14 < 14.6 - Multiple security fixes"),
+    ],
+    "rabbitmq": [
+        (r"RabbitMQ[/ ]3\.([0-7])\.", "high", "RabbitMQ < 3.8 - Multiple vulnerabilities"),
+        (r"RabbitMQ[/ ]3\.(8|9)\.[0-9]", "medium", "RabbitMQ 3.8-3.9 - CVE-2021-32718, CVE-2021-32719"),
+    ],
+    "docker": [
+        (r"Docker[/ ]1[0-8]\.", "high", "Docker < 19 - Multiple container escape vulnerabilities"),
+        (r"Docker[/ ]19\.(0[0-3])", "medium", "Docker 19 < 19.03.9 - CVE-2019-14271 to CVE-2020-15257"),
+        (r"Docker[/ ]20\.10\.([0-9]|1[0-7])", "low", "Docker 20.10 < 20.10.18 - Security updates available"),
+    ],
+    "kubernetes": [
+        (r"Kubernetes[/ ]1\.(1[0-9]|20)\.", "high", "Kubernetes 1.10-1.20 - Multiple CVEs, EOL"),
+        (r"Kubernetes[/ ]1\.(21|22)\.", "medium", "Kubernetes 1.21-1.22 - CVE-2022-3162, CVE-2022-3172"),
+    ],
+    "grafana": [
+        (r"Grafana[/ ]([0-7])\.", "high", "Grafana < 8 - Multiple vulnerabilities including auth bypass"),
+        (r"Grafana[/ ]8\.([0-2])\.", "high", "Grafana 8.0-8.2 - CVE-2021-39226 snapshot auth bypass"),
+        (r"Grafana[/ ]8\.[3-5]\.", "medium", "Grafana 8.3-8.5 - Multiple security fixes in later versions"),
+    ],
+    "gitlab": [
+        (r"GitLab[/ ]1[0-3]\.", "high", "GitLab < 14 - Multiple critical CVEs"),
+        (r"GitLab[/ ]14\.[0-9]\.", "medium", "GitLab 14.x - CVE-2021-22205 RCE, CVE-2022-0342"),
+        (r"GitLab[/ ]15\.[0-3]\.", "low", "GitLab 15.0-15.3 - Check for latest security patches"),
+    ],
+    "confluence": [
+        (r"Confluence[/ ]([0-6])\.", "critical", "Confluence < 7 - Multiple critical RCE vulnerabilities"),
+        (r"Confluence[/ ]7\.[0-3]\.", "high", "Confluence 7.0-7.3 - CVE-2021-26084 OGNL injection"),
+        (r"Confluence[/ ]7\.(4|5|6|7|8|9|1[0-7])", "medium", "Confluence 7.4-7.17 - CVE-2022-26134 RCE"),
+    ],
+    "jira": [
+        (r"JIRA[/ ]([0-7])\.", "high", "Jira < 8 - Multiple vulnerabilities including SSRF"),
+        (r"JIRA[/ ]8\.[0-9]\.", "medium", "Jira 8.x - CVE-2019-8449 to CVE-2019-8451"),
+    ],
+    "spring": [
+        (r"Spring[/ ]([0-4])\.", "critical", "Spring < 5 - Multiple vulnerabilities"),
+        (r"Spring[/ ]5\.([0-2])\.", "high", "Spring 5.0-5.2 - CVE-2022-22965 Spring4Shell RCE"),
+        (r"Spring[/ ]5\.3\.([0-9]|1[0-7])", "medium", "Spring 5.3 < 5.3.18 - Spring4Shell and other CVEs"),
+    ],
+    "log4j": [
+        (r"log4j[/ ]2\.(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14)", "critical", "Log4j 2.0-2.14 - CVE-2021-44228 Log4Shell RCE"),
+        (r"log4j[/ ]2\.15", "high", "Log4j 2.15 - CVE-2021-45046 incomplete fix"),
+        (r"log4j[/ ]2\.16", "medium", "Log4j 2.16 - CVE-2021-45105 DoS vulnerability"),
+    ],
+    "varnish": [
+        (r"Varnish[/ ]([0-5])\.", "medium", "Varnish < 6 - Multiple security fixes in later versions"),
+        (r"Varnish[/ ]6\.[0-3]\.", "low", "Varnish 6.0-6.3 - CVE-2021-36740 request smuggling"),
+    ],
+    "haproxy": [
+        (r"HAProxy[/ ]1\.([0-7])\.", "high", "HAProxy < 1.8 - Multiple vulnerabilities"),
+        (r"HAProxy[/ ]1\.8\.([0-9]|1[0-9]|2[0-5])", "medium", "HAProxy 1.8 < 1.8.26 - HTTP/2 vulnerabilities"),
+        (r"HAProxy[/ ]2\.0\.([0-9]|1[0-9])", "low", "HAProxy 2.0 < 2.0.20 - Multiple security fixes"),
+    ],
+    "samba": [
+        (r"Samba[/ ]([0-3])\.", "critical", "Samba < 4 - Multiple critical vulnerabilities"),
+        (r"Samba[/ ]4\.[0-9]\.", "high", "Samba 4.0-4.9 - CVE-2017-7494 SambaCry RCE"),
+        (r"Samba[/ ]4\.1[0-4]\.", "medium", "Samba 4.10-4.14 - CVE-2020-1472 Zerologon"),
+    ],
+    "bind": [
+        (r"BIND[/ ]9\.([0-9]|10)\.", "high", "BIND 9.0-9.10 - Multiple critical vulnerabilities"),
+        (r"BIND[/ ]9\.1[1-5]\.", "medium", "BIND 9.11-9.15 - CVE-2020-8616, CVE-2020-8617"),
+        (r"BIND[/ ]9\.16\.([0-9]|1[0-9]|2[0-9])", "low", "BIND 9.16 < 9.16.30 - Check for security updates"),
     ],
 }
 
@@ -1302,15 +1407,39 @@ async def analyze_nmap_with_ai(analysis_result: NmapAnalysisResult) -> Dict[str,
         
         client = genai.Client(api_key=settings.gemini_api_key)
         
-        # Build summary for AI
+        # Build detailed host info for AI (increased limits for better analysis)
         findings_text = "\n".join(
             f"- [{f.severity.upper()}] {f.title}: {f.description} (host: {f.host}, port: {f.port})"
-            for f in analysis_result.findings[:25]
+            for f in analysis_result.findings[:50]  # Increased from 25 to 50
         )
         
+        # More detailed host info including services
+        def format_host_services(h):
+            open_ports = [p for p in h.ports if p.get('state') == 'open'][:10]
+            services_str = ', '.join([f"{p.get('port')}/{p.get('service', 'unknown')}" for p in open_ports])
+            return f"- {h.ip} ({h.hostname or 'no hostname'}): {len([p for p in h.ports if p.get('state') == 'open'])} open ports, OS: {h.os_guess or 'unknown'}, Services: {services_str}"
+        
         hosts_text = "\n".join(
-            f"- {h.ip} ({h.hostname or 'no hostname'}): {len([p for p in h.ports if p.get('state') == 'open'])} open ports, OS: {h.os_guess or 'unknown'}"
-            for h in analysis_result.hosts[:20]
+            format_host_services(h)
+            for h in analysis_result.hosts[:40]  # Increased from 20 to 40
+        )
+        
+        # Build detailed port/service info
+        all_open_ports = []
+        for h in analysis_result.hosts[:40]:
+            for p in h.ports:
+                if p.get('state') == 'open':
+                    all_open_ports.append({
+                        "host": h.ip,
+                        "port": p.get('port'),
+                        "service": p.get('service', 'unknown'),
+                        "product": p.get('product', ''),
+                        "version": p.get('version', ''),
+                    })
+        
+        ports_detail = "\n".join(
+            f"- {p['host']}:{p['port']} - {p['service']} {p['product']} {p['version']}".strip()
+            for p in all_open_ports[:100]  # Top 100 open ports with details
         )
         
         prompt = f"""You are an expert network security analyst and penetration tester. Analyze this Nmap scan data and produce a comprehensive, structured security assessment report.
@@ -1342,6 +1471,9 @@ async def analyze_nmap_with_ai(analysis_result: NmapAnalysisResult) -> Dict[str,
 
 ### Hosts Summary
 {hosts_text}
+
+### Open Ports Detail (Top 100)
+{ports_detail if ports_detail else "No open ports detected."}
 
 ### Automated Security Findings ({len(analysis_result.findings)} issues)
 {findings_text if findings_text else "No critical security issues detected by automated analysis."}
@@ -1627,6 +1759,258 @@ SCAN_TYPES = {
     },
 }
 
+# Available NSE script categories that can be added to scans
+# Users can select one or more of these to run additional scripts
+NSE_SCRIPT_CATEGORIES = {
+    "vuln": {
+        "name": "Vulnerability Scripts",
+        "description": "Checks for known vulnerabilities (CVEs, misconfigurations)",
+        "examples": ["smb-vuln-ms17-010", "http-vuln-cve2017-5638", "ssl-heartbleed"],
+        "warning": "May trigger IDS/IPS alerts",
+        "timeout_multiplier": 2.0,
+    },
+    "safe": {
+        "name": "Safe Scripts",
+        "description": "Non-intrusive scripts that won't crash services",
+        "examples": ["http-headers", "ssh-hostkey", "ssl-cert"],
+        "warning": None,
+        "timeout_multiplier": 1.2,
+    },
+    "discovery": {
+        "name": "Discovery Scripts",
+        "description": "Enumerate services and gather info (banners, versions)",
+        "examples": ["http-enum", "smb-enum-shares", "dns-brute"],
+        "warning": "Can generate significant traffic",
+        "timeout_multiplier": 1.5,
+    },
+    "auth": {
+        "name": "Authentication Scripts",
+        "description": "Check for auth issues, default creds, anonymous access",
+        "examples": ["ftp-anon", "http-auth", "mysql-empty-password"],
+        "warning": None,
+        "timeout_multiplier": 1.3,
+    },
+    "brute": {
+        "name": "Brute Force Scripts",
+        "description": "Password brute forcing (use with caution)",
+        "examples": ["ssh-brute", "ftp-brute", "http-brute"],
+        "warning": "May lock out accounts, use responsibly",
+        "timeout_multiplier": 3.0,
+    },
+    "exploit": {
+        "name": "Exploit Scripts",
+        "description": "Attempt to exploit vulnerabilities (pentesting only)",
+        "examples": ["smb-vuln-ms08-067", "http-shellshock"],
+        "warning": "DANGEROUS - Only use in authorized pentests",
+        "timeout_multiplier": 2.0,
+    },
+    "intrusive": {
+        "name": "Intrusive Scripts",
+        "description": "May crash services or affect system stability",
+        "examples": ["http-slowloris", "dns-update"],
+        "warning": "May cause service disruption",
+        "timeout_multiplier": 2.0,
+    },
+    "malware": {
+        "name": "Malware Detection Scripts",
+        "description": "Detect malware infections and backdoors",
+        "examples": ["http-malware-host", "smb-double-pulsar-backdoor"],
+        "warning": None,
+        "timeout_multiplier": 1.5,
+    },
+    "default": {
+        "name": "Default Scripts",
+        "description": "Standard scripts included with -sC flag",
+        "examples": ["ssh-hostkey", "http-title", "ssl-cert"],
+        "warning": None,
+        "timeout_multiplier": 1.0,
+    },
+    "broadcast": {
+        "name": "Broadcast Scripts",
+        "description": "Send broadcast packets to discover hosts/services",
+        "examples": ["broadcast-dhcp-discover", "broadcast-netbios-master-browser"],
+        "warning": "Generates broadcast traffic on the network",
+        "timeout_multiplier": 1.2,
+    },
+}
+
+# Individual NSE scripts that can be run for specific checks
+NSE_INDIVIDUAL_SCRIPTS = {
+    # SSL/TLS vulnerabilities
+    "ssl-heartbleed": {
+        "name": "Heartbleed (CVE-2014-0160)",
+        "description": "Check for OpenSSL Heartbleed vulnerability",
+        "category": "vuln",
+    },
+    "ssl-poodle": {
+        "name": "POODLE (CVE-2014-3566)",
+        "description": "Check for SSLv3 POODLE vulnerability",
+        "category": "vuln",
+    },
+    "ssl-dh-params": {
+        "name": "Weak DH Parameters",
+        "description": "Check for weak Diffie-Hellman parameters",
+        "category": "vuln",
+    },
+    "ssl-ccs-injection": {
+        "name": "CCS Injection (CVE-2014-0224)",
+        "description": "Check for OpenSSL CCS injection vulnerability",
+        "category": "vuln",
+    },
+    "ssl-cert": {
+        "name": "SSL Certificate",
+        "description": "Retrieve and analyze SSL certificates",
+        "category": "safe",
+    },
+    "ssl-enum-ciphers": {
+        "name": "SSL Ciphers",
+        "description": "Enumerate SSL/TLS cipher suites",
+        "category": "safe",
+    },
+    # SMB vulnerabilities
+    "smb-vuln-ms17-010": {
+        "name": "EternalBlue (MS17-010)",
+        "description": "Check for MS17-010 SMB vulnerability (WannaCry)",
+        "category": "vuln",
+    },
+    "smb-vuln-ms08-067": {
+        "name": "MS08-067",
+        "description": "Check for MS08-067 SMB vulnerability (Conficker)",
+        "category": "vuln",
+    },
+    "smb-vuln-cve-2017-7494": {
+        "name": "SambaCry (CVE-2017-7494)",
+        "description": "Check for Samba remote code execution",
+        "category": "vuln",
+    },
+    "smb-double-pulsar-backdoor": {
+        "name": "DoublePulsar Backdoor",
+        "description": "Check for NSA DoublePulsar backdoor",
+        "category": "malware",
+    },
+    "smb-enum-shares": {
+        "name": "SMB Shares",
+        "description": "Enumerate SMB shares",
+        "category": "discovery",
+    },
+    # HTTP vulnerabilities
+    "http-shellshock": {
+        "name": "Shellshock (CVE-2014-6271)",
+        "description": "Check for Shellshock vulnerability",
+        "category": "vuln",
+    },
+    "http-vuln-cve2017-5638": {
+        "name": "Apache Struts RCE (CVE-2017-5638)",
+        "description": "Check for Apache Struts vulnerability",
+        "category": "vuln",
+    },
+    "http-vuln-cve2021-41773": {
+        "name": "Apache Path Traversal (CVE-2021-41773)",
+        "description": "Check for Apache 2.4.49/2.4.50 path traversal",
+        "category": "vuln",
+    },
+    "http-sql-injection": {
+        "name": "SQL Injection",
+        "description": "Basic SQL injection tests",
+        "category": "vuln",
+    },
+    "http-xssed": {
+        "name": "XSS Detection",
+        "description": "Check for XSS vulnerabilities via xssed.com",
+        "category": "vuln",
+    },
+    "http-enum": {
+        "name": "HTTP Enumeration",
+        "description": "Enumerate web directories and files",
+        "category": "discovery",
+    },
+    "http-headers": {
+        "name": "HTTP Headers",
+        "description": "Retrieve HTTP response headers",
+        "category": "safe",
+    },
+    "http-methods": {
+        "name": "HTTP Methods",
+        "description": "Check for dangerous HTTP methods (PUT, DELETE)",
+        "category": "safe",
+    },
+    # Authentication
+    "ftp-anon": {
+        "name": "FTP Anonymous Login",
+        "description": "Check for anonymous FTP access",
+        "category": "auth",
+    },
+    "mysql-empty-password": {
+        "name": "MySQL Empty Password",
+        "description": "Check for MySQL accounts with no password",
+        "category": "auth",
+    },
+    "mongodb-databases": {
+        "name": "MongoDB Databases",
+        "description": "List MongoDB databases (if unauthenticated)",
+        "category": "auth",
+    },
+    "redis-info": {
+        "name": "Redis Info",
+        "description": "Get Redis server info (often unauthenticated)",
+        "category": "auth",
+    },
+    # Service-specific
+    "dns-zone-transfer": {
+        "name": "DNS Zone Transfer",
+        "description": "Attempt DNS zone transfer",
+        "category": "discovery",
+    },
+    "snmp-info": {
+        "name": "SNMP Info",
+        "description": "Get SNMP system info",
+        "category": "discovery",
+    },
+    "ntp-monlist": {
+        "name": "NTP Monlist",
+        "description": "Get NTP monlist for amplification check",
+        "category": "vuln",
+    },
+    "memcached-info": {
+        "name": "Memcached Info",
+        "description": "Get Memcached server statistics",
+        "category": "discovery",
+    },
+    # Log4j
+    "http-vuln-cve2021-44228": {
+        "name": "Log4Shell (CVE-2021-44228)",
+        "description": "Check for Log4j remote code execution",
+        "category": "vuln",
+    },
+}
+
+
+def get_nse_script_categories() -> List[Dict[str, Any]]:
+    """Get available NSE script categories."""
+    return [
+        {
+            "id": cat_id,
+            "name": cat_info["name"],
+            "description": cat_info["description"],
+            "examples": cat_info["examples"],
+            "warning": cat_info["warning"],
+        }
+        for cat_id, cat_info in NSE_SCRIPT_CATEGORIES.items()
+    ]
+
+
+def get_nse_individual_scripts() -> List[Dict[str, Any]]:
+    """Get available individual NSE scripts."""
+    return [
+        {
+            "id": script_id,
+            "name": script_info["name"],
+            "description": script_info["description"],
+            "category": script_info["category"],
+        }
+        for script_id, script_info in NSE_INDIVIDUAL_SCRIPTS.items()
+    ]
+
 
 def is_nmap_installed() -> bool:
     """Check if nmap is installed and available."""
@@ -1716,6 +2100,8 @@ def run_nmap_scan(
     scan_type: str = "basic",
     ports: Optional[str] = None,
     extra_args: Optional[List[str]] = None,
+    scripts: Optional[List[str]] = None,
+    script_categories: Optional[List[str]] = None,
 ) -> Tuple[Optional[Path], Optional[str], Optional[str]]:
     """
     Run an Nmap scan and return the path to the XML output.
@@ -1725,6 +2111,8 @@ def run_nmap_scan(
         scan_type: Type of scan from SCAN_TYPES
         ports: Optional port specification (e.g., "22,80,443" or "1-1000")
         extra_args: Additional nmap arguments
+        scripts: List of individual NSE script names to run
+        script_categories: List of NSE script categories to run (e.g., ["vuln", "safe"])
         
     Returns:
         Tuple of (output_xml_path, command_used, error_message)
@@ -1755,6 +2143,72 @@ def run_nmap_scan(
         cmd = [arg for arg in cmd if arg not in ["-F", "--top-ports"] and not arg.isdigit()]
         cmd.extend(["-p", ports.replace(" ", "")])
     
+    # Calculate timeout multiplier for scripts
+    timeout_multiplier = 1.0
+    
+    # Add script categories if provided
+    if script_categories:
+        # Validate categories
+        valid_categories = []
+        for cat in script_categories:
+            if cat in NSE_SCRIPT_CATEGORIES:
+                valid_categories.append(cat)
+                # Apply timeout multiplier
+                timeout_multiplier = max(timeout_multiplier, NSE_SCRIPT_CATEGORIES[cat]["timeout_multiplier"])
+            else:
+                logger.warning(f"Unknown script category: {cat}, skipping")
+        
+        if valid_categories:
+            # Check if --script already in cmd and merge
+            existing_script_idx = None
+            for i, arg in enumerate(cmd):
+                if arg == "--script" and i + 1 < len(cmd):
+                    existing_script_idx = i + 1
+                    break
+            
+            if existing_script_idx is not None:
+                # Merge with existing script argument
+                existing_scripts = cmd[existing_script_idx]
+                new_scripts = ",".join(valid_categories)
+                cmd[existing_script_idx] = f"{existing_scripts},{new_scripts}"
+            else:
+                cmd.extend(["--script", ",".join(valid_categories)])
+    
+    # Add individual scripts if provided
+    if scripts:
+        # Validate individual scripts
+        valid_scripts = []
+        for script in scripts:
+            if script in NSE_INDIVIDUAL_SCRIPTS:
+                valid_scripts.append(script)
+            else:
+                # Allow arbitrary script names (user may know scripts not in our list)
+                if re.match(r'^[a-zA-Z0-9\-_]+$', script):
+                    valid_scripts.append(script)
+                    logger.info(f"Using custom script: {script}")
+                else:
+                    logger.warning(f"Invalid script name: {script}, skipping")
+        
+        if valid_scripts:
+            # Check if --script already in cmd and merge
+            existing_script_idx = None
+            for i, arg in enumerate(cmd):
+                if arg == "--script" and i + 1 < len(cmd):
+                    existing_script_idx = i + 1
+                    break
+            
+            if existing_script_idx is not None:
+                # Merge with existing script argument
+                existing_scripts = cmd[existing_script_idx]
+                new_scripts = ",".join(valid_scripts)
+                cmd[existing_script_idx] = f"{existing_scripts},{new_scripts}"
+            else:
+                cmd.extend(["--script", ",".join(valid_scripts)])
+            
+            # Add timeout multiplier for vuln scripts
+            if any(s in NSE_INDIVIDUAL_SCRIPTS and NSE_INDIVIDUAL_SCRIPTS.get(s, {}).get("category") == "vuln" for s in valid_scripts):
+                timeout_multiplier = max(timeout_multiplier, 1.5)
+    
     # Add extra arguments
     if extra_args:
         cmd.extend(extra_args)
@@ -1769,7 +2223,7 @@ def run_nmap_scan(
     
     command_str = " ".join(cmd)
     
-    # Calculate dynamic timeout based on target size
+    # Calculate dynamic timeout based on target size and scripts
     base_timeout = scan_config["timeout"]
     timeout = base_timeout
     
@@ -1786,6 +2240,11 @@ def run_nmap_scan(
                 logger.info(f"Network range {target} has {num_hosts} hosts, timeout adjusted to {timeout}s (base: {base_timeout}s)")
         except ValueError:
             pass  # Not a valid CIDR, use base timeout
+    
+    # Apply script timeout multiplier
+    if timeout_multiplier > 1.0:
+        timeout = int(timeout * timeout_multiplier)
+        logger.info(f"Scripts enabled, timeout multiplied by {timeout_multiplier}x = {timeout}s")
     
     logger.info(f"Running Nmap scan: {command_str} (timeout: {timeout}s)")
     

@@ -47,6 +47,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
 import HubIcon from "@mui/icons-material/Hub";
 import ViewInArIcon from "@mui/icons-material/ViewInAr";
+import WarningIcon from "@mui/icons-material/Warning";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
@@ -986,7 +987,9 @@ const sections = [
   { id: "itil-comparison", label: "ITIL v3 vs v4" },
   { id: "implementation", label: "Implementation Roadmap" },
   { id: "continual-improvement", label: "Continual Improvement" },
+  { id: "career-paths", label: "Career Paths" },
   { id: "certifications", label: "Certifications" },
+  { id: "exam-tips", label: "Exam Tips" },
   { id: "quiz", label: "Knowledge Check" },
 ];
 
@@ -1201,6 +1204,131 @@ export default function ITILv4GuidePage() {
             </Box>
           </Paper>
 
+          {/* Beginner-Friendly Analogy */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha(ACCENT_COLOR, 0.03), border: `2px solid ${alpha(ACCENT_COLOR, 0.15)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: ACCENT_COLOR }}>
+              🏨 The Hotel Analogy: Understanding IT Services
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Imagine IT services like running a <strong>luxury hotel</strong>. This analogy helps understand how ITIL works:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { icon: "🛎️", term: "Service Desk", hotel: "Front Desk / Concierge", it: "First point of contact for all guest (user) requests and issues" },
+                { icon: "🔧", term: "Incident Mgmt", hotel: "Maintenance Team", it: "When the AC breaks, they fix it fast so the guest isn't uncomfortable" },
+                { icon: "🔍", term: "Problem Mgmt", hotel: "Quality Inspector", it: "Figures out WHY all the ACs on floor 3 keep breaking" },
+                { icon: "📋", term: "Change Mgmt", hotel: "Renovation Planning", it: "Carefully planned upgrades so guests aren't disturbed" },
+                { icon: "📦", term: "Service Catalog", hotel: "Hotel Menu", it: "List of all services available (room service, spa, wifi, etc.)" },
+                { icon: "📊", term: "SLA", hotel: "Service Guarantee", it: "Promise: Room cleaned by 3pm, wifi always on, complaints resolved in 1 hour" },
+              ].map((item) => (
+                <Grid item xs={12} md={6} key={item.term}>
+                  <Box sx={{ display: "flex", gap: 2, p: 2, bgcolor: "background.paper", borderRadius: 2 }}>
+                    <Typography sx={{ fontSize: "2rem" }}>{item.icon}</Typography>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.term}</Typography>
+                      <Typography variant="caption" sx={{ display: "block", color: "#3b82f6", fontWeight: 600 }}>
+                        Hotel: {item.hotel}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{item.it}</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#22c55e" }}>
+                💡 The Key Insight:
+              </Typography>
+              <Typography variant="body2">
+                Just like a hotel's goal is happy guests (not beautiful rooms), IT's goal is <strong>enabling business value</strong> (not just running servers). 
+                ITIL helps you shift from "technology-focused" to "value-focused" thinking.
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Why ITIL Matters */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              🎯 Why ITIL Matters: The Business Case
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ textAlign: "center", p: 2 }}>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: "#3b82f6" }}>2.5M+</Typography>
+                  <Typography variant="body2" color="text.secondary">ITIL-certified professionals worldwide</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ textAlign: "center", p: 2 }}>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: "#22c55e" }}>30+</Typography>
+                  <Typography variant="body2" color="text.secondary">Years of proven best practices</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ textAlign: "center", p: 2 }}>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: "#8b5cf6" }}>92%</Typography>
+                  <Typography variant="body2" color="text.secondary">Of enterprises use ITIL practices (HDI)</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Without ITIL, Organizations Often Experience:</Typography>
+            <Grid container spacing={2}>
+              {[
+                { problem: "Chaos during outages", desc: "No clear escalation, finger-pointing, extended downtime" },
+                { problem: "Shadow IT explosion", desc: "Business bypasses slow IT with unauthorized tools" },
+                { problem: "Budget justification struggles", desc: "IT seen as cost center, not value enabler" },
+                { problem: "Repeated incidents", desc: "Same problems happen over and over" },
+                { problem: "Change-induced outages", desc: "60% of outages caused by changes gone wrong" },
+                { problem: "Poor vendor management", desc: "Contracts without SLAs, no accountability" },
+              ].map((item) => (
+                <Grid item xs={12} md={6} key={item.problem}>
+                  <Box sx={{ p: 2, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, borderLeft: `3px solid #ef4444` }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#ef4444" }}>{item.problem}</Typography>
+                    <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha(ACCENT_COLOR, 0.05), borderRadius: 2 }}>
+              <Typography variant="body2">
+                <strong>ITIL provides:</strong> A common language, proven patterns, and a structured approach to solve these problems 
+                while continuously improving. It's not about bureaucracy—it's about <strong>working smarter</strong>.
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* ITIL History Timeline */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#8b5cf6", 0.1)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              📜 ITIL Evolution: From Government Project to Global Standard
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Understanding ITIL's history helps you appreciate why it's structured the way it is and how it has evolved 
+              to meet modern IT challenges.
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { year: "1989", version: "ITIL v1", event: "UK Government (CCTA) creates ITIL to standardize IT practices across agencies", color: "#6b7280" },
+                { year: "2000", version: "ITIL v2", event: "Restructured around Service Support and Service Delivery; becomes globally adopted", color: "#3b82f6" },
+                { year: "2007", version: "ITIL v3", event: "Introduces Service Lifecycle (Strategy, Design, Transition, Operation, Improvement)", color: "#8b5cf6" },
+                { year: "2011", version: "ITIL 2011", event: "Refinement of v3 with clearer guidance and corrections", color: "#22c55e" },
+                { year: "2019", version: "ITIL 4", event: "Major overhaul: SVS, flexible practices, Agile/DevOps integration, value co-creation", color: ACCENT_COLOR },
+                { year: "2020+", version: "ITIL 4 Expansion", event: "Additional practice guides, specialist modules, and integration guidance released", color: "#f59e0b" },
+              ].map((item, idx) => (
+                <Grid item xs={12} md={6} key={item.year}>
+                  <Box sx={{ display: "flex", gap: 2, p: 2, borderRadius: 2, bgcolor: alpha(item.color, 0.03), border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                    <Box sx={{ textAlign: "center", minWidth: 60 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: item.color }}>{item.year}</Typography>
+                      <Chip label={item.version} size="small" sx={{ bgcolor: alpha(item.color, 0.1), color: item.color, fontWeight: 600, fontSize: "0.65rem" }} />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>{item.event}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
           {/* Key Concepts */}
           <Paper id="key-concepts" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -1213,6 +1341,78 @@ export default function ITILv4GuidePage() {
               ITIL 4 introduces fundamental concepts that underpin the entire framework. Understanding these is
               essential for effective IT service management.
             </Typography>
+            
+            {/* Value Equation Visual */}
+            <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                📐 The Value Equation
+              </Typography>
+              <Box sx={{ textAlign: "center", py: 2 }}>
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, bgcolor: "background.paper", p: 2, borderRadius: 2 }}>
+                  <Box sx={{ p: 1.5, bgcolor: alpha("#22c55e", 0.1), borderRadius: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>Utility</Typography>
+                    <Typography variant="caption">(What it does)</Typography>
+                  </Box>
+                  <Typography variant="h5" sx={{ color: "text.secondary" }}>+</Typography>
+                  <Box sx={{ p: 1.5, bgcolor: alpha("#3b82f6", 0.1), borderRadius: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>Warranty</Typography>
+                    <Typography variant="caption">(How well it works)</Typography>
+                  </Box>
+                  <Typography variant="h5" sx={{ color: "text.secondary" }}>=</Typography>
+                  <Box sx={{ p: 1.5, bgcolor: alpha(ACCENT_COLOR, 0.1), borderRadius: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: ACCENT_COLOR }}>Value</Typography>
+                    <Typography variant="caption">(Business benefit)</Typography>
+                  </Box>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 2 }}>
+                Example: Email service has <strong>Utility</strong> (send/receive messages) + <strong>Warranty</strong> (99.9% uptime, secure, fast) = <strong>Value</strong> (business communication enabled)
+              </Typography>
+            </Paper>
+            
+            {/* Output vs Outcome Visual */}
+            <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                🎯 Output vs Outcome: A Critical Distinction
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
+                    <Typography variant="h4">📦</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b" }}>Output</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      What IT produces/delivers
+                    </Typography>
+                    <Box component="ul" sx={{ textAlign: "left", m: 0, pl: 2 }}>
+                      <Typography component="li" variant="caption" color="text.secondary">A deployed email server</Typography>
+                      <Typography component="li" variant="caption" color="text.secondary">A report generated</Typography>
+                      <Typography component="li" variant="caption" color="text.secondary">An incident ticket resolved</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ textAlign: "center", p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+                    <Typography variant="h4">🏆</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e" }}>Outcome</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      The business result enabled
+                    </Typography>
+                    <Box component="ul" sx={{ textAlign: "left", m: 0, pl: 2 }}>
+                      <Typography component="li" variant="caption" color="text.secondary">Teams can collaborate globally</Typography>
+                      <Typography component="li" variant="caption" color="text.secondary">Leadership can make data-driven decisions</Typography>
+                      <Typography component="li" variant="caption" color="text.secondary">Employee can continue their work</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+              <Box sx={{ mt: 2, p: 2, bgcolor: alpha("#ef4444", 0.05), borderRadius: 1 }}>
+                <Typography variant="body2">
+                  <strong>⚠️ Common Mistake:</strong> IT teams often focus on outputs ("we deployed 50 servers") instead of outcomes 
+                  ("business processed 20% more orders"). ITIL shifts focus to outcomes.
+                </Typography>
+              </Box>
+            </Paper>
+            
             <Grid container spacing={2}>
               {[
                 { term: "Service", definition: "A means of enabling value co-creation by facilitating outcomes customers want to achieve", icon: "🎯" },
@@ -1239,6 +1439,127 @@ export default function ITILv4GuidePage() {
                 </Grid>
               ))}
             </Grid>
+          </Paper>
+
+          {/* Day in the Life: Service Desk Scenarios */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              <SupportAgentIcon sx={{ color: "#22c55e" }} />
+              A Day in the Life: ITIL in Action
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              Let's follow a typical day to see how ITIL practices work together in a real organization:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                {
+                  time: "8:00 AM",
+                  scenario: "Major Email Outage Reported",
+                  practices: ["Incident Management", "Major Incident Process"],
+                  actions: "Service desk logs P1 incident, triggers major incident process, assembles response team, begins customer communication",
+                  color: "#ef4444",
+                },
+                {
+                  time: "9:30 AM",
+                  scenario: "Email Restored - Post-Incident",
+                  practices: ["Problem Management"],
+                  actions: "Problem ticket created to investigate root cause. Team discovers misconfigured DNS after last night's change.",
+                  color: "#f59e0b",
+                },
+                {
+                  time: "10:00 AM",
+                  scenario: "New Employee Onboarding",
+                  practices: ["Service Request Management", "Access Management"],
+                  actions: "HR submits standard onboarding request. Automated workflow provisions laptop, accounts, and access within SLA.",
+                  color: "#3b82f6",
+                },
+                {
+                  time: "11:00 AM",
+                  scenario: "Software Upgrade Request",
+                  practices: ["Change Enablement", "Release Management"],
+                  actions: "Change request submitted for CRM upgrade. CAB reviews impact, approves for weekend deployment window.",
+                  color: "#8b5cf6",
+                },
+                {
+                  time: "2:00 PM",
+                  scenario: "Quarterly SLA Review Meeting",
+                  practices: ["Service Level Management", "Measurement & Reporting"],
+                  actions: "IT and business review SLA performance. 99.2% availability achieved vs 99.5% target. Action plan created.",
+                  color: "#22c55e",
+                },
+                {
+                  time: "4:00 PM",
+                  scenario: "Continual Improvement Board",
+                  practices: ["Continual Improvement"],
+                  actions: "Team reviews improvement backlog. Prioritizes automation of password resets (30% of all tickets).",
+                  color: ACCENT_COLOR,
+                },
+              ].map((item) => (
+                <Grid item xs={12} key={item.time}>
+                  <Box sx={{ display: "flex", gap: 2, p: 2, bgcolor: alpha(item.color, 0.03), borderRadius: 2, borderLeft: `4px solid ${item.color}` }}>
+                    <Box sx={{ minWidth: 70, textAlign: "center" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.time}</Typography>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.scenario}</Typography>
+                      <Box sx={{ display: "flex", gap: 0.5, my: 1, flexWrap: "wrap" }}>
+                        {item.practices.map((p) => (
+                          <Chip key={p} label={p} size="small" sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(item.color, 0.1), color: item.color }} />
+                        ))}
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">{item.actions}</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* ITSM Tool Landscape */}
+          <Paper sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+              🛠️ ITSM Tool Landscape
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              ITIL practices are typically implemented using ITSM tools. Here's the current market landscape:
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha("#3b82f6", 0.1) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Tool</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Best For</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>ITIL Alignment</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { tool: "ServiceNow", category: "Enterprise", best: "Large enterprises, complex workflows", align: "Full ITIL 4 certified" },
+                    { tool: "BMC Helix", category: "Enterprise", best: "Multi-cloud, AI-powered ITSM", align: "Full ITIL certified" },
+                    { tool: "Jira Service Management", category: "Mid-market", best: "Agile teams, DevOps integration", align: "Strong, modern approach" },
+                    { tool: "Freshservice", category: "Mid-market", best: "Quick deployment, ease of use", align: "Good ITIL coverage" },
+                    { tool: "Zendesk", category: "SMB/Customer", best: "Customer support, simplicity", align: "Basic ITSM features" },
+                    { tool: "ManageEngine", category: "SMB", best: "Cost-effective, IT operations", align: "Solid ITIL coverage" },
+                    { tool: "Ivanti", category: "Enterprise", best: "Unified IT, asset management", align: "Comprehensive" },
+                    { tool: "TOPdesk", category: "Mid-market", best: "European markets, shared services", align: "Strong ITIL focus" },
+                  ].map((row) => (
+                    <TableRow key={row.tool}>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.tool}</TableCell>
+                      <TableCell><Chip label={row.category} size="small" /></TableCell>
+                      <TableCell>{row.best}</TableCell>
+                      <TableCell>{row.align}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2 }}>
+              <Typography variant="body2">
+                <strong>💡 Tip:</strong> Tool selection should follow process design. "ITIL first, tool second." 
+                Many organizations fail by customizing tools before defining their processes.
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Four Dimensions */}
@@ -2055,6 +2376,97 @@ export default function ITILv4GuidePage() {
             </Grid>
           </Paper>
 
+          {/* Career Paths */}
+          <Paper id="career-paths" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TrendingUpIcon sx={{ color: "#22c55e" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                ITIL Career Paths & Salary Guide
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              ITIL knowledge opens doors to various IT service management career paths. Here's what you can expect:
+            </Typography>
+            
+            {/* Salary Ranges */}
+            <Paper sx={{ p: 3, mb: 4, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                💰 US Salary Ranges (2024)
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { role: "Service Desk Analyst", level: "Entry", salary: "$45K - $60K", cert: "ITIL Foundation" },
+                  { role: "IT Support Specialist", level: "Entry", salary: "$50K - $70K", cert: "ITIL Foundation" },
+                  { role: "Incident Manager", level: "Mid", salary: "$70K - $95K", cert: "ITIL Foundation + CDS" },
+                  { role: "Problem Manager", level: "Mid", salary: "$75K - $100K", cert: "ITIL Foundation + CDS" },
+                  { role: "Change Manager", level: "Mid", salary: "$80K - $105K", cert: "ITIL Foundation + CDS" },
+                  { role: "ITSM Process Owner", level: "Senior", salary: "$90K - $120K", cert: "ITIL Managing Professional" },
+                  { role: "IT Service Manager", level: "Senior", salary: "$100K - $140K", cert: "ITIL Managing Professional" },
+                  { role: "ITSM Director", level: "Executive", salary: "$140K - $200K", cert: "ITIL Strategic Leader" },
+                ].map((item) => (
+                  <Grid item xs={12} md={6} key={item.role}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 1.5, bgcolor: "background.paper", borderRadius: 1, border: `1px solid ${alpha("#22c55e", 0.1)}` }}>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{item.role}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.cert}</Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#22c55e" }}>{item.salary}</Typography>
+                        <Chip label={item.level} size="small" sx={{ height: 18, fontSize: "0.6rem" }} />
+                      </Box>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+                * Salaries vary by location, company size, and additional certifications. Source: Glassdoor, LinkedIn, Indeed 2024
+              </Typography>
+            </Paper>
+
+            {/* Career Progression */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📈 Typical Career Progression</Typography>
+            <Box sx={{ position: "relative", mb: 4 }}>
+              {[
+                { stage: "1", title: "Service Desk / Help Desk", time: "0-2 years", skills: "Customer service, ticket handling, basic troubleshooting", cert: "ITIL Foundation" },
+                { stage: "2", title: "IT Support / Operations", time: "2-4 years", skills: "Incident resolution, monitoring, documentation", cert: "ITIL Foundation" },
+                { stage: "3", title: "Process Analyst / Specialist", time: "4-6 years", skills: "Process design, KPI analysis, tool configuration", cert: "ITIL Specialist (CDS/DSV)" },
+                { stage: "4", title: "Process Owner / Manager", time: "6-10 years", skills: "Team leadership, stakeholder management, strategy", cert: "ITIL Managing Professional" },
+                { stage: "5", title: "ITSM Director / VP", time: "10+ years", skills: "Executive leadership, budget, organizational transformation", cert: "ITIL Strategic Leader / Master" },
+              ].map((item, idx) => (
+                <Box key={item.stage} sx={{ display: "flex", gap: 2, mb: 2 }}>
+                  <Box sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: ACCENT_COLOR, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>
+                    {item.stage}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 2, bgcolor: alpha(ACCENT_COLOR, 0.03), borderRadius: 2 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{item.title}</Typography>
+                      <Chip label={item.time} size="small" variant="outlined" sx={{ height: 20, fontSize: "0.65rem" }} />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{item.skills}</Typography>
+                    <Chip label={item.cert} size="small" sx={{ mt: 1, height: 20, fontSize: "0.65rem", bgcolor: alpha(ACCENT_COLOR, 0.1), color: ACCENT_COLOR }} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Related Job Titles */}
+            <Paper sx={{ p: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
+                🔍 Job Titles to Search For
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {[
+                  "Service Desk Analyst", "IT Support Specialist", "Incident Manager", "Problem Manager",
+                  "Change Manager", "Configuration Manager", "Release Manager", "ITSM Analyst",
+                  "IT Service Manager", "Service Delivery Manager", "IT Operations Manager",
+                  "ITSM Consultant", "Process Owner", "Service Level Manager", "IT Director"
+                ].map((title) => (
+                  <Chip key={title} label={title} size="small" sx={{ bgcolor: alpha("#3b82f6", 0.1) }} />
+                ))}
+              </Box>
+            </Paper>
+          </Paper>
+
           {/* Certifications */}
           <Paper id="certifications" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
@@ -2139,6 +2551,160 @@ export default function ITILv4GuidePage() {
                 </Card>
               </Grid>
             </Grid>
+          </Paper>
+
+          {/* Exam Tips */}
+          <Paper id="exam-tips" elevation={0} sx={{ p: 4, mb: 4, borderRadius: 3, border: `1px solid ${alpha("#f59e0b", 0.1)}` }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+              <TipsAndUpdatesIcon sx={{ color: "#f59e0b" }} />
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                ITIL 4 Foundation Exam Tips
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+              The ITIL 4 Foundation exam has 40 multiple-choice questions with 60 minutes to complete. 
+              You need 26/40 (65%) to pass. Here's how to prepare:
+            </Typography>
+
+            {/* Exam Format */}
+            <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#3b82f6", 0.03), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>📋 Exam Format</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>40</Typography>
+                    <Typography variant="caption">Questions</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: "#3b82f6" }}>60</Typography>
+                    <Typography variant="caption">Minutes</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: "#22c55e" }}>65%</Typography>
+                    <Typography variant="caption">Pass Mark</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: "#f59e0b" }}>$365</Typography>
+                    <Typography variant="caption">Exam Cost (USD)</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Key Topics by Weight */}
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>📊 Topic Weightings</Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {[
+                { topic: "Key Concepts", weight: "~15%", questions: "~6 questions", color: "#3b82f6" },
+                { topic: "Guiding Principles", weight: "~17%", questions: "~7 questions", color: "#8b5cf6" },
+                { topic: "Four Dimensions", weight: "~10%", questions: "~4 questions", color: "#22c55e" },
+                { topic: "Service Value System", weight: "~15%", questions: "~6 questions", color: "#f59e0b" },
+                { topic: "Service Value Chain", weight: "~18%", questions: "~7 questions", color: "#dc2626" },
+                { topic: "ITIL Practices", weight: "~25%", questions: "~10 questions", color: ACCENT_COLOR },
+              ].map((item) => (
+                <Grid item xs={12} md={6} key={item.topic}>
+                  <Box sx={{ p: 2, bgcolor: alpha(item.color, 0.03), borderRadius: 2, borderLeft: `4px solid ${item.color}` }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{item.topic}</Typography>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.weight}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.questions}</Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Study Tips */}
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>✅ Do This</Typography>
+                <List dense>
+                  {[
+                    "Memorize all 7 guiding principles and their key points",
+                    "Know all 6 Service Value Chain activities",
+                    "Understand the purpose of key practices (Incident, Problem, Change)",
+                    "Know the 4 dimensions by heart",
+                    "Practice with official sample exams",
+                    "Understand value co-creation concept deeply",
+                    "Read questions carefully - watch for 'NOT' and 'EXCEPT'",
+                  ].map((tip, i) => (
+                    <ListItem key={i} sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={tip} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>❌ Avoid This</Typography>
+                <List dense>
+                  {[
+                    "Don't just memorize - understand the 'why'",
+                    "Don't rush - you have 90 seconds per question",
+                    "Don't overthink - the answer is usually straightforward",
+                    "Don't confuse ITIL v3 terms (processes vs practices)",
+                    "Don't skip the official ITIL 4 Foundation book",
+                    "Don't rely only on brain dumps - they're often outdated",
+                    "Don't forget about output vs outcome distinction",
+                  ].map((tip, i) => (
+                    <ListItem key={i} sx={{ py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <WarningIcon sx={{ fontSize: 16, color: "#ef4444" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={tip} primaryTypographyProps={{ variant: "body2" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+            </Grid>
+
+            {/* Common Exam Traps */}
+            <Paper sx={{ p: 3, mt: 3, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+                ⚠️ Common Exam Traps
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { trap: "Confusing Utility and Warranty", tip: "Utility = fitness for PURPOSE (what), Warranty = fitness for USE (how well)" },
+                  { trap: "Mixing up Output and Outcome", tip: "Output = tangible deliverable, Outcome = result/benefit enabled" },
+                  { trap: "Wrong principle order", tip: "Focus on Value is FIRST, Optimize and Automate is LAST" },
+                  { trap: "Confusing practices", tip: "Incident = restore quickly, Problem = find root cause, Change = control modifications" },
+                ].map((item) => (
+                  <Grid item xs={12} md={6} key={item.trap}>
+                    <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#f59e0b" }}>{item.trap}</Typography>
+                      <Typography variant="body2" color="text.secondary">{item.tip}</Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+
+            {/* Study Resources */}
+            <Box sx={{ mt: 3, p: 2, bgcolor: alpha(ACCENT_COLOR, 0.05), borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>📚 Recommended Study Resources</Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {[
+                  "ITIL 4 Foundation Official Manual (AXELOS)",
+                  "PeopleCert Sample Exams",
+                  "Dion Training Practice Tests",
+                  "LinkedIn Learning ITIL Courses",
+                  "Udemy ITIL 4 Courses",
+                ].map((resource) => (
+                  <Chip key={resource} label={resource} size="small" variant="outlined" />
+                ))}
+              </Box>
+            </Box>
           </Paper>
 
           {/* Quiz Section */}

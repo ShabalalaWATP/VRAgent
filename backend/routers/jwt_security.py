@@ -7,7 +7,10 @@ API endpoints for JWT security testing and attack simulation.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -114,7 +117,7 @@ class QuickTestRequest(BaseModel):
 # =============================================================================
 
 @router.post("/analyze")
-async def analyze_token(request: AnalyzeJWTRequest) -> Dict[str, Any]:
+async def analyze_token(request: AnalyzeJWTRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Analyze a JWT token structure and identify potential issues.
     
@@ -133,7 +136,7 @@ async def analyze_token(request: AnalyzeJWTRequest) -> Dict[str, Any]:
 
 
 @router.post("/scan")
-async def scan_token(request: ScanJWTRequest):
+async def scan_token(request: ScanJWTRequest, current_user: User = Depends(get_current_active_user)):
     """
     Perform comprehensive JWT security scan.
     
@@ -181,7 +184,7 @@ async def scan_token(request: ScanJWTRequest):
 
 
 @router.post("/forge")
-async def forge_token(request: ForgeJWTRequest) -> Dict[str, Any]:
+async def forge_token(request: ForgeJWTRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Forge a modified JWT token.
     
@@ -218,7 +221,7 @@ async def forge_token(request: ForgeJWTRequest) -> Dict[str, Any]:
 
 
 @router.get("/attacks")
-async def list_attack_types() -> Dict[str, Any]:
+async def list_attack_types(current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     List available JWT attack types.
     
@@ -260,7 +263,7 @@ async def list_attack_types() -> Dict[str, Any]:
 
 
 @router.post("/quick-test")
-async def quick_vulnerability_test(request: QuickTestRequest) -> Dict[str, Any]:
+async def quick_vulnerability_test(request: QuickTestRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Perform quick JWT vulnerability check.
     
@@ -309,6 +312,7 @@ async def quick_vulnerability_test(request: QuickTestRequest) -> Dict[str, Any]:
 async def get_secret_wordlist(
     limit: int = 100,
     include_common: bool = True,
+    current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
     """
     Get the built-in JWT secret wordlist.
@@ -325,7 +329,7 @@ async def get_secret_wordlist(
 
 
 @router.post("/decode")
-async def decode_token(request: AnalyzeJWTRequest) -> Dict[str, Any]:
+async def decode_token(request: AnalyzeJWTRequest, current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Decode a JWT token without validation.
     
@@ -351,6 +355,7 @@ async def generate_proof_of_concept(
     vulnerability_type: str,
     original_token: str,
     cracked_secret: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
     """
     Generate proof-of-concept tokens for identified vulnerabilities.
@@ -412,7 +417,7 @@ async def generate_proof_of_concept(
 
 
 @router.get("/common-claims")
-async def get_common_claims() -> Dict[str, Any]:
+async def get_common_claims(current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
     """
     Get information about common JWT claims.
     

@@ -1,11 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -25,6 +23,12 @@ import {
   IconButton,
   Tooltip,
   alpha,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
+  Divider,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -37,24 +41,40 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SearchIcon from "@mui/icons-material/Search";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+const theme = {
+  primary: "#3b82f6",
+  primaryLight: "#60a5fa",
+  secondary: "#a5b4fc",
+  accent: "#8b5cf6",
+  success: "#10b981",
+  warning: "#f59e0b",
+  info: "#3b82f6",
+  text: "#e2e8f0",
+  textMuted: "#94a3b8",
+  bgDark: "#0a0d18",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(255,255,255,0.08)",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <RouteIcon /> },
+  { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+  { id: "concepts", label: "Concepts", icon: <HubIcon /> },
+  { id: "techniques", label: "Techniques", icon: <RouteIcon /> },
+  { id: "detection", label: "Detection", icon: <SearchIcon /> },
+  { id: "defenses", label: "Defenses", icon: <ShieldIcon /> },
+  { id: "beginner-lab", label: "Beginner Lab", icon: <SchoolIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -1087,7 +1107,76 @@ const quizQuestions: QuizQuestion[] = [
 
 const PivotingTunnelingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom >= 150) {
+            setActiveSection(sectionId);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const sidebarNav = (
+    <Box sx={{ p: 2 }}>
+      <Typography variant="overline" sx={{ color: theme.textMuted, fontWeight: 600, mb: 2, display: "block" }}>
+        On This Page
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <LinearProgress
+          variant="determinate"
+          value={((sectionNavItems.findIndex((item) => item.id === activeSection) + 1) / sectionNavItems.length) * 100}
+          sx={{ height: 4, borderRadius: 2, bgcolor: "rgba(59,130,246,0.2)", "& .MuiLinearProgress-bar": { bgcolor: theme.primary } }}
+        />
+      </Box>
+      <List dense sx={{ p: 0 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor: activeSection === item.id ? alpha(theme.primary, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${theme.primary}` : "3px solid transparent",
+              "&:hover": { bgcolor: alpha(theme.primary, 0.1) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? theme.primary : theme.textMuted }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              sx={{ "& .MuiListItemText-primary": { fontSize: "0.85rem", fontWeight: activeSection === item.id ? 600 : 400, color: activeSection === item.id ? theme.primary : theme.textMuted } }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   const objectives = [
     "Explain pivoting and tunneling in plain language.",
@@ -1379,121 +1468,152 @@ netstat -anv | head -n 20`;
 
   return (
     <LearnPageLayout pageTitle="Pivoting and Tunneling" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+    <Box sx={{ minHeight: "100vh", bgcolor: theme.bgDark, py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation */}
+          {!isMobile && (
+            <Grid item md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              <Box sx={{ position: "sticky", top: 80 }}>
+                <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden" }}>
+                  {sidebarNav}
+                </Paper>
+              </Box>
+            </Grid>
+          )}
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <RouteIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Pivoting and Tunneling
-          </Typography>
-        </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          Pivoting and tunneling describe ways traffic is routed through other systems or hidden inside other protocols.
-        </Typography>
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            In simple terms, pivoting is using one computer to reach another network you could not reach directly.
-            Tunneling is wrapping one kind of traffic inside another to pass through filters. Both can be used for
-            legitimate administration or abused by attackers. This page focuses on understanding the concepts,
-            spotting warning signs, and building safer defenses.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
-            Think of pivoting like using a secure door to access a hallway behind it. Tunneling is like hiding a
-            smaller package inside a larger, allowed shipment. Knowing the patterns helps you detect misuse.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            Everything here is beginner-friendly and defensive. Use safe checks and lab-only exercises.
-          </Typography>
-        </Paper>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<HubIcon />} label="Pivoting" size="small" />
-          <Chip icon={<RouteIcon />} label="Tunneling" size="small" />
-          <Chip icon={<SecurityIcon />} label="Detection" size="small" />
-          <Chip icon={<ShieldIcon />} label="Defenses" size="small" />
-          <Chip icon={<WarningIcon />} label="Risk Signals" size="small" />
-        </Box>
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
 
-        <Paper sx={{ bgcolor: "#111424", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#3b82f6" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<HubIcon />} label="Concepts" />
-            <Tab icon={<RouteIcon />} label="Techniques" />
-            <Tab icon={<SearchIcon />} label="Detection" />
-            <Tab icon={<ShieldIcon />} label="Defenses" />
-            <Tab icon={<WarningIcon />} label="Beginner Lab" />
-          </Tabs>
-
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Learning Objectives
+            {/* Introduction Section */}
+            <Box id="intro" sx={{ scrollMarginTop: 80 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <RouteIcon sx={{ fontSize: 42, color: theme.primary }} />
+                <Typography
+                  variant="h3"
+                  sx={{
+                    fontWeight: 700,
+                    background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`,
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  Pivoting and Tunneling
                 </Typography>
-                <List dense>
-                  {objectives.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
+              </Box>
+              <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+                Pivoting and tunneling describe ways traffic is routed through other systems or hidden inside other protocols.
+              </Typography>
+              <Paper elevation={0} sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2, border: `1px solid ${theme.border}` }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+                  In simple terms, pivoting is using one computer to reach another network you could not reach directly.
+                  Tunneling is wrapping one kind of traffic inside another to pass through filters. Both can be used for
+                  legitimate administration or abused by attackers. This page focuses on understanding the concepts,
+                  spotting warning signs, and building safer defenses.
+                </Typography>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+                  From a defender point of view, these techniques change the normal path traffic takes. A connection that
+                  should be direct may now hop through a workstation, a jump host, or a relay service, which shifts where
+                  logs appear and how source addresses look. That shift is often the first clue that pivoting is happening.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Network segmentation exists to limit where traffic can go. Pivoting and tunneling can cross those
+                  boundaries without obvious policy changes, so visibility, identity context, and anomaly baselines become
+                  essential for detection and response.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Think of pivoting like using a secure door to access a hallway behind it. Tunneling is like hiding a
+                  smaller package inside a larger, allowed shipment. Knowing the patterns helps you detect misuse.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400" }}>
+                  Everything here is beginner-friendly and defensive. Use safe checks and lab-only exercises.
+                </Typography>
               </Paper>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip icon={<HubIcon />} label="Pivoting" size="small" />
+                <Chip icon={<RouteIcon />} label="Tunneling" size="small" />
+                <Chip icon={<SecurityIcon />} label="Detection" size="small" />
+                <Chip icon={<ShieldIcon />} label="Defenses" size="small" />
+                <Chip icon={<WarningIcon />} label="Risk Signals" size="small" />
+              </Box>
+            </Box>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  Beginner Path
-                </Typography>
-                <List dense>
-                  {beginnerPath.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
+            {/* Overview Section */}
+            <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SecurityIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Overview
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
-                  What This Is Not
-                </Typography>
-                <List dense>
-                  {whatItIsNot.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
+                    Learning Objectives
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    These objectives emphasize recognition and defensive decision making. You should be able to explain
+                    how relays change network visibility, describe common detection signals, and frame response actions
+                    without relying on offensive steps.
+                  </Typography>
+                  <List dense>
+                    {objectives.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="info" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
+                    Beginner Path
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    If this is your first exposure to pivoting, focus on understanding normal traffic flows first.
+                    Then compare those baselines to the patterns shown here so anomalies stand out clearly in logs.
+                  </Typography>
+                  <List dense>
+                    {beginnerPath.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="info" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
+                    What This Is Not
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    This page intentionally avoids step by step exploitation or bypass guidance. It is written for
+                    blue teams, defenders, and administrators who need to understand the risks and build safe controls.
+                  </Typography>
+                  <List dense>
+                    {whatItIsNot.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
                         <CheckCircleIcon color="warning" fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
@@ -1505,6 +1625,10 @@ netstat -anv | head -n 20`;
               <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Quick Glossary
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Terminology in this space can be inconsistent. These short definitions keep the language simple so you
+                  can align conversations across teams without getting stuck on tool specific jargon.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1530,6 +1654,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Simple Definitions
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Use these as mental anchors. They are intentionally short and are meant to support the more detailed
+                  examples later on the page.
+                </Typography>
                 <List dense>
                   {simpleDefinitions.map((item) => (
                     <ListItem key={item}>
@@ -1546,6 +1674,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Why It Matters
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Pivoting and tunneling sit at the center of lateral movement and access expansion. Understanding them
+                  helps you recognize when an incident is moving beyond its initial foothold.
+                </Typography>
                 <List dense>
                   {whyItMatters.map((item) => (
                     <ListItem key={item}>
@@ -1561,6 +1693,10 @@ netstat -anv | head -n 20`;
               <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Pivot Types
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The pivot type describes where the relay lives and how traffic is forwarded. The type you observe
+                  affects which logs you need and which controls will be most effective.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1586,6 +1722,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Impact Examples
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These examples focus on outcomes rather than methods. The goal is to highlight why pivoting and
+                  tunneling matter for risk, response, and containment.
+                </Typography>
                 <List dense>
                   {impactExamples.map((item) => (
                     <ListItem key={item}>
@@ -1602,6 +1742,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Common Misconceptions
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Many misconceptions come from mixing normal admin workflows with adversary behavior. These quick
+                  myth and reality statements help separate acceptable use from suspicious patterns.
+                </Typography>
                 <Grid container spacing={2}>
                   {misconceptions.map((item) => (
                     <Grid item xs={12} md={4} key={item.myth}>
@@ -1610,17 +1754,17 @@ netstat -anv | head -n 20`;
                           p: 2,
                           bgcolor: "#0b1020",
                           borderRadius: 2,
-                          border: "1px solid rgba(59,130,246,0.3)",
+                          border: `1px solid ${alpha(theme.primary, 0.3)}`,
                           height: "100%",
                         }}
                       >
-                        <Typography variant="subtitle2" sx={{ color: "#3b82f6", mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ color: theme.primary, mb: 1 }}>
                           Myth
                         </Typography>
                         <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
                           {item.myth}
                         </Typography>
-                        <Typography variant="subtitle2" sx={{ color: "#a5b4fc", mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ color: theme.secondary, mb: 0.5 }}>
                           Reality
                         </Typography>
                         <Typography variant="body2" sx={{ color: "grey.400" }}>
@@ -1631,18 +1775,43 @@ netstat -anv | head -n 20`;
                   ))}
                 </Grid>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
+            {/* Concepts Section */}
+            <Box id="concepts" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <HubIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Concepts
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
               <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
                 Pivoting uses a host you already control to reach internal assets. Tunneling hides traffic inside
                 a different protocol to pass through network restrictions.
               </Typography>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                Pivoting is about changing the path of access, while tunneling is about changing the packaging of
+                traffic. A pivot might still use normal protocols, but through an unexpected relay. A tunnel might
+                use expected paths, but with payloads that do not match the outer protocol.
+              </Typography>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                For defenders, the key is understanding where visibility shifts. The pivot host often becomes the
+                choke point for evidence. The tunnel endpoint often becomes the place where protocols stop looking
+                like themselves.
+              </Typography>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Common Use Cases
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These are normal, defensible scenarios that explain why the patterns exist. In incident response,
+                  the same shapes can appear during misuse, so context and authorization are always required.
                 </Typography>
                 <Grid container spacing={2}>
                   {commonUseCases.map((item) => (
@@ -1652,17 +1821,17 @@ netstat -anv | head -n 20`;
                           p: 2,
                           bgcolor: "#0b1020",
                           borderRadius: 2,
-                          border: "1px solid rgba(59,130,246,0.3)",
+                          border: `1px solid ${alpha(theme.primary, 0.3)}`,
                           height: "100%",
                         }}
                       >
-                        <Typography variant="subtitle1" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
+                        <Typography variant="subtitle1" sx={{ color: theme.text, fontWeight: 600 }}>
                           {item.title}
                         </Typography>
                         <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
                           {item.desc}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                        <Typography variant="caption" sx={{ color: theme.textMuted }}>
                           Risk: {item.risk}
                         </Typography>
                       </Paper>
@@ -1671,9 +1840,13 @@ netstat -anv | head -n 20`;
                 </Grid>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Policy and Context
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The same technical behavior can be allowed in one environment and prohibited in another. Clear
+                  policies define which relay points are approved, how access is logged, and who can authorize it.
                 </Typography>
                 <List dense>
                   {policyGuidance.map((item) => (
@@ -1686,21 +1859,36 @@ netstat -anv | head -n 20`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+            {/* Techniques Section */}
+            <Box id="techniques" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <RouteIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Techniques
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These patterns are described at a conceptual level so defenders can recognize them in telemetry
+                  without needing to reproduce them. Use this section to map suspicious paths to probable techniques.
+                </Typography>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Technique Risk and Visibility
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ color: "#3b82f6" }}>Technique</TableCell>
-                        <TableCell sx={{ color: "#3b82f6" }}>Visibility</TableCell>
+                        <TableCell sx={{ color: theme.primary }}>Technique</TableCell>
+                        <TableCell sx={{ color: theme.primary }}>Visibility</TableCell>
                         <TableCell sx={{ color: "#3b82f6" }}>Risk</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1718,16 +1906,20 @@ netstat -anv | head -n 20`;
               </Paper>
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  ATT&CK provides a shared vocabulary to connect detection engineering and incident response. The
+                  mapping below is intentionally high-level and is meant for orientation, not attribution.
+                </Typography>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   ATT&CK Mapping (High-Level)
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Tactic</TableCell>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Technique</TableCell>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Example</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Tactic</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Technique</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Example</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1743,12 +1935,16 @@ netstat -anv | head -n 20`;
                 </TableContainer>
               </Paper>
 
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                This quick table describes the idea behind each technique in plain language. It is designed to
+                support safe discussions about detection and controls.
+              </Typography>
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#3b82f6" }}>Technique</TableCell>
-                      <TableCell sx={{ color: "#3b82f6" }}>High-level idea</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Technique</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>High-level idea</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1761,14 +1957,29 @@ netstat -anv | head -n 20`;
                   </TableBody>
                 </Table>
               </TableContainer>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+            {/* Detection Section */}
+            <Box id="detection" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SearchIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Detection
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Baseline Questions
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Detection starts with knowing what normal looks like. These questions guide you toward building
+                  a baseline for expected paths, expected users, and expected timing.
                 </Typography>
                 <List dense>
                   {baselineQuestions.map((item) => (
@@ -1782,9 +1993,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Signals
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Signals are clues, not proof. The strongest detections combine traffic patterns with identity
+                  context and endpoint telemetry so the signal is harder to explain away as normal admin work.
                 </Typography>
                 <List dense>
                   {signals.map((item) => (
@@ -1798,15 +2013,19 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Pitfalls
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Many environments have legitimate jump hosts, proxies, and remote access tools. The pitfalls
+                  below describe where false positives or blind spots commonly appear.
                 </Typography>
                 <List dense>
                   {detectionPitfalls.map((item) => (
                     <ListItem key={item}>
                       <ListItemIcon>
-                        <WarningIcon sx={{ color: "#f59e0b" }} fontSize="small" />
+                        <WarningIcon sx={{ color: theme.warning }} fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
                     </ListItem>
@@ -1814,9 +2033,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Tuning Ideas
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Tuning is about reducing noise while keeping real risk in view. Use these ideas to align alerts
+                  with approved workflows and to highlight the exceptions that matter most.
                 </Typography>
                 <List dense>
                   {tuningIdeas.map((item) => (
@@ -1834,6 +2057,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Behavior Signals
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Behavior signals are patterns that emerge over time. They often require correlation across
+                  network and endpoint logs to confirm a relay or tunnel is occurring.
+                </Typography>
                 <List dense>
                   {behaviorSignals.map((item) => (
                     <ListItem key={item}>
@@ -1850,6 +2077,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Telemetry Sources
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  High quality telemetry is the difference between a guess and a confident assessment. Prefer
+                  sources that include identity, destination, and timing so you can follow a path end to end.
+                </Typography>
                 <List dense>
                   {telemetry.map((item) => (
                     <ListItem key={item}>
@@ -1865,6 +2096,10 @@ netstat -anv | head -n 20`;
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Telemetry Coverage Map
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  This map helps you identify which data sources confirm or refute a suspected relay. If a column is
+                  empty, you may need additional logging or network sensors to close the gap.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1887,15 +2122,19 @@ netstat -anv | head -n 20`;
               </Paper>
 
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Log Sources (Examples)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These examples show where defenders typically look for evidence of pivoting or tunneling. The
+                  exact log names will vary, so map them to your environment.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Source</TableCell>
-                        <TableCell sx={{ color: "#a5b4fc" }}>What to look for</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Source</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>What to look for</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1910,17 +2149,21 @@ netstat -anv | head -n 20`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Matrix (Simple)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The matrix links stages to evidence so you can track progress through an incident. It also helps
+                  ensure your detections cover more than a single point in the chain.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Stage</TableCell>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Signal</TableCell>
-                        <TableCell sx={{ color: "#a5b4fc" }}>Evidence</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Stage</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Signal</TableCell>
+                        <TableCell sx={{ color: theme.secondary }}>Evidence</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1936,9 +2179,13 @@ netstat -anv | head -n 20`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Evidence Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Collecting the right evidence early reduces uncertainty later. These items focus on read only
+                  artifacts that preserve the original timeline.
                 </Typography>
                 <List dense>
                   {evidenceChecklist.map((item) => (
@@ -1952,9 +2199,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Investigation Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Investigations often stall when teams cannot connect the relay host to the destination host.
+                  This checklist keeps the focus on linking identity, device, and network paths.
                 </Typography>
                 <List dense>
                   {investigationChecklist.map((item) => (
@@ -1968,22 +2219,41 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Accordion>
+              <Accordion sx={{ mt: 3, bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Safe Read-only Checks</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    These commands are intended for controlled labs and read only verification. They should not be
+                    used to modify networks or bypass controls.
+                  </Typography>
                   <CodeBlock code={safeChecks} language="bash" />
                 </AccordionDetails>
               </Accordion>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+            {/* Defenses Section */}
+            <Box id="defenses" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ShieldIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Defenses
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Defensive Controls
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Controls should reduce the number of places a relay can exist and increase the cost of hiding
+                  traffic. Prioritize controls that also help with incident response and asset discovery.
                 </Typography>
                 <List dense>
                   {defenses.map((item) => (
@@ -1997,9 +2267,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Hardening Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Hardening focuses on reducing exposure and narrowing permitted paths. The checklist below is meant
+                  to be actionable without requiring architectural changes.
                 </Typography>
                 <List dense>
                   {hardeningChecklist.map((item) => (
@@ -2017,6 +2291,10 @@ netstat -anv | head -n 20`;
                 <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
                   Segmentation Guidance
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Segmentation limits how far a relay can move. Strong segmentation pairs clear policy with
+                  enforcement points that are visible in your telemetry.
+                </Typography>
                 <List dense>
                   {segmentationGuidance.map((item) => (
                     <ListItem key={item}>
@@ -2029,9 +2307,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Response Steps
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Response is about preserving evidence while preventing further movement. Keep changes scoped,
+                  record decisions, and coordinate with network operations.
                 </Typography>
                 <List dense>
                   {responseSteps.map((item) => (
@@ -2045,9 +2327,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Response Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  This checklist ensures the basics are covered, from containment to communication. Use it to
+                  coordinate across security, IT, and leadership.
                 </Typography>
                 <List dense>
                   {responseChecklist.map((item) => (
@@ -2061,9 +2347,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Reporting Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Clear reporting makes lessons learned actionable. Document scope, timeline, affected assets, and
+                  the control gaps that enabled the movement.
                 </Typography>
                 <List dense>
                   {reportingChecklist.map((item) => (
@@ -2076,14 +2366,29 @@ netstat -anv | head -n 20`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+            {/* Beginner Lab Section */}
+            <Box id="beginner-lab" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SchoolIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Beginner Lab
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Beginner Lab Walkthrough (Safe)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  This lab is designed to teach observation skills, not exploitation. Focus on capturing simple
+                  before and after views of traffic so you can recognize pivots in the real world.
                 </Typography>
                 <List dense>
                   {labSteps.map((item) => (
@@ -2097,9 +2402,13 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Lab Evidence to Collect
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Evidence collection in a lab builds good habits. Capture timestamps, source and destination
+                  details, and any changes in flow direction.
                 </Typography>
                 <List dense>
                   {labArtifacts.map((item) => (
@@ -2113,16 +2422,24 @@ netstat -anv | head -n 20`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Report Template
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Use this template to practice clear communication. Short, factual notes help other teams validate
+                  your observations and reproduce them in a safe lab.
                 </Typography>
                 <CodeBlock code={reportTemplate} language="text" />
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Safe Boundaries
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Boundaries matter as much as the activity. Keep the lab isolated, use only approved assets, and
+                  stop immediately if anything starts to resemble a production network.
                 </Typography>
                 <List dense>
                   {safeBoundaries.map((item) => (
@@ -2135,43 +2452,80 @@ netstat -anv | head -n 20`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
-        </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Pivoting and Tunneling Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+            {/* Quiz Section */}
+            <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <QuizIcon sx={{ color: theme.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Knowledge Check
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: theme.border }} />
+                </Box>
+                <QuizSection
+                  questions={quizQuestions}
+                  accentColor={QUIZ_ACCENT_COLOR}
+                  title="Pivoting and Tunneling Knowledge Check"
+                  description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                  questionsPerQuiz={QUIZ_QUESTION_COUNT}
+                />
+              </Paper>
+            </Box>
 
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
-          >
-            Back to Learning Hub
-          </Button>
-        </Box>
+            <Box sx={{ mt: 4, textAlign: "center" }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/learn")}
+                sx={{ borderColor: theme.primary, color: theme.primary }}
+              >
+                Back to Learning Hub
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
       </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        sx={{ display: { xs: "block", md: "none" }, "& .MuiDrawer-paper": { width: 280, bgcolor: theme.bgCard } }}
+      >
+        <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${theme.border}` }}>
+          <Typography variant="h6" sx={{ color: theme.text }}>Navigation</Typography>
+          <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: theme.textMuted }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* Mobile FABs */}
+      {isMobile && (
+        <>
+          <Fab
+            size="small"
+            onClick={() => setNavDrawerOpen(true)}
+            sx={{ position: "fixed", bottom: 80, right: 16, bgcolor: theme.primary, color: "#fff", "&:hover": { bgcolor: theme.primaryLight } }}
+          >
+            <ListAltIcon />
+          </Fab>
+          <Fab
+            size="small"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            sx={{ position: "fixed", bottom: 24, right: 16, bgcolor: theme.bgCard, color: theme.text, border: `1px solid ${theme.border}`, "&:hover": { bgcolor: theme.bgNested } }}
+          >
+            <KeyboardArrowUpIcon />
+          </Fab>
+        </>
+      )}
     </Box>
     </LearnPageLayout>
   );

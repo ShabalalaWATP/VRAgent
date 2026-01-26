@@ -21,12 +21,118 @@ from enum import Enum
 from urllib.parse import urlencode, urlparse, parse_qs, quote
 import logging
 from abc import ABC, abstractmethod
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
 from datetime import datetime, timedelta
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# SECURITY: Redirect URI Validation
+# =============================================================================
+
+# Allowed redirect URI schemes
+ALLOWED_REDIRECT_SCHEMES = {"https", "http"}  # http only for localhost
+
+# Localhost patterns (allowed with http)
+LOCALHOST_PATTERNS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def validate_redirect_uri(
+    uri: Optional[str],
+    allowed_domains: Optional[List[str]] = None,
+    require_https: bool = True
+) -> Tuple[bool, str]:
+    """
+    Validate a redirect URI to prevent open redirect vulnerabilities.
+
+    Args:
+        uri: The redirect URI to validate
+        allowed_domains: Optional list of allowed domains (whitelist)
+        require_https: If True, require HTTPS (except for localhost)
+
+    Returns:
+        Tuple of (is_valid, error_message)
+
+    Security checks:
+    1. URI must be a valid URL with scheme and host
+    2. Scheme must be http or https
+    3. HTTPS required for non-localhost (when require_https=True)
+    4. If allowed_domains provided, host must be in whitelist
+    5. No credentials in URL (@)
+    6. No open redirect patterns (//evil.com)
+    """
+    if not uri:
+        return False, "Redirect URI is required"
+
+    try:
+        parsed = urlparse(uri)
+
+        # Check scheme
+        if not parsed.scheme:
+            return False, "Redirect URI must include a scheme (http/https)"
+
+        if parsed.scheme.lower() not in ALLOWED_REDIRECT_SCHEMES:
+            return False, f"Invalid scheme '{parsed.scheme}'. Only http/https allowed."
+
+        # Check host
+        if not parsed.netloc:
+            return False, "Redirect URI must include a host"
+
+        # Extract host without port
+        host = parsed.hostname or ""
+        if not host:
+            return False, "Could not parse host from redirect URI"
+
+        host_lower = host.lower()
+
+        # Check for credentials in URL (potential security issue)
+        if "@" in parsed.netloc.split(":")[0]:
+            return False, "Redirect URI must not contain credentials"
+
+        # Check HTTPS requirement (localhost exempt)
+        is_localhost = host_lower in LOCALHOST_PATTERNS
+        if require_https and not is_localhost and parsed.scheme.lower() != "https":
+            return False, "Redirect URI must use HTTPS for non-localhost domains"
+
+        # Check against allowed domains whitelist
+        if allowed_domains is not None:
+            allowed_lower = [d.lower() for d in allowed_domains]
+            # Check exact match or subdomain match
+            domain_allowed = False
+            for allowed in allowed_lower:
+                if host_lower == allowed or host_lower.endswith(f".{allowed}"):
+                    domain_allowed = True
+                    break
+            if not domain_allowed:
+                return False, f"Domain '{host}' not in allowed redirect domains"
+
+        # Check for suspicious patterns
+        if uri.startswith("//") or "://" in uri[uri.index("://") + 3:]:
+            return False, "Redirect URI contains suspicious pattern"
+
+        return True, ""
+
+    except Exception as e:
+        return False, f"Invalid redirect URI: {str(e)}"
+
+
+def get_validated_redirect_uri(
+    uri: Optional[str],
+    allowed_domains: Optional[List[str]] = None,
+    require_https: bool = True
+) -> str:
+    """
+    Validate and return a redirect URI, raising AuthenticationError if invalid.
+
+    This is a convenience wrapper around validate_redirect_uri.
+    """
+    is_valid, error = validate_redirect_uri(uri, allowed_domains, require_https)
+    if not is_valid:
+        raise AuthenticationError(f"Invalid redirect URI: {error}")
+    return uri
 
 
 class AuthFlowType(Enum):
@@ -428,15 +534,18 @@ class OAuth2Handler(AuthHandler):
     
     async def _pkce_flow(self, client: httpx.AsyncClient) -> TokenInfo:
         """OAuth2 Authorization Code flow with PKCE."""
+        # SECURITY: Validate redirect_uri to prevent open redirect attacks
+        validated_redirect = get_validated_redirect_uri(self.config.redirect_uri)
+
         # Generate PKCE challenge if not provided
         if not self.config.pkce_challenge:
             self.config.pkce_challenge = PKCEChallenge.generate()
-        
+
         # Step 1: Build authorization URL
         auth_params = {
             "client_id": self.config.client_id,
             "response_type": "code",
-            "redirect_uri": self.config.redirect_uri,
+            "redirect_uri": validated_redirect,
             "code_challenge": self.config.pkce_challenge.code_challenge,
             "code_challenge_method": self.config.pkce_challenge.code_challenge_method,
             "state": secrets.token_urlsafe(16),
@@ -465,18 +574,21 @@ class OAuth2Handler(AuthHandler):
         )
     
     async def exchange_pkce_code(
-        self, 
-        client: httpx.AsyncClient, 
+        self,
+        client: httpx.AsyncClient,
         authorization_code: str
     ) -> TokenInfo:
         """Exchange authorization code for tokens (PKCE flow completion)."""
         if not self.config.pkce_challenge:
             raise AuthenticationError("PKCE challenge not found")
-        
+
+        # SECURITY: Validate redirect_uri to prevent open redirect attacks
+        validated_redirect = get_validated_redirect_uri(self.config.redirect_uri)
+
         data = {
             "grant_type": "authorization_code",
             "code": authorization_code,
-            "redirect_uri": self.config.redirect_uri,
+            "redirect_uri": validated_redirect,
             "client_id": self.config.client_id,
             "code_verifier": self.config.pkce_challenge.code_verifier,
         }
@@ -560,10 +672,13 @@ class OAuth2Handler(AuthHandler):
     
     def get_authorize_url(self, state: Optional[str] = None) -> str:
         """Get the OAuth2 authorization URL for interactive flows."""
+        # SECURITY: Validate redirect_uri to prevent open redirect attacks
+        validated_redirect = get_validated_redirect_uri(self.config.redirect_uri)
+
         params = {
             "client_id": self.config.client_id,
             "response_type": "code",
-            "redirect_uri": self.config.redirect_uri,
+            "redirect_uri": validated_redirect,
             "state": state or secrets.token_urlsafe(16),
         }
         

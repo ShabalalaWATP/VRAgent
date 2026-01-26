@@ -546,13 +546,13 @@ export default function ProjectDetailPage() {
           <Tab 
             icon={<SecurityIcon />} 
             iconPosition="start" 
-            label="Security Scanning" 
+            label="Static Analysis" 
             value="security" 
           />
           <Tab 
             icon={<NetworkCheckIcon />} 
             iconPosition="start" 
-            label="Network Analysis" 
+            label="Dynamic Analysis" 
             value="network" 
           />
           <Tab 
@@ -595,7 +595,7 @@ export default function ProjectDetailPage() {
             <Tab 
               icon={<ChatIcon />} 
               iconPosition="start" 
-              label="Team Chat" 
+              label="Project Chat" 
               value="team-chat" 
             />
           )}
@@ -1273,7 +1273,7 @@ export default function ProjectDetailPage() {
         />
       )}
 
-      {/* Team Chat Tab Content */}
+      {/* Project Chat Tab Content */}
       {mainTab === "team-chat" && projectQuery.data?.is_shared === true && (
         <ProjectTeamChatTab 
           projectId={id}

@@ -2758,15 +2758,67 @@ const ComputerNetworkingPage: React.FC = () => {
           scrollMarginTop: 96,
         }}
       >
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
           <InfoIcon sx={{ color: "#0ea5e9" }} />
           Introduction to Computer Networking
         </Typography>
-        
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#0ea5e9", 0.03), borderRadius: 2, border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0ea5e9" }}>
+            The Foundation of Modern Computing: Why Networking Powers Everything
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Every time you send a message, stream a video, make a video call, or access a cloud application, you're relying on computer
+            networks—vast interconnected systems that have become the invisible backbone of modern life. Networking isn't just about
+            connecting devices; it's about enabling the seamless flow of information that powers global commerce, communication, entertainment,
+            and collaboration. From your smartphone connecting to a cell tower to massive data centers serving millions of requests per second,
+            networking protocols and architectures make it all possible.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The beauty of networking lies in its universal principles. Whether you're setting up a small home Wi-Fi network or designing
+            infrastructure for a Fortune 500 company, the same fundamental concepts apply: <strong>addressing</strong> (how devices identify
+            themselves), <strong>routing</strong> (how data finds its path), <strong>protocols</strong> (the rules governing communication),
+            and <strong>security</strong> (protecting data in transit). Understanding these concepts opens doors to careers in network
+            engineering, cybersecurity, cloud architecture, DevOps, and system administration.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            For cybersecurity professionals, networking knowledge is non-negotiable. You cannot defend what you don't understand. Attackers
+            exploit network vulnerabilities—man-in-the-middle attacks intercept unencrypted traffic, DDoS attacks flood network resources,
+            DNS poisoning redirects users to malicious sites, and ARP spoofing enables lateral movement within networks. Whether you're
+            performing penetration testing, analyzing packet captures in Wireshark, configuring firewall rules, or investigating security
+            incidents, deep networking knowledge is your most powerful tool.
+          </Typography>
+        </Paper>
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            From ARPANET to 5G: The Evolution of Networking
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The history of computer networking begins in 1969 with <strong>ARPANET</strong>, the U.S. Department of Defense's experimental
+            network that connected four universities. This pioneering network introduced packet switching—breaking data into small packets that
+            could take different routes to their destination and be reassembled. This resilient approach to data transmission became the
+            foundation of the modern Internet. In 1983, ARPANET adopted the TCP/IP protocol suite, officially birthing the Internet as we know it.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The 1990s brought the World Wide Web (thanks to Tim Berners-Lee's HTTP and HTML), transforming the Internet from an academic tool
+            into a consumer platform. Ethernet emerged as the dominant LAN technology, Wi-Fi standards (802.11) enabled wireless connectivity,
+            and the IPv4 address space began to strain under explosive growth. By the 2000s, the shift to cloud computing, mobile devices, and
+            IoT created unprecedented demands on network infrastructure. Today, we're in the era of <strong>software-defined networking (SDN)</strong>,
+            where network behavior is programmable, and <strong>5G wireless</strong>, delivering gigabit speeds to mobile devices.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Yet despite decades of innovation, the core principles remain remarkably consistent. The OSI model created in 1984 still guides
+            how we think about networking. TCP's three-way handshake still establishes connections. IP addresses still identify devices. The
+            protocols and standards developed decades ago continue to underpin trillion-dollar industries. Learning networking means learning
+            concepts that will remain relevant for your entire career.
+          </Typography>
+        </Paper>
+
         <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-          Computer networking is the practice of connecting computers and other devices together to share resources, 
-          exchange data, and communicate. From the smallest home network to the vast infrastructure of the Internet, 
-          networking principles remain consistent: devices need a way to identify each other, a medium to transmit data, 
+          Computer networking is the practice of connecting computers and other devices together to share resources,
+          exchange data, and communicate. From the smallest home network to the vast infrastructure of the Internet,
+          networking principles remain consistent: devices need a way to identify each other, a medium to transmit data,
           and agreed-upon rules (protocols) for communication.
         </Typography>
 
@@ -2879,9 +2931,32 @@ const ComputerNetworkingPage: React.FC = () => {
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 96 }} id="osi-model">
         🏗️ OSI Model (7 Layers)
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        The Open Systems Interconnection model - a conceptual framework for understanding network communication
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        The Open Systems Interconnection (OSI) model is a conceptual framework developed by the International Organization for Standardization (ISO) in 1984. It standardizes the communication functions of telecommunication and computing systems without regard to their underlying internal structure and technology.
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.2)}` }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0ea5e9" }}>
+          Why the OSI Model Matters
+        </Typography>
+        <Typography variant="body2" paragraph>
+          The OSI model breaks down the complex process of network communication into seven distinct layers, each with specific responsibilities. This modular approach allows network engineers, developers, and administrators to:
+        </Typography>
+        <Box component="ul" sx={{ pl: 3, "& li": { mb: 1 } }}>
+          <li><Typography variant="body2"><strong>Troubleshoot effectively:</strong> By isolating problems to specific layers, you can identify whether an issue is physical (cable), logical (IP routing), or application-level (DNS resolution).</Typography></li>
+          <li><Typography variant="body2"><strong>Design scalable systems:</strong> Each layer can be upgraded or modified independently without affecting other layers, enabling modular network design.</Typography></li>
+          <li><Typography variant="body2"><strong>Understand protocols:</strong> Knowing which layer a protocol operates at helps you understand its purpose and limitations (e.g., TCP at Layer 4 vs IP at Layer 3).</Typography></li>
+          <li><Typography variant="body2"><strong>Vendor interoperability:</strong> The standardized model ensures different vendors' equipment can communicate, as long as they adhere to the same layer protocols.</Typography></li>
+        </Box>
+
+        <Typography variant="body2" paragraph sx={{ mt: 2 }}>
+          <strong>Data Flow:</strong> When you send data across a network, it travels down through all seven layers on the sending device (encapsulation), across the physical medium, and then up through the seven layers on the receiving device (de-encapsulation). Each layer adds its own header information during encapsulation.
+        </Typography>
+
+        <Typography variant="body2" paragraph>
+          <strong>Mnemonic to Remember:</strong> "Please Do Not Throw Sausage Pizza Away" (Physical, Data Link, Network, Transport, Session, Presentation, Application) or reversed: "All People Seem To Need Data Processing" (Application to Physical).
+        </Typography>
+      </Paper>
 
       {/* OSI Model Image */}
       <Paper sx={{ p: 2, mb: 3, borderRadius: 3, textAlign: "center", bgcolor: alpha("#0ea5e9", 0.02) }}>
@@ -2930,13 +3005,146 @@ const ComputerNetworkingPage: React.FC = () => {
         </Table>
       </TableContainer>
 
+      {/* Deep Dive: Layer-by-Layer Explanation */}
+      <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.02) }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, color: "#0ea5e9" }}>
+          🔍 Deep Dive: Understanding Each OSI Layer
+        </Typography>
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>
+            Layer 7 - Application Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            This is the layer closest to the end user. It provides network services directly to applications and handles high-level protocols like HTTP, FTP, SMTP, and DNS. The Application Layer doesn't refer to applications like Chrome or Outlook, but rather the protocols these applications use to communicate over the network. For example, when you browse a website, your browser uses HTTP/HTTPS (Layer 7) to request web pages from a server.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you type "google.com" in your browser, the DNS protocol (Layer 7) resolves the domain name to an IP address before the connection can be established.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f97316", mb: 1 }}>
+            Layer 6 - Presentation Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Presentation Layer acts as a data translator for the network. It handles data encoding, encryption, compression, and format conversion. This layer ensures that data sent from the Application Layer of one system can be read by the Application Layer of another system, even if they use different data formats. SSL/TLS encryption happens here, converting plaintext into encrypted ciphertext before transmission.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you visit an HTTPS website, the Presentation Layer encrypts your login credentials before sending them across the internet, protecting them from interception.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>
+            Layer 5 - Session Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Session Layer establishes, manages, and terminates connections (sessions) between applications. It provides synchronization, dialog control, and manages the orderly exchange of data. This layer handles authentication and reconnection if a session is interrupted. NetBIOS and RPC (Remote Procedure Call) operate at this layer.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you're on a video call and your internet briefly drops, the Session Layer can help re-establish the connection and synchronize where you left off, rather than starting completely over.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>
+            Layer 4 - Transport Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Transport Layer provides reliable data transfer services to the upper layers. It handles segmentation, flow control, error checking, and acknowledgments. The two main protocols here are TCP (Transmission Control Protocol) and UDP (User Datagram Protocol). TCP provides reliable, connection-oriented communication with error checking and retransmission, while UDP provides fast, connectionless communication without guaranteed delivery.
+          </Typography>
+          <Typography variant="body2" paragraph>
+            <strong>Port numbers</strong> operate at this layer - they identify specific applications or services (e.g., port 80 for HTTP, port 443 for HTTPS). When data arrives at a computer, the Transport Layer uses the port number to determine which application should receive it.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you download a file, TCP ensures every packet arrives in order and requests retransmission of any lost packets. When you stream live video, UDP is often used because speed is more important than perfect accuracy.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#06b6d4", mb: 1 }}>
+            Layer 3 - Network Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Network Layer handles routing and forwarding of data packets between different networks. It provides logical addressing (IP addresses) and determines the best path for data to travel from source to destination across multiple networks. Routers operate at this layer, making forwarding decisions based on IP addresses. The primary protocol is IP (Internet Protocol), along with routing protocols like OSPF, BGP, and RIP.
+          </Typography>
+          <Typography variant="body2" paragraph>
+            This layer also handles packet fragmentation and reassembly when data is too large to fit in a single frame. It's responsible for logical network topology and path determination.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you send an email from New York to Tokyo, the Network Layer (routers) determines the optimal path through dozens of intermediate routers to get your data across the world.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
+            Layer 2 - Data Link Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Data Link Layer provides node-to-node data transfer between two directly connected nodes. It handles physical addressing (MAC addresses), frame formatting, error detection (using FCS - Frame Check Sequence), and media access control. This layer is divided into two sublayers: LLC (Logical Link Control) and MAC (Media Access Control).
+          </Typography>
+          <Typography variant="body2" paragraph>
+            Switches operate at this layer, using MAC address tables to forward frames only to the intended recipient port rather than broadcasting to all ports like hubs do. The Data Link Layer also handles collision detection and avoidance in shared media environments.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When your computer sends data to your router over Ethernet, the Data Link Layer adds the router's MAC address to the frame header so the data reaches the correct device on your local network.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 1 }}>
+            Layer 1 - Physical Layer
+          </Typography>
+          <Typography variant="body2" paragraph>
+            The Physical Layer deals with the actual physical transmission of raw bit streams over a physical medium. It defines the electrical, mechanical, and procedural specifications for activating, maintaining, and deactivating physical links. This includes cables (copper, fiber optic), connectors (RJ45, SC), voltage levels, cable distances, physical data rates, and network topology (bus, star, ring).
+          </Typography>
+          <Typography variant="body2" paragraph>
+            This layer converts digital data (1s and 0s) into electrical signals (copper cables), light pulses (fiber optics), or radio waves (wireless). It doesn't care about the content of the data - it just transmits raw bits.
+          </Typography>
+          <Typography variant="body2">
+            <strong>Real-world example:</strong> When you plug an Ethernet cable into your computer, the Physical Layer handles the electrical signals traveling through the copper wires at speeds defined by standards like 10/100/1000 Mbps Ethernet.
+          </Typography>
+        </Box>
+      </Paper>
+
       {/* TCP/IP Model */}
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 96 }} id="tcpip-model">
         🌐 TCP/IP Model (4 Layers)
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        The practical model used by the Internet - simpler and more widely implemented
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        The TCP/IP model, also known as the Internet Protocol Suite, is the practical networking model that powers the modern Internet. Developed by the U.S. Department of Defense in the 1970s, it predates the OSI model and is more widely implemented in real-world networks.
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+          TCP/IP vs OSI: Key Differences
+        </Typography>
+        <Typography variant="body2" paragraph>
+          While the OSI model is a theoretical framework with seven layers, the TCP/IP model is a practical, four-layer model that directly corresponds to how the Internet actually works. Here's why both models are important:
+        </Typography>
+        <Box component="ul" sx={{ pl: 3, "& li": { mb: 1 } }}>
+          <li><Typography variant="body2"><strong>TCP/IP is implementation-focused:</strong> It describes the actual protocols used on the Internet (TCP, IP, HTTP, etc.), not just theoretical concepts.</Typography></li>
+          <li><Typography variant="body2"><strong>OSI is educational:</strong> The seven-layer OSI model is excellent for teaching and troubleshooting because it breaks down complex concepts into more granular pieces.</Typography></li>
+          <li><Typography variant="body2"><strong>Layer mapping:</strong> The TCP/IP Application layer combines OSI layers 5, 6, and 7. The Network Access layer combines OSI layers 1 and 2.</Typography></li>
+          <li><Typography variant="body2"><strong>Protocol specificity:</strong> TCP/IP defines specific protocols (like TCP and IP), while OSI defines generic functions each layer should perform.</Typography></li>
+        </Box>
+        <Typography variant="body2" paragraph sx={{ mt: 2 }}>
+          In practice, network engineers reference both models: OSI for conceptual understanding and troubleshooting ("Is this a Layer 2 or Layer 3 issue?"), and TCP/IP for actual protocol implementation.
+        </Typography>
+      </Paper>
 
       {/* TCP/IP Model Image */}
       <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
@@ -2990,9 +3198,43 @@ const ComputerNetworkingPage: React.FC = () => {
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
         📍 IP Addressing
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Understanding IPv4 classes, private ranges, and special addresses
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        IP (Internet Protocol) addresses are unique identifiers assigned to every device on a network. They enable devices to locate and communicate with each other across local networks and the Internet.
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.02) }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+          Understanding IPv4 Addressing
+        </Typography>
+        <Typography variant="body2" paragraph>
+          An IPv4 address is a 32-bit number divided into four octets (8 bits each), written in dotted-decimal notation like <strong>192.168.1.100</strong>. Each octet can range from 0 to 255 (2⁸ = 256 possible values). This gives us approximately 4.3 billion total IPv4 addresses (2³² = 4,294,967,296).
+        </Typography>
+
+        <Typography variant="body2" paragraph>
+          <strong>IP Address Structure:</strong> An IP address consists of two parts:
+        </Typography>
+        <Box component="ul" sx={{ pl: 3, mb: 2, "& li": { mb: 1 } }}>
+          <li><Typography variant="body2"><strong>Network portion:</strong> Identifies the network the device belongs to (like a street name)</Typography></li>
+          <li><Typography variant="body2"><strong>Host portion:</strong> Identifies the specific device on that network (like a house number)</Typography></li>
+        </Box>
+
+        <Typography variant="body2" paragraph>
+          The <strong>subnet mask</strong> determines which bits represent the network and which represent the host. Common masks include:
+        </Typography>
+        <Box component="ul" sx={{ pl: 3, mb: 2, "& li": { mb: 1 } }}>
+          <li><Typography variant="body2" sx={{ fontFamily: "monospace" }}>255.255.255.0 (/24) - 254 usable hosts</Typography></li>
+          <li><Typography variant="body2" sx={{ fontFamily: "monospace" }}>255.255.0.0 (/16) - 65,534 usable hosts</Typography></li>
+          <li><Typography variant="body2" sx={{ fontFamily: "monospace" }}>255.0.0.0 (/8) - 16,777,214 usable hosts</Typography></li>
+        </Box>
+
+        <Typography variant="body2" paragraph>
+          <strong>Classful vs Classless Addressing:</strong> Originally, IP addresses were divided into fixed classes (A, B, C, D, E). This "classful" system was inefficient and wasted many addresses. Modern networks use CIDR (Classless Inter-Domain Routing), which allows flexible subnet masks of any length, maximizing address utilization.
+        </Typography>
+
+        <Typography variant="body2">
+          <strong>Special Addresses:</strong> Not all IP addresses can be assigned to hosts. Each network reserves two addresses: the <strong>network address</strong> (all host bits = 0, e.g., 192.168.1.0) identifies the network itself, and the <strong>broadcast address</strong> (all host bits = 1, e.g., 192.168.1.255) sends data to all devices on the network.
+        </Typography>
+      </Paper>
 
       {/* IPv4 Classes */}
       <Accordion defaultExpanded sx={{ mb: 2, borderRadius: "12px !important", "&:before": { display: "none" } }}>
@@ -3134,9 +3376,57 @@ const ComputerNetworkingPage: React.FC = () => {
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
         🧮 How to Subnet (Complete Guide)
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Master the art of subnetting - essential for network design and CCNA certification
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        Subnetting is one of the most important skills for network engineers. It's essential for efficient IP address management, network segmentation, and is heavily tested in CCNA and other networking certifications.
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.02) }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+          Why Subnet? Real-World Benefits
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                🚀 Network Performance
+              </Typography>
+              <Typography variant="body2">
+                Smaller broadcast domains mean less broadcast traffic. Instead of 254 devices shouting on one network, you can have multiple networks of 30 devices each, dramatically reducing network noise.
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                🔒 Security & Isolation
+              </Typography>
+              <Typography variant="body2">
+                Separate departments into different subnets (Finance: 10.0.10.0/24, HR: 10.0.20.0/24) and control traffic between them with firewalls and ACLs. A compromised device in one subnet can't easily spread to others.
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                💰 IP Address Efficiency
+              </Typography>
+              <Typography variant="body2">
+                Don't waste addresses! A point-to-point link between two routers only needs 2 IPs - use /30 (4 total, 2 usable) instead of /24 (256 total, 254 usable). This conserves precious IPv4 space.
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                📊 Organized Network Design
+              </Typography>
+              <Typography variant="body2">
+                Hierarchical addressing makes troubleshooting easier. If all subnets for Building A start with 10.1.x.x and Building B with 10.2.x.x, you immediately know where a problem is located.
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Subnetting Image */}
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, textAlign: "center", bgcolor: alpha("#06b6d4", 0.02), border: "1px solid", borderColor: alpha("#06b6d4", 0.1) }}>
@@ -4687,17 +4977,88 @@ const ComputerNetworkingPage: React.FC = () => {
 
       {/* TCP vs UDP */}
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        TCP vs UDP
+        TCP vs UDP: Transport Layer Protocols
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#06b6d4", 0.02) }}>
+        <Typography variant="body2" paragraph>
+          At the Transport Layer (Layer 4), two primary protocols handle how data moves between applications: TCP (Transmission Control Protocol) and UDP (User Datagram Protocol). Choosing between them is a fundamental network design decision that affects reliability, speed, and application behavior.
+        </Typography>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, height: "100%", bgcolor: alpha("#22c55e", 0.05), borderRadius: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
+                ✅ TCP (Transmission Control Protocol)
+              </Typography>
+              <Typography variant="body2" paragraph>
+                TCP is <strong>connection-oriented</strong> and <strong>reliable</strong>. It guarantees that data arrives in order, without errors, and without duplication. This reliability comes at the cost of overhead and latency.
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>Key Features:</Typography>
+              <Box component="ul" sx={{ pl: 2, mt: 0, fontSize: "0.85rem", "& li": { mb: 0.5 } }}>
+                <li>Connection establishment (3-way handshake)</li>
+                <li>Sequence numbers for ordering</li>
+                <li>Acknowledgments (ACKs) for delivery confirmation</li>
+                <li>Retransmission of lost packets</li>
+                <li>Flow control (prevents overwhelming receiver)</li>
+                <li>Congestion control (adjusts to network conditions)</li>
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mt: 1, mb: 0.5 }}>Best For:</Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.85rem" }}>
+                HTTP/HTTPS, Email (SMTP/IMAP), File Transfers (FTP), SSH, Database Connections
+              </Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, height: "100%", bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#f59e0b" }}>
+                ⚡ UDP (User Datagram Protocol)
+              </Typography>
+              <Typography variant="body2" paragraph>
+                UDP is <strong>connectionless</strong> and <strong>unreliable</strong> (best-effort delivery). It sends data without establishing a connection, doesn't guarantee delivery, and doesn't preserve order. The trade-off is minimal overhead and low latency.
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mb: 0.5 }}>Key Features:</Typography>
+              <Box component="ul" sx={{ pl: 2, mt: 0, fontSize: "0.85rem", "& li": { mb: 0.5 } }}>
+                <li>No connection setup (just send)</li>
+                <li>No acknowledgments or retransmissions</li>
+                <li>No ordering guarantees</li>
+                <li>Minimal header overhead (8 bytes vs TCP's 20+ bytes)</li>
+                <li>Application handles reliability if needed</li>
+                <li>Supports broadcast and multicast</li>
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, display: "block", mt: 1, mb: 0.5 }}>Best For:</Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.85rem" }}>
+                DNS Queries, Live Streaming, VoIP, Online Gaming, IoT Sensors, DHCP, SNMP
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Alert severity="info" sx={{ mt: 3 }}>
+          <AlertTitle sx={{ fontWeight: 700 }}>When to Choose Which?</AlertTitle>
+          <Typography variant="body2">
+            <strong>Use TCP</strong> when data integrity is critical - every byte must arrive correctly (web pages, file downloads, emails).
+            <strong> Use UDP</strong> when speed matters more than perfect accuracy - losing a video frame or voice packet is acceptable if it keeps the stream smooth.
+          </Typography>
+        </Alert>
+      </Paper>
 
       {/* TCP 3-Way Handshake Image */}
       <Paper sx={{ p: 3, mb: 3, borderRadius: 3, background: alpha("#22c55e", 0.03) }}>
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
           🤝 TCP 3-Way Handshake
         </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Before any data can be transmitted via TCP, a connection must be established using a three-step process called the 3-way handshake. This synchronizes sequence numbers and ensures both sides are ready:
+        </Typography>
+        <Box component="ol" sx={{ pl: 3, mb: 2, "& li": { mb: 1 } }}>
+          <li><Typography variant="body2"><strong>SYN:</strong> Client sends a SYN (synchronize) packet with an initial sequence number</Typography></li>
+          <li><Typography variant="body2"><strong>SYN-ACK:</strong> Server acknowledges with SYN-ACK, sending its own sequence number</Typography></li>
+          <li><Typography variant="body2"><strong>ACK:</strong> Client acknowledges the server's sequence number, connection established</Typography></li>
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          TCP establishes a reliable connection using a three-step process: SYN → SYN-ACK → ACK.
-          This ensures both hosts are ready for communication and synchronizes sequence numbers.
+          After communication ends, TCP gracefully closes the connection with a 4-way handshake (FIN → ACK → FIN → ACK).
         </Typography>
         <Box sx={{ display: "flex", justifyContent: "center" }}>
           <Box
@@ -4746,9 +5107,73 @@ const ComputerNetworkingPage: React.FC = () => {
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
         🖧 Network Devices
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Understanding network hardware and their functions
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        Network infrastructure devices operate at different OSI layers and provide varying levels of intelligence, security, and traffic management capabilities.
       </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.02) }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+          Understanding Network Device Intelligence Levels
+        </Typography>
+        <Typography variant="body2" paragraph>
+          As you move up the OSI model, devices become more "intelligent" - they understand more about the data they're handling and can make smarter forwarding decisions:
+        </Typography>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2, height: "100%" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ec4899" }}>
+                Layer 1 - Physical (Hub, Repeater)
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.9rem" }}>
+                <strong>Dumb devices</strong> that simply amplify and repeat electrical signals. No intelligence - they don't read MAC addresses or IP addresses. They broadcast everything to all ports, creating collision domains. Hubs are largely obsolete, replaced by switches.
+              </Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2, height: "100%" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#8b5cf6" }}>
+                Layer 2 - Data Link (Switch, Bridge)
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.9rem" }}>
+                <strong>MAC-aware devices</strong> that learn which MAC addresses are connected to which ports. They build MAC address tables and forward frames only to the destination port, reducing collisions. Each port is its own collision domain. Modern switches also support VLANs, port security, and QoS.
+              </Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2, height: "100%" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#06b6d4" }}>
+                Layer 3 - Network (Router, Layer 3 Switch)
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.9rem" }}>
+                <strong>IP-aware devices</strong> that make routing decisions based on IP addresses. They connect different networks, maintain routing tables, and determine the best path for packets. Routers create broadcast domains, provide NAT, and can run routing protocols like OSPF, BGP, and EIGRP.
+              </Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, bgcolor: "background.default", borderRadius: 2, height: "100%" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
+                Layer 4-7 - Higher Layers (Firewall, Load Balancer)
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: "0.9rem" }}>
+                <strong>Application-aware devices</strong> that understand port numbers, protocols, and even application data. Firewalls inspect packets for security threats. Load balancers distribute traffic across servers based on application health. These devices provide deep packet inspection (DPI) and content-based routing.
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Alert severity="warning" sx={{ mt: 3 }}>
+          <AlertTitle sx={{ fontWeight: 700 }}>Collision vs Broadcast Domains</AlertTitle>
+          <Typography variant="body2">
+            <strong>Collision Domain:</strong> Area where data packets can collide. Hubs have one large collision domain. Switches split into separate collision domains per port.
+            <br />
+            <strong>Broadcast Domain:</strong> Area where broadcast traffic reaches all devices. Switches don't split broadcast domains (unless using VLANs). Routers create separate broadcast domains.
+          </Typography>
+        </Alert>
+      </Paper>
 
       <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
         <Table size="small">
@@ -4777,10 +5202,82 @@ const ComputerNetworkingPage: React.FC = () => {
 
       {/* DNS */}
       <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 96 }} id="dns">
-        🌍 DNS Record Types
+        🌍 Domain Name System (DNS)
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Domain Name System record types and their purposes
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+        DNS is the "phone book" of the Internet, translating human-readable domain names (like google.com) into machine-readable IP addresses (like 142.250.80.46). Without DNS, you'd need to memorize IP addresses for every website you visit.
+      </Typography>
+
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: alpha("#22c55e", 0.02) }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+          How DNS Works: The Resolution Process
+        </Typography>
+        <Typography variant="body2" paragraph>
+          When you type a URL into your browser, a complex multi-step process happens in milliseconds:
+        </Typography>
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+            Step-by-Step DNS Query Resolution:
+          </Typography>
+          <Box component="ol" sx={{ pl: 3, "& li": { mb: 2 } }}>
+            <li>
+              <Typography variant="body2">
+                <strong>Browser Cache Check:</strong> Your browser first checks its own cache to see if it recently looked up this domain. If found, it uses the cached IP immediately.
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Operating System Cache:</strong> If not in browser cache, the OS checks its own DNS cache (you can view this with <code>ipconfig /displaydns</code> on Windows or <code>dscacheutil -cachedump -entries Host</code> on macOS).
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Recursive Resolver:</strong> If still not found, your computer queries your configured DNS server (usually provided by your ISP or services like 8.8.8.8 Google DNS, 1.1.1.1 Cloudflare). This is called a "recursive resolver" because it does all the work for you.
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Root Nameserver:</strong> The recursive resolver queries one of the 13 root nameserver clusters (labeled A through M). The root server doesn't know the IP but points to the TLD (Top-Level Domain) server for .com, .org, etc.
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>TLD Nameserver:</strong> The resolver then queries the .com TLD server, which points to the authoritative nameserver for the specific domain (e.g., google.com's nameservers).
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Authoritative Nameserver:</strong> Finally, the resolver queries the authoritative nameserver for google.com, which returns the actual IP address.
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Cache and Return:</strong> The recursive resolver caches this result (TTL-based) and returns the IP to your computer, which also caches it.
+              </Typography>
+            </li>
+          </Box>
+        </Box>
+
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <AlertTitle sx={{ fontWeight: 700 }}>DNS Hierarchy</AlertTitle>
+          <Typography variant="body2">
+            DNS uses a hierarchical, distributed database. For "www.example.com", it's read right-to-left:
+            <strong>.com</strong> (TLD) → <strong>example</strong> (Second-Level Domain) → <strong>www</strong> (subdomain/hostname).
+          </Typography>
+        </Alert>
+
+        <Typography variant="body2" paragraph>
+          <strong>DNS Protocols:</strong> DNS primarily uses <strong>UDP port 53</strong> for queries because it's fast and lightweight. However, DNS switches to <strong>TCP port 53</strong> for zone transfers (AXFR) between nameservers or when responses exceed 512 bytes (though EDNS0 allows larger UDP responses).
+        </Typography>
+
+        <Typography variant="body2">
+          <strong>TTL (Time To Live):</strong> Each DNS record has a TTL value (in seconds) that tells resolvers how long to cache the result. Short TTLs (60-300s) allow quick changes but increase query load. Long TTLs (3600s-86400s) reduce load but slow down propagation of changes.
+        </Typography>
+      </Paper>
+
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+        DNS Record Types
       </Typography>
 
       <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 3 }}>
@@ -5058,6 +5555,122 @@ const ComputerNetworkingPage: React.FC = () => {
         </Box>
       </Paper>
 
+      {/* TCP vs UDP Deep Dive */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, background: alpha("#22c55e", 0.02), border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, color: "#22c55e" }}>
+          🔀 TCP vs UDP: The Transport Layer Battle
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            TCP: The Reliable Workhorse of the Internet
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            <strong>Transmission Control Protocol (TCP)</strong> is the foundation of reliable internet communication. When you load a webpage,
+            send an email, or download a file, TCP ensures every single byte arrives correctly and in order. TCP is connection-oriented, meaning
+            it establishes a virtual circuit between sender and receiver before data transmission begins. This connection is created through the
+            famous <strong>three-way handshake</strong>: SYN (synchronize), SYN-ACK (synchronize-acknowledge), and ACK (acknowledge). Only after
+            this handshake succeeds does data transfer begin.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            TCP provides <strong>guaranteed delivery</strong> through acknowledgments and retransmissions. Each TCP segment includes a sequence
+            number, and the receiver sends ACKs confirming receipt. If the sender doesn't receive an ACK within a timeout period, it retransmits
+            the segment. TCP also implements <strong>flow control</strong> via sliding windows—the receiver advertises how much data it can accept,
+            preventing buffer overflow. <strong>Congestion control</strong> algorithms (like TCP Reno, Cubic, BBR) detect network congestion by
+            monitoring packet loss and adjust transmission rates accordingly.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            The cost of this reliability is overhead. Each TCP segment includes a 20-byte header (or more with options), and the acknowledgment
+            mechanism introduces latency. For every data packet sent, you must wait for an ACK before sending more (unless using window scaling).
+            This makes TCP unsuitable for real-time applications where slight data loss is acceptable but delays are not. Yet for applications
+            where correctness matters—web browsing (HTTP/HTTPS), file transfers (FTP/SFTP), email (SMTP/IMAP), and database queries—TCP is
+            irreplaceable. Its reliability guarantee means developers can build applications without worrying about lost or out-of-order data.
+          </Typography>
+        </Paper>
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#06b6d4", 0.03), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            UDP: Speed Over Reliability
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            <strong>User Datagram Protocol (UDP)</strong> takes the opposite approach: it's fast, lightweight, and unreliable. UDP is connectionless—no
+            handshake, no acknowledgments, no guaranteed delivery. When you send a UDP datagram, it's fired off into the network with no confirmation
+            it will arrive. The UDP header is only 8 bytes (compared to TCP's minimum 20 bytes), containing just source port, destination port,
+            length, and an optional checksum. This minimal overhead makes UDP ideal for applications where speed trumps reliability.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            <strong>Real-time applications</strong> are UDP's domain. Video conferencing (Zoom, Teams), VoIP calls (Skype, WhatsApp), and live
+            streaming use UDP because a single lost packet causing a brief audio glitch or video artifact is preferable to the delay TCP retransmission
+            would introduce. Online multiplayer games use UDP—if a position update packet is lost, the next packet (arriving milliseconds later)
+            makes it irrelevant. <strong>DNS queries</strong> use UDP port 53 because most DNS responses fit in a single datagram, and if it's lost,
+            the client simply retries. DHCP, TFTP, and SNMP all choose UDP for similar reasons.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Modern protocols like <strong>QUIC</strong> (Quick UDP Internet Connections), used by HTTP/3, implement TCP-like reliability features
+            on top of UDP. Why? Because UDP allows protocol innovation without waiting for operating system TCP stack updates. QUIC provides
+            multiplexing, encryption, and congestion control while avoiding TCP's head-of-line blocking problem. This demonstrates that UDP's
+            simplicity makes it an excellent foundation for building custom transport protocols tailored to specific application needs.
+          </Typography>
+        </Paper>
+      </Paper>
+
+      {/* Routing Protocols */}
+      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, background: alpha("#8b5cf6", 0.02), border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, color: "#8b5cf6" }}>
+          🗺️ Routing Protocols: How the Internet Finds Its Way
+        </Typography>
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            The Routing Problem: Billions of Paths, Milliseconds to Decide
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            When you access a website hosted across the world, your data might traverse 15-20 routers to reach its destination. Each router must
+            decide: which interface should I forward this packet through? This decision happens billions of times per second across the global internet.
+            <strong>Routing protocols</strong> are the distributed algorithms that build and maintain routing tables—the databases routers consult
+            to make forwarding decisions. Without routing protocols, the internet couldn't exist at scale.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Routing protocols fall into two categories: <strong>Interior Gateway Protocols (IGPs)</strong> for routing within an organization
+            (like RIP, OSPF, EIGRP), and <strong>Exterior Gateway Protocols (EGPs)</strong> for routing between organizations—primarily BGP, which
+            glues the entire internet together. They also differ in approach: <strong>distance-vector</strong> protocols (RIP, EIGRP) share routing
+            tables with neighbors and calculate best paths based on hop count or composite metrics, while <strong>link-state</strong> protocols
+            (OSPF, IS-IS) build a complete topology map and calculate shortest paths using Dijkstra's algorithm.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            <strong>Convergence time</strong>—how quickly routers agree on topology after a change—is critical. When a link fails, routing protocols
+            must detect the failure, propagate updates, recalculate paths, and update forwarding tables. During this convergence period, traffic may
+            be dropped or loop. Modern link-state protocols like OSPF converge in seconds, while older distance-vector protocols like RIP could take
+            minutes, causing prolonged outages.
+          </Typography>
+        </Paper>
+
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#ef4444", 0.03), borderRadius: 2, border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+            BGP: The Protocol That Runs the Internet
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            <strong>Border Gateway Protocol (BGP)</strong> is the internet's routing protocol. Every major ISP, cloud provider, and large enterprise
+            uses BGP to exchange routing information between <strong>Autonomous Systems (AS)</strong>—independent networks with their own routing
+            policies. When you access Google, Facebook, or AWS, BGP determines the path your packets take through dozens of ISPs and transit providers.
+            BGP is a path-vector protocol: instead of just advertising destination networks, it advertises the full AS path, preventing routing loops.
+          </Typography>
+          <Typography paragraph sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            BGP's flexibility is both its strength and weakness. Routing decisions are based on <strong>policy</strong> (business relationships,
+            traffic engineering) rather than purely on shortest path. ISPs can prefer certain routes, filter advertisements, or manipulate path
+            attributes to influence routing. This policy-based routing enables sophisticated traffic engineering but also creates security risks.
+            <strong>BGP hijacking</strong>—maliciously advertising IP prefixes you don't own—has caused major internet outages. In 2008, Pakistan's
+            attempt to block YouTube internally resulted in advertising YouTube's IP space to the entire internet, taking YouTube offline globally.
+          </Typography>
+          <Typography sx={{ fontSize: "0.95rem", lineHeight: 1.8, color: "grey.300" }}>
+            Despite being designed in the 1980s with no built-in security, BGP still underpins the modern internet. <strong>RPKI (Resource Public
+            Key Infrastructure)</strong> and <strong>BGPsec</strong> are efforts to add cryptographic validation, but adoption remains slow.
+            Understanding BGP is essential for network engineers and cybersecurity professionals—many of the internet's largest outages and attacks
+            stem from BGP misconfigurations or malicious manipulation.
+          </Typography>
+        </Paper>
+      </Paper>
+
       {/* Network Troubleshooting */}
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, background: alpha("#f59e0b", 0.03) }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
@@ -5310,6 +5923,23 @@ const ComputerNetworkingPage: React.FC = () => {
           </Box>
         </AccordionSummary>
         <AccordionDetails>
+          <Paper sx={{ p: 2, mb: 3, bgcolor: alpha("#ec4899", 0.03), borderRadius: 2 }}>
+            <Typography variant="body2" paragraph>
+              <strong>NAT (Network Address Translation)</strong> is a critical technology that enables multiple devices on a private network to share a single public IP address when accessing the Internet. It was created to address IPv4 address exhaustion and adds a layer of security by hiding internal network structure.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>How NAT Works:</strong> When a device on your home network (e.g., 192.168.1.10) sends a request to a website, your router replaces the private source IP with its public IP address and tracks the connection in a NAT translation table. When the response comes back, the router uses the table to forward it to the correct internal device.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Why NAT Matters:</strong>
+            </Typography>
+            <Box component="ul" sx={{ pl: 3, mb: 2, "& li": { mb: 0.5 } }}>
+              <li><Typography variant="body2"><strong>IP Conservation:</strong> Millions of devices share far fewer public IPv4 addresses</Typography></li>
+              <li><Typography variant="body2"><strong>Security:</strong> Internal network structure is hidden from the Internet</Typography></li>
+              <li><Typography variant="body2"><strong>Flexibility:</strong> You can change ISPs without reconfiguring internal devices</Typography></li>
+              <li><Typography variant="body2"><strong>Challenges:</strong> Breaks end-to-end connectivity, complicates peer-to-peer apps, requires port forwarding for incoming connections</Typography></li>
+            </Box>
+          </Paper>
           <TableContainer>
             <Table size="small">
               <TableHead>

@@ -317,7 +317,7 @@ export default function DNSGuidePage() {
 
         <Chip
           component={Link}
-          to="/network/dns"
+          to="/dynamic/dns"
           label="Open DNS Analyzer Tool →"
           clickable
           sx={{

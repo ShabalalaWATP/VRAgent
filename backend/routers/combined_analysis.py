@@ -1198,7 +1198,7 @@ async def export_report_pdf(
 
 
 # ============================================================================
-# Send to Team Chat
+# Send to Project Chat
 # ============================================================================
 
 @router.post("/reports/{report_id}/send-to-team-chat")
@@ -1208,7 +1208,7 @@ async def send_report_to_team_chat(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Send a summary of the combined analysis report to the project's team chat.
+    Send a summary of the combined analysis report to the project's chat.
     """
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -1217,18 +1217,18 @@ async def send_report_to_team_chat(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     
-    # Get the project's team chat conversation
+    # Get the project's chat conversation
     project = db.query(Project).filter(Project.id == report.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Find team chat conversation
+    # Find project chat conversation
     team_chat = db.query(Conversation).filter(
         Conversation.project_id == report.project_id
     ).first()
     
     if not team_chat:
-        raise HTTPException(status_code=404, detail="Team chat not found for this project. Please set up a team chat first.")
+        raise HTTPException(status_code=404, detail="Project chat not found. Please set up a project chat first.")
     
     # Check if user is participant
     is_participant = db.query(ConversationParticipant).filter(
@@ -1237,7 +1237,7 @@ async def send_report_to_team_chat(
     ).first()
     
     if not is_participant:
-        raise HTTPException(status_code=403, detail="You are not a member of this team chat")
+        raise HTTPException(status_code=403, detail="You are not a member of this project chat")
     
     # Create report summary message
     risk_emoji = {
@@ -1292,7 +1292,7 @@ _Shared by {current_user.username}_"""
     
     return {
         "status": "success",
-        "message": "Report summary sent to team chat",
+        "message": "Report summary sent to project chat",
         "conversation_id": team_chat.id,
         "message_id": message.id
     }
@@ -1398,14 +1398,15 @@ IMPORTANT GUIDELINES:
         })
         
         # Generate response
+        from google.genai import types
         response = client.models.generate_content(
             model=settings.gemini_model_id,
             contents=messages,
-            config={
-                "system_instruction": system_prompt,
-                "temperature": 0.7,
-                "max_output_tokens": 2000,
-            }
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                thinking_config=types.ThinkingConfig(thinking_level="high"),
+                max_output_tokens=2000,
+            )
         )
         
         if response.text:

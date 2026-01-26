@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import {
   Box,
@@ -16,18 +16,19 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  IconButton,
   LinearProgress,
   Card,
   CardContent,
   Alert,
   Tabs,
   Tab,
-  Tooltip,
-  Button,
   Divider,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  Button,
 } from "@mui/material";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
@@ -38,6 +39,7 @@ import InputIcon from "@mui/icons-material/Input";
 import WifiIcon from "@mui/icons-material/Wifi";
 import PrivacyTipIcon from "@mui/icons-material/PrivacyTip";
 import SecurityIcon from "@mui/icons-material/Security";
+import ShieldIcon from "@mui/icons-material/Shield";
 import SettingsIcon from "@mui/icons-material/Settings";
 import StorageIcon from "@mui/icons-material/Storage";
 import EnhancedEncryptionIcon from "@mui/icons-material/EnhancedEncryption";
@@ -51,6 +53,150 @@ import CodeIcon from "@mui/icons-material/Code";
 import QuizIcon from "@mui/icons-material/Quiz";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import MenuIcon from "@mui/icons-material/Menu";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import InfoIcon from "@mui/icons-material/Info";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+
+// Theme colors for consistent styling
+const themeColors = {
+  primary: "#f59e0b",
+  primaryLight: "#fbbf24",
+  secondary: "#8b5cf6",
+  accent: "#3b82f6",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(245, 158, 11, 0.2)",
+  textMuted: "#94a3b8",
+};
+
+const attackSurfaceAreas = [
+  {
+    area: "App binary and resources",
+    detail: "Reverse engineering reveals strings, endpoints, and hardcoded secrets.",
+    examples: ["APK/IPA extraction", "embedded API keys", "feature flags"],
+  },
+  {
+    area: "Local storage",
+    detail: "Sensitive data stored on device can be extracted or tampered with.",
+    examples: ["SQLite databases", "SharedPreferences/UserDefaults", "cache files"],
+  },
+  {
+    area: "Network traffic",
+    detail: "Weak TLS or missing validation allows interception or modification.",
+    examples: ["HTTP endpoints", "weak pinning", "certificate bypass"],
+  },
+  {
+    area: "OS integrations",
+    detail: "Misused platform APIs expose data or privileged actions.",
+    examples: ["intents and URL schemes", "clipboard", "notifications"],
+  },
+  {
+    area: "Third-party SDKs",
+    detail: "Libraries can add risk or leak data outside the app boundary.",
+    examples: ["analytics SDKs", "ads", "crash reporting"],
+  },
+];
+
+const trustBoundaries = [
+  "Device to backend API: TLS configuration and certificate validation",
+  "App to third-party SDKs: data sharing and permission scope",
+  "App to OS services: secure storage, keychain/keystore, clipboard",
+  "App to other apps: deep links, intents, and URL schemes",
+  "Offline data to sync layer: replay, conflicts, and integrity checks",
+];
+
+const testingWorkflow = [
+  {
+    step: "Recon and setup",
+    detail: "Gather app versions, permissions, endpoints, and run on test devices.",
+    outputs: ["Device setup", "Proxy configured", "Baseline traffic captured"],
+  },
+  {
+    step: "Static analysis",
+    detail: "Inspect the binary for hardcoded secrets, insecure settings, and risky code.",
+    outputs: ["Decompiled code", "secret scan", "manifest review"],
+  },
+  {
+    step: "Dynamic analysis",
+    detail: "Run the app through core flows while intercepting traffic.",
+    outputs: ["MITM validation", "API fuzzing", "auth flow checks"],
+  },
+  {
+    step: "Runtime instrumentation",
+    detail: "Use tools like Frida to bypass checks and test deeper logic.",
+    outputs: ["Bypass root detection", "modify auth responses"],
+  },
+  {
+    step: "Backend/API validation",
+    detail: "Verify server-side authorization and rate limiting controls.",
+    outputs: ["IDOR checks", "privilege tests", "replay protection"],
+  },
+  {
+    step: "Reporting and fixes",
+    detail: "Document findings with reproduction steps and remediation guidance.",
+    outputs: ["Risk summary", "fix recommendations", "test evidence"],
+  },
+];
+
+const mobileTooling = [
+  {
+    category: "Static analysis",
+    tools: ["MobSF", "JADX", "apktool", "Ghidra", "strings"],
+  },
+  {
+    category: "Dynamic analysis",
+    tools: ["Burp Suite", "mitmproxy", "Charles Proxy", "Proxyman"],
+  },
+  {
+    category: "Runtime instrumentation",
+    tools: ["Frida", "Objection", "Xposed", "Cycript"],
+  },
+  {
+    category: "Android tooling",
+    tools: ["adb", "drozer", "MobSF Android agent", "Android Studio profiler"],
+  },
+  {
+    category: "iOS tooling",
+    tools: ["Xcode", "Frida iOS", "class-dump", "lldb"],
+  },
+];
+
+const storageLocations = [
+  {
+    platform: "Android",
+    areas: ["SharedPreferences", "SQLite databases", "Files/Cache", "External storage", "Keystore"],
+  },
+  {
+    platform: "iOS",
+    areas: ["UserDefaults", "Core Data/SQLite", "Library/Caches", "Documents", "Keychain"],
+  },
+];
+
+const hardeningChecklist = [
+  "Remove debug builds and disable debuggable flags",
+  "Enforce TLS with proper certificate validation or pinning",
+  "Move secrets to backend services or secure storage",
+  "Restrict exported components and deep link handlers",
+  "Minimize permissions and request them at runtime",
+  "Harden logging to avoid leaking tokens or PII",
+  "Enable integrity checks, obfuscation, and anti-tamper controls",
+  "Use SBOM and dependency scanning for third-party SDKs",
+];
+
+// Section navigation items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <InfoIcon fontSize="small" /> },
+  { id: "overview", label: "Overview", icon: <PhoneAndroidIcon fontSize="small" /> },
+  { id: "threat-model", label: "Threat Model", icon: <SecurityIcon fontSize="small" /> },
+  { id: "quick-reference", label: "Quick Reference", icon: <ListAltIcon fontSize="small" /> },
+  { id: "testing-workflow", label: "Testing Workflow", icon: <BugReportIcon fontSize="small" /> },
+  { id: "hardening", label: "Hardening", icon: <ShieldIcon fontSize="small" /> },
+  { id: "detailed-analysis", label: "Detailed Analysis", icon: <SecurityIcon fontSize="small" /> },
+  { id: "resources", label: "Resources", icon: <MenuBookIcon fontSize="small" /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon fontSize="small" /> },
+];
 
 // Quiz Question Interface
 interface QuizQuestion {
@@ -1087,626 +1233,927 @@ const exploitabilityColors = {
 
 export default function OwaspMobilePage() {
   const theme = useTheme();
-  const navigate = useNavigate();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [expandedRisk, setExpandedRisk] = useState<string | false>("m1");
   const [tabValue, setTabValue] = useState(0);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const pageContext = `This page covers the OWASP Mobile Top 10 security risks for mobile applications. Topics include: improper credential usage, inadequate supply chain security, insecure authentication/authorization, insufficient input/output validation, insecure communication, inadequate privacy controls, insufficient binary protections, security misconfiguration, insecure data storage, and insufficient cryptography. Current tab: ${['All Risks', 'Android', 'iOS'][tabValue] || 'Overview'}. ${expandedRisk ? `Currently viewing risk: ${expandedRisk.toUpperCase()}.` : ''}`;
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+    }
+    setMobileNavOpen(false);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 120 && rect.bottom >= 120) {
+            setActiveSection(sectionId);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Box sx={{ p: 2 }}>
+      <Typography
+        variant="overline"
+        sx={{ color: themeColors.textMuted, fontWeight: 600, px: 1, mb: 1, display: "block" }}
+      >
+        Navigation
+      </Typography>
+      {sectionNavItems.map((item) => (
+        <Box
+          key={item.id}
+          onClick={() => scrollToSection(item.id)}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            px: 2,
+            py: 1,
+            borderRadius: 2,
+            cursor: "pointer",
+            mb: 0.5,
+            bgcolor: activeSection === item.id ? alpha(themeColors.primary, 0.15) : "transparent",
+            borderLeft: activeSection === item.id ? `3px solid ${themeColors.primary}` : "3px solid transparent",
+            color: activeSection === item.id ? themeColors.primary : themeColors.textMuted,
+            transition: "all 0.2s ease",
+            "&:hover": {
+              bgcolor: alpha(themeColors.primary, 0.1),
+              color: themeColors.primary,
+            },
+          }}
+        >
+          {item.icon}
+          <Typography variant="body2" sx={{ fontWeight: activeSection === item.id ? 600 : 400 }}>
+            {item.label}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+
+  const pageContext = `This page covers the OWASP Mobile Top 10 security risks for mobile applications. Topics include: improper credential usage, inadequate supply chain security, insecure authentication/authorization, insufficient input/output validation, insecure communication, inadequate privacy controls, insufficient binary protections, security misconfiguration, insecure data storage, and insufficient cryptography. Includes threat modeling, attack surface mapping, testing workflows, tooling, and hardening checklists. Current tab: ${['All Risks', 'Android', 'iOS'][tabValue] || 'Overview'}. ${expandedRisk ? `Currently viewing risk: ${expandedRisk.toUpperCase()}.` : ''}`;
 
   return (
     <LearnPageLayout pageTitle="OWASP Mobile Top 10" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Back Button */}
-      <Chip
-        component={Link}
-        to="/learn"
-        icon={<ArrowBackIcon />}
-        label="Back to Learning Hub"
-        clickable
-        variant="outlined"
-        sx={{ borderRadius: 2, mb: 3 }}
-      />
-
-      {/* Header */}
-      <Box sx={{ mb: 5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <Box
-            sx={{
-              width: 72,
-              height: 72,
-              borderRadius: 3,
-              background: `linear-gradient(135deg, #3b82f6, #8b5cf6)`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: `0 8px 32px ${alpha("#3b82f6", 0.3)}`,
-            }}
-          >
-            <PhoneAndroidIcon sx={{ fontSize: 36, color: "white" }} />
-          </Box>
-          <Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Typography
-                variant="h3"
-                sx={{
-                  fontWeight: 800,
-                  background: `linear-gradient(135deg, #3b82f6, #8b5cf6)`,
-                  backgroundClip: "text",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                OWASP Mobile Top 10
-              </Typography>
-              <Chip
-                label="2024"
-                sx={{
-                  fontWeight: 700,
-                  bgcolor: alpha("#3b82f6", 0.1),
-                  color: "#3b82f6",
-                }}
-              />
-            </Box>
-            <Typography variant="h6" color="text.secondary">
-              Critical security risks for mobile applications
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Platform Toggle */}
-      <Paper sx={{ mb: 4, borderRadius: 3, overflow: "hidden" }}>
-        <Tabs
-          value={tabValue}
-          onChange={(_, v) => setTabValue(v)}
-          centered
-          sx={{
-            bgcolor: alpha(theme.palette.background.paper, 0.5),
-            "& .MuiTab-root": { minHeight: 56, fontWeight: 600 },
-          }}
-        >
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <PhoneAndroidIcon />
-                All Platforms
-              </Box>
-            }
-          />
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <AndroidIcon sx={{ color: "#3DDC84" }} />
-                Android Focus
-              </Box>
-            }
-          />
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <AppleIcon />
-                iOS Focus
-              </Box>
-            }
-          />
-        </Tabs>
-      </Paper>
-
-      {/* Stats */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {[
-          { value: "10", label: "Risk Categories", color: "#3b82f6" },
-          { value: "4", label: "Critical Risks", color: "#dc2626" },
-          { value: "5", label: "High Impact", color: "#f59e0b" },
-          { value: "50+", label: "Attack Vectors", color: "#8b5cf6" },
-        ].map((stat) => (
-          <Grid item xs={6} md={3} key={stat.label}>
-            <Paper
-              sx={{
-                p: 2.5,
-                textAlign: "center",
-                borderRadius: 3,
-                border: `1px solid ${alpha(stat.color, 0.2)}`,
-                background: `linear-gradient(135deg, ${alpha(stat.color, 0.05)}, transparent)`,
-              }}
-            >
-              <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>
-                {stat.value}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {stat.label}
-              </Typography>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Risk Overview Chart */}
-      <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-          📊 Risk Prevalence Overview
-        </Typography>
-        <Grid container spacing={1}>
-          {mobileRisks.map((risk) => (
-            <Grid item xs={12} key={risk.id}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Typography
-                  variant="body2"
-                  sx={{ minWidth: 180, fontWeight: 500, fontSize: "0.8rem" }}
-                >
-                  M{risk.rank}: {risk.shortTitle}
-                </Typography>
-                <Box sx={{ flex: 1 }}>
-                  <LinearProgress
-                    variant="determinate"
-                    value={risk.prevalence}
-                    sx={{
-                      height: 20,
-                      borderRadius: 2,
-                      bgcolor: alpha(risk.color, 0.1),
-                      "& .MuiLinearProgress-bar": {
-                        bgcolor: risk.color,
-                        borderRadius: 2,
-                      },
-                    }}
-                  />
+      <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f" }}>
+        <Container maxWidth="xl" sx={{ py: 4 }}>
+          <Grid container spacing={4}>
+            {/* Sidebar Navigation */}
+            {!isMobile && (
+              <Grid item md={2.5}>
+                <Box sx={{ position: "sticky", top: 80 }}>
+                  {sidebarNav}
                 </Box>
-                <Typography variant="body2" sx={{ minWidth: 40, fontWeight: 700, color: risk.color }}>
-                  {risk.prevalence}%
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Paper>
-
-      {/* Quick Reference Cards */}
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        🔍 Quick Reference
-      </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {mobileRisks.map((risk) => (
-          <Grid item xs={6} sm={4} md={2.4} key={risk.id}>
-            <Card
-              sx={{
-                height: "100%",
-                cursor: "pointer",
-                border: `1px solid ${alpha(risk.color, 0.2)}`,
-                transition: "all 0.2s",
-                "&:hover": {
-                  transform: "translateY(-4px)",
-                  boxShadow: `0 8px 24px ${alpha(risk.color, 0.2)}`,
-                  borderColor: risk.color,
-                },
-              }}
-              onClick={() => setExpandedRisk(risk.id)}
-            >
-              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 1.5,
-                    bgcolor: alpha(risk.color, 0.1),
-                    color: risk.color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    mb: 1.5,
-                  }}
-                >
-                  {risk.icon}
-                </Box>
-                <Chip
-                  label={`M${risk.rank}`}
-                  size="small"
-                  sx={{
-                    bgcolor: risk.color,
-                    color: "white",
-                    fontWeight: 700,
-                    fontSize: "0.65rem",
-                    height: 20,
-                    mb: 0.5,
-                  }}
-                />
-                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.75rem" }}>
-                  {risk.shortTitle}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Detailed Accordions */}
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        📋 Detailed Analysis
-      </Typography>
-
-      {mobileRisks.map((risk) => (
-        <Accordion
-          key={risk.id}
-          expanded={expandedRisk === risk.id}
-          onChange={(_, isExpanded) => setExpandedRisk(isExpanded ? risk.id : false)}
-          sx={{
-            mb: 2,
-            border: `1px solid ${alpha(risk.color, 0.2)}`,
-            borderRadius: "12px !important",
-            "&:before": { display: "none" },
-            overflow: "hidden",
-          }}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon />}
-            sx={{
-              borderLeft: `4px solid ${risk.color}`,
-              "&:hover": { bgcolor: alpha(risk.color, 0.02) },
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%", flexWrap: "wrap" }}>
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 2,
-                  bgcolor: alpha(risk.color, 0.1),
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: risk.color,
-                }}
-              >
-                {risk.icon}
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 200 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                  <Chip
-                    label={`M${risk.rank}`}
-                    size="small"
-                    sx={{ bgcolor: risk.color, color: "white", fontWeight: 700 }}
-                  />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    {risk.title}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
-                  <Chip
-                    icon={<ErrorIcon sx={{ fontSize: 14 }} />}
-                    label={`Impact: ${risk.impact}`}
-                    size="small"
-                    sx={{
-                      bgcolor: alpha(impactColors[risk.impact], 0.1),
-                      color: impactColors[risk.impact],
-                      "& .MuiChip-icon": { color: impactColors[risk.impact] },
-                    }}
-                  />
-                  <Chip
-                    icon={<BugReportIcon sx={{ fontSize: 14 }} />}
-                    label={`Exploit: ${risk.exploitability}`}
-                    size="small"
-                    sx={{
-                      bgcolor: alpha(exploitabilityColors[risk.exploitability], 0.1),
-                      color: exploitabilityColors[risk.exploitability],
-                      "& .MuiChip-icon": { color: exploitabilityColors[risk.exploitability] },
-                    }}
-                  />
-                </Box>
-              </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails sx={{ pt: 0 }}>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              {risk.description}
-            </Typography>
-
-            <Grid container spacing={3}>
-              {/* Key Points */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: risk.color }}>
-                  📋 Key Points
-                </Typography>
-                <List dense disablePadding>
-                  {risk.keyPoints.map((point, i) => (
-                    <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
-                      <ListItemIcon sx={{ minWidth: 24 }}>
-                        <CheckCircleIcon sx={{ fontSize: 14, color: risk.color }} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={point}
-                        primaryTypographyProps={{ variant: "body2" }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
               </Grid>
+            )}
 
-              {/* Attack Vectors */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "error.main" }}>
-                  ⚔️ Attack Vectors
-                </Typography>
-                <List dense disablePadding>
-                  {risk.attackVectors.map((vector, i) => (
-                    <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
-                      <ListItemIcon sx={{ minWidth: 24 }}>
-                        <WarningIcon sx={{ fontSize: 14, color: "error.main" }} />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={vector}
-                        primaryTypographyProps={{ variant: "body2" }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Grid>
-
-              {/* Vulnerable Code */}
-              {risk.vulnerableCode && (tabValue === 0 || tabValue === 1) && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "error.main" }}>
-                    ❌ Vulnerable Code Example
-                  </Typography>
-                  {risk.vulnerableCode
-                    .filter(vc => tabValue === 0 || vc.platform.toLowerCase().includes(tabValue === 1 ? "android" : "ios") || vc.platform === "Any" || vc.platform === "API Request")
-                    .map((vc, i) => (
-                    <Paper
-                      key={i}
-                      sx={{
-                        p: 2,
-                        mb: 2,
-                        bgcolor: alpha(theme.palette.error.main, 0.03),
-                        border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Chip label={vc.platform} size="small" sx={{ mb: 1, bgcolor: alpha(theme.palette.error.main, 0.1) }} />
-                      <Box
-                        component="pre"
-                        sx={{
-                          m: 0,
-                          p: 2,
-                          bgcolor: alpha(theme.palette.background.default, 0.5),
-                          borderRadius: 1,
-                          overflow: "auto",
-                          fontSize: "0.75rem",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {vc.code}
-                      </Box>
-                      <Typography variant="caption" color="error.main" sx={{ mt: 1, display: "block" }}>
-                        ⚠️ {vc.issue}
-                      </Typography>
-                    </Paper>
-                  ))}
-                </Grid>
-              )}
-
-              {/* Secure Code */}
-              {risk.secureCode && (tabValue === 0 || tabValue === 1 || tabValue === 2) && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "success.main" }}>
-                    ✅ Secure Code Example
-                  </Typography>
-                  {risk.secureCode
-                    .filter(sc => tabValue === 0 || sc.platform.toLowerCase().includes(tabValue === 1 ? "android" : "ios") || sc.platform.toLowerCase().includes("server"))
-                    .map((sc, i) => (
-                    <Paper
-                      key={i}
-                      sx={{
-                        p: 2,
-                        mb: 2,
-                        bgcolor: alpha(theme.palette.success.main, 0.03),
-                        border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Chip label={sc.platform} size="small" sx={{ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.1) }} />
-                      <Box
-                        component="pre"
-                        sx={{
-                          m: 0,
-                          p: 2,
-                          bgcolor: alpha(theme.palette.background.default, 0.5),
-                          borderRadius: 1,
-                          overflow: "auto",
-                          fontSize: "0.75rem",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {sc.code}
-                      </Box>
-                      <Typography variant="caption" color="success.main" sx={{ mt: 1, display: "block" }}>
-                        ✓ {sc.fix}
-                      </Typography>
-                    </Paper>
-                  ))}
-                </Grid>
-              )}
-
-              {/* Prevention */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "success.main" }}>
-                  🛡️ Prevention
-                </Typography>
-                <Paper
-                  sx={{
-                    p: 2,
-                    bgcolor: alpha(theme.palette.success.main, 0.03),
-                    border: `1px solid ${alpha(theme.palette.success.main, 0.15)}`,
-                    borderRadius: 2,
-                  }}
-                >
-                  {risk.prevention.map((item, i) => (
-                    <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.5 }}>
-                      <CheckCircleIcon sx={{ fontSize: 14, color: "success.main", mt: 0.3 }} />
-                      <Typography variant="body2">{item}</Typography>
-                    </Box>
-                  ))}
-                </Paper>
-              </Grid>
-
-              {/* Testing Tips */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "info.main" }}>
-                  🔍 Testing Tips
-                </Typography>
-                <Paper
-                  sx={{
-                    p: 2,
-                    bgcolor: alpha(theme.palette.info.main, 0.03),
-                    border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
-                    borderRadius: 2,
-                  }}
-                >
-                  {risk.testingTips.map((tip, i) => (
-                    <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.5 }}>
-                      <CodeIcon sx={{ fontSize: 14, color: "info.main", mt: 0.3 }} />
-                      <Typography variant="body2">{tip}</Typography>
-                    </Box>
-                  ))}
-                </Paper>
-              </Grid>
-
-              {/* Platform Specific */}
-              {(tabValue === 1 && risk.androidSpecific) && (
-                <Grid item xs={12}>
-                  <Alert
-                    severity="info"
-                    icon={<AndroidIcon sx={{ color: "#3DDC84" }} />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      Android-Specific Recommendations
-                    </Typography>
-                    {risk.androidSpecific.map((tip, i) => (
-                      <Typography key={i} variant="body2">• {tip}</Typography>
-                    ))}
-                  </Alert>
-                </Grid>
-              )}
-
-              {(tabValue === 2 && risk.iosSpecific) && (
-                <Grid item xs={12}>
-                  <Alert
-                    severity="info"
-                    icon={<AppleIcon />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      iOS-Specific Recommendations
-                    </Typography>
-                    {risk.iosSpecific.map((tip, i) => (
-                      <Typography key={i} variant="body2">• {tip}</Typography>
-                    ))}
-                  </Alert>
-                </Grid>
-              )}
-
-              {/* Tools */}
-              {risk.tools && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                    🛠️ Recommended Tools
-                  </Typography>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                    {risk.tools.map((tool) => (
-                      <Chip
-                        key={tool}
-                        label={tool}
-                        size="small"
-                        sx={{ bgcolor: alpha(risk.color, 0.1), color: risk.color }}
-                      />
-                    ))}
-                  </Box>
-                </Grid>
-              )}
-
-              {/* Real World Examples */}
-              {risk.realWorldExamples && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                    🌍 Real-World Examples
-                  </Typography>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      bgcolor: alpha(theme.palette.warning.main, 0.03),
-                      border: `1px solid ${alpha(theme.palette.warning.main, 0.15)}`,
-                      borderRadius: 2,
-                    }}
-                  >
-                    {risk.realWorldExamples.map((example, i) => (
-                      <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>
-                        • {example}
-                      </Typography>
-                    ))}
-                  </Paper>
-                </Grid>
-              )}
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-      ))}
-
-      {/* Resources */}
-      <Paper sx={{ mt: 4, p: 4, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-          📚 Essential Resources
-        </Typography>
-        <Grid container spacing={2}>
-          {[
-            { name: "OWASP Mobile Security Project", url: "https://owasp.org/www-project-mobile-security/", desc: "Official OWASP mobile security resources" },
-            { name: "OWASP MASTG", url: "https://mas.owasp.org/MASTG/", desc: "Mobile Application Security Testing Guide" },
-            { name: "OWASP MASVS", url: "https://mas.owasp.org/MASVS/", desc: "Mobile Application Security Verification Standard" },
-            { name: "MobSF", url: "https://github.com/MobSF/Mobile-Security-Framework-MobSF", desc: "Automated mobile security testing framework" },
-            { name: "Frida", url: "https://frida.re/", desc: "Dynamic instrumentation toolkit for mobile apps" },
-            { name: "Android Security Docs", url: "https://developer.android.com/security", desc: "Official Android security best practices" },
-          ].map((resource) => (
-            <Grid item xs={12} sm={6} key={resource.name}>
+            {/* Main Content */}
+            <Grid item xs={12} md={9.5}>
+              {/* Intro Section */}
               <Paper
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    borderColor: "primary.main",
-                    transform: "translateY(-2px)",
-                  },
-                }}
-                onClick={() => window.open(resource.url, "_blank")}
+                id="intro"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
               >
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "primary.main" }}>
-                  {resource.name} ↗
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {resource.desc}
-                </Typography>
+                <Chip
+                  component={Link}
+                  to="/learn"
+                  icon={<ArrowBackIcon />}
+                  label="Back to Learning Hub"
+                  clickable
+                  variant="outlined"
+                  sx={{ borderRadius: 2, mb: 3, borderColor: themeColors.border, color: themeColors.textMuted }}
+                />
+
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 3,
+                      background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.secondary})`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 8px 32px ${alpha(themeColors.primary, 0.3)}`,
+                    }}
+                  >
+                    <PhoneAndroidIcon sx={{ fontSize: 36, color: "white" }} />
+                  </Box>
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Typography
+                        variant="h3"
+                        sx={{
+                          fontWeight: 800,
+                          background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.secondary})`,
+                          backgroundClip: "text",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                        }}
+                      >
+                        OWASP Mobile Top 10
+                      </Typography>
+                      <Chip
+                        label="2024"
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor: alpha(themeColors.primary, 0.1),
+                          color: themeColors.primary,
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="h6" sx={{ color: themeColors.textMuted }}>
+                      Critical security risks for mobile applications
+                    </Typography>
+                  </Box>
+                </Box>
               </Paper>
+
+              {/* Overview Section */}
+              <Paper
+                id="overview"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                {/* Platform Toggle */}
+                <Paper sx={{ mb: 4, borderRadius: 3, overflow: "hidden", bgcolor: themeColors.bgNested }}>
+                  <Tabs
+                    value={tabValue}
+                    onChange={(_, v) => setTabValue(v)}
+                    centered
+                    sx={{
+                      "& .MuiTab-root": { minHeight: 56, fontWeight: 600, color: themeColors.textMuted },
+                      "& .Mui-selected": { color: themeColors.primary },
+                      "& .MuiTabs-indicator": { bgcolor: themeColors.primary },
+                    }}
+                  >
+                    <Tab
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <PhoneAndroidIcon />
+                          All Platforms
+                        </Box>
+                      }
+                    />
+                    <Tab
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <AndroidIcon sx={{ color: "#3DDC84" }} />
+                          Android Focus
+                        </Box>
+                      }
+                    />
+                    <Tab
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <AppleIcon />
+                          iOS Focus
+                        </Box>
+                      }
+                    />
+                  </Tabs>
+                </Paper>
+
+                {/* Stats */}
+                <Grid container spacing={2} sx={{ mb: 4 }}>
+                  {[
+                    { value: "10", label: "Risk Categories", color: themeColors.accent },
+                    { value: "4", label: "Critical Risks", color: "#dc2626" },
+                    { value: "5", label: "High Impact", color: themeColors.primary },
+                    { value: "50+", label: "Attack Vectors", color: themeColors.secondary },
+                  ].map((stat) => (
+                    <Grid item xs={6} md={3} key={stat.label}>
+                      <Paper
+                        sx={{
+                          p: 2.5,
+                          textAlign: "center",
+                          borderRadius: 3,
+                          bgcolor: themeColors.bgNested,
+                          border: `1px solid ${alpha(stat.color, 0.2)}`,
+                          background: `linear-gradient(135deg, ${alpha(stat.color, 0.05)}, transparent)`,
+                        }}
+                      >
+                        <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>
+                          {stat.value}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                          {stat.label}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                {/* Risk Overview Chart */}
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, color: "white" }}>
+                  📊 Risk Prevalence Overview
+                </Typography>
+                <Grid container spacing={1}>
+                  {mobileRisks.map((risk) => (
+                    <Grid item xs={12} key={risk.id}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ minWidth: 180, fontWeight: 500, fontSize: "0.8rem", color: themeColors.textMuted }}
+                        >
+                          M{risk.rank}: {risk.shortTitle}
+                        </Typography>
+                        <Box sx={{ flex: 1 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={risk.prevalence}
+                            sx={{
+                              height: 20,
+                              borderRadius: 2,
+                              bgcolor: alpha(risk.color, 0.1),
+                              "& .MuiLinearProgress-bar": {
+                                bgcolor: risk.color,
+                                borderRadius: 2,
+                              },
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="body2" sx={{ minWidth: 40, fontWeight: 700, color: risk.color }}>
+                          {risk.prevalence}%
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Threat Model Section */}
+              <Paper
+                id="threat-model"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "white" }}>
+                  🧭 Threat Model and Attack Surface
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, mb: 3 }}>
+                  Mobile apps operate across multiple trust boundaries: device storage, OS services, network calls,
+                  and third-party SDKs. A simple threat model helps you identify where data can leak, where attackers
+                  can tamper with logic, and which controls should be enforced on the server instead of the client.
+                </Typography>
+
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  {attackSurfaceAreas.map((area) => (
+                    <Grid item xs={12} md={6} key={area.area}>
+                      <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.primary, mb: 0.5 }}>
+                          {area.area}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
+                          {area.detail}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          Examples: {area.examples.join(", ")}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "white" }}>
+                  Trust Boundaries to Map
+                </Typography>
+                <List dense sx={{ mb: 2 }}>
+                  {trustBoundaries.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: themeColors.primary }} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item}
+                        primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "white" }}>
+                  Common Data Storage Locations
+                </Typography>
+                <Grid container spacing={2}>
+                  {storageLocations.map((location) => (
+                    <Grid item xs={12} md={6} key={location.platform}>
+                      <Paper sx={{ p: 2, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.accent, mb: 0.5 }}>
+                          {location.platform}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          {location.areas.join(", ")}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Quick Reference Section */}
+              <Paper
+                id="quick-reference"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "white" }}>
+                  🔍 Quick Reference
+                </Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 3 }}>
+                  Use this grid as a quick index. Click any risk to jump to the detailed analysis section with
+                  example vulnerabilities, prevention guidance, and platform-specific tips.
+                </Typography>
+                <Grid container spacing={2}>
+                  {mobileRisks.map((risk) => (
+                    <Grid item xs={6} sm={4} md={2.4} key={risk.id}>
+                      <Card
+                        sx={{
+                          height: "100%",
+                          cursor: "pointer",
+                          bgcolor: themeColors.bgNested,
+                          border: `1px solid ${alpha(risk.color, 0.2)}`,
+                          transition: "all 0.2s",
+                          "&:hover": {
+                            transform: "translateY(-4px)",
+                            boxShadow: `0 8px 24px ${alpha(risk.color, 0.2)}`,
+                            borderColor: risk.color,
+                          },
+                        }}
+                        onClick={() => setExpandedRisk(risk.id)}
+                      >
+                        <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                          <Box
+                            sx={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 1.5,
+                              bgcolor: alpha(risk.color, 0.1),
+                              color: risk.color,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              mb: 1.5,
+                            }}
+                          >
+                            {risk.icon}
+                          </Box>
+                          <Chip
+                            label={`M${risk.rank}`}
+                            size="small"
+                            sx={{
+                              bgcolor: risk.color,
+                              color: "white",
+                              fontWeight: 700,
+                              fontSize: "0.65rem",
+                              height: 20,
+                              mb: 0.5,
+                            }}
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.75rem", color: "white" }}>
+                            {risk.shortTitle}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Testing Workflow Section */}
+              <Paper
+                id="testing-workflow"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "white" }}>
+                  🧪 Mobile Security Testing Workflow
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, mb: 3 }}>
+                  A repeatable workflow helps you cover both the client app and the backend APIs. The steps below
+                  mirror how professional mobile security assessments are performed and map to OWASP MASVS and MASTG.
+                </Typography>
+                <Grid container spacing={2}>
+                  {testingWorkflow.map((step, index) => (
+                    <Grid item xs={12} md={6} key={step.step}>
+                      <Paper sx={{ p: 2.5, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.primary, mb: 0.5 }}>
+                          {index + 1}. {step.step}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
+                          {step.detail}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          Outputs: {step.outputs.join(", ")}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                <Divider sx={{ my: 3, borderColor: themeColors.border }} />
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: "white" }}>
+                  Tooling Cheat Sheet
+                </Typography>
+                <Grid container spacing={2}>
+                  {mobileTooling.map((tool) => (
+                    <Grid item xs={12} md={6} key={tool.category}>
+                      <Paper sx={{ p: 2, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.accent, mb: 0.5 }}>
+                          {tool.category}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          {tool.tools.join(", ")}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Hardening Section */}
+              <Paper
+                id="hardening"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "white" }}>
+                  🛡️ Secure Release and Hardening Checklist
+                </Typography>
+                <Typography variant="body1" sx={{ color: themeColors.textMuted, mb: 3 }}>
+                  These controls help reduce the most common OWASP Mobile Top 10 risks before release. Treat this
+                  as a baseline: enforce server-side authorization, minimize data exposure, and lock down the app
+                  so reverse engineering does not reveal secrets.
+                </Typography>
+                <List dense>
+                  {hardeningChecklist.map((item) => (
+                    <ListItem key={item} sx={{ py: 0.25, px: 0 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: themeColors.primary }} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item}
+                        primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+
+              {/* Detailed Analysis Section */}
+              <Paper
+                id="detailed-analysis"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "white" }}>
+                  📋 Detailed Analysis
+                </Typography>
+
+                {mobileRisks.map((risk) => (
+                  <Accordion
+                    key={risk.id}
+                    expanded={expandedRisk === risk.id}
+                    onChange={(_, isExpanded) => setExpandedRisk(isExpanded ? risk.id : false)}
+                    sx={{
+                      mb: 2,
+                      bgcolor: themeColors.bgNested,
+                      border: `1px solid ${alpha(risk.color, 0.2)}`,
+                      borderRadius: "12px !important",
+                      "&:before": { display: "none" },
+                      overflow: "hidden",
+                    }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon sx={{ color: themeColors.textMuted }} />}
+                      sx={{
+                        borderLeft: `4px solid ${risk.color}`,
+                        "&:hover": { bgcolor: alpha(risk.color, 0.02) },
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%", flexWrap: "wrap" }}>
+                        <Box
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            bgcolor: alpha(risk.color, 0.1),
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: risk.color,
+                          }}
+                        >
+                          {risk.icon}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 200 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            <Chip
+                              label={`M${risk.rank}`}
+                              size="small"
+                              sx={{ bgcolor: risk.color, color: "white", fontWeight: 700 }}
+                            />
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: "white" }}>
+                              {risk.title}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
+                            <Chip
+                              icon={<ErrorIcon sx={{ fontSize: 14 }} />}
+                              label={`Impact: ${risk.impact}`}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(impactColors[risk.impact], 0.1),
+                                color: impactColors[risk.impact],
+                                "& .MuiChip-icon": { color: impactColors[risk.impact] },
+                              }}
+                            />
+                            <Chip
+                              icon={<BugReportIcon sx={{ fontSize: 14 }} />}
+                              label={`Exploit: ${risk.exploitability}`}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(exploitabilityColors[risk.exploitability], 0.1),
+                                color: exploitabilityColors[risk.exploitability],
+                                "& .MuiChip-icon": { color: exploitabilityColors[risk.exploitability] },
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ pt: 0 }}>
+                      <Typography variant="body1" sx={{ mb: 3, color: themeColors.textMuted }}>
+                        {risk.description}
+                      </Typography>
+
+                      <Grid container spacing={3}>
+                        {/* Key Points */}
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: risk.color }}>
+                            📋 Key Points
+                          </Typography>
+                          <List dense disablePadding>
+                            {risk.keyPoints.map((point, i) => (
+                              <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                                <ListItemIcon sx={{ minWidth: 24 }}>
+                                  <CheckCircleIcon sx={{ fontSize: 14, color: risk.color }} />
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={point}
+                                  primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Grid>
+
+                        {/* Attack Vectors */}
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#ef4444" }}>
+                            ⚔️ Attack Vectors
+                          </Typography>
+                          <List dense disablePadding>
+                            {risk.attackVectors.map((vector, i) => (
+                              <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                                <ListItemIcon sx={{ minWidth: 24 }}>
+                                  <WarningIcon sx={{ fontSize: 14, color: "#ef4444" }} />
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={vector}
+                                  primaryTypographyProps={{ variant: "body2", sx: { color: themeColors.textMuted } }}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Grid>
+
+                        {/* Vulnerable Code */}
+                        {risk.vulnerableCode && (tabValue === 0 || tabValue === 1) && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#ef4444" }}>
+                              ❌ Vulnerable Code Example
+                            </Typography>
+                            {risk.vulnerableCode
+                              .filter(vc => tabValue === 0 || vc.platform.toLowerCase().includes(tabValue === 1 ? "android" : "ios") || vc.platform === "Any" || vc.platform === "API Request")
+                              .map((vc, i) => (
+                              <Paper
+                                key={i}
+                                sx={{
+                                  p: 2,
+                                  mb: 2,
+                                  bgcolor: alpha("#ef4444", 0.03),
+                                  border: `1px solid ${alpha("#ef4444", 0.2)}`,
+                                  borderRadius: 2,
+                                }}
+                              >
+                                <Chip label={vc.platform} size="small" sx={{ mb: 1, bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }} />
+                                <Box
+                                  component="pre"
+                                  sx={{
+                                    m: 0,
+                                    p: 2,
+                                    bgcolor: themeColors.bgNested,
+                                    borderRadius: 1,
+                                    overflow: "auto",
+                                    fontSize: "0.75rem",
+                                    fontFamily: "monospace",
+                                    color: themeColors.textMuted,
+                                  }}
+                                >
+                                  {vc.code}
+                                </Box>
+                                <Typography variant="caption" sx={{ mt: 1, display: "block", color: "#ef4444" }}>
+                                  ⚠️ {vc.issue}
+                                </Typography>
+                              </Paper>
+                            ))}
+                          </Grid>
+                        )}
+
+                        {/* Secure Code */}
+                        {risk.secureCode && (tabValue === 0 || tabValue === 1 || tabValue === 2) && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#10b981" }}>
+                              ✅ Secure Code Example
+                            </Typography>
+                            {risk.secureCode
+                              .filter(sc => tabValue === 0 || sc.platform.toLowerCase().includes(tabValue === 1 ? "android" : "ios") || sc.platform.toLowerCase().includes("server"))
+                              .map((sc, i) => (
+                              <Paper
+                                key={i}
+                                sx={{
+                                  p: 2,
+                                  mb: 2,
+                                  bgcolor: alpha("#10b981", 0.03),
+                                  border: `1px solid ${alpha("#10b981", 0.2)}`,
+                                  borderRadius: 2,
+                                }}
+                              >
+                                <Chip label={sc.platform} size="small" sx={{ mb: 1, bgcolor: alpha("#10b981", 0.1), color: "#10b981" }} />
+                                <Box
+                                  component="pre"
+                                  sx={{
+                                    m: 0,
+                                    p: 2,
+                                    bgcolor: themeColors.bgNested,
+                                    borderRadius: 1,
+                                    overflow: "auto",
+                                    fontSize: "0.75rem",
+                                    fontFamily: "monospace",
+                                    color: themeColors.textMuted,
+                                  }}
+                                >
+                                  {sc.code}
+                                </Box>
+                                <Typography variant="caption" sx={{ mt: 1, display: "block", color: "#10b981" }}>
+                                  ✓ {sc.fix}
+                                </Typography>
+                              </Paper>
+                            ))}
+                          </Grid>
+                        )}
+
+                        {/* Prevention */}
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#10b981" }}>
+                            🛡️ Prevention
+                          </Typography>
+                          <Paper
+                            sx={{
+                              p: 2,
+                              bgcolor: alpha("#10b981", 0.03),
+                              border: `1px solid ${alpha("#10b981", 0.15)}`,
+                              borderRadius: 2,
+                            }}
+                          >
+                            {risk.prevention.map((item, i) => (
+                              <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.5 }}>
+                                <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981", mt: 0.3 }} />
+                                <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{item}</Typography>
+                              </Box>
+                            ))}
+                          </Paper>
+                        </Grid>
+
+                        {/* Testing Tips */}
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: themeColors.accent }}>
+                            🔍 Testing Tips
+                          </Typography>
+                          <Paper
+                            sx={{
+                              p: 2,
+                              bgcolor: alpha(themeColors.accent, 0.03),
+                              border: `1px solid ${alpha(themeColors.accent, 0.15)}`,
+                              borderRadius: 2,
+                            }}
+                          >
+                            {risk.testingTips.map((tip, i) => (
+                              <Box key={i} sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.5 }}>
+                                <CodeIcon sx={{ fontSize: 14, color: themeColors.accent, mt: 0.3 }} />
+                                <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{tip}</Typography>
+                              </Box>
+                            ))}
+                          </Paper>
+                        </Grid>
+
+                        {/* Platform Specific */}
+                        {(tabValue === 1 && risk.androidSpecific) && (
+                          <Grid item xs={12}>
+                            <Alert
+                              severity="info"
+                              icon={<AndroidIcon sx={{ color: "#3DDC84" }} />}
+                              sx={{ borderRadius: 2, bgcolor: alpha("#3DDC84", 0.05), border: `1px solid ${alpha("#3DDC84", 0.2)}` }}
+                            >
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#3DDC84" }}>
+                                Android-Specific Recommendations
+                              </Typography>
+                              {risk.androidSpecific.map((tip, i) => (
+                                <Typography key={i} variant="body2" sx={{ color: themeColors.textMuted }}>• {tip}</Typography>
+                              ))}
+                            </Alert>
+                          </Grid>
+                        )}
+
+                        {(tabValue === 2 && risk.iosSpecific) && (
+                          <Grid item xs={12}>
+                            <Alert
+                              severity="info"
+                              icon={<AppleIcon />}
+                              sx={{ borderRadius: 2, bgcolor: alpha("#fff", 0.05), border: `1px solid ${alpha("#fff", 0.2)}` }}
+                            >
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "white" }}>
+                                iOS-Specific Recommendations
+                              </Typography>
+                              {risk.iosSpecific.map((tip, i) => (
+                                <Typography key={i} variant="body2" sx={{ color: themeColors.textMuted }}>• {tip}</Typography>
+                              ))}
+                            </Alert>
+                          </Grid>
+                        )}
+
+                        {/* Tools */}
+                        {risk.tools && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "white" }}>
+                              🛠️ Recommended Tools
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {risk.tools.map((tool) => (
+                                <Chip
+                                  key={tool}
+                                  label={tool}
+                                  size="small"
+                                  sx={{ bgcolor: alpha(risk.color, 0.1), color: risk.color }}
+                                />
+                              ))}
+                            </Box>
+                          </Grid>
+                        )}
+
+                        {/* Real World Examples */}
+                        {risk.realWorldExamples && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: themeColors.primary }}>
+                              🌍 Real-World Examples
+                            </Typography>
+                            <Paper
+                              sx={{
+                                p: 2,
+                                bgcolor: alpha(themeColors.primary, 0.03),
+                                border: `1px solid ${alpha(themeColors.primary, 0.15)}`,
+                                borderRadius: 2,
+                              }}
+                            >
+                              {risk.realWorldExamples.map((example, i) => (
+                                <Typography key={i} variant="body2" sx={{ mb: 0.5, color: themeColors.textMuted }}>
+                                  • {example}
+                                </Typography>
+                              ))}
+                            </Paper>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Paper>
+
+              {/* Resources Section */}
+              <Paper
+                id="resources"
+                sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: "white" }}>
+                  📚 Essential Resources
+                </Typography>
+                <Grid container spacing={2}>
+                  {[
+                    { name: "OWASP Mobile Security Project", url: "https://owasp.org/www-project-mobile-security/", desc: "Official OWASP mobile security resources" },
+                    { name: "OWASP MASTG", url: "https://mas.owasp.org/MASTG/", desc: "Mobile Application Security Testing Guide" },
+                    { name: "OWASP MASVS", url: "https://mas.owasp.org/MASVS/", desc: "Mobile Application Security Verification Standard" },
+                    { name: "MobSF", url: "https://github.com/MobSF/Mobile-Security-Framework-MobSF", desc: "Automated mobile security testing framework" },
+                    { name: "Frida", url: "https://frida.re/", desc: "Dynamic instrumentation toolkit for mobile apps" },
+                    { name: "Android Security Docs", url: "https://developer.android.com/security", desc: "Official Android security best practices" },
+                  ].map((resource) => (
+                    <Grid item xs={12} sm={6} key={resource.name}>
+                      <Paper
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          bgcolor: themeColors.bgNested,
+                          border: `1px solid ${themeColors.border}`,
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          "&:hover": {
+                            borderColor: themeColors.primary,
+                            transform: "translateY(-2px)",
+                          },
+                        }}
+                        onClick={() => window.open(resource.url, "_blank")}
+                      >
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: themeColors.primary }}>
+                          {resource.name} ↗
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                          {resource.desc}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+
+              {/* Quiz Section */}
+              <QuizSection />
             </Grid>
-          ))}
-        </Grid>
-      </Paper>
+          </Grid>
+        </Container>
 
-      {/* Quiz Section */}
-      <Box sx={{ mt: 4 }}>
-        <QuizSection />
-      </Box>
-
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        {/* Mobile Navigation Drawer */}
+        <Drawer
+          anchor="left"
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          sx={{
+            "& .MuiDrawer-paper": {
+              bgcolor: themeColors.bgCard,
+              borderRight: `1px solid ${themeColors.border}`,
+              width: 280,
+            },
+          }}
         >
-          Back to Learning Hub
-        </Button>
+          {sidebarNav}
+        </Drawer>
+
+        {/* Floating Action Buttons */}
+        {isMobile && (
+          <Fab
+            size="medium"
+            onClick={() => setMobileNavOpen(true)}
+            sx={{
+              position: "fixed",
+              bottom: 80,
+              right: 16,
+              bgcolor: themeColors.primary,
+              color: "white",
+              "&:hover": { bgcolor: themeColors.primaryLight },
+            }}
+          >
+            <MenuIcon />
+          </Fab>
+        )}
+        <Fab
+          size="medium"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            bgcolor: themeColors.bgCard,
+            color: themeColors.primary,
+            border: `1px solid ${themeColors.border}`,
+            "&:hover": { bgcolor: alpha(themeColors.primary, 0.1) },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
       </Box>
-    </Container>
     </LearnPageLayout>
   );
 }

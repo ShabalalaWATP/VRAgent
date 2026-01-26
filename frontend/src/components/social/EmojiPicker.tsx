@@ -110,17 +110,97 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
 
   const categories = Object.keys(EMOJI_DATA);
 
+  // Emoji name mapping for search functionality
+  const EMOJI_SEARCH_TERMS: Record<string, string[]> = {
+    // Smileys
+    "😀": ["grin", "grinning", "happy", "smile"],
+    "😃": ["smile", "happy", "grin"],
+    "😄": ["smile", "happy", "laugh"],
+    "😁": ["grin", "beam", "happy"],
+    "😅": ["sweat", "nervous", "laugh"],
+    "😂": ["laugh", "cry", "tears", "joy", "lol"],
+    "🤣": ["rofl", "rolling", "laugh"],
+    "😊": ["blush", "smile", "happy"],
+    "😇": ["angel", "innocent", "halo"],
+    "🙂": ["smile", "slightly"],
+    "😉": ["wink"],
+    "😍": ["heart", "eyes", "love"],
+    "🥰": ["love", "hearts", "adore"],
+    "😘": ["kiss", "love"],
+    "😎": ["cool", "sunglasses"],
+    "🤔": ["think", "thinking", "hmm"],
+    "😴": ["sleep", "zzz", "tired"],
+    "😭": ["cry", "sob", "sad"],
+    "😡": ["angry", "mad", "rage"],
+    "😱": ["scream", "shocked", "fear"],
+    "🤯": ["mind", "blown", "explode"],
+    "🥳": ["party", "celebrate"],
+    "🤢": ["sick", "nausea", "green"],
+    "🤮": ["vomit", "sick"],
+    "🥺": ["pleading", "puppy", "eyes"],
+    // Gestures
+    "👍": ["thumbs", "up", "yes", "ok", "good", "like"],
+    "👎": ["thumbs", "down", "no", "bad", "dislike"],
+    "👏": ["clap", "applause"],
+    "🙏": ["pray", "thanks", "please", "namaste"],
+    "🤝": ["handshake", "deal", "agree"],
+    "✌️": ["peace", "victory"],
+    "👋": ["wave", "hello", "hi", "bye"],
+    "💪": ["muscle", "strong", "flex"],
+    "👌": ["ok", "perfect", "nice"],
+    // Hearts
+    "❤️": ["heart", "love", "red"],
+    "💔": ["broken", "heart", "sad"],
+    "💕": ["hearts", "love", "two"],
+    "💖": ["sparkle", "heart"],
+    "🖤": ["black", "heart"],
+    // Activities
+    "🔥": ["fire", "hot", "lit"],
+    "⭐": ["star"],
+    "🎉": ["party", "celebrate", "tada"],
+    "🎊": ["confetti", "party"],
+    "🏆": ["trophy", "winner", "champion"],
+    "💯": ["hundred", "perfect", "score"],
+    "✅": ["check", "done", "yes", "complete"],
+    "❌": ["cross", "no", "wrong", "x"],
+    // Tech
+    "💻": ["computer", "laptop", "code"],
+    "🐛": ["bug"],
+    "🔧": ["wrench", "tool", "fix"],
+    "⚙️": ["gear", "settings"],
+    "🔒": ["lock", "secure"],
+    "🔑": ["key"],
+    // Other common
+    "☕": ["coffee"],
+    "🍕": ["pizza"],
+    "🍺": ["beer"],
+    "🚀": ["rocket", "launch", "fast"],
+  };
+
   // Filter emojis based on search
   const getFilteredEmojis = (): string[] => {
     if (!searchQuery.trim()) {
       return EMOJI_DATA[selectedCategory] || [];
     }
+    
+    const query = searchQuery.toLowerCase().trim();
+    const results: string[] = [];
+    
     // Search across all categories
-    const allEmojis: string[] = [];
     Object.values(EMOJI_DATA).forEach((emojis) => {
-      allEmojis.push(...emojis);
+      emojis.forEach((emoji) => {
+        // Check if already added
+        if (results.includes(emoji)) return;
+        
+        // Check search terms mapping
+        const terms = EMOJI_SEARCH_TERMS[emoji];
+        if (terms && terms.some(term => term.includes(query) || query.includes(term))) {
+          results.push(emoji);
+        }
+      });
     });
-    return allEmojis;
+    
+    return results;
   };
 
   const handleEmojiClick = (emoji: string) => {

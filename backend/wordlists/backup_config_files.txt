@@ -1,0 +1,165 @@
+# Backup and Configuration File Discovery Wordlist
+# Common backup files, database dumps, and configuration files
+
+# Backup Extensions
+backup
+backup.sql
+backup.tar
+backup.tar.gz
+backup.zip
+backup.bak
+.bak
+.backup
+.old
+.orig
+.original
+.save
+.swp
+.tmp
+.temp
+
+# Database Backups
+database.sql
+database.sql.gz
+db.sql
+dump.sql
+mysql.sql
+mysqldump.sql
+backup.sql.gz
+data.sql
+export.sql
+
+# Common Backup Patterns
+site.tar.gz
+site.zip
+www.tar.gz
+www.zip
+web.tar.gz
+web.zip
+html.tar.gz
+html.zip
+public.zip
+htdocs.zip
+
+# Config Files
+.env
+.env.local
+.env.production
+.env.development
+.env.staging
+.env.backup
+.env.old
+.env.example
+.env.sample
+env.js
+config.js
+config.json
+config.yaml
+config.yml
+config.xml
+config.php
+config.inc.php
+config.ini
+settings.json
+settings.yaml
+settings.yml
+settings.php
+settings.py
+app.config
+web.config
+.htaccess
+.htpasswd
+nginx.conf
+apache.conf
+httpd.conf
+
+# IDE/Editor Files
+.idea
+.vscode
+.project
+.settings
+.sublime-project
+.sublime-workspace
+
+# Source Control
+.git
+.git/config
+.gitignore
+.gitattributes
+.svn
+.svn/entries
+.hg
+.bzr
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+.circleci
+Jenkinsfile
+azure-pipelines.yml
+.github/workflows
+
+# Docker
+Dockerfile
+docker-compose.yml
+docker-compose.yaml
+.dockerignore
+
+# Package Files
+package.json
+package-lock.json
+composer.json
+composer.lock
+requirements.txt
+Gemfile
+Gemfile.lock
+Pipfile
+Pipfile.lock
+yarn.lock
+pnpm-lock.yaml
+
+# Framework Configs
+next.config.js
+nuxt.config.js
+vue.config.js
+angular.json
+tsconfig.json
+webpack.config.js
+babel.config.js
+.babelrc
+jest.config.js
+vite.config.js
+
+# Keys & Secrets
+id_rsa
+id_rsa.pub
+id_dsa
+id_dsa.pub
+.ssh/id_rsa
+.ssh/authorized_keys
+.pem
+.key
+private.key
+server.key
+ssl.key
+credentials
+credentials.json
+secrets
+secrets.json
+secrets.yaml
+service-account.json
+
+# Logs
+access.log
+error.log
+debug.log
+app.log
+server.log
+logs/
+.log
+
+# Temp Files
+temp
+tmp
+cache
+.cache

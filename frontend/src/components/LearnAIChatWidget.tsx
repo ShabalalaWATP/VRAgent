@@ -30,7 +30,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import { ChatCodeBlock } from "./ChatCodeBlock";
+import { createChatMarkdownComponents, chatMarkdownContainerSx } from "./ChatMarkdownComponents";
+import { authFetch } from "../api/auth";
 
 interface Message {
   id: string;
@@ -108,11 +109,8 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
         content: m.content,
       }));
 
-      const response = await fetch("/api/learn/chat", {
+      const response = await authFetch("/learn/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           message: userMessage.content,
           page_title: pageTitle,
@@ -365,24 +363,12 @@ const LearnAIChatWidget: React.FC<LearnAIChatWidgetProps> = ({
                       )}
                       <Box
                         sx={{
-                          wordBreak: "break-word",
+                          ...chatMarkdownContainerSx,
                           fontSize: "0.85rem",
                           lineHeight: 1.5,
-                          "& p": { m: 0 },
-                          "& p:not(:last-child)": { mb: 1 },
-                          "& ul, & ol": { pl: 2, m: 0 },
-                          "& li": { mb: 0.5 },
                         }}
                       >
-                        <ReactMarkdown
-                          components={{
-                            code: ({ className, children }) => (
-                              <ChatCodeBlock className={className} theme={theme}>
-                                {children}
-                              </ChatCodeBlock>
-                            ),
-                          }}
-                        >
+                        <ReactMarkdown components={createChatMarkdownComponents(theme)}>
                           {msg.content}
                         </ReactMarkdown>
                       </Box>

@@ -150,7 +150,7 @@ def _safe_json_parse(text: str, fallback: dict = None) -> dict:
         if array_match:
             arr = json.loads(array_match.group())
             return {"items": arr}
-    except:
+    except (json.JSONDecodeError, AttributeError):
         pass
     
     return fallback
@@ -1542,7 +1542,7 @@ Respond with JSON for ALL {len(batch)} files:
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_level="low"),
                         max_output_tokens=4000
                     )
                 )
@@ -2169,7 +2169,7 @@ These files don't have "entry points" in the code sense, but they can reveal cri
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.2,
+                        thinking_config=types.ThinkingConfig(thinking_level="medium"),
                         max_output_tokens=4000
                     )
                 )
@@ -2350,7 +2350,7 @@ These files don't have "entry points" in the code sense, but they can reveal cri
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.3,
+                        thinking_config=types.ThinkingConfig(thinking_level="medium"),
                         max_output_tokens=4000
                     )
                 )
@@ -2568,7 +2568,7 @@ Sink format (only if genuinely concerning):
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_level="low"),
                         max_output_tokens=3000  # Reduced for faster responses
                     )
                 )
@@ -2861,7 +2861,7 @@ A response of {{"flow_exists": false, "is_exploitable": false}} is completely va
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_level="low"),
                         max_output_tokens=2000
                     )
                 )
@@ -2968,7 +2968,7 @@ Now complete the analysis with this additional context."""
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_level="low"),
                         max_output_tokens=2000
                     )
                 )
@@ -3109,7 +3109,7 @@ Be conservative - if there's doubt, lean toward higher false_positive_likelihood
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.2,
+                        thinking_config=types.ThinkingConfig(thinking_level="medium"),
                         max_output_tokens=2000
                     )
                 )
@@ -3384,7 +3384,7 @@ Respond with JSON:
                     model=self.model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        thinking_config=types.ThinkingConfig(thinking_level="low"),
                         max_output_tokens=2000
                     )
                 )

@@ -19,6 +19,21 @@ MAX_GROUP_NAME_LENGTH = 100
 MAX_DESCRIPTION_LENGTH = 500
 
 
+def str_to_bool(value: str) -> bool:
+    """Convert string 'true'/'false' to Python boolean.
+    
+    Used because database stores booleans as strings for SQLite compatibility.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() == "true"
+
+
+def bool_to_str(value: bool) -> str:
+    """Convert Python boolean to string 'true'/'false' for database storage."""
+    return "true" if value else "false"
+
+
 def sanitize_content(content: str) -> str:
     """Sanitize message content to prevent XSS and limit length."""
     if not content:
@@ -68,44 +83,49 @@ def create_group(
     participant_ids: Optional[List[int]] = None
 ) -> Tuple[Optional[Conversation], str]:
     """Create a new group chat."""
-    # Create conversation
-    conversation = Conversation(
-        name=name,
-        description=description,
-        avatar_url=avatar_url,
-        is_group="true",
-        created_by=creator_id
-    )
-    db.add(conversation)
-    db.flush()
-    
-    # Add creator as owner
-    owner_participant = ConversationParticipant(
-        conversation_id=conversation.id,
-        user_id=creator_id,
-        role="owner"
-    )
-    db.add(owner_participant)
-    
-    # Add other participants (must be friends with creator)
-    if participant_ids:
-        for uid in participant_ids:
-            if uid != creator_id:
-                if not are_friends(db, creator_id, uid):
-                    continue  # Skip non-friends silently
-                participant = ConversationParticipant(
-                    conversation_id=conversation.id,
-                    user_id=uid,
-                    role="member",
-                    added_by=creator_id
-                )
-                db.add(participant)
-    
-    db.commit()
-    db.refresh(conversation)
-    
-    logger.info(f"Group '{name}' created by user {creator_id}")
-    return conversation, ""
+    try:
+        # Create conversation
+        conversation = Conversation(
+            name=name,
+            description=description,
+            avatar_url=avatar_url,
+            is_group="true",
+            created_by=creator_id
+        )
+        db.add(conversation)
+        db.flush()
+
+        # Add creator as owner
+        owner_participant = ConversationParticipant(
+            conversation_id=conversation.id,
+            user_id=creator_id,
+            role="owner"
+        )
+        db.add(owner_participant)
+
+        # Add other participants (must be friends with creator)
+        if participant_ids:
+            for uid in participant_ids:
+                if uid != creator_id:
+                    if not are_friends(db, creator_id, uid):
+                        continue  # Skip non-friends silently
+                    participant = ConversationParticipant(
+                        conversation_id=conversation.id,
+                        user_id=uid,
+                        role="member",
+                        added_by=creator_id
+                    )
+                    db.add(participant)
+
+        db.commit()
+        db.refresh(conversation)
+
+        logger.info(f"Group '{name}' created by user {creator_id}")
+        return conversation, ""
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create group: {e}")
+        return None, "Failed to create group, please try again"
 
 
 def update_group(
@@ -656,34 +676,39 @@ def send_message(
     if len(sanitized_content) > MAX_MESSAGE_LENGTH:
         return None, f"Message too long (max {MAX_MESSAGE_LENGTH} characters)"
     
-    # Create message
-    message = Message(
-        conversation_id=conversation_id,
-        sender_id=sender_id,
-        content=sanitized_content,
-        message_type=message_type,
-        attachment_data=attachment_data
-    )
-    
-    db.add(message)
-    
-    # Update conversation last_message_at
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if conversation:
-        conversation.last_message_at = datetime.utcnow()
-    
-    # Update sender's last_read_at
-    participant = db.query(ConversationParticipant).filter(
-        ConversationParticipant.conversation_id == conversation_id,
-        ConversationParticipant.user_id == sender_id
-    ).first()
-    if participant:
-        participant.last_read_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(message)
-    
-    return message, ""
+    # Create message with transaction safety
+    try:
+        message = Message(
+            conversation_id=conversation_id,
+            sender_id=sender_id,
+            content=sanitized_content,
+            message_type=message_type,
+            attachment_data=attachment_data
+        )
+
+        db.add(message)
+
+        # Update conversation last_message_at
+        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if conversation:
+            conversation.last_message_at = datetime.utcnow()
+
+        # Update sender's last_read_at
+        participant = db.query(ConversationParticipant).filter(
+            ConversationParticipant.conversation_id == conversation_id,
+            ConversationParticipant.user_id == sender_id
+        ).first()
+        if participant:
+            participant.last_read_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(message)
+
+        return message, ""
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to send message: {e}")
+        return None, "Failed to send message, please try again"
 
 
 def get_messages(
@@ -697,6 +722,8 @@ def get_messages(
     """
     Get messages in a conversation.
     Returns (messages, total, has_more).
+    
+    Optimized to avoid N+1 queries by batch loading users, reactions, and reply counts.
     """
     # Check user is participant
     if not is_conversation_participant(db, conversation_id, user_id):
@@ -720,23 +747,67 @@ def get_messages(
     # Reverse to get chronological order
     messages = list(reversed(messages))
     
+    if not messages:
+        return [], total, has_more
+    
+    # Batch load all required data to avoid N+1 queries
+    message_ids = [msg.id for msg in messages]
+    sender_ids = list(set(msg.sender_id for msg in messages))
+    reply_to_ids = [msg.reply_to_id for msg in messages if msg.reply_to_id]
+    
+    # Batch load senders
+    senders = {u.id: u for u in db.query(User).filter(User.id.in_(sender_ids)).all()}
+    
+    # Batch load reactions for all messages
+    all_reactions = db.query(MessageReaction).filter(
+        MessageReaction.message_id.in_(message_ids)
+    ).all()
+    reactions_by_message: Dict[int, list] = {}
+    for reaction in all_reactions:
+        if reaction.message_id not in reactions_by_message:
+            reactions_by_message[reaction.message_id] = []
+        reactions_by_message[reaction.message_id].append(reaction)
+    
+    # Batch load reply info for messages that are replies
+    reply_info_map = {}
+    if reply_to_ids:
+        reply_messages = db.query(Message).filter(Message.id.in_(reply_to_ids)).all()
+        reply_senders = {u.id: u for u in db.query(User).filter(
+            User.id.in_([m.sender_id for m in reply_messages])
+        ).all()}
+        for reply_msg in reply_messages:
+            sender = reply_senders.get(reply_msg.sender_id)
+            reply_info_map[reply_msg.id] = {
+                "id": reply_msg.id,
+                "sender_username": sender.username if sender else "Unknown",
+                "content_preview": reply_msg.content[:100] + "..." if len(reply_msg.content) > 100 else reply_msg.content,
+                "is_deleted": str_to_bool(reply_msg.is_deleted)
+            }
+    
+    # Batch load reply counts
+    from sqlalchemy import func as sql_func
+    reply_counts_query = db.query(
+        Message.reply_to_id,
+        sql_func.count(Message.id).label('count')
+    ).filter(
+        Message.reply_to_id.in_(message_ids),
+        Message.is_deleted == "false"
+    ).group_by(Message.reply_to_id).all()
+    reply_counts = {r.reply_to_id: r.count for r in reply_counts_query}
+    
     result = []
     for msg in messages:
-        sender = db.query(User).filter(User.id == msg.sender_id).first()
+        sender = senders.get(msg.sender_id)
         
-        # Get reactions summary
-        reactions = _get_reactions_for_message(db, msg.id, user_id)
+        # Get reactions summary from batch loaded data
+        msg_reactions = reactions_by_message.get(msg.id, [])
+        reactions = _format_reactions_summary(msg_reactions, user_id)
         
-        # Get reply info if this is a reply
-        reply_to = None
-        if msg.reply_to_id:
-            reply_to = _get_reply_info(db, msg.reply_to_id)
+        # Get reply info from batch loaded data
+        reply_to = reply_info_map.get(msg.reply_to_id) if msg.reply_to_id else None
         
-        # Get reply count for threading
-        reply_count = db.query(Message).filter(
-            Message.reply_to_id == msg.id,
-            Message.is_deleted == "false"
-        ).count()
+        # Get reply count from batch loaded data
+        reply_count = reply_counts.get(msg.id, 0)
         
         result.append({
             "id": msg.id,
@@ -753,12 +824,26 @@ def get_messages(
             "reply_count": reply_count,
             "created_at": msg.created_at,
             "updated_at": msg.updated_at,
-            "is_edited": msg.is_edited == "true",
-            "is_deleted": msg.is_deleted == "true",
+            "is_edited": str_to_bool(msg.is_edited),
+            "is_deleted": str_to_bool(msg.is_deleted),
             "is_own_message": msg.sender_id == user_id
         })
     
     return result, total, has_more
+
+
+def _format_reactions_summary(reactions: List[MessageReaction], user_id: int) -> Dict[str, dict]:
+    """Format reactions list into summary dict with user counts."""
+    summary = {}
+    for reaction in reactions:
+        emoji = reaction.emoji
+        if emoji not in summary:
+            summary[emoji] = {"count": 0, "users": [], "has_reacted": False}
+        summary[emoji]["count"] += 1
+        summary[emoji]["users"].append({"user_id": reaction.user_id, "username": ""})  # Username populated separately if needed
+        if reaction.user_id == user_id:
+            summary[emoji]["has_reacted"] = True
+    return summary
 
 
 def mark_conversation_read(db: Session, conversation_id: int, user_id: int) -> bool:
@@ -798,27 +883,33 @@ def edit_message(
     
     sanitized_content = sanitize_content(new_content)
     
-    # Save previous content to edit history
-    from backend.models.models import MessageEditHistory
-    current_count = db.query(MessageEditHistory).filter(
-        MessageEditHistory.message_id == message_id
-    ).count()
-    
-    history_entry = MessageEditHistory(
-        message_id=message_id,
-        previous_content=message.content,
-        edit_number=current_count + 1
-    )
-    db.add(history_entry)
-    
-    message.content = sanitized_content
-    message.is_edited = "true"
-    message.updated_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(message)
-    
-    return message, ""
+    # Save previous content to edit history with transaction safety
+    try:
+        from backend.models.models import MessageEditHistory
+        # Use with_for_update to prevent race conditions on edit_number
+        current_count = db.query(func.count(MessageEditHistory.id)).filter(
+            MessageEditHistory.message_id == message_id
+        ).with_for_update().scalar() or 0
+
+        history_entry = MessageEditHistory(
+            message_id=message_id,
+            previous_content=message.content,
+            edit_number=current_count + 1
+        )
+        db.add(history_entry)
+
+        message.content = sanitized_content
+        message.is_edited = "true"
+        message.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(message)
+
+        return message, ""
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to edit message: {e}")
+        return None, "Failed to edit message, please try again"
 
 
 def delete_message(
@@ -843,34 +934,37 @@ def delete_message(
 
 
 def get_unread_counts(db: Session, user_id: int) -> dict:
-    """Get unread message counts for all conversations."""
-    # Get all conversations user is in
-    participations = db.query(ConversationParticipant).filter(
+    """Get unread message counts for all conversations using optimized single query."""
+    # Build a single query that calculates unread counts for all conversations at once
+    # This is much more efficient than N+1 queries
+    unread_subquery = db.query(
+        ConversationParticipant.conversation_id,
+        func.count(Message.id).label('unread_count')
+    ).outerjoin(
+        Message,
+        and_(
+            Message.conversation_id == ConversationParticipant.conversation_id,
+            Message.sender_id != user_id,
+            Message.is_deleted == "false",
+            or_(
+                ConversationParticipant.last_read_at.is_(None),
+                Message.created_at > ConversationParticipant.last_read_at
+            )
+        )
+    ).filter(
         ConversationParticipant.user_id == user_id
+    ).group_by(
+        ConversationParticipant.conversation_id
     ).all()
-    
+
     counts = {}
     total = 0
-    
-    for p in participations:
-        if p.last_read_at:
-            count = db.query(func.count(Message.id)).filter(
-                Message.conversation_id == p.conversation_id,
-                Message.created_at > p.last_read_at,
-                Message.sender_id != user_id,
-                Message.is_deleted == "false"
-            ).scalar()
-        else:
-            count = db.query(func.count(Message.id)).filter(
-                Message.conversation_id == p.conversation_id,
-                Message.sender_id != user_id,
-                Message.is_deleted == "false"
-            ).scalar()
-        
-        if count > 0:
-            counts[p.conversation_id] = count
+
+    for conv_id, count in unread_subquery:
+        if count and count > 0:
+            counts[conv_id] = count
             total += count
-    
+
     return {
         "total_unread": total,
         "by_conversation": counts
@@ -949,20 +1043,21 @@ def get_message_reactions(
     db: Session,
     message_id: int,
     user_id: int
-) -> Tuple[Dict[str, Dict], int]:
+) -> Tuple[List[Dict], int]:
     """Get all reactions for a message, grouped by emoji."""
     # Get the message first
     message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
-        return {}, 0
-    
+        return [], 0
+
     # Check user is in conversation
     if not is_conversation_participant(db, message.conversation_id, user_id):
-        return {}, 0
-    
+        return [], 0
+
+    # _get_reactions_for_message returns a List, not a Dict
     reactions = _get_reactions_for_message(db, message_id, user_id)
-    total = sum(r["count"] for r in reactions.values())
-    
+    total = sum(r["count"] for r in reactions)
+
     return reactions, total
 
 
@@ -990,9 +1085,21 @@ def send_reply(
         Message.conversation_id == conversation_id,
         Message.is_deleted == "false"
     ).first()
-    
+
     if not original:
         return None, "Original message not found"
+
+    # Prevent circular reply references (max depth of 10 to prevent deep nesting)
+    depth = 0
+    current_msg = original
+    while current_msg.reply_to_id and depth < 10:
+        parent = db.query(Message).filter(Message.id == current_msg.reply_to_id).first()
+        if not parent:
+            break
+        current_msg = parent
+        depth += 1
+    if depth >= 10:
+        return None, "Reply thread too deep (max 10 levels)"
     
     # Check sender is participant
     if not is_conversation_participant(db, conversation_id, sender_id):
@@ -1622,46 +1729,51 @@ def create_poll(
     # Verify participant
     if not is_conversation_participant(db, conversation_id, creator_id):
         return None, None, "Not a participant"
-    
-    # Create the poll
-    poll = Poll(
-        conversation_id=conversation_id,
-        created_by=creator_id,
-        question=question,
-        poll_type=poll_type,
-        is_anonymous="true" if is_anonymous else "false",
-        allow_add_options="true" if allow_add_options else "false",
-        closes_at=closes_at
-    )
-    db.add(poll)
-    db.flush()
-    
-    # Add options
-    for option_text in options:
-        option = PollOption(
-            poll_id=poll.id,
-            text=option_text.strip(),
-            added_by=creator_id
+
+    try:
+        # Create the poll
+        poll = Poll(
+            conversation_id=conversation_id,
+            created_by=creator_id,
+            question=question,
+            poll_type=poll_type,
+            is_anonymous="true" if is_anonymous else "false",
+            allow_add_options="true" if allow_add_options else "false",
+            closes_at=closes_at
         )
-        db.add(option)
-    
-    # Create associated message
-    message = Message(
-        conversation_id=conversation_id,
-        sender_id=creator_id,
-        content=f"📊 Poll: {question}",
-        message_type="poll"
-    )
-    db.add(message)
-    db.flush()
-    
-    # Link poll to message
-    poll.message_id = message.id
-    
-    db.commit()
-    db.refresh(poll)
-    
-    return poll, message, ""
+        db.add(poll)
+        db.flush()
+
+        # Add options
+        for option_text in options:
+            option = PollOption(
+                poll_id=poll.id,
+                text=option_text.strip(),
+                added_by=creator_id
+            )
+            db.add(option)
+
+        # Create associated message
+        message = Message(
+            conversation_id=conversation_id,
+            sender_id=creator_id,
+            content=f"Poll: {question}",
+            message_type="poll"
+        )
+        db.add(message)
+        db.flush()
+
+        # Link poll to message
+        poll.message_id = message.id
+
+        db.commit()
+        db.refresh(poll)
+
+        return poll, message, ""
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create poll: {e}")
+        return None, None, "Failed to create poll, please try again"
 
 
 def get_poll(
@@ -1775,25 +1887,31 @@ def vote_on_poll(
     if poll.poll_type == "single" and len(option_ids) > 1:
         return False, "Only one choice allowed"
     
-    # Remove existing votes for this user on this poll
-    existing_votes = db.query(PollVote).join(PollOption).filter(
-        PollOption.poll_id == poll_id,
-        PollVote.user_id == user_id
-    ).all()
-    
-    for vote in existing_votes:
-        db.delete(vote)
-    
-    # Add new votes
-    for opt_id in option_ids:
-        vote = PollVote(
-            option_id=opt_id,
-            user_id=user_id
-        )
-        db.add(vote)
-    
-    db.commit()
-    return True, ""
+    # Use atomic transaction for vote update to prevent race conditions
+    try:
+        # Remove existing votes for this user on this poll
+        existing_votes = db.query(PollVote).join(PollOption).filter(
+            PollOption.poll_id == poll_id,
+            PollVote.user_id == user_id
+        ).all()
+
+        for vote in existing_votes:
+            db.delete(vote)
+
+        # Add new votes
+        for opt_id in option_ids:
+            vote = PollVote(
+                option_id=opt_id,
+                user_id=user_id
+            )
+            db.add(vote)
+
+        db.commit()
+        return True, ""
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update poll vote: {e}")
+        return False, "Failed to submit vote, please try again"
 
 
 def add_poll_option(

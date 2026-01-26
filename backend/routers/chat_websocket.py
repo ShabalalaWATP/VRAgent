@@ -5,13 +5,13 @@ from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.orm import Session
-from jose import jwt, JWTError
 
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.websocket_manager import chat_manager
 from backend.models.models import User
+from backend.services.auth_service import decode_token
 from backend.services.messaging_service import (
     is_conversation_participant,
     get_conversation_participant_ids,
@@ -26,14 +26,22 @@ router = APIRouter(tags=["websocket"])
 
 async def get_user_from_token(token: str, db: Session) -> Optional[User]:
     """Validate JWT token and return user."""
+    payload = decode_token(token)
+    if not payload:
+        return None
+
+    # Verify token type
+    if payload.get("type") != "access":
+        return None
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
-        user_id = payload.get("sub")
-        if user_id is None:
-            return None
         user = db.query(User).filter(User.id == int(user_id)).first()
         return user
-    except JWTError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -98,7 +106,10 @@ async def websocket_chat_endpoint(
             try:
                 message = json.loads(data)
                 msg_type = message.get("type")
-                
+
+                # Update activity timestamp on any message
+                chat_manager.update_activity(user.id, websocket)
+
                 # Rate limit check for non-ping messages
                 if msg_type != "ping" and not chat_manager.check_rate_limit(user.id):
                     await websocket.send_text(json.dumps({
@@ -108,7 +119,8 @@ async def websocket_chat_endpoint(
                     continue
                 
                 if msg_type == "ping":
-                    # Respond to keep-alive
+                    # Update activity timestamp and respond to keep-alive
+                    chat_manager.update_activity(user.id, websocket)
                     await websocket.send_text(json.dumps({"type": "pong"}))
                 
                 elif msg_type == "typing":
@@ -158,8 +170,24 @@ async def websocket_chat_endpoint(
                 logger.error(f"Error processing WebSocket message: {e}")
     
     except WebSocketDisconnect:
-        pass
+        logger.debug(f"WebSocket disconnected for user {user.id} ({user.username})")
     finally:
+        # Clear typing state and notify if user was typing
+        typing_state = chat_manager.typing_states.get(user.id)
+        if typing_state:
+            conversation_id, _ = typing_state
+            try:
+                participant_ids = get_conversation_participant_ids(db, conversation_id)
+                await chat_manager.send_typing_indicator(
+                    conversation_id,
+                    participant_ids,
+                    user.id,
+                    user.username,
+                    False  # User stopped typing (disconnected)
+                )
+            except Exception as e:
+                logger.debug(f"Failed to send typing stop on disconnect: {e}")
+        
         # Disconnect and notify friends
         await chat_manager.disconnect(websocket, user.id)
         friend_ids = get_friend_ids(db, user.id)
