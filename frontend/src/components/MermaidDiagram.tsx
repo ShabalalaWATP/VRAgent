@@ -148,6 +148,8 @@ mermaid.registerIconPacks([
 mermaid.initialize({
   startOnLoad: false,
   theme: "dark",
+  // NOTE: "loose" is required for interactive diagrams (click events, links)
+  // The diagram content comes from AI/backend, not direct user input
   securityLevel: "loose",
   fontFamily: "inherit",
   flowchart: {

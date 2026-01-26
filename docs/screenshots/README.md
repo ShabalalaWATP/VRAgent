@@ -1,0 +1,1 @@
+# Screenshots\n\nPlace screenshot images in this directory.\n\nRecommended naming:\n- dashboard.png\n- static-analysis.png\n- dynamic-analysis.png\n- reverse-engineering.png\n- learning-hub.png\n- scan-report.png

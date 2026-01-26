@@ -1,0 +1,75 @@
+# Prometheus Configuration for VRAgent
+
+global:
+  scrape_interval: 15s  # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'vragent'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Load alert rules
+rule_files:
+  - '/etc/prometheus/rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # VRAgent Backend API
+  - job_name: 'vragent-backend'
+    metrics_path: '/health/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'backend'
+          component: 'api'
+    scrape_interval: 10s  # More frequent for API metrics
+    scrape_timeout: 5s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'
+
+  # Node Exporter (system metrics)
+  # Uncomment if you add node-exporter to docker-compose
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+  #       labels:
+  #         service: 'node-exporter'
+  #         component: 'system'
+
+  # Redis Exporter (Redis metrics)
+  # Uncomment if you add redis-exporter to docker-compose
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         service: 'redis'
+  #         component: 'cache'
+
+  # PostgreSQL Exporter (database metrics)
+  # Uncomment if you add postgres-exporter to docker-compose
+  # - job_name: 'postgresql'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #       labels:
+  #         service: 'postgresql'
+  #         component: 'database'
+
+  # Docker container metrics (cAdvisor)
+  # Uncomment if you add cadvisor to docker-compose
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+  #       labels:
+  #         service: 'cadvisor'
+  #         component: 'containers'

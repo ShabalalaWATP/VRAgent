@@ -11,14 +11,16 @@ from backend.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Security limits
-MAX_CONNECTIONS_PER_USER = 5  # Max tabs/devices per user
-MESSAGE_RATE_LIMIT = 30  # Messages per minute per user
+MAX_CONNECTIONS_PER_USER = 10  # Max tabs/devices per user (increased for teams)
+MESSAGE_RATE_LIMIT = 60  # Messages per minute per user (increased for active discussions)
 RATE_WINDOW_SECONDS = 60  # Rate limit window
+HEARTBEAT_INTERVAL = 30  # Seconds between heartbeat pings
+CONNECTION_TIMEOUT = 90  # Seconds before considering a connection dead
 
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time messaging."""
-    
+
     def __init__(self):
         # user_id -> set of WebSocket connections (user can have multiple tabs/devices)
         self.active_connections: Dict[int, Set[WebSocket]] = {}
@@ -28,6 +30,8 @@ class ConnectionManager:
         self.typing_states: Dict[int, tuple] = {}
         # Rate limiting: user_id -> list of message timestamps
         self.message_rates: Dict[int, List[float]] = defaultdict(list)
+        # Last activity tracking: (user_id, websocket) -> timestamp
+        self.last_activity: Dict[tuple, float] = {}
         # Lock for thread-safe operations
         self._lock = asyncio.Lock()
     
@@ -44,6 +48,8 @@ class ConnectionManager:
             if user_id not in self.active_connections:
                 self.active_connections[user_id] = set()
             self.active_connections[user_id].add(websocket)
+            # Track last activity for heartbeat monitoring
+            self.last_activity[(user_id, id(websocket))] = time()
         logger.info(f"WebSocket connected: user {user_id} ({current_count + 1}/{MAX_CONNECTIONS_PER_USER})")
         return True
     
@@ -54,6 +60,9 @@ class ConnectionManager:
                 self.active_connections[user_id].discard(websocket)
                 if not self.active_connections[user_id]:
                     del self.active_connections[user_id]
+                    # Clean up rate limit data when user fully disconnects
+                    if user_id in self.message_rates:
+                        del self.message_rates[user_id]
             # Clean up typing states
             if user_id in self.typing_states:
                 del self.typing_states[user_id]
@@ -62,6 +71,10 @@ class ConnectionManager:
                 self.conversation_viewers[conv_id].discard(user_id)
                 if not self.conversation_viewers[conv_id]:
                     del self.conversation_viewers[conv_id]
+            # Clean up last activity tracking
+            activity_key = (user_id, id(websocket))
+            if activity_key in self.last_activity:
+                del self.last_activity[activity_key]
         logger.info(f"WebSocket disconnected: user {user_id}")
     
     def is_online(self, user_id: int) -> bool:
@@ -109,6 +122,41 @@ class ConnectionManager:
     def get_connection_count(self, user_id: int) -> int:
         """Get the number of active connections for a user."""
         return len(self.active_connections.get(user_id, set()))
+
+    def update_activity(self, user_id: int, websocket: WebSocket) -> None:
+        """Update the last activity timestamp for a connection."""
+        self.last_activity[(user_id, id(websocket))] = time()
+
+    def is_connection_stale(self, user_id: int, websocket: WebSocket) -> bool:
+        """Check if a connection has exceeded the timeout period."""
+        activity_key = (user_id, id(websocket))
+        last_seen = self.last_activity.get(activity_key, 0)
+        return (time() - last_seen) > CONNECTION_TIMEOUT
+
+    async def cleanup_stale_connections(self) -> int:
+        """Remove connections that have exceeded the timeout. Returns count of removed connections."""
+        now = time()
+        stale_connections = []
+
+        async with self._lock:
+            for (user_id, ws_id), last_seen in list(self.last_activity.items()):
+                if (now - last_seen) > CONNECTION_TIMEOUT:
+                    # Find the actual websocket object
+                    for ws in self.active_connections.get(user_id, set()):
+                        if id(ws) == ws_id:
+                            stale_connections.append((user_id, ws))
+                            break
+
+        # Disconnect stale connections outside the lock
+        for user_id, ws in stale_connections:
+            try:
+                await ws.close(code=4000, reason="Connection timeout")
+            except Exception:
+                pass  # Connection may already be closed
+            await self.disconnect(ws, user_id)
+            logger.info(f"Removed stale connection for user {user_id}")
+
+        return len(stale_connections)
     
     async def send_personal(self, user_id: int, message: dict) -> None:
         """Send a message to all connections of a specific user."""
@@ -124,6 +172,10 @@ class ConnectionManager:
             # Clean up dead connections
             for ws in dead_connections:
                 await self.disconnect(ws, user_id)
+    
+    async def send_to_user(self, user_id: int, message: dict) -> None:
+        """Alias for send_personal - sends a message to a specific user."""
+        await self.send_personal(user_id, message)
     
     async def send_to_users(self, user_ids: list[int], message: dict) -> None:
         """Send a message to multiple users."""
@@ -187,3 +239,66 @@ class ConnectionManager:
 
 # Global connection manager instance
 chat_manager = ConnectionManager()
+
+
+class ScanProgressManager:
+    """WebSocket manager for broadcast scan progress updates."""
+    
+    def __init__(self):
+        # scan_id -> set of WebSocket connections watching this scan
+        self.scan_watchers: Dict[str, Set[WebSocket]] = {}
+        self._lock = asyncio.Lock()
+    
+    async def connect(self, websocket: WebSocket, scan_id: str) -> bool:
+        """Accept and register a WebSocket connection for scan progress."""
+        try:
+            await websocket.accept()
+            async with self._lock:
+                if scan_id not in self.scan_watchers:
+                    self.scan_watchers[scan_id] = set()
+                self.scan_watchers[scan_id].add(websocket)
+            logger.info(f"WebSocket connected for scan: {scan_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to accept scan WebSocket: {e}")
+            return False
+    
+    async def disconnect(self, websocket: WebSocket, scan_id: str) -> None:
+        """Remove a WebSocket connection for scan progress."""
+        async with self._lock:
+            if scan_id in self.scan_watchers:
+                self.scan_watchers[scan_id].discard(websocket)
+                if not self.scan_watchers[scan_id]:
+                    del self.scan_watchers[scan_id]
+        logger.info(f"WebSocket disconnected for scan: {scan_id}")
+    
+    async def broadcast_scan_progress(self, scan_id: str, progress_data: Dict[str, Any]) -> None:
+        """Broadcast progress update to all watchers of a scan."""
+        if scan_id not in self.scan_watchers:
+            return
+        
+        message = json.dumps({
+            "type": "scan_progress",
+            "data": progress_data,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        # Collect dead connections to remove
+        dead_connections = set()
+        
+        for websocket in self.scan_watchers.get(scan_id, set()).copy():
+            try:
+                await websocket.send_text(message)
+            except Exception:
+                dead_connections.add(websocket)
+        
+        # Clean up dead connections
+        if dead_connections:
+            async with self._lock:
+                if scan_id in self.scan_watchers:
+                    for ws in dead_connections:
+                        self.scan_watchers[scan_id].discard(ws)
+
+
+# Global scan progress manager instance
+scan_progress_manager = ScanProgressManager()

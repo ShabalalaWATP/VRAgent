@@ -27,10 +27,11 @@ def has_project_access(db: Session, project_id: int, user_id: int) -> bool:
     if project.owner_id == user_id:
         return True
     
-    # Check collaborator access
+    # Check collaborator access (only accepted collaborators)
     collaborator = db.query(ProjectCollaborator).filter(
         ProjectCollaborator.project_id == project_id,
-        ProjectCollaborator.user_id == user_id
+        ProjectCollaborator.user_id == user_id,
+        ProjectCollaborator.status == "accepted"
     ).first()
     
     return collaborator is not None

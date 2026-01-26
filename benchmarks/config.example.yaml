@@ -1,0 +1,21 @@
+version: 1
+output_root: benchmarks/runs
+defaults:
+  duration_seconds: 900
+  timeout_ms: 1000
+  memory_limit_mb: 256
+  use_qemu: true
+  target_args: "@@"
+  extra_afl_flags: []
+  telemetry_interval_sec: 2.0
+  ai_generate_seeds: false
+  ai_seed_count: 10
+  ai_generate_dictionary: true
+  ai_include_existing_seeds: true
+cases:
+  - id: example_target
+    target_path: /path/to/target
+    seed_dir: /path/to/seeds
+    dictionary_path: /path/to/dictionary.txt
+    use_qemu: false
+    ai_generate_seeds: true

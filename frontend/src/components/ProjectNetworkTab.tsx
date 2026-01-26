@@ -325,7 +325,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/pcap")}
+                to={getToolLink("/dynamic/pcap")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -342,7 +342,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
           </Card>
         </Grid>
 
-        {/* Nmap Analyzer */}
+        {/* Dynamic Scanner */}
         <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
@@ -376,24 +376,25 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
                 </Box>
                 <Box>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                    Nmap Analyzer
+                    Dynamic Scanner
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Network Scan Analysis
+                    Active Vulnerability Scanning
                   </Typography>
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
-                Upload Nmap scan outputs. Identifies open ports, vulnerable services, and provides
-                prioritized remediation recommendations.
+                Comprehensive dynamic security scanner. Port scanning, service detection, vulnerability 
+                assessment, and AI-powered exploit chain analysis.
               </Typography>
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
-                <Chip label=".xml" size="small" variant="outlined" />
-                <Chip label=".nmap" size="small" variant="outlined" />
+                <Chip label="Ports" size="small" variant="outlined" />
+                <Chip label="Services" size="small" variant="outlined" />
+                <Chip label="CVEs" size="small" variant="outlined" />
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/nmap")}
+                to={getToolLink("/dynamic/dynamic-scanner")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -404,7 +405,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
                   },
                 }}
               >
-                Open Nmap Analyzer
+                Open Dynamic Scanner
               </Button>
             </CardContent>
           </Card>
@@ -461,7 +462,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/ssl")}
+                to={getToolLink("/dynamic/ssl")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -529,7 +530,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/dns")}
+                to={getToolLink("/dynamic/dns")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -546,7 +547,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
           </Card>
         </Grid>
 
-        {/* Traceroute Visualization */}
+        {/* Nmap & Traceroute Analyzer */}
         <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={{
@@ -576,28 +577,29 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
                     flexShrink: 0,
                   }}
                 >
-                  <HubIcon sx={{ fontSize: 28, color: "white" }} />
+                  <RadarIcon sx={{ fontSize: 28, color: "white" }} />
                 </Box>
                 <Box>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                    Traceroute
+                    Nmap & Traceroute
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Network Path Visualization
+                    Network Discovery & Analysis
                   </Typography>
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
-                Visualize network paths, identify routing bottlenecks, measure hop-by-hop latency, and
-                analyze packet loss along routes.
+                Combined network scanner with Nmap port/service detection, traceroute path visualization,
+                interactive network topology maps, and AI-powered analysis.
               </Typography>
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
-                <Chip label="Path Viz" size="small" variant="outlined" />
-                <Chip label="Latency" size="small" variant="outlined" />
+                <Chip label="Nmap" size="small" variant="outlined" />
+                <Chip label="Traceroute" size="small" variant="outlined" />
+                <Chip label="Topology" size="small" variant="outlined" />
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/traceroute")}
+                to={getToolLink("/dynamic/traceroute")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -608,7 +610,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
                   },
                 }}
               >
-                Open Traceroute
+                Open Network Scanner
               </Button>
             </CardContent>
           </Card>
@@ -666,7 +668,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/api-tester")}
+                to={getToolLink("/dynamic/api-tester")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -737,7 +739,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/fuzzer")}
+                to={getToolLink("/dynamic/fuzzer")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -808,7 +810,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
               </Box>
               <Button
                 component={Link}
-                to={getToolLink("/network/binary-fuzzer")}
+                to={getToolLink("/dynamic/binary-fuzzer")}
                 variant="contained"
                 fullWidth
                 sx={{
@@ -898,7 +900,7 @@ const ProjectNetworkTab: React.FC<ProjectNetworkTabProps> = ({ projectId, projec
                 />
                 <Button
                   component={Link}
-                  to={getToolLink("/network/mitm")}
+                  to={getToolLink("/dynamic/mitm")}
                   variant="contained"
                   fullWidth
                   sx={{

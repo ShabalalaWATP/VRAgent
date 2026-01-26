@@ -891,6 +891,18 @@ export default function ScrumGuidePage() {
               adaptive solutions for complex problems. This guide covers everything from the theory and values that
               underpin Scrum to the roles, events, and artifacts that make it work.
             </Typography>
+            <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+              <strong>Why Scrum Exists:</strong> Traditional project management often assumes you can predict everything
+              upfront—requirements, timelines, and solutions. But in complex work like software development, this rarely
+              holds true. Scrum embraces uncertainty by delivering work in small increments, gathering feedback frequently,
+              and adapting based on what you learn. Instead of a massive plan that becomes outdated, you have a living
+              process that evolves with your understanding.
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+              <strong>Who Uses Scrum:</strong> While Scrum originated in software development, it's now used across
+              industries—from marketing teams planning campaigns to HR departments improving hiring processes. Any work
+              that benefits from iterative delivery and continuous improvement can leverage Scrum's principles.
+            </Typography>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
               {["Framework", "Agile", "Empiricism", "Iterative", "Incremental"].map((tag) => (
                 <Chip
@@ -996,6 +1008,45 @@ export default function ScrumGuidePage() {
               groups of people who collectively have all the skills needed to do the work.
             </Typography>
 
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Beginner's Guide: Understanding Empiricism
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                <strong>What does "empiricism" really mean?</strong> Think of it like a scientist running experiments.
+                Instead of assuming you know the answer, you try something, observe the results, and adjust. In Scrum:
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ pl: 2, mb: 2 }}>
+                • <strong>Week 1:</strong> You think users want Feature X based on initial research<br/>
+                • <strong>Week 2:</strong> You build a small version and show it to real users<br/>
+                • <strong>Week 3:</strong> Users say "This is great, but we actually need Feature Y more"<br/>
+                • <strong>Week 4:</strong> You pivot to Feature Y instead of wasting months on X
+              </Typography>
+              <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                This is empiricism in action—learning from real experience rather than assumptions.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                Beginner's Guide: Understanding Lean Thinking
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                <strong>What is "waste" in software development?</strong> Lean thinking comes from manufacturing (Toyota),
+                but applies perfectly to knowledge work. Common wastes in software include:
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ pl: 2, mb: 2 }}>
+                • <strong>Overproduction:</strong> Building features nobody uses<br/>
+                • <strong>Waiting:</strong> Developers waiting for decisions, approvals, or other teams<br/>
+                • <strong>Handoffs:</strong> Work passing through 5 people when 2 would do<br/>
+                • <strong>Defects:</strong> Bugs that could have been prevented with better practices<br/>
+                • <strong>Over-processing:</strong> Excessive documentation nobody reads
+              </Typography>
+              <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                Scrum reduces waste by focusing on valuable work, keeping teams small, and delivering frequently.
+              </Typography>
+            </Box>
+
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
               The Three Pillars of Empiricism
             </Typography>
@@ -1044,33 +1095,57 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               Successful use of Scrum depends on people becoming more proficient in living five values. These values
-              give direction to the Scrum Team with regard to their work, actions, and behavior.
+              give direction to the Scrum Team with regard to their work, actions, and behavior. Without these values,
+              Scrum becomes just a set of meetings and artifacts—it loses its soul.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha(ACCENT_COLOR, 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha(ACCENT_COLOR, 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: ACCENT_COLOR }}>
+                Why Values Matter: A Real-World Example
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+                Imagine a team that does all the Scrum ceremonies but lacks these values. During Daily Scrum, developers
+                hide that they're stuck because they fear looking incompetent (<em>no Openness</em>). The Product Owner
+                commits to deadlines without consulting the team (<em>no Respect</em>). Developers take on work they know
+                they can't finish to avoid conflict (<em>no Courage</em>). The result? A team going through the motions
+                while trust erodes and delivery suffers.
+              </Typography>
+              <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                Now imagine the opposite: A team where it's safe to say "I'm stuck," where the PO trusts developers'
+                estimates, and where anyone can challenge a bad idea. That's Scrum working as intended.
+              </Typography>
+            </Box>
+
             <Grid container spacing={2}>
               {[
                 {
                   value: "Commitment",
-                  description: "The Scrum Team commits to achieving its goals and supporting each other.",
+                  description: "The Scrum Team commits to achieving its goals and supporting each other. This doesn't mean committing to fixed scope—it means committing to doing your best work and supporting teammates.",
+                  example: "When a teammate is struggling, you offer to pair program or take on some of their tasks.",
                   color: "#dc2626",
                 },
                 {
                   value: "Focus",
-                  description: "Primary focus is on the work of the Sprint to make the best possible progress toward goals.",
+                  description: "Primary focus is on the work of the Sprint to make the best possible progress toward goals. This means saying 'no' to distractions and context-switching.",
+                  example: "When stakeholders ask for urgent additions mid-Sprint, the team explains the current Sprint Goal and negotiates properly.",
                   color: "#f59e0b",
                 },
                 {
                   value: "Openness",
-                  description: "The Scrum Team and stakeholders are open about the work and challenges.",
+                  description: "The Scrum Team and stakeholders are open about the work and challenges. Bad news early is better than bad news late.",
+                  example: "A developer says 'I underestimated this task, I need help' on day 2, not day 10.",
                   color: "#22c55e",
                 },
                 {
                   value: "Respect",
-                  description: "Scrum Team members respect each other as capable, independent people.",
+                  description: "Scrum Team members respect each other as capable, independent people. Micromanagement and blame have no place here.",
+                  example: "The team trusts developers to figure out HOW to build something; the PO focuses on WHAT and WHY.",
                   color: "#3b82f6",
                 },
                 {
                   value: "Courage",
-                  description: "Members have courage to do the right thing and work on tough problems.",
+                  description: "Members have courage to do the right thing and work on tough problems, even when it's uncomfortable.",
+                  example: "A junior developer speaks up when they notice a security flaw in a senior's code.",
                   color: "#8b5cf6",
                 },
               ].map((item) => (
@@ -1080,14 +1155,33 @@ export default function ScrumGuidePage() {
                       <Typography variant="h6" sx={{ fontWeight: 700, color: item.color, mb: 1 }}>
                         {item.value}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         {item.description}
                       </Typography>
+                      <Box sx={{ bgcolor: alpha(item.color, 0.08), p: 1.5, borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>Example: </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.example}
+                        </Typography>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
               ))}
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                How to Build These Values in Your Team
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                • <strong>Model the behavior:</strong> Leaders and Scrum Masters should demonstrate these values first<br/>
+                • <strong>Celebrate examples:</strong> When someone shows courage or openness, acknowledge it publicly<br/>
+                • <strong>Make it safe to fail:</strong> Create an environment where mistakes are learning opportunities<br/>
+                • <strong>Address violations:</strong> When values are broken, discuss it in retrospectives without blame<br/>
+                • <strong>Hire for values:</strong> Technical skills can be taught; values alignment is harder to change
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Scrum Team Section */}
@@ -1136,16 +1230,49 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               The Product Owner is accountable for maximizing the value of the product resulting from the work of the
-              Scrum Team. The Product Owner is one person, not a committee.
+              Scrum Team. The Product Owner is one person, not a committee. This single point of accountability is crucial—when
+              everyone is responsible for product decisions, no one is.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#dc2626", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#dc2626" }}>
+                A Day in the Life of a Product Owner
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>8:30 AM - Check metrics and feedback:</strong> Review analytics dashboards, customer support tickets,
+                and user feedback from overnight. Note any urgent issues that might affect backlog priorities.<br/><br/>
+
+                <strong>9:00 AM - Stakeholder call:</strong> Meet with sales team who reports customers are asking for a
+                specific integration. Document requirements and explain current roadmap priorities.<br/><br/>
+
+                <strong>10:00 AM - Daily Scrum (observe):</strong> Listen to understand progress and blockers. Don't direct
+                the conversation—that's the developers' time. Note any questions about requirements to address afterward.<br/><br/>
+
+                <strong>10:30 AM - Clarify requirements:</strong> A developer has questions about a user story. Walk through
+                the acceptance criteria together, maybe sketch a quick wireframe.<br/><br/>
+
+                <strong>11:00 AM - Backlog refinement prep:</strong> Review upcoming items, write acceptance criteria for
+                new stories, gather data to help with estimation discussions.<br/><br/>
+
+                <strong>1:00 PM - Customer interview:</strong> Talk to an actual user about their workflow. Discover they
+                use the product differently than expected—this might change priorities.<br/><br/>
+
+                <strong>2:30 PM - Backlog refinement session:</strong> Work with developers to break down large items,
+                clarify requirements, and discuss technical considerations that might affect value.<br/><br/>
+
+                <strong>4:00 PM - Update roadmap:</strong> Based on today's learnings, adjust the Product Backlog order.
+                Communicate changes to stakeholders who need to know.
+              </Typography>
+            </Box>
+
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              Accountabilities:
+              Core Accountabilities:
             </Typography>
             <List>
               {[
                 "Developing and explicitly communicating the Product Goal",
                 "Creating and clearly communicating Product Backlog items",
-                "Ordering Product Backlog items",
+                "Ordering Product Backlog items to best achieve goals",
                 "Ensuring that the Product Backlog is transparent, visible, and understood",
               ].map((item, i) => (
                 <ListItem key={i}>
@@ -1156,10 +1283,35 @@ export default function ScrumGuidePage() {
                 </ListItem>
               ))}
             </List>
-            <Box sx={{ bgcolor: alpha("#dc2626", 0.05), p: 2, borderRadius: 2, mt: 2 }}>
+
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, mt: 3 }}>
+              Common Mistakes New Product Owners Make:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { mistake: "Acting as a proxy", fix: "Have authority to make decisions, don't just relay messages from stakeholders" },
+                { mistake: "Writing technical solutions", fix: "Describe WHAT users need, let developers determine HOW" },
+                { mistake: "Ignoring the team's input", fix: "Developers often know what's technically valuable—listen to them" },
+                { mistake: "Changing priorities constantly", fix: "Protect Sprint scope; save changes for Sprint Planning" },
+              ].map((item, i) => (
+                <Grid item xs={12} sm={6} key={i}>
+                  <Box sx={{ bgcolor: alpha("#dc2626", 0.04), p: 2, borderRadius: 2, height: "100%" }}>
+                    <Typography variant="subtitle2" sx={{ color: "#dc2626", fontWeight: 600 }}>
+                      {item.mistake}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {item.fix}
+                    </Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Box sx={{ bgcolor: alpha("#dc2626", 0.05), p: 2, borderRadius: 2, mt: 3 }}>
               <Typography variant="body2">
                 <strong>Important:</strong> For Product Owners to succeed, the entire organization must respect their
-                decisions. These decisions are visible in the Product Backlog content and ordering.
+                decisions. These decisions are visible in the Product Backlog content and ordering. If a VP can override
+                the PO at will, the PO role becomes meaningless.
               </Typography>
             </Box>
           </Paper>
@@ -1174,21 +1326,86 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               The Scrum Master is accountable for establishing Scrum as defined in the Scrum Guide. They help everyone
-              understand Scrum theory and practice, both within the Scrum Team and the organization.
+              understand Scrum theory and practice, both within the Scrum Team and the organization. The Scrum Master
+              is a <strong>servant-leader</strong>—they lead by serving others, not by commanding.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Understanding the Scrum Master Role: What It Is and Isn't
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#22c55e", mb: 1 }}>
+                    The Scrum Master IS:
+                  </Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • A coach who helps the team improve<br/>
+                    • A facilitator who makes events effective<br/>
+                    • A shield who protects the team from distractions<br/>
+                    • An impediment remover who clears blockers<br/>
+                    • A change agent who helps the org adopt Scrum
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#dc2626", mb: 1 }}>
+                    The Scrum Master is NOT:
+                  </Typography>
+                  <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                    • A project manager who assigns work<br/>
+                    • A boss who approves time off<br/>
+                    • A secretary who takes notes<br/>
+                    • A status reporter to management<br/>
+                    • A police officer enforcing "Scrum rules"
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                A Day in the Life of a Scrum Master
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>8:30 AM - Prepare for Daily Scrum:</strong> Review the Sprint board. Are there any items stuck?
+                Any patterns emerging? Think about coaching questions rather than solutions.<br/><br/>
+
+                <strong>9:00 AM - Facilitate Daily Scrum:</strong> Ensure the 15-minute timebox is respected. If
+                discussions go long, suggest "let's take that offline." Don't solve problems—help the team solve them.<br/><br/>
+
+                <strong>9:30 AM - Follow up on impediments:</strong> A developer mentioned waiting on IT for server access.
+                Call IT, escalate if needed, remove the blocker so developers can focus on development.<br/><br/>
+
+                <strong>10:30 AM - Coach a team member:</strong> A developer is frustrated about unclear requirements.
+                Instead of fixing it, coach them on how to communicate with the Product Owner effectively.<br/><br/>
+
+                <strong>11:30 AM - Meet with other Scrum Masters:</strong> Share challenges and solutions. Learn that
+                another team solved a similar problem—bring that knowledge back to your team.<br/><br/>
+
+                <strong>1:00 PM - Stakeholder management:</strong> A manager wants "just a quick status update meeting."
+                Explain that Sprint Review serves this purpose and invite them to attend.<br/><br/>
+
+                <strong>2:00 PM - Prepare for Retrospective:</strong> The team has been struggling with code reviews.
+                Design a focused retrospective activity to surface root causes.<br/><br/>
+
+                <strong>3:30 PM - Observe and coach:</strong> Notice two developers avoiding collaboration. Have a
+                private conversation to understand if there's a conflict that needs addressing.
+              </Typography>
+            </Box>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
                 <Card sx={{ height: "100%", bgcolor: alpha("#22c55e", 0.05) }}>
                   <CardContent>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#22c55e", mb: 1 }}>
-                      Serves the Team
+                      Serves the Scrum Team
                     </Typography>
                     <List dense>
                       {[
-                        "Coaching on self-management",
-                        "Helping focus on high-value Increments",
-                        "Removing impediments",
-                        "Ensuring effective events",
+                        "Coaching on self-management and cross-functionality",
+                        "Helping focus on creating high-value Increments",
+                        "Removing impediments to progress",
+                        "Ensuring all events are positive, productive, and timeboxed",
                       ].map((item, i) => (
                         <ListItem key={i} sx={{ py: 0 }}>
                           <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
@@ -1206,10 +1423,10 @@ export default function ScrumGuidePage() {
                     </Typography>
                     <List dense>
                       {[
-                        "Finding techniques for Product Goal",
-                        "Helping understand Product Backlog",
-                        "Facilitating stakeholder collaboration",
-                        "Establishing empirical planning",
+                        "Helping find techniques for effective Product Goal definition",
+                        "Helping establish empirical product planning",
+                        "Facilitating stakeholder collaboration as needed",
+                        "Helping ensure the Product Backlog is well-understood",
                       ].map((item, i) => (
                         <ListItem key={i} sx={{ py: 0 }}>
                           <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
@@ -1227,10 +1444,10 @@ export default function ScrumGuidePage() {
                     </Typography>
                     <List dense>
                       {[
-                        "Leading Scrum adoption",
-                        "Planning implementations",
-                        "Removing barriers",
-                        "Helping understand empiricism",
+                        "Leading, training, and coaching Scrum adoption",
+                        "Planning and advising Scrum implementations",
+                        "Helping employees understand empirical approach",
+                        "Removing barriers between stakeholders and teams",
                       ].map((item, i) => (
                         <ListItem key={i} sx={{ py: 0 }}>
                           <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
@@ -1241,6 +1458,19 @@ export default function ScrumGuidePage() {
                 </Card>
               </Grid>
             </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Facilitation Tips for New Scrum Masters
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                • <strong>Ask, don't tell:</strong> "What do you think we should do?" is more powerful than giving answers<br/>
+                • <strong>Use silence:</strong> After asking a question, wait. Uncomfortable silence often leads to breakthroughs<br/>
+                • <strong>Timebox ruthlessly:</strong> Respect people's time—end meetings on time, every time<br/>
+                • <strong>Make it safe:</strong> No question is stupid, no concern is too small to raise<br/>
+                • <strong>Follow up:</strong> When you commit to removing an impediment, do it—credibility is earned through action
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Developers Section */}
@@ -1457,21 +1687,66 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               Sprint Planning initiates the Sprint by laying out the work to be performed. The entire Scrum Team
-              collaborates on this plan. Time-boxed to 8 hours for a one-month Sprint, shorter for shorter Sprints.
+              collaborates on this plan. Time-boxed to 8 hours for a one-month Sprint, shorter for shorter Sprints
+              (typically 2 hours for a 2-week Sprint).
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#8b5cf6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#8b5cf6" }}>
+                Step-by-Step Sprint Planning Guide for Beginners
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Before the Meeting (Preparation):</strong><br/>
+                • PO has refined top backlog items with acceptance criteria<br/>
+                • Team knows their capacity (vacations, holidays, other commitments)<br/>
+                • Previous Sprint velocity is available as a reference<br/><br/>
+
+                <strong>Step 1: Set the Stage (5-10 min)</strong><br/>
+                • Review the Product Goal and how this Sprint contributes to it<br/>
+                • Discuss any constraints (team capacity, dependencies, deadlines)<br/><br/>
+
+                <strong>Step 2: Craft the Sprint Goal (15-30 min)</strong><br/>
+                • PO proposes what value we want to deliver this Sprint<br/>
+                • Team discusses and refines until everyone commits to the goal<br/>
+                • Write it down clearly—this guides all decisions during the Sprint<br/><br/>
+
+                <strong>Step 3: Select Product Backlog Items (30-60 min)</strong><br/>
+                • Starting from the top, developers pull items they believe they can complete<br/>
+                • Discuss each item: Is it clear? Does it support the Sprint Goal?<br/>
+                • Stop when the team feels they have enough work (use velocity as guide)<br/><br/>
+
+                <strong>Step 4: Plan the Work (30-60 min)</strong><br/>
+                • Break selected items into tasks (ideally ≤1 day each)<br/>
+                • Identify dependencies and risks<br/>
+                • Developers self-organize: who will work on what first?<br/><br/>
+
+                <strong>Step 5: Confirm Commitment (5 min)</strong><br/>
+                • Review Sprint Goal one more time<br/>
+                • Does everyone believe we can achieve this? If not, adjust scope<br/>
+                • Sprint officially begins!
+              </Typography>
+            </Box>
+
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              Three Topics Addressed:
+              The Three Topics Addressed:
             </Typography>
             <Accordion defaultExpanded sx={{ mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography sx={{ fontWeight: 600 }}>Topic 1: Why is this Sprint valuable?</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ mb: 2 }}>
                   The Product Owner proposes how the product could increase value. The whole Scrum Team collaborates
-                  to define a <strong>Sprint Goal</strong> that communicates why the Sprint is valuable to
-                  stakeholders.
+                  to define a <strong>Sprint Goal</strong> that communicates why the Sprint is valuable to stakeholders.
                 </Typography>
+                <Box sx={{ bgcolor: alpha("#8b5cf6", 0.05), p: 2, borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Example Sprint Goals:</Typography>
+                  <Typography variant="caption" component="div" sx={{ mt: 1 }}>
+                    • "Users can complete checkout without creating an account"<br/>
+                    • "Admin dashboard shows real-time sales metrics"<br/>
+                    • "Mobile app loads 50% faster on slow connections"
+                  </Typography>
+                </Box>
               </AccordionDetails>
             </Accordion>
             <Accordion sx={{ mb: 1 }}>
@@ -1479,10 +1754,18 @@ export default function ScrumGuidePage() {
                 <Typography sx={{ fontWeight: 600 }}>Topic 2: What can be Done this Sprint?</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ mb: 2 }}>
                   Developers select Product Backlog items to include in the current Sprint. The Scrum Team may refine
-                  items during this process. Selecting how much can be completed is solely up to the Developers.
+                  items during this process. <strong>Selecting how much can be completed is solely up to the Developers</strong>—the
+                  PO cannot force more work onto the team.
                 </Typography>
+                <Box sx={{ bgcolor: alpha("#f59e0b", 0.05), p: 2, borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Pro Tip:</Typography>
+                  <Typography variant="caption" component="div" sx={{ mt: 1 }}>
+                    New teams often overcommit. Start conservative and increase over time. It's better to finish
+                    early and pull more work than to carry incomplete items into the next Sprint.
+                  </Typography>
+                </Box>
               </AccordionDetails>
             </Accordion>
             <Accordion>
@@ -1490,12 +1773,33 @@ export default function ScrumGuidePage() {
                 <Typography sx={{ fontWeight: 600 }}>Topic 3: How will the chosen work get done?</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ mb: 2 }}>
                   Developers plan the work necessary to create an Increment that meets the Definition of Done.
                   This is often done by decomposing PBIs into smaller work items of one day or less.
                 </Typography>
+                <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 2, borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Task Breakdown Example:</Typography>
+                  <Typography variant="caption" component="div" sx={{ mt: 1 }}>
+                    User Story: "As a user, I can reset my password via email"<br/>
+                    Tasks: Design email template (2h) → Build reset endpoint (4h) → Create reset page UI (3h) →
+                    Write tests (2h) → Security review (1h) → Update documentation (1h)
+                  </Typography>
+                </Box>
               </AccordionDetails>
             </Accordion>
+
+            <Box sx={{ bgcolor: alpha("#dc2626", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#dc2626" }}>
+                Common Sprint Planning Mistakes to Avoid
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                • <strong>No Sprint Goal:</strong> Just picking random items from the backlog without a unifying purpose<br/>
+                • <strong>PO not available:</strong> Developers can't get questions answered, leading to assumptions<br/>
+                • <strong>Skipping task breakdown:</strong> "We'll figure it out" leads to hidden complexity<br/>
+                • <strong>Overcommitting:</strong> Saying yes to pressure instead of being realistic<br/>
+                • <strong>Not considering capacity:</strong> Forgetting about vacations, meetings, and other commitments
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Daily Scrum */}
@@ -1508,20 +1812,69 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               The Daily Scrum is a 15-minute event for Developers to inspect progress toward the Sprint Goal and
-              adapt the Sprint Backlog as necessary. It is held at the same time and place every working day.
+              adapt the Sprint Backlog as necessary. It is held at the same time and place every working day. Despite
+              its brevity, this is often where teams win or lose—it's the daily heartbeat that keeps everyone aligned.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                How to Run an Effective Daily Scrum (Beginner's Guide)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>The Traditional Three Questions (Optional but Common):</strong><br/>
+                Many teams use these as a starting point, though the Scrum Guide no longer prescribes them:<br/>
+                1. What did I do yesterday that helped the team meet the Sprint Goal?<br/>
+                2. What will I do today to help the team meet the Sprint Goal?<br/>
+                3. Do I see any impediments that prevent me or the team from meeting the Sprint Goal?<br/><br/>
+
+                <strong>Alternative Formats Teams Use:</strong><br/>
+                • <strong>Walk the Board:</strong> Go through each in-progress item on the Sprint board from right to left<br/>
+                • <strong>Focus on Flow:</strong> "What's blocked? What's about to be finished? What should we start?"<br/>
+                • <strong>Round Robin:</strong> Each person gives a quick update in turn<br/>
+                • <strong>Parking Lot:</strong> Note topics for after the standup on a visible list<br/><br/>
+
+                <strong>The Key Mindset Shift:</strong><br/>
+                Daily Scrum is NOT a status report to the Scrum Master or PO. It's developers talking TO EACH OTHER
+                about how to coordinate their work. The Scrum Master facilitates but doesn't run it like a meeting.
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                What a Good Daily Scrum Sounds Like
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9, fontStyle: "italic" }}>
+                <strong>Developer 1:</strong> "I finished the API endpoint for user profiles. Today I'm picking up the
+                frontend integration. Sarah, I'll need your CSS component around 2pm—will that work?"<br/><br/>
+
+                <strong>Developer 2 (Sarah):</strong> "Yes, I'll have it ready by noon. I'm a bit stuck on the responsive
+                layout though—could use another pair of eyes."<br/><br/>
+
+                <strong>Developer 3:</strong> "I can help with that right after this. I'm finishing up tests for the
+                checkout flow. Actually, I noticed the Sprint Goal is at risk if we don't resolve that payment gateway
+                issue today. Can we sync with the PO after this?"<br/><br/>
+
+                <strong>Developer 1:</strong> "Good catch. Let's all stay for 5 minutes after to figure that out."
+              </Typography>
+              <Typography variant="caption" sx={{ display: "block", mt: 2, color: "text.secondary" }}>
+                Notice: No one asked "what did you do yesterday?" They're coordinating today's work and solving problems together.
+              </Typography>
+            </Box>
+
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
-                <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 2, borderRadius: 2 }}>
+                <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 2, borderRadius: 2, height: "100%" }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#22c55e", mb: 1 }}>
-                    Best Practices
+                    Signs of a Healthy Daily Scrum
                   </Typography>
                   <List dense>
                     {[
-                      "Focus on progress toward Sprint Goal",
-                      "Developers choose structure/techniques",
-                      "Create focus and improve self-management",
-                      "Identify impediments quickly",
+                      "Developers talk to each other, not the Scrum Master",
+                      "Focus is on Sprint Goal progress, not individual tasks",
+                      "Problems surface quickly and get addressed",
+                      "People offer to help each other spontaneously",
+                      "It ends on time (or early!)",
+                      "Energy is positive—people want to be there",
                     ].map((item, i) => (
                       <ListItem key={i}>
                         <ListItemIcon sx={{ minWidth: 28 }}>
@@ -1534,16 +1887,18 @@ export default function ScrumGuidePage() {
                 </Box>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Box sx={{ bgcolor: alpha("#dc2626", 0.05), p: 2, borderRadius: 2 }}>
+                <Box sx={{ bgcolor: alpha("#dc2626", 0.05), p: 2, borderRadius: 2, height: "100%" }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#dc2626", mb: 1 }}>
-                    Anti-Patterns to Avoid
+                    Warning Signs (Anti-Patterns)
                   </Typography>
                   <List dense>
                     {[
-                      "Status reporting to Scrum Master",
-                      "Detailed problem-solving discussions",
-                      "Going over 15 minutes",
-                      "Missing the Daily Scrum",
+                      "Everyone reports to the Scrum Master like a boss",
+                      "Detailed problem-solving during the standup",
+                      "Consistently going over 15 minutes",
+                      "People showing up late or not at all",
+                      "Updates that don't relate to Sprint Goal",
+                      "No one asks questions or offers help",
                     ].map((item, i) => (
                       <ListItem key={i}>
                         <ListItemIcon sx={{ minWidth: 28 }}>
@@ -1556,6 +1911,19 @@ export default function ScrumGuidePage() {
                 </Box>
               </Grid>
             </Grid>
+
+            <Box sx={{ bgcolor: alpha(ACCENT_COLOR, 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha(ACCENT_COLOR, 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: ACCENT_COLOR }}>
+                Pro Tips for Remote/Distributed Teams
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                • <strong>Camera on:</strong> Helps build connection and keeps people engaged<br/>
+                • <strong>Async option:</strong> Some teams post updates in Slack/Teams before a shorter live sync<br/>
+                • <strong>Time zones:</strong> Rotate the meeting time so the same people aren't always inconvenienced<br/>
+                • <strong>Virtual board:</strong> Share screen with the Sprint board during the standup<br/>
+                • <strong>Keep it human:</strong> A quick "how is everyone?" before diving in builds team cohesion
+              </Typography>
+            </Box>
           </Paper>
 
           {/* Sprint Review */}
@@ -1568,28 +1936,88 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               The Sprint Review is to inspect the outcome of the Sprint and determine future adaptations. The Scrum
-              Team presents results to key stakeholders and progress toward the Product Goal is discussed.
+              Team presents results to key stakeholders and progress toward the Product Goal is discussed. This is where
+              the empirical loop closes—real feedback from real stakeholders shapes what comes next.
             </Typography>
-            <Box sx={{ bgcolor: alpha("#3b82f6", 0.05), p: 3, borderRadius: 2, mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                Key Points:
+
+            <Box sx={{ bgcolor: alpha("#3b82f6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#3b82f6" }}>
+                How to Run a Great Sprint Review (Step-by-Step)
               </Typography>
-              <List dense>
-                {[
-                  "Time-boxed to 4 hours for a one-month Sprint",
-                  "Attendees collaborate on what to do next",
-                  "Product Backlog may be adjusted based on feedback",
-                  "This is a working session, not a presentation",
-                  "Not a gate or release approval meeting",
-                ].map((item, i) => (
-                  <ListItem key={i}>
-                    <ListItemIcon sx={{ minWidth: 28 }}>
-                      <ArrowRightIcon sx={{ color: "#3b82f6" }} />
-                    </ListItemIcon>
-                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                  </ListItem>
-                ))}
-              </List>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>Before the Review:</strong><br/>
+                • Invite key stakeholders (customers, users, sponsors, other teams)<br/>
+                • Prepare a working demo environment—avoid "it works on my machine"<br/>
+                • Review what was Done vs. what was planned<br/><br/>
+
+                <strong>During the Review (Sample Agenda for 2-week Sprint):</strong><br/>
+                <strong>1. Welcome & Context (5 min):</strong> PO recaps the Sprint Goal and what we set out to achieve<br/>
+                <strong>2. Demo the Increment (30-40 min):</strong> Developers show WORKING software—not slides, not mockups<br/>
+                <strong>3. Discussion & Feedback (20-30 min):</strong> Stakeholders ask questions, provide feedback, share concerns<br/>
+                <strong>4. Market/Business Update (10 min):</strong> PO shares any changes in market conditions or priorities<br/>
+                <strong>5. Backlog Collaboration (10-15 min):</strong> Discuss what should come next based on what we learned<br/><br/>
+
+                <strong>The Crucial Mindset:</strong><br/>
+                Sprint Review is a CONVERSATION, not a presentation. Stakeholders should talk more than the team.
+                If you're just showing slides and asking "any questions?" you're doing it wrong.
+              </Typography>
+            </Box>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ bgcolor: alpha("#22c55e", 0.05), p: 2, borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#22c55e", mb: 1 }}>
+                    What Makes Reviews Effective
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Show working software, not presentations",
+                      "Invite real users when possible",
+                      "Actively solicit critical feedback",
+                      "Adjust backlog based on what you learn",
+                      "Keep it collaborative and interactive",
+                    ].map((item, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "#22c55e" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ bgcolor: alpha("#dc2626", 0.05), p: 2, borderRadius: 2, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#dc2626", mb: 1 }}>
+                    Common Review Anti-Patterns
+                  </Typography>
+                  <List dense>
+                    {[
+                      "PowerPoint presentations instead of demos",
+                      "Only developers attend (no stakeholders)",
+                      "No time for questions or feedback",
+                      "Treating it as a gate/approval meeting",
+                      "Demoing incomplete or broken features",
+                    ].map((item, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <WarningIcon sx={{ fontSize: 16, color: "#dc2626" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Grid>
+            </Grid>
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 2, borderRadius: 2 }}>
+              <Typography variant="body2">
+                <strong>Pro Tip:</strong> The best Sprint Reviews feel like a product discovery session. Stakeholders
+                leave saying "I didn't know we could do that!" or "What if we tried this instead?" That's the feedback
+                loop working as intended.
+              </Typography>
             </Box>
           </Paper>
 
@@ -1603,18 +2031,68 @@ export default function ScrumGuidePage() {
             </Box>
             <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
               The Sprint Retrospective concludes the Sprint. It is an opportunity for the Scrum Team to inspect itself
-              and create a plan for improvements to be enacted during the next Sprint.
+              and create a plan for improvements to be enacted during the next Sprint. This is arguably the most important
+              Scrum event—it's where teams get better, Sprint over Sprint.
             </Typography>
+
+            <Box sx={{ bgcolor: alpha("#8b5cf6", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#8b5cf6" }}>
+                Retrospective Formats for Every Situation
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>1. Start, Stop, Continue (Classic - Good for Beginners)</strong><br/>
+                • What should we START doing?<br/>
+                • What should we STOP doing?<br/>
+                • What should we CONTINUE doing?<br/><br/>
+
+                <strong>2. Mad, Sad, Glad (Emotion-Focused)</strong><br/>
+                • What made you MAD this Sprint?<br/>
+                • What made you SAD?<br/>
+                • What made you GLAD?<br/><br/>
+
+                <strong>3. 4Ls (Comprehensive)</strong><br/>
+                • What did we LOVE?<br/>
+                • What did we LEARN?<br/>
+                • What did we LACK?<br/>
+                • What did we LONG for?<br/><br/>
+
+                <strong>4. Sailboat (Visual Metaphor)</strong><br/>
+                • Wind (what's pushing us forward)<br/>
+                • Anchors (what's holding us back)<br/>
+                • Rocks (risks ahead)<br/>
+                • Island (our goal/destination)
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#22c55e", 0.08), p: 3, borderRadius: 2, mb: 3, border: `1px solid ${alpha("#22c55e", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#22c55e" }}>
+                Sample Retrospective Agenda (90 minutes for 2-week Sprint)
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
+                <strong>1. Set the Stage (5 min):</strong> Check-in activity. "In one word, how do you feel about this Sprint?"<br/><br/>
+
+                <strong>2. Gather Data (20 min):</strong> Collect observations using your chosen format (sticky notes, digital board)<br/><br/>
+
+                <strong>3. Generate Insights (25 min):</strong> Group similar items, discuss patterns, identify root causes<br/><br/>
+
+                <strong>4. Decide What to Do (20 min):</strong> Vote on top items, create specific action items with owners<br/><br/>
+
+                <strong>5. Close the Retro (10 min):</strong> Summarize actions, appreciate team members, check out<br/><br/>
+
+                <strong>Buffer (10 min):</strong> Always build in buffer—good discussions shouldn't be cut short
+              </Typography>
+            </Box>
+
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              Focus Areas:
+              Focus Areas to Inspect:
             </Typography>
             <Grid container spacing={2}>
               {[
-                { area: "Individuals", icon: "👤", description: "How did team members interact and collaborate?" },
-                { area: "Interactions", icon: "🤝", description: "How effective was communication?" },
-                { area: "Processes", icon: "⚙️", description: "What processes worked well or need improvement?" },
-                { area: "Tools", icon: "🔧", description: "Are the tools enabling or hindering the team?" },
-                { area: "Definition of Done", icon: "✅", description: "Is the DoD appropriate for the product?" },
+                { area: "Individuals", icon: "👤", description: "How did team members interact and collaborate? Any skills gaps?" },
+                { area: "Interactions", icon: "🤝", description: "How effective was communication? Were there conflicts?" },
+                { area: "Processes", icon: "⚙️", description: "What processes worked? What caused friction or delays?" },
+                { area: "Tools", icon: "🔧", description: "Are tools enabling or hindering? Any tooling improvements needed?" },
+                { area: "Definition of Done", icon: "✅", description: "Is our DoD appropriate? Should we strengthen it?" },
               ].map((item) => (
                 <Grid item xs={12} sm={6} md={4} key={item.area}>
                   <Card sx={{ height: "100%", textAlign: "center", p: 2 }}>
@@ -1629,10 +2107,33 @@ export default function ScrumGuidePage() {
                 </Grid>
               ))}
             </Grid>
-            <Box sx={{ bgcolor: alpha("#8b5cf6", 0.05), p: 2, borderRadius: 2, mt: 3 }}>
-              <Typography variant="body2">
-                <strong>Output:</strong> The team identifies the most impactful improvements to address as soon as
-                possible. The most important may even be added to the Sprint Backlog for the next Sprint.
+
+            <Box sx={{ bgcolor: alpha("#f59e0b", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#f59e0b" }}>
+                Making Retros Actually Lead to Change
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                The #1 reason retrospectives fail: <strong>no follow-through</strong>. Here's how to fix that:<br/><br/>
+                • <strong>Limit action items:</strong> Pick 1-2 improvements max—trying to fix everything fixes nothing<br/>
+                • <strong>Make them SMART:</strong> Specific, Measurable, Achievable, Relevant, Time-bound<br/>
+                • <strong>Assign owners:</strong> "The team will do X" means no one will do X<br/>
+                • <strong>Add to Sprint Backlog:</strong> Important improvements deserve Sprint capacity<br/>
+                • <strong>Review last Sprint's actions:</strong> Start each retro by checking if previous actions happened<br/>
+                • <strong>Track improvement over time:</strong> Are we actually getting better? Measure it
+              </Typography>
+            </Box>
+
+            <Box sx={{ bgcolor: alpha("#dc2626", 0.08), p: 3, borderRadius: 2, mt: 3, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: "#dc2626" }}>
+                When Retros Go Wrong: Common Anti-Patterns
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                • <strong>"Same retro every time":</strong> Vary your format—repetition breeds disengagement<br/>
+                • <strong>"Nothing ever changes":</strong> If actions aren't happening, make fewer and track harder<br/>
+                • <strong>"People don't speak up":</strong> Use anonymous input gathering, create psychological safety<br/>
+                • <strong>"Blame game":</strong> Focus on processes and systems, not individuals<br/>
+                • <strong>"Management attends":</strong> Unless they're part of the Scrum Team, they shouldn't be there<br/>
+                • <strong>"We skip it when busy":</strong> That's exactly when you need it most
               </Typography>
             </Box>
           </Paper>

@@ -7,7 +7,8 @@
  * - Docker Inspector - Inspect image layers, secrets, and attack vectors
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 import {
   Box,
   Container,
@@ -42,6 +43,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
   FormControlLabel,
   FormControl,
   Select,
@@ -90,6 +93,8 @@ import {
   Shield as ShieldIcon,
   Info as InfoIcon,
   Search as SearchIcon,
+  Tune as TuneIcon,
+  FilterAlt as FilterAltIcon,
   Save as SaveIcon,
   History as HistoryIcon,
   Delete as DeleteIcon,
@@ -134,6 +139,7 @@ import {
   type ApkCertificate,
   type DockerAnalysisResult,
   type DockerImageInfo,
+  type LayerSecret,
   type REReportSummary,
   type SaveREReportRequest,
   type DataFlowAnalysisResult,
@@ -196,6 +202,70 @@ const getSeverityColor = (severity: string): string => {
   }
 };
 
+const getDockerRiskScore = (result: DockerAnalysisResult): number => {
+  let score = 0;
+  const securityIssues = result.security_issues || [];
+  const secrets = result.secrets || [];
+  const layerSecrets = result.layer_secrets || [];
+  const baseImageIntel = result.base_image_intel || [];
+
+  securityIssues.forEach((issue) => {
+    switch ((issue.severity || "").toLowerCase()) {
+      case "critical": score += 40; break;
+      case "high": score += 25; break;
+      case "medium": score += 10; break;
+      case "low": score += 3; break;
+    }
+  });
+
+  const scoreSecret = (severity: string) => {
+    switch ((severity || "").toLowerCase()) {
+      case "critical": return 35;
+      case "high": return 20;
+      default: return 10;
+    }
+  };
+
+  secrets.forEach((secret) => {
+    score += scoreSecret(secret.severity);
+  });
+
+  layerSecrets.forEach((secret) => {
+    score += scoreSecret(secret.severity);
+  });
+
+  baseImageIntel.forEach((intel) => {
+    switch ((intel.severity || "").toLowerCase()) {
+      case "critical": score += 20; break;
+      case "high": score += 12; break;
+      case "medium": score += 6; break;
+      case "low": score += 3; break;
+      default: score += 1; break;
+    }
+  });
+
+  // CVE vulnerabilities from package scanning
+  if (result.cve_scan) {
+    // KEV vulnerabilities are highest priority
+    score += (result.cve_scan.kev_count || 0) * 30;
+    // High EPSS vulnerabilities (actively exploited)
+    score += (result.cve_scan.high_epss_count || 0) * 15;
+    // Critical/High CVEs
+    score += (result.cve_scan.critical_count || 0) * 10;
+    score += (result.cve_scan.high_count || 0) * 5;
+    score += (result.cve_scan.medium_count || 0) * 2;
+  }
+
+  return Math.min(100, score);
+};
+
+const getDockerRiskLevelLabel = (score: number): "critical" | "high" | "medium" | "low" => {
+  if (score >= 70) return "critical";
+  if (score >= 40) return "high";
+  if (score >= 20) return "medium";
+  return "low";
+};
+
 // Format seconds to human-readable time
 const formatTimeSeconds = (seconds: number): string => {
   if (seconds < 60) {
@@ -210,6 +280,22 @@ const formatTimeSeconds = (seconds: number): string => {
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
 };
+
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${Math.round(bytes)} B`;
+};
+
+type DockerScanProfile = "fast" | "balanced" | "deep" | "custom";
 
 // Tab panel component
 interface TabPanelProps {
@@ -2665,7 +2751,7 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
           {/* Tab 0: Functionality Report */}
           {activeTab === 0 && (
             result.ai_functionality_report ? (
-              <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: result.ai_functionality_report }} />
+              <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: sanitizeHtml(result.ai_functionality_report) }} />
             ) : (
               <Alert severity="info">
                 Functionality report not available. This may happen if AI analysis encountered an error.
@@ -3284,7 +3370,7 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
               {/* AI Security Report (if available and no full scan yet) */}
               {!enhancedSecurityResult && !enhancedSecurityLoading && result.ai_security_report && (
                 <Box sx={{ mt: 2 }}>
-                  <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: result.ai_security_report }} />
+                  <Box sx={htmlContentStyles} dangerouslySetInnerHTML={{ __html: sanitizeHtml(result.ai_security_report) }} />
                 </Box>
               )}
 
@@ -4809,7 +4895,7 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
                     borderRadius: 1,
                     fontFamily: "monospace",
                     fontSize: "0.8rem",
-                    maxHeight: 300,
+                    maxHeight: 400,
                     overflow: "auto",
                   }}
                 >
@@ -4833,15 +4919,30 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
                       <Typography
                         component="span"
                         sx={{
-                          color: insn.is_call ? "success.main" : insn.is_jump ? "warning.main" : "grey.100",
+                          color: insn.is_call ? "success.main" : 
+                                 insn.is_return ? "error.main" :
+                                 insn.is_conditional_jump ? "warning.main" :
+                                 insn.is_jump ? "warning.light" : 
+                                 "grey.100",
                           minWidth: 60,
+                          fontWeight: (insn.is_call || insn.is_return) ? 600 : 400,
                         }}
                       >
                         {insn.mnemonic}
                       </Typography>
-                      <Typography component="span" sx={{ color: "grey.300" }}>
+                      <Typography component="span" sx={{ color: "grey.300", flex: 1 }}>
                         {insn.op_str}
+                        {insn.target_address && (
+                          <Typography component="span" sx={{ color: "info.light", ml: 1 }}>
+                            → 0x{insn.target_address.toString(16)}
+                          </Typography>
+                        )}
                       </Typography>
+                      {insn.string_ref && (
+                        <Typography component="span" sx={{ color: "secondary.main" }}>
+                          ; "{insn.string_ref.slice(0, 40)}{insn.string_ref.length > 40 ? '...' : ''}"
+                        </Typography>
+                      )}
                       {insn.comment && (
                         <Typography component="span" sx={{ color: "error.main", ml: "auto" }}>
                           ; {insn.comment}
@@ -4858,21 +4959,68 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
                   Analyzed Functions ({result.disassembly.functions.length})
+                  {result.disassembly.total_instructions && (
+                    <Typography component="span" variant="caption" sx={{ ml: 2, color: "text.secondary" }}>
+                      {result.disassembly.total_instructions} instructions, {result.disassembly.coverage_percent}% coverage
+                    </Typography>
+                  )}
                 </Typography>
                 {result.disassembly.functions.map((func, fIdx) => (
                   <Accordion key={fIdx} sx={{ mb: 1 }}>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography sx={{ fontFamily: "monospace", display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography sx={{ fontFamily: "monospace", display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                         {func.name}
                         <Typography component="span" variant="caption" color="text.secondary">
                           @ 0x{func.address.toString(16)} ({func.size} bytes)
                         </Typography>
+                        {(func.cyclomatic_complexity ?? 1) > 1 && (
+                          <Chip 
+                            label={`CC: ${func.cyclomatic_complexity}`} 
+                            size="small" 
+                            color={(func.cyclomatic_complexity ?? 1) > 10 ? "warning" : "default"}
+                            title="Cyclomatic Complexity"
+                          />
+                        )}
+                        {func.is_recursive && (
+                          <Chip label="recursive" size="small" color="info" />
+                        )}
+                        {func.is_leaf && (
+                          <Chip label="leaf" size="small" variant="outlined" />
+                        )}
                         {func.suspicious_patterns.length > 0 && (
                           <Chip label="⚠️" size="small" color="warning" />
                         )}
                       </Typography>
                     </AccordionSummary>
                     <AccordionDetails>
+                      {/* Function metadata */}
+                      <Grid container spacing={2} sx={{ mb: 2 }}>
+                        {func.calling_convention && (
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Calling Convention</Typography>
+                            <Typography variant="body2" fontFamily="monospace">{func.calling_convention}</Typography>
+                          </Grid>
+                        )}
+                        {func.stack_frame_size !== undefined && func.stack_frame_size !== null && (
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Stack Frame</Typography>
+                            <Typography variant="body2" fontFamily="monospace">0x{func.stack_frame_size.toString(16)} bytes</Typography>
+                          </Grid>
+                        )}
+                        {func.cfg && func.cfg.blocks && (
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Basic Blocks</Typography>
+                            <Typography variant="body2" fontFamily="monospace">{Object.keys(func.cfg.blocks).length}</Typography>
+                          </Grid>
+                        )}
+                        {func.cfg && func.cfg.loop_headers && func.cfg.loop_headers.length > 0 && (
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Loops</Typography>
+                            <Typography variant="body2" fontFamily="monospace">{func.cfg.loop_headers.length}</Typography>
+                          </Grid>
+                        )}
+                      </Grid>
+                      
                       {func.calls.length > 0 && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" color="text.secondary">Calls:</Typography>
@@ -4883,6 +5031,20 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
                           </Box>
                         </Box>
                       )}
+                      
+                      {func.suspicious_patterns.length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="error">Suspicious Patterns:</Typography>
+                          <Box sx={{ mt: 0.5 }}>
+                            {func.suspicious_patterns.map((pattern, pIdx) => (
+                              <Typography key={pIdx} variant="body2" sx={{ fontFamily: "monospace", color: "error.main" }}>
+                                • {pattern}
+                              </Typography>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                      
                       <Box
                         sx={{
                           bgcolor: "grey.900",
@@ -4891,23 +5053,64 @@ function BinaryResults({ result }: { result: BinaryAnalysisResult }) {
                           borderRadius: 1,
                           fontFamily: "monospace",
                           fontSize: "0.75rem",
-                          maxHeight: 200,
+                          maxHeight: 300,
                           overflow: "auto",
                         }}
                       >
-                        {func.instructions.slice(0, 50).map((insn, iIdx) => (
-                          <Box key={iIdx} sx={{ display: "flex", gap: 1, py: 0.125 }}>
+                        {func.instructions.slice(0, 100).map((insn, iIdx) => (
+                          <Box 
+                            key={iIdx} 
+                            sx={{ 
+                              display: "flex", 
+                              gap: 1, 
+                              py: 0.125,
+                              bgcolor: insn.is_suspicious ? alpha("#ff5722", 0.2) : "transparent",
+                              "&:hover": { bgcolor: alpha("#fff", 0.05) },
+                            }}
+                          >
                             <Typography component="span" sx={{ color: "info.main", minWidth: 80, fontSize: "inherit" }}>
                               0x{insn.address.toString(16).padStart(8, "0")}
                             </Typography>
-                            <Typography component="span" sx={{ color: insn.is_call ? "success.main" : "grey.100", minWidth: 50, fontSize: "inherit" }}>
+                            <Typography 
+                              component="span" 
+                              sx={{ 
+                                color: insn.is_call ? "success.main" : 
+                                       insn.is_return ? "error.main" :
+                                       insn.is_conditional_jump ? "warning.main" :
+                                       insn.is_jump ? "warning.light" : 
+                                       "grey.100", 
+                                minWidth: 50, 
+                                fontSize: "inherit",
+                                fontWeight: (insn.is_call || insn.is_return) ? 600 : 400,
+                              }}
+                            >
                               {insn.mnemonic}
                             </Typography>
-                            <Typography component="span" sx={{ color: "grey.400", fontSize: "inherit" }}>
+                            <Typography component="span" sx={{ color: "grey.400", fontSize: "inherit", flex: 1 }}>
                               {insn.op_str}
+                              {insn.target_address && (
+                                <Typography component="span" sx={{ color: "info.light", ml: 1 }}>
+                                  → 0x{insn.target_address.toString(16)}
+                                </Typography>
+                              )}
                             </Typography>
+                            {insn.string_ref && (
+                              <Typography component="span" sx={{ color: "secondary.main", fontSize: "inherit" }}>
+                                ; "{insn.string_ref.slice(0, 32)}{insn.string_ref.length > 32 ? '...' : ''}"
+                              </Typography>
+                            )}
+                            {insn.comment && (
+                              <Typography component="span" sx={{ color: "error.main", fontSize: "inherit" }}>
+                                ; {insn.comment}
+                              </Typography>
+                            )}
                           </Box>
                         ))}
+                        {func.instructions.length > 100 && (
+                          <Typography sx={{ color: "grey.500", mt: 1, textAlign: "center" }}>
+                            ... and {func.instructions.length - 100} more instructions
+                          </Typography>
+                        )}
                       </Box>
                     </AccordionDetails>
                   </Accordion>
@@ -6326,6 +6529,81 @@ function PrecomputedObfuscationAnalysis({ data }: { data: NonNullable<UnifiedApk
 }
 
 // ============================================================================
+// Shared Utility: Format markdown to HTML with proper styling
+// ============================================================================
+function formatMarkdownToHtml(markdown: string): string {
+  if (!markdown) return "";
+  
+  let html = markdown;
+  
+  // Headers
+  html = html.replace(/^#### (.*$)/gim, '<h4 style="font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.75rem 0; color: inherit;">$1</h4>');
+  html = html.replace(/^### (.*$)/gim, '<h3 style="font-size: 1.1rem; font-weight: 700; margin: 1.75rem 0 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 style="font-size: 1.25rem; font-weight: 700; margin: 2rem 0 1rem 0; color: inherit;">$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1 style="font-size: 1.5rem; font-weight: 700; margin: 2rem 0 1rem 0;">$1</h1>');
+  
+  // Bold and italic
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  
+  // Code blocks
+  html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, _lang, code) => {
+    return `<pre style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem;"><code>${code.trim()}</code></pre>`;
+  });
+  
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.9em;">$1</code>');
+  
+  // Process lines for lists and paragraphs
+  const lines = html.split('\n');
+  const processedLines: string[] = [];
+  let inList = false;
+  let listType: 'ul' | 'ol' = 'ul';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const bulletMatch = line.match(/^[\s]*[-*•]\s+(.*)$/);
+    const numberedMatch = line.match(/^[\s]*(\d+)\.\s+(.*)$/);
+    
+    if (bulletMatch) {
+      if (!inList || listType !== 'ul') {
+        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        processedLines.push('<ul style="margin: 0.75rem 0; padding-left: 1.5rem;">');
+        inList = true;
+        listType = 'ul';
+      }
+      processedLines.push(`<li style="margin: 0.5rem 0; line-height: 1.6;">${bulletMatch[1]}</li>`);
+    } else if (numberedMatch) {
+      if (!inList || listType !== 'ol') {
+        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        processedLines.push('<ol style="margin: 0.75rem 0; padding-left: 1.5rem;">');
+        inList = true;
+        listType = 'ol';
+      }
+      processedLines.push(`<li style="margin: 0.5rem 0; line-height: 1.6;">${numberedMatch[2]}</li>`);
+    } else {
+      if (inList) {
+        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+      }
+      // Wrap non-empty lines that aren't already tags in <p>
+      const trimmedLine = line.trim();
+      if (trimmedLine && !trimmedLine.startsWith('<')) {
+        processedLines.push(`<p style="margin: 0.75rem 0; line-height: 1.7;">${trimmedLine}</p>`);
+      } else if (trimmedLine) {
+        processedLines.push(line);
+      }
+    }
+  }
+  if (inList) {
+    processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+  }
+  
+  return processedLines.join('\n');
+}
+
+// ============================================================================
 // APK Quick AI Summary Component - "What Does This APK Do?" and "Quick Security Findings"
 // ============================================================================
 function ApkQuickAISummary({ result }: { result: ApkAnalysisResult }) {
@@ -6337,75 +6615,6 @@ function ApkQuickAISummary({ result }: { result: ApkAnalysisResult }) {
   const [isLoadingSec, setIsLoadingSec] = useState(false);
   const [errorFunc, setErrorFunc] = useState<string | null>(null);
   const [errorSec, setErrorSec] = useState<string | null>(null);
-
-  // Format markdown to HTML with proper styling
-  const formatMarkdownToHtml = (markdown: string): string => {
-    if (!markdown) return "";
-    
-    let html = markdown;
-    
-    // Headers
-    html = html.replace(/^#### (.*$)/gim, '<h4 style="font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem 0; color: inherit;">$1</h4>');
-    html = html.replace(/^### (.*$)/gim, '<h3 style="font-size: 1.1rem; font-weight: 700; margin: 1.25rem 0 0.5rem 0; color: #60a5fa;">$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2 style="font-size: 1.2rem; font-weight: 700; margin: 1.5rem 0 0.75rem 0; color: inherit;">$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1 style="font-size: 1.3rem; font-weight: 700; margin: 1.5rem 0 0.75rem 0;">$1</h1>');
-    
-    // Bold and italic
-    html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 600; color: inherit;">$1</strong>');
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.3); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; font-family: monospace;">$1</code>');
-    
-    // Process lines for lists and paragraphs
-    const lines = html.split('\n');
-    const processedLines: string[] = [];
-    let inList = false;
-    let listType: 'ul' | 'ol' = 'ul';
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const bulletMatch = line.match(/^[\s]*[-*•]\s+(.*)$/);
-      const numberedMatch = line.match(/^[\s]*(\d+)\.\s+(.*)$/);
-      
-      if (bulletMatch) {
-        if (!inList || listType !== 'ul') {
-          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          processedLines.push('<ul style="margin: 0.5rem 0; padding-left: 1.25rem; list-style-type: disc;">');
-          inList = true;
-          listType = 'ul';
-        }
-        processedLines.push(`<li style="margin: 0.35rem 0; line-height: 1.5;">${bulletMatch[1]}</li>`);
-      } else if (numberedMatch) {
-        if (!inList || listType !== 'ol') {
-          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          processedLines.push('<ol style="margin: 0.5rem 0; padding-left: 1.25rem;">');
-          inList = true;
-          listType = 'ol';
-        }
-        processedLines.push(`<li style="margin: 0.35rem 0; line-height: 1.5;">${numberedMatch[2]}</li>`);
-      } else {
-        if (inList) {
-          processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          inList = false;
-        }
-        // Handle paragraphs - skip empty lines, wrap non-empty text
-        const trimmedLine = line.trim();
-        if (trimmedLine && !trimmedLine.startsWith('<h') && !trimmedLine.startsWith('<pre') && !trimmedLine.startsWith('<ul') && !trimmedLine.startsWith('<ol')) {
-          processedLines.push(`<p style="margin: 0.5rem 0; line-height: 1.6;">${line}</p>`);
-        } else if (trimmedLine) {
-          processedLines.push(line);
-        }
-      }
-    }
-    
-    if (inList) {
-      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-    }
-    
-    return processedLines.join('\n');
-  };
 
   // Generate functionality summary
   const generateFunctionalitySummary = async () => {
@@ -6570,7 +6779,7 @@ Be direct and actionable. Prioritize the most important issues.`,
                   '& ul, & ol': { marginLeft: 0 },
                   '& p:first-of-type': { marginTop: 0 },
                 }}
-                dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(functionalitySummary) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdownToHtml(functionalitySummary)) }}
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 2 }}>
@@ -6617,7 +6826,7 @@ Be direct and actionable. Prioritize the most important issues.`,
                   '& ul, & ol': { marginLeft: 0 },
                   '& p:first-of-type': { marginTop: 0 },
                 }}
-                dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(securitySummary) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdownToHtml(securitySummary)) }}
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 2 }}>
@@ -6666,79 +6875,6 @@ function DeepAnalysisReports({
   const [errorSec, setErrorSec] = useState<string | null>(null);
   const [errorDiagram, setErrorDiagram] = useState<string | null>(null);
   const [autoGenerated, setAutoGenerated] = useState(false);
-
-  // Format markdown to HTML with proper styling
-  const formatMarkdownToHtml = (markdown: string): string => {
-    if (!markdown) return "";
-    
-    let html = markdown;
-    
-    // Headers
-    html = html.replace(/^#### (.*$)/gim, '<h4 style="font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.75rem 0; color: inherit;">$1</h4>');
-    html = html.replace(/^### (.*$)/gim, '<h3 style="font-size: 1.1rem; font-weight: 700; margin: 1.75rem 0 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2 style="font-size: 1.25rem; font-weight: 700; margin: 2rem 0 1rem 0; color: inherit;">$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1 style="font-size: 1.5rem; font-weight: 700; margin: 2rem 0 1rem 0;">$1</h1>');
-    
-    // Bold and italic
-    html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
-    // Code blocks
-    html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
-      return `<pre style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0; font-size: 0.85rem;"><code>${code.trim()}</code></pre>`;
-    });
-    
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.9em;">$1</code>');
-    
-    // Process lines for lists and paragraphs
-    const lines = html.split('\n');
-    const processedLines: string[] = [];
-    let inList = false;
-    let listType: 'ul' | 'ol' = 'ul';
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const bulletMatch = line.match(/^[\s]*[-*•]\s+(.*)$/);
-      const numberedMatch = line.match(/^[\s]*(\d+)\.\s+(.*)$/);
-      
-      if (bulletMatch) {
-        if (!inList || listType !== 'ul') {
-          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          processedLines.push('<ul style="margin: 0.75rem 0; padding-left: 1.5rem;">');
-          inList = true;
-          listType = 'ul';
-        }
-        processedLines.push(`<li style="margin: 0.5rem 0; line-height: 1.6;">${bulletMatch[1]}</li>`);
-      } else if (numberedMatch) {
-        if (!inList || listType !== 'ol') {
-          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          processedLines.push('<ol style="margin: 0.75rem 0; padding-left: 1.5rem;">');
-          inList = true;
-          listType = 'ol';
-        }
-        processedLines.push(`<li style="margin: 0.5rem 0; line-height: 1.6;">${numberedMatch[2]}</li>`);
-      } else {
-        if (inList) {
-          processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-          inList = false;
-        }
-        // Wrap non-empty lines that aren't already tags in <p>
-        const trimmedLine = line.trim();
-        if (trimmedLine && !trimmedLine.startsWith('<')) {
-          processedLines.push(`<p style="margin: 0.75rem 0; line-height: 1.7;">${trimmedLine}</p>`);
-        } else if (trimmedLine) {
-          processedLines.push(line);
-        }
-      }
-    }
-    if (inList) {
-      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-    }
-    
-    return processedLines.join('\n');
-  };
 
   // Generate comprehensive functionality report
   const generateFunctionalityReport = async () => {
@@ -7064,7 +7200,7 @@ Be specific with class names, methods, and technical details from the decompiled
                   "& code": { color: theme.palette.primary.main, bgcolor: alpha(theme.palette.primary.main, 0.1) },
                   "& pre": { bgcolor: alpha(theme.palette.common.black, 0.2) },
                 }}
-                dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(functionalityReport) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdownToHtml(functionalityReport)) }}
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 4 }}>
@@ -7114,7 +7250,7 @@ Be specific with class names, methods, and technical details from the decompiled
                   "& code": { color: theme.palette.error.main, bgcolor: alpha(theme.palette.error.main, 0.1) },
                   "& pre": { bgcolor: alpha(theme.palette.common.black, 0.2) },
                 }}
-                dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(securityReport) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdownToHtml(securityReport)) }}
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 4 }}>
@@ -7592,7 +7728,7 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
         {activeReport === 0 && result.ai_report_functionality && (
           <Box
             sx={htmlContentStyles}
-            dangerouslySetInnerHTML={{ __html: formatReportContent(result.ai_report_functionality) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReportContent(result.ai_report_functionality)) }}
           />
         )}
         {activeReport === 0 && !result.ai_report_functionality && (
@@ -7605,7 +7741,7 @@ function ApkAIReports({ result }: { result: ApkAnalysisResult }) {
         {activeReport === 1 && result.ai_report_security && (
           <Box
             sx={htmlContentStyles}
-            dangerouslySetInnerHTML={{ __html: formatReportContent(result.ai_report_security) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatReportContent(result.ai_report_security)) }}
           />
         )}
         {activeReport === 1 && !result.ai_report_security && (
@@ -10332,16 +10468,23 @@ function FridaScriptsViewer({ dynamicAnalysis }: { dynamicAnalysis: import("../a
                     >
                       {currentScript.script_code.split('\n').map((line, idx) => {
                         // Basic JavaScript syntax highlighting
-                        let highlighted = line;
+                        // First escape HTML to prevent XSS
+                        const escapedLine = line
+                          .replace(/&/g, '&amp;')
+                          .replace(/</g, '&lt;')
+                          .replace(/>/g, '&gt;')
+                          .replace(/"/g, '&quot;');
+                        
+                        let highlighted = escapedLine;
                         
                         // Comments
-                        if (line.trim().startsWith('//')) {
-                          highlighted = `<span style="color: #6a9955">${line}</span>`;
+                        if (escapedLine.trim().startsWith('//')) {
+                          highlighted = `<span style="color: #6a9955">${escapedLine}</span>`;
                         }
                         // Strings
                         else {
-                          highlighted = line
-                            .replace(/(["'])((?:(?!\1)[^\\]|\\.)*)(\1)/g, '<span style="color: #ce9178">$1$2$3</span>')
+                          highlighted = escapedLine
+                            .replace(/(&quot;|&#39;)((?:(?!\1)[^\\]|\\.)*)(\1)/g, '<span style="color: #ce9178">$1$2$3</span>')
                             .replace(/\b(function|var|let|const|return|if|else|try|catch|for|while|true|false|null|undefined|this|new)\b/g, '<span style="color: #569cd6">$1</span>')
                             .replace(/\b(console)\.(log|warn|error)/g, '<span style="color: #dcdcaa">$1</span>.<span style="color: #dcdcaa">$2</span>')
                             .replace(/\b(Java)\.(use|perform|registerClass|cast|enumerateLoadedClasses)/g, '<span style="color: #4ec9b0">$1</span>.<span style="color: #dcdcaa">$2</span>')
@@ -11533,20 +11676,42 @@ function HardeningScoreCard({ hardeningScore }: { hardeningScore: import("../api
 // Docker Inspector Results Component
 function DockerResults({ result }: { result: DockerAnalysisResult }) {
   const theme = useTheme();
+  const [issueSearch, setIssueSearch] = useState("");
+  const [issueSeverityFilter, setIssueSeverityFilter] = useState<string[]>([]);
+  const [issueCategoryFilter, setIssueCategoryFilter] = useState<string[]>([]);
+  const [secretSearch, setSecretSearch] = useState("");
+  const [layerSecretSearch, setLayerSecretSearch] = useState("");
+  const [layerSecretMinSeverity, setLayerSecretMinSeverity] = useState("all");
+  const [layerSecretDeletedOnly, setLayerSecretDeletedOnly] = useState(false);
+  const [layerSecretPreview, setLayerSecretPreview] = useState<LayerSecret | null>(null);
+
+  useEffect(() => {
+    setIssueSearch("");
+    setIssueSeverityFilter([]);
+    setIssueCategoryFilter([]);
+    setSecretSearch("");
+    setLayerSecretSearch("");
+    setLayerSecretMinSeverity("all");
+    setLayerSecretDeletedOnly(false);
+    setLayerSecretPreview(null);
+  }, [result.image_id, result.image_name]);
+
+  const securityIssues = result.security_issues || [];
+  const secrets = result.secrets || [];
 
   // Categorize security issues by attack type for offensive security view
   const categorizeIssues = () => {
     const categories = {
-      container_escape: [] as typeof result.security_issues,
-      privilege_escalation: [] as typeof result.security_issues,
-      secrets: [] as typeof result.security_issues,
-      lateral_movement: [] as typeof result.security_issues,
-      network_exposure: [] as typeof result.security_issues,
-      supply_chain: [] as typeof result.security_issues,
-      other: [] as typeof result.security_issues,
+      container_escape: [] as typeof securityIssues,
+      privilege_escalation: [] as typeof securityIssues,
+      secrets: [] as typeof securityIssues,
+      lateral_movement: [] as typeof securityIssues,
+      network_exposure: [] as typeof securityIssues,
+      supply_chain: [] as typeof securityIssues,
+      other: [] as typeof securityIssues,
     };
 
-    result.security_issues.forEach((issue) => {
+    securityIssues.forEach((issue) => {
       const cat = issue.category?.toLowerCase() || "";
       if (cat.includes("escape") || cat.includes("privileged")) {
         categories.container_escape.push(issue);
@@ -11569,28 +11734,130 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
 
   const categories = categorizeIssues();
 
-  // Calculate risk score
-  const calculateRiskScore = () => {
-    let score = 0;
-    result.security_issues.forEach((issue) => {
-      switch (issue.severity?.toLowerCase()) {
-        case "critical": score += 40; break;
-        case "high": score += 25; break;
-        case "medium": score += 10; break;
-        case "low": score += 3; break;
-      }
-    });
-    result.secrets.forEach((s) => {
-      switch (s.severity?.toLowerCase()) {
-        case "critical": score += 35; break;
-        case "high": score += 20; break;
-        default: score += 10;
-      }
-    });
-    return Math.min(100, score);
-  };
+  const layerSecrets = result.layer_secrets || [];
+  const baseImageIntel = result.base_image_intel || [];
+  const secretCount = secrets.length + layerSecrets.length;
+  const deletedSecretsCount =
+    result.deleted_secrets_count ?? layerSecrets.filter((s) => s.is_deleted).length;
+  const baseImageIntelCount = baseImageIntel.length;
 
-  const riskScore = calculateRiskScore();
+  const normalizeSeverity = (severity?: string) => (severity || "unknown").toLowerCase();
+  const severityScore: Record<string, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+    advisory: 0,
+    info: 0,
+    unknown: 0,
+  };
+  const getSeverityRank = (severity?: string) => severityScore[normalizeSeverity(severity)] ?? 0;
+
+  const issueCategoryOptions = useMemo(() => {
+    const options = Array.from(new Set(securityIssues.map((issue) => issue.category).filter(Boolean))) as string[];
+    return options.sort((a, b) => a.localeCompare(b));
+  }, [securityIssues]);
+
+  const severityCounts = useMemo(() => {
+    const counts = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      advisory: 0,
+      info: 0,
+      unknown: 0,
+    };
+    securityIssues.forEach((issue) => {
+      const key = normalizeSeverity(issue.severity) as keyof typeof counts;
+      if (counts[key] !== undefined) {
+        counts[key] += 1;
+      } else {
+        counts.unknown += 1;
+      }
+    });
+    return counts;
+  }, [securityIssues]);
+
+  const severitySegments = [
+    { key: "critical", label: "Critical", count: severityCounts.critical, color: "#dc2626" },
+    { key: "high", label: "High", count: severityCounts.high, color: "#f97316" },
+    { key: "medium", label: "Medium", count: severityCounts.medium, color: "#eab308" },
+    { key: "low", label: "Low", count: severityCounts.low, color: "#22c55e" },
+    { key: "advisory", label: "Advisory", count: severityCounts.advisory, color: "#3b82f6" },
+    { key: "info", label: "Info", count: severityCounts.info, color: "#6b7280" },
+    { key: "unknown", label: "Unknown", count: severityCounts.unknown, color: "#9ca3af" },
+  ].filter((segment) => segment.count > 0);
+
+  const filteredIssues = useMemo(() => {
+    return securityIssues.filter((issue) => {
+      const severity = normalizeSeverity(issue.severity);
+      if (issueSeverityFilter.length > 0 && !issueSeverityFilter.includes(severity)) {
+        return false;
+      }
+      if (issueCategoryFilter.length > 0) {
+        if (!issue.category || !issueCategoryFilter.includes(issue.category)) {
+          return false;
+        }
+      }
+      if (!issueSearch) return true;
+      const search = issueSearch.toLowerCase();
+      return [
+        issue.category,
+        issue.description,
+        issue.attack_vector,
+        issue.command,
+        issue.rule_id,
+      ].some((field) => field?.toLowerCase().includes(search));
+    });
+  }, [securityIssues, issueSeverityFilter, issueCategoryFilter, issueSearch]);
+
+  const sortedIssues = useMemo(() => {
+    return [...filteredIssues].sort((a, b) => {
+      const severityDiff = getSeverityRank(b.severity) - getSeverityRank(a.severity);
+      if (severityDiff !== 0) return severityDiff;
+      return (a.category || "").localeCompare(b.category || "");
+    });
+  }, [filteredIssues]);
+
+  const filteredSecrets = useMemo(() => {
+    if (!secretSearch) return secrets;
+    const search = secretSearch.toLowerCase();
+    return secrets.filter((secret) => {
+      return [
+        secret.secret_type,
+        secret.layer_id,
+        secret.layer_command,
+        secret.masked_value,
+        secret.context,
+      ].some((field) => field?.toLowerCase().includes(search));
+    });
+  }, [secrets, secretSearch]);
+
+  const filteredLayerSecrets = useMemo(() => {
+    return layerSecrets.filter((secret) => {
+      if (layerSecretDeletedOnly && !secret.is_deleted) return false;
+      if (layerSecretMinSeverity !== "all") {
+        if (getSeverityRank(secret.severity) < getSeverityRank(layerSecretMinSeverity)) {
+          return false;
+        }
+      }
+      if (!layerSecretSearch) return true;
+      const search = layerSecretSearch.toLowerCase();
+      return [
+        secret.file_path,
+        secret.file_type,
+        secret.attack_vector,
+        String(secret.layer_index),
+      ].some((field) => field?.toLowerCase().includes(search));
+    });
+  }, [layerSecrets, layerSecretDeletedOnly, layerSecretMinSeverity, layerSecretSearch]);
+
+  const largestLayers = useMemo(() => {
+    return [...(result.layers || [])].sort((a, b) => b.size - a.size).slice(0, 5);
+  }, [result.layers]);
+
+  const riskScore = getDockerRiskScore(result);
   const getRiskLevel = (score: number) => {
     if (score >= 70) return { level: "CRITICAL", color: "#dc2626", icon: "🔴" };
     if (score >= 40) return { level: "HIGH", color: "#f97316", icon: "🟠" };
@@ -11599,8 +11866,47 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
   };
   const risk = getRiskLevel(riskScore);
 
-  const criticalCount = result.security_issues.filter(i => i.severity?.toLowerCase() === "critical").length;
-  const highCount = result.security_issues.filter(i => i.severity?.toLowerCase() === "high").length;
+  const criticalCount = securityIssues.filter(i => i.severity?.toLowerCase() === "critical").length;
+  const highCount = securityIssues.filter(i => i.severity?.toLowerCase() === "high").length;
+
+  // CVE stats
+  const cveScan = result.cve_scan;
+  const cveCount = cveScan?.vulnerabilities?.length || 0;
+  const kevCount = cveScan?.kev_count || 0;
+  const highEpssCount = cveScan?.high_epss_count || 0;
+  const cveCriticalCount = cveScan?.critical_count || 0;
+
+  const riskDrivers = [
+    { label: "Critical issues", value: criticalCount, color: "#dc2626" },
+    { label: "High issues", value: highCount, color: "#f97316" },
+    { label: "Secrets found", value: secretCount, color: "#dc2626" },
+    { label: "Deleted secrets", value: deletedSecretsCount, color: "#dc2626" },
+    { label: "Base image intel", value: baseImageIntelCount, color: "#8b5cf6" },
+    { label: "KEV CVEs", value: kevCount, color: "#dc2626" },
+    { label: "High EPSS CVEs", value: highEpssCount, color: "#f97316" },
+    { label: "Critical CVEs", value: cveCriticalCount, color: "#dc2626" },
+    { label: "Total CVEs", value: cveCount, color: "#8b5cf6" },
+  ].filter((item) => item.value > 0);
+
+  const recommendations = [
+    secretCount > 0 ? "Rotate exposed secrets and rebuild the image to purge history." : null,
+    deletedSecretsCount > 0 ? "Rebuild the image without secrets to remove deleted layer artifacts." : null,
+    baseImageIntelCount > 0 ? "Review base image findings and pin to a trusted, supported tag." : null,
+    categories.container_escape.length > 0 ? "Remove privileged flags, drop capabilities, and run as non-root." : null,
+    categories.privilege_escalation.length > 0 ? "Remove SUID binaries and harden permissions in build steps." : null,
+    kevCount > 0 ? "Patch CVEs in the CISA KEV catalog immediately - these are actively exploited." : null,
+    highEpssCount > 0 ? "Prioritize patching high EPSS score CVEs - high likelihood of exploitation." : null,
+    cveCount > 10 ? "Consider using a minimal base image to reduce attack surface." : null,
+  ].filter(Boolean) as string[];
+
+  const layerScanMeta = result.layer_scan_metadata || {};
+  const layerScanError = (layerScanMeta as { error?: string }).error;
+
+  const maskSecretContext = (context: string, value: string, maskedValue: string) => {
+    if (!context) return "-";
+    if (!value) return "-";
+    return context.split(value).join(maskedValue);
+  };
 
   return (
     <Box>
@@ -11643,7 +11949,7 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#dc2626", 0.1), borderRadius: 1 }}>
-                  <Typography variant="h5" color="error">{result.secrets.length}</Typography>
+                  <Typography variant="h5" color="error">{secretCount}</Typography>
                   <Typography variant="caption">Secrets</Typography>
                 </Box>
               </Grid>
@@ -11653,13 +11959,188 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                   <Typography variant="caption">Layers</Typography>
                 </Box>
               </Grid>
+              {deletedSecretsCount > 0 && (
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#dc2626", 0.1), borderRadius: 1 }}>
+                    <Typography variant="h5" color="error">{deletedSecretsCount}</Typography>
+                    <Typography variant="caption">Deleted Secrets</Typography>
+                  </Box>
+                </Grid>
+              )}
+              {baseImageIntelCount > 0 && (
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 1 }}>
+                    <Typography variant="h5" sx={{ color: "#8b5cf6" }}>{baseImageIntelCount}</Typography>
+                    <Typography variant="caption">Base Intel</Typography>
+                  </Box>
+                </Grid>
+              )}
             </Grid>
           </Grid>
         </Grid>
       </Paper>
 
+      {/* Findings Overview */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <ReportIcon color="primary" /> Findings Overview
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Severity Distribution
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  height: 12,
+                  borderRadius: 1,
+                  overflow: "hidden",
+                  bgcolor: alpha(theme.palette.text.secondary, 0.08),
+                  mb: 1.5,
+                }}
+              >
+                {securityIssues.length === 0 ? (
+                  <Box sx={{ width: "100%", bgcolor: alpha(theme.palette.text.secondary, 0.08) }} />
+                ) : (
+                  severitySegments.map((segment) => (
+                    <Box
+                      key={segment.key}
+                      sx={{
+                        width: `${(segment.count / securityIssues.length) * 100}%`,
+                        bgcolor: segment.color,
+                      }}
+                    />
+                  ))
+                )}
+              </Box>
+              {severitySegments.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No security issues detected
+                </Typography>
+              ) : (
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {severitySegments.map((segment) => (
+                    <Chip
+                      key={segment.key}
+                      label={`${segment.label}: ${segment.count}`}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(segment.color, 0.12),
+                        color: segment.color,
+                        fontWeight: 600,
+                      }}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Risk Drivers
+              </Typography>
+              {riskDrivers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No high-impact drivers detected
+                </Typography>
+              ) : (
+                <Box sx={{ display: "grid", gap: 1 }}>
+                  {riskDrivers.map((driver) => (
+                    <Box key={driver.label} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Chip
+                        label={driver.value}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(driver.color, 0.12),
+                          color: driver.color,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <Typography variant="body2">{driver.label}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              {recommendations.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Recommended Actions
+                  </Typography>
+                  <List dense>
+                    {recommendations.slice(0, 4).map((rec, idx) => (
+                      <ListItem key={idx} sx={{ py: 0.25 }}>
+                        <ListItemText
+                          primary={<Typography variant="body2">{rec}</Typography>}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Layer Scan Coverage
+              </Typography>
+              {layerScanError ? (
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  {layerScanError}
+                </Alert>
+              ) : (
+                <>
+                  <Typography variant="body2">
+                    Layers scanned: {layerScanMeta.layers_scanned ?? "N/A"} of {layerScanMeta.layers_total ?? "N/A"}
+                  </Typography>
+                  <Typography variant="body2">
+                    Files scanned: {layerScanMeta.files_scanned ?? "N/A"} · Size: {formatBytes(layerScanMeta.total_size_scanned ?? 0)}
+                  </Typography>
+                  {layerScanMeta.layers_truncated && (
+                    <Chip
+                      label="Scan truncated to recent layers"
+                      size="small"
+                      color="warning"
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </>
+              )}
+              {largestLayers.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Largest Layers
+                  </Typography>
+                  <List dense>
+                    {largestLayers.map((layer, idx) => (
+                      <ListItem key={`${layer.id}-${idx}`} sx={{ py: 0.25 }}>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" fontFamily="monospace">
+                              {layer.id.slice(0, 8)}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary">
+                              {formatBytes(layer.size)} · {layer.command.length > 50 ? layer.command.slice(0, 50) + "..." : layer.command}
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      </Paper>
+
       {/* Attack Vector Categories */}
-      {result.security_issues.length > 0 && (
+      {securityIssues.length > 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <TargetIcon color="error" /> Attack Vectors by Category
@@ -11804,15 +12285,191 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         </Grid>
       </Paper>
 
+      {/* Base Image Intelligence */}
+      {baseImageIntel.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon color="secondary" /> Base Image Intelligence
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell width={110}>Severity</TableCell>
+                  <TableCell width={140}>Category</TableCell>
+                  <TableCell>Message</TableCell>
+                  <TableCell>Recommendation</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {baseImageIntel.map((intel, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <Chip
+                        label={intel.severity}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(getSeverityColor(intel.severity), 0.2),
+                          color: getSeverityColor(intel.severity),
+                          fontWeight: 600,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">{intel.category}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{intel.message}</Typography>
+                      {intel.attack_vector && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                          Attack Vector: {intel.attack_vector}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{intel.recommendation || "-"}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+
+      {/* AI False Positive Adjudication */}
+      {result.adjudication_enabled && (result.adjudication_summary || result.adjudication_stats) && (
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <AiIcon color="info" /> AI False Positive Adjudication
+          </Typography>
+          {result.adjudication_summary && (
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              {result.adjudication_summary}
+            </Typography>
+          )}
+          {result.adjudication_stats && (
+            <Grid container spacing={2} sx={{ mb: result.rejected_findings?.length ? 2 : 0 }}>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha(theme.palette.info.main, 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" color="info">{result.adjudication_stats.total}</Typography>
+                  <Typography variant="caption">Total</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#16a34a", 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#16a34a" }}>{result.adjudication_stats.confirmed}</Typography>
+                  <Typography variant="caption">Confirmed</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#6b7280", 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#6b7280" }}>{result.adjudication_stats.rejected}</Typography>
+                  <Typography variant="caption">Rejected</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          )}
+          {result.rejected_findings && result.rejected_findings.length > 0 && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Rejected Findings (Sample)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <List dense>
+                  {result.rejected_findings.slice(0, 5).map((finding, idx) => (
+                    <ListItem key={idx} sx={{ py: 0.25 }}>
+                      <ListItemText
+                        primary={<Typography variant="body2">{finding.message || "Rejected finding"}</Typography>}
+                        secondary={
+                          finding._adjudication?.reason
+                            ? <Typography variant="caption">{finding._adjudication.reason}</Typography>
+                            : undefined
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </Paper>
+      )}
+
       {/* All Security Issues (Detailed) */}
-      {result.security_issues.length > 0 && (
+      {securityIssues.length > 0 && (
         <Accordion defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <BugIcon color="error" /> All Security Issues ({result.security_issues.length})
+              <BugIcon color="error" /> All Security Issues ({securityIssues.length})
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <FilterAltIcon fontSize="small" color="action" />
+              <Typography variant="subtitle2">Filters</Typography>
+            </Box>
+            <Box sx={{ mb: 2 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Search issues"
+                    value={issueSearch}
+                    onChange={(e) => setIssueSearch(e.target.value)}
+                    InputProps={{
+                      startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                      endAdornment: issueSearch ? (
+                        <IconButton size="small" onClick={() => setIssueSearch("")}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      ) : null,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Autocomplete
+                    multiple
+                    options={issueCategoryOptions}
+                    value={issueCategoryFilter}
+                    onChange={(_, value) => setIssueCategoryFilter(value)}
+                    disableCloseOnSelect
+                    renderInput={(params) => (
+                      <TextField {...params} size="small" label="Filter by category" />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <ToggleButtonGroup
+                    value={issueSeverityFilter}
+                    onChange={(_, value) => setIssueSeverityFilter(value || [])}
+                    size="small"
+                  >
+                    <ToggleButton value="critical">Critical</ToggleButton>
+                    <ToggleButton value="high">High</ToggleButton>
+                    <ToggleButton value="medium">Medium</ToggleButton>
+                    <ToggleButton value="low">Low</ToggleButton>
+                  </ToggleButtonGroup>
+                </Grid>
+              </Grid>
+              <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label={`Showing ${sortedIssues.length} of ${securityIssues.length}`}
+                  size="small"
+                  variant="outlined"
+                />
+                {(issueSearch || issueCategoryFilter.length > 0 || issueSeverityFilter.length > 0) && (
+                  <Button size="small" onClick={() => {
+                    setIssueSearch("");
+                    setIssueCategoryFilter([]);
+                    setIssueSeverityFilter([]);
+                  }}>
+                    Clear filters
+                  </Button>
+                )}
+              </Box>
+            </Box>
             <TableContainer sx={{ maxHeight: 400 }}>
               <Table size="small">
                 <TableHead>
@@ -11824,37 +12481,47 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {result.security_issues.map((issue, idx) => (
-                    <TableRow key={idx} sx={{ bgcolor: issue.severity?.toLowerCase() === "critical" ? alpha("#dc2626", 0.05) : "inherit" }}>
-                      <TableCell>
-                        <Chip
-                          label={issue.severity}
-                          size="small"
-                          sx={{
-                            bgcolor: alpha(getSeverityColor(issue.severity), 0.2),
-                            color: getSeverityColor(issue.severity),
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption">{issue.category}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{issue.description}</Typography>
-                        {issue.command && (
-                          <Typography variant="caption" fontFamily="monospace" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                            {issue.command.length > 100 ? issue.command.slice(0, 100) + "..." : issue.command}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" color="error" sx={{ fontStyle: "italic" }}>
-                          {issue.attack_vector || "-"}
+                  {sortedIssues.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Typography variant="body2" color="text.secondary">
+                          No issues match the current filters
                         </Typography>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    sortedIssues.map((issue, idx) => (
+                      <TableRow key={idx} sx={{ bgcolor: issue.severity?.toLowerCase() === "critical" ? alpha("#dc2626", 0.05) : "inherit" }}>
+                        <TableCell>
+                          <Chip
+                            label={issue.severity}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(getSeverityColor(issue.severity), 0.2),
+                              color: getSeverityColor(issue.severity),
+                              fontWeight: 600,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption">{issue.category}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">{issue.description}</Typography>
+                          {issue.command && (
+                            <Typography variant="caption" fontFamily="monospace" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                              {issue.command.length > 100 ? issue.command.slice(0, 100) + "..." : issue.command}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="error" sx={{ fontStyle: "italic" }}>
+                            {issue.attack_vector || "-"}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -11863,11 +12530,11 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
       )}
 
       {/* Secrets in Layers */}
-      {result.secrets.length > 0 && (
+      {secrets.length > 0 && (
         <Accordion sx={{ mt: 2 }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
-              <SecretIcon /> Secrets Found in Image ({result.secrets.length})
+              <SecretIcon /> Secrets Found in Image ({secrets.length})
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
@@ -11876,6 +12543,23 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                 <strong>Attack Vector:</strong> Secrets in image layers can be extracted using <code>docker save</code> + <code>tar</code> even if "deleted" in later layers.
               </Typography>
             </Alert>
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Search secrets"
+                value={secretSearch}
+                onChange={(e) => setSecretSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                  endAdornment: secretSearch ? (
+                    <IconButton size="small" onClick={() => setSecretSearch("")}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  ) : null,
+                }}
+              />
+            </Box>
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -11883,40 +12567,399 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                     <TableCell>Layer</TableCell>
                     <TableCell>Type</TableCell>
                     <TableCell>Value (Masked)</TableCell>
+                    <TableCell>Context</TableCell>
                     <TableCell>Severity</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {result.secrets.map((secret, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>
-                        <Tooltip title={secret.layer_command}>
+                  {filteredSecrets.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography variant="body2" color="text.secondary">
+                          No secrets match the current search
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSecrets.map((secret, idx) => {
+                      const maskedContext = maskSecretContext(secret.context || "", secret.value, secret.masked_value);
+                      const displayContext = maskedContext.length > 120 ? maskedContext.slice(0, 120) + "..." : maskedContext || "-";
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <Tooltip title={secret.layer_command}>
+                              <Typography variant="body2" fontFamily="monospace">
+                                {secret.layer_id.slice(0, 8)}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>{secret.secret_type}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                              {secret.masked_value}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title={maskedContext || "No context"}>
+                              <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                                {displayContext}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={secret.severity}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
+                                color: getSeverityColor(secret.severity),
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* Layer Deep Scan Secrets */}
+      {layerSecrets.length > 0 && (
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
+              <LayersIcon /> Layer Deep Scan Secrets ({layerSecrets.length})
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {deletedSecretsCount > 0 && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Critical:</strong> {deletedSecretsCount} secret files were deleted in later layers but
+                  remain recoverable from earlier layers.
+                </Typography>
+              </Alert>
+            )}
+            {result.layer_scan_metadata && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                Layers scanned: {result.layer_scan_metadata.layers_scanned ?? "N/A"} · Files scanned:{" "}
+                {result.layer_scan_metadata.files_scanned ?? "N/A"} · Deleted secrets:{" "}
+                {result.layer_scan_metadata.deleted_secrets_found ?? 0}
+              </Typography>
+            )}
+            <Box sx={{ mb: 2 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={5}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Search files"
+                    value={layerSecretSearch}
+                    onChange={(e) => setLayerSecretSearch(e.target.value)}
+                    InputProps={{
+                      startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                      endAdornment: layerSecretSearch ? (
+                        <IconButton size="small" onClick={() => setLayerSecretSearch("")}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      ) : null,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Min severity</InputLabel>
+                    <Select
+                      label="Min severity"
+                      value={layerSecretMinSeverity}
+                      onChange={(e) => setLayerSecretMinSeverity(e.target.value)}
+                    >
+                      <MenuItem value="all">All</MenuItem>
+                      <MenuItem value="critical">Critical</MenuItem>
+                      <MenuItem value="high">High</MenuItem>
+                      <MenuItem value="medium">Medium</MenuItem>
+                      <MenuItem value="low">Low</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={6} md={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={layerSecretDeletedOnly}
+                        onChange={(e) => setLayerSecretDeletedOnly(e.target.checked)}
+                      />
+                    }
+                    label="Deleted only"
+                  />
+                </Grid>
+              </Grid>
+              <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label={`Showing ${filteredLayerSecrets.length} of ${layerSecrets.length}`}
+                  size="small"
+                  variant="outlined"
+                />
+              </Box>
+            </Box>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Layer</TableCell>
+                    <TableCell>File</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Deleted</TableCell>
+                    <TableCell>Size</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Preview</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredLayerSecrets.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7}>
+                        <Typography variant="body2" color="text.secondary">
+                          No layer secrets match the current filters
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredLayerSecrets.map((secret, idx) => (
+                      <TableRow key={idx} sx={{ bgcolor: secret.is_deleted ? alpha("#dc2626", 0.05) : "inherit" }}>
+                        <TableCell>
                           <Typography variant="body2" fontFamily="monospace">
-                            {secret.layer_id.slice(0, 8)}
+                            {String(secret.layer_index)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                            {secret.file_path}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{secret.file_type}</TableCell>
+                        <TableCell>
+                          {secret.is_deleted ? (
+                            <Chip label="YES" size="small" color="error" />
+                          ) : (
+                            <Chip label="No" size="small" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatBytes(secret.size_bytes)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={secret.severity}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
+                              color: getSeverityColor(secret.severity),
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={secret.content_preview ? "View preview" : "No preview available"}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => setLayerSecretPreview(secret)}
+                                disabled={!secret.content_preview}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </AccordionDetails>
+        </Accordion>
+      )}
+
+      {/* CVE Vulnerabilities */}
+      {result.cve_scan && result.cve_scan.vulnerabilities && result.cve_scan.vulnerabilities.length > 0 && (
+        <Accordion sx={{ mt: 2 }} defaultExpanded>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+              <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
+                <BugIcon /> Package Vulnerabilities ({result.cve_scan.vulnerabilities.length} CVEs)
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, ml: "auto" }}>
+                {(result.cve_scan.critical_count || 0) > 0 && (
+                  <Chip label={`Critical: ${result.cve_scan.critical_count}`} size="small" color="error" />
+                )}
+                {(result.cve_scan.high_count || 0) > 0 && (
+                  <Chip label={`High: ${result.cve_scan.high_count}`} size="small" sx={{ bgcolor: "#f97316", color: "white" }} />
+                )}
+                {(result.cve_scan.kev_count || 0) > 0 && (
+                  <Chip label={`KEV: ${result.cve_scan.kev_count}`} size="small" color="error" variant="outlined" />
+                )}
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            {/* Summary stats */}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#22c55e", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h6">{result.cve_scan.packages_scanned}</Typography>
+                  <Typography variant="caption">Packages Scanned</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#dc2626", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h6" color="error">{result.cve_scan.packages_with_vulns}</Typography>
+                  <Typography variant="caption">Vulnerable Packages</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#8b5cf6", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#8b5cf6" }}>{result.cve_scan.high_epss_count}</Typography>
+                  <Typography variant="caption">High EPSS (&gt;50%)</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#3b82f6", 0.1), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#3b82f6" }}>{result.cve_scan.enrichment_applied ? "Yes" : "No"}</Typography>
+                  <Typography variant="caption">NVD Enriched</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* KEV warning */}
+            {(result.cve_scan.kev_count || 0) > 0 && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>{result.cve_scan.kev_count} CVE(s) are in the CISA Known Exploited Vulnerabilities catalog!</strong>
+                  {" "}These vulnerabilities are actively exploited in the wild and require immediate attention.
+                </Typography>
+              </Alert>
+            )}
+
+            {/* CVE Table */}
+            <TableContainer sx={{ maxHeight: 500 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>CVE ID</TableCell>
+                    <TableCell>Package</TableCell>
+                    <TableCell>Version</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>CVSS</TableCell>
+                    <TableCell>EPSS</TableCell>
+                    <TableCell>KEV</TableCell>
+                    <TableCell>Priority</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {result.cve_scan.vulnerabilities.map((vuln, idx) => (
+                    <TableRow
+                      key={idx}
+                      sx={{
+                        bgcolor: vuln.in_kev
+                          ? alpha("#dc2626", 0.1)
+                          : vuln.severity?.toLowerCase() === "critical"
+                            ? alpha("#dc2626", 0.05)
+                            : "inherit"
+                      }}
+                    >
+                      <TableCell>
+                        <Tooltip title={vuln.title || vuln.description || "No description"}>
+                          <Typography
+                            variant="body2"
+                            fontFamily="monospace"
+                            sx={{
+                              color: vuln.in_kev ? "#dc2626" : "inherit",
+                              fontWeight: vuln.in_kev ? 700 : 400,
+                            }}
+                          >
+                            {vuln.external_id}
                           </Typography>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>{secret.secret_type}</TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                          {secret.masked_value}
-                        </Typography>
+                        <Typography variant="body2">{vuln.package_name || "-"}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" fontFamily="monospace">{vuln.package_version || "-"}</Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={secret.severity}
+                          label={vuln.severity || "unknown"}
                           size="small"
                           sx={{
-                            bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
-                            color: getSeverityColor(secret.severity),
+                            bgcolor: alpha(getSeverityColor(vuln.severity || "unknown"), 0.2),
+                            color: getSeverityColor(vuln.severity || "unknown"),
+                            fontWeight: 600,
                           }}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          fontWeight={vuln.cvss_score && vuln.cvss_score >= 9.0 ? 700 : 400}
+                          color={vuln.cvss_score && vuln.cvss_score >= 9.0 ? "error" : "inherit"}
+                        >
+                          {vuln.cvss_score?.toFixed(1) || "-"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={vuln.epss_percentile ? `${(vuln.epss_percentile * 100).toFixed(0)}th percentile` : ""}>
+                          <Typography
+                            variant="body2"
+                            color={vuln.epss_score && vuln.epss_score > 0.5 ? "error" : "inherit"}
+                            fontWeight={vuln.epss_score && vuln.epss_score > 0.5 ? 700 : 400}
+                          >
+                            {vuln.epss_score ? `${(vuln.epss_score * 100).toFixed(1)}%` : "-"}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        {vuln.in_kev ? (
+                          <Chip label="YES" size="small" color="error" />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">No</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vuln.priority_label && (
+                          <Chip
+                            label={vuln.priority_label}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(getSeverityColor(vuln.priority_label), 0.2),
+                              color: getSeverityColor(vuln.priority_label),
+                            }}
+                          />
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* Scan metadata */}
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" color="text.secondary">
+                Scan duration: {result.cve_scan.scan_duration_seconds?.toFixed(1)}s ·
+                Trivy: {result.cve_scan.trivy_available ? "Available" : "Not available"}
+              </Typography>
+              {result.cve_scan.error && (
+                <Chip label={`Error: ${result.cve_scan.error}`} size="small" color="warning" />
+              )}
+            </Box>
           </AccordionDetails>
         </Accordion>
       )}
@@ -11948,7 +12991,7 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {layer.size > 0 ? `${(layer.size / (1024 * 1024)).toFixed(1)} MB` : "0 B"}
+                        {formatBytes(layer.size)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -11992,6 +13035,80 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
           </Typography>
         </Paper>
       )}
+
+      <Dialog
+        open={Boolean(layerSecretPreview)}
+        onClose={() => setLayerSecretPreview(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Layer Secret Preview</DialogTitle>
+        <DialogContent dividers>
+          {layerSecretPreview ? (
+            <Box sx={{ display: "grid", gap: 1.5 }}>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                <Chip
+                  label={layerSecretPreview.severity?.toUpperCase() || "UNKNOWN"}
+                  size="small"
+                  sx={{
+                    bgcolor: alpha(getSeverityColor(layerSecretPreview.severity), 0.2),
+                    color: getSeverityColor(layerSecretPreview.severity),
+                    fontWeight: 600,
+                  }}
+                />
+                {layerSecretPreview.is_deleted && (
+                  <Chip label="Deleted (recoverable)" size="small" color="error" />
+                )}
+                <Chip label={`Layer ${layerSecretPreview.layer_index}`} size="small" />
+                <Chip label={formatBytes(layerSecretPreview.size_bytes)} size="small" />
+              </Box>
+              <Box>
+                <Typography variant="subtitle2">File</Typography>
+                <Typography variant="body2" fontFamily="monospace">
+                  {layerSecretPreview.file_path}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2">Type</Typography>
+                <Typography variant="body2">{layerSecretPreview.file_type}</Typography>
+              </Box>
+              {layerSecretPreview.entropy !== undefined && (
+                <Box>
+                  <Typography variant="subtitle2">Entropy</Typography>
+                  <Typography variant="body2">{layerSecretPreview.entropy.toFixed(2)}</Typography>
+                </Box>
+              )}
+              {layerSecretPreview.attack_vector && (
+                <Box>
+                  <Typography variant="subtitle2">Attack Vector</Typography>
+                  <Typography variant="body2">{layerSecretPreview.attack_vector}</Typography>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="subtitle2">Content Preview</Typography>
+                {layerSecretPreview.content_preview ? (
+                  <Paper variant="outlined" sx={{ p: 1.5, bgcolor: alpha(theme.palette.background.default, 0.6) }}>
+                    <Typography
+                      variant="body2"
+                      component="pre"
+                      sx={{ whiteSpace: "pre-wrap", fontFamily: "monospace", m: 0 }}
+                    >
+                      {layerSecretPreview.content_preview}
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No preview available for this file
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLayerSecretPreview(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -12071,6 +13188,18 @@ export default function ReverseEngineeringHub() {
   const [dockerLoading, setDockerLoading] = useState(false);
   const [dockerImageFilter, setDockerImageFilter] = useState("");
   const [dockerImagesLoading, setDockerImagesLoading] = useState(false);
+  const [dockerIncludeAi, setDockerIncludeAi] = useState(true);
+  const [dockerAdjudicateFindings, setDockerAdjudicateFindings] = useState(true);
+  const [dockerSkepticismLevel, setDockerSkepticismLevel] = useState<"high" | "medium" | "low">("high");
+  const [dockerDeepScan, setDockerDeepScan] = useState(true);
+  const [dockerCheckBaseImage, setDockerCheckBaseImage] = useState(true);
+  // CVE Scanning state
+  const [dockerScanCves, setDockerScanCves] = useState(true);
+  const [dockerIncludeNvd, setDockerIncludeNvd] = useState(true);
+  const [dockerIncludeKev, setDockerIncludeKev] = useState(true);
+  const [dockerIncludeEpss, setDockerIncludeEpss] = useState(true);
+  const [dockerExportAnchor, setDockerExportAnchor] = useState<null | HTMLElement>(null);
+  const [exportingDocker, setExportingDocker] = useState(false);
 
   // Saved reports state
   const [savedReports, setSavedReports] = useState<REReportSummary[]>([]);
@@ -12133,6 +13262,52 @@ export default function ReverseEngineeringHub() {
     img.name.toLowerCase().includes(dockerImageFilter.toLowerCase()) ||
     img.id.toLowerCase().includes(dockerImageFilter.toLowerCase())
   );
+
+  const selectedDockerImage = useMemo(
+    () => dockerImages.find((img) => img.name === selectedImage),
+    [dockerImages, selectedImage]
+  );
+
+  const dockerScanProfile = useMemo<DockerScanProfile>(() => {
+    if (!dockerIncludeAi && !dockerAdjudicateFindings && !dockerDeepScan && !dockerCheckBaseImage) {
+      return "fast";
+    }
+    if (dockerIncludeAi && dockerAdjudicateFindings && dockerSkepticismLevel === "high" && !dockerDeepScan && dockerCheckBaseImage) {
+      return "balanced";
+    }
+    if (dockerIncludeAi && dockerAdjudicateFindings && dockerSkepticismLevel === "high" && dockerDeepScan && dockerCheckBaseImage) {
+      return "deep";
+    }
+    return "custom";
+  }, [dockerIncludeAi, dockerAdjudicateFindings, dockerSkepticismLevel, dockerDeepScan, dockerCheckBaseImage]);
+
+  const applyDockerProfile = (profile: Exclude<DockerScanProfile, "custom">) => {
+    switch (profile) {
+      case "fast":
+        setDockerIncludeAi(false);
+        setDockerAdjudicateFindings(false);
+        setDockerSkepticismLevel("high");
+        setDockerDeepScan(false);
+        setDockerCheckBaseImage(false);
+        break;
+      case "balanced":
+        setDockerIncludeAi(true);
+        setDockerAdjudicateFindings(true);
+        setDockerSkepticismLevel("high");
+        setDockerDeepScan(false);
+        setDockerCheckBaseImage(true);
+        break;
+      case "deep":
+        setDockerIncludeAi(true);
+        setDockerAdjudicateFindings(true);
+        setDockerSkepticismLevel("high");
+        setDockerDeepScan(true);
+        setDockerCheckBaseImage(true);
+        break;
+      default:
+        break;
+    }
+  };
 
   const loadSavedReports = async () => {
     try {
@@ -12514,44 +13689,23 @@ export default function ReverseEngineeringHub() {
     try {
       setSavingReport(true);
 
-      // Calculate risk score for the report
-      let riskScore = 0;
-      dockerResult.security_issues.forEach((issue) => {
-        switch (issue.severity?.toLowerCase()) {
-          case "critical": riskScore += 40; break;
-          case "high": riskScore += 25; break;
-          case "medium": riskScore += 10; break;
-          case "low": riskScore += 3; break;
-        }
-      });
-      dockerResult.secrets.forEach((s) => {
-        switch (s.severity?.toLowerCase()) {
-          case "critical": riskScore += 35; break;
-          case "high": riskScore += 20; break;
-          default: riskScore += 10;
-        }
-      });
-      riskScore = Math.min(100, riskScore);
-
-      const getRiskLevel = (score: number) => {
-        if (score >= 70) return "critical";
-        if (score >= 40) return "high";
-        if (score >= 20) return "medium";
-        return "low";
-      };
+      const riskScore = getDockerRiskScore(dockerResult);
+      const riskLevel = getDockerRiskLevelLabel(riskScore);
+      const deepSecretsCount = dockerResult.layer_secrets?.length || 0;
+      const secretsCount = (dockerResult.secrets?.length || 0) + deepSecretsCount;
 
       const report: SaveREReportRequest = {
         analysis_type: 'docker',
         title: `Docker Inspector: ${dockerResult.image_name}`,
         filename: dockerResult.image_name,
         project_id: projectId,
-        risk_level: getRiskLevel(riskScore),
+        risk_level: riskLevel,
         risk_score: riskScore,
         image_name: dockerResult.image_name,
         image_id: dockerResult.image_id,
         total_layers: dockerResult.total_layers,
         base_image: dockerResult.base_image || undefined,
-        secrets_count: dockerResult.secrets.length,
+        secrets_count: secretsCount,
         security_issues: dockerResult.security_issues as any,
         ai_analysis_raw: dockerResult.ai_analysis || undefined,
         full_analysis_data: {
@@ -12564,8 +13718,17 @@ export default function ReverseEngineeringHub() {
           layers: dockerResult.layers,
           secrets: dockerResult.secrets,
           security_issues: dockerResult.security_issues,
+          deleted_files: dockerResult.deleted_files,
+          base_image_intel: dockerResult.base_image_intel,
+          layer_secrets: dockerResult.layer_secrets,
+          layer_scan_metadata: dockerResult.layer_scan_metadata,
+          deleted_secrets_count: dockerResult.deleted_secrets_count,
+          adjudication_enabled: dockerResult.adjudication_enabled,
+          adjudication_summary: dockerResult.adjudication_summary,
+          adjudication_stats: dockerResult.adjudication_stats,
+          rejected_findings: dockerResult.rejected_findings,
           risk_score: riskScore,
-          risk_level: getRiskLevel(riskScore),
+          risk_level: riskLevel,
         },
       };
       await reverseEngineeringClient.saveReport(report);
@@ -12575,6 +13738,31 @@ export default function ReverseEngineeringHub() {
       setError(`Failed to save report: ${e.message}`);
     } finally {
       setSavingReport(false);
+    }
+  };
+
+  const exportDockerResult = async (format: "markdown" | "pdf" | "docx") => {
+    if (!dockerResult) return;
+    try {
+      setExportingDocker(true);
+      setDockerExportAnchor(null);
+      const blob = await reverseEngineeringClient.exportDockerResult(dockerResult, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = format === "markdown" ? "md" : format;
+      const base = dockerResult.image_name || "docker_report";
+      const safeBase = base.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
+      a.download = `docker_analysis_${safeBase}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMessage(`Docker report exported as ${format.toUpperCase()} successfully!`);
+    } catch (e: any) {
+      setError(`Failed to export report: ${e.message}`);
+    } finally {
+      setExportingDocker(false);
     }
   };
 
@@ -12756,6 +13944,14 @@ export default function ReverseEngineeringHub() {
           secrets_found: (fullData.secrets_found || []) as any[],
           secrets: (fullData.secrets || fullData.secrets_found || []) as any[],
           deleted_files: (fullData.deleted_files || []) as any[],
+          base_image_intel: (fullData.base_image_intel || []) as any[],
+          layer_secrets: (fullData.layer_secrets || []) as any[],
+          layer_scan_metadata: (fullData.layer_scan_metadata || undefined) as any,
+          deleted_secrets_count: (fullData.deleted_secrets_count as number) || 0,
+          adjudication_enabled: (fullData.adjudication_enabled as boolean) || false,
+          adjudication_summary: (fullData.adjudication_summary as string) || undefined,
+          adjudication_stats: (fullData.adjudication_stats || undefined) as any,
+          rejected_findings: (fullData.rejected_findings || []) as any[],
           ai_analysis: detail.ai_analysis_raw,
         } as DockerAnalysisResult);
         setActiveTab(2); // Docker tab (index 2)
@@ -12867,7 +14063,19 @@ export default function ReverseEngineeringHub() {
     try {
       setDockerLoading(true);
       setError(null);
-      const result = await reverseEngineeringClient.analyzeDockerImage(selectedImage, true);
+      const result = await reverseEngineeringClient.analyzeDockerImage(
+        selectedImage,
+        dockerIncludeAi,
+        dockerAdjudicateFindings,
+        dockerSkepticismLevel,
+        dockerDeepScan,
+        dockerCheckBaseImage,
+        // CVE Scanning parameters
+        dockerScanCves,
+        dockerIncludeNvd,
+        dockerIncludeKev,
+        dockerIncludeEpss
+      );
       setDockerResult(result);
     } catch (e: any) {
       setError(e.message);
@@ -12880,14 +14088,14 @@ export default function ReverseEngineeringHub() {
     <LearnPageLayout pageTitle="Reverse Engineering Hub" pageContext={pageContext}>
     <>
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Back to Projects Button */}
+      {/* Back to Home Button */}
       <Button
         component={Link}
         to="/"
         startIcon={<HubIcon />}
         sx={{ mb: 2 }}
       >
-        Back to Projects
+        Back to Home
       </Button>
 
       {/* Breadcrumbs */}
@@ -13996,6 +15204,167 @@ export default function ReverseEngineeringHub() {
                     {dockerLoading ? "Analyzing..." : "Analyze Image"}
                   </Button>
 
+                  {selectedImage && !selectedDockerImage && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      Image not found locally. Run <code>docker pull {selectedImage}</code> before scanning.
+                    </Alert>
+                  )}
+                  {selectedDockerImage && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Selected Image Details
+                      </Typography>
+                      <Typography variant="body2" fontFamily="monospace">
+                        {selectedDockerImage.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        ID: {selectedDockerImage.id.slice(0, 12)} · Size: {selectedDockerImage.size}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Created: {selectedDockerImage.created}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Divider sx={{ my: 3 }} />
+
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <TuneIcon fontSize="small" /> Scan Configuration
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={dockerScanProfile}
+                    exclusive
+                    size="small"
+                    disabled={dockerLoading}
+                    onChange={(_, value) => {
+                      if (!value || value === "custom") return;
+                      applyDockerProfile(value as Exclude<DockerScanProfile, "custom">);
+                    }}
+                    sx={{
+                      width: "100%",
+                      mb: 1.5,
+                      "& .MuiToggleButton-root": { flex: 1, textTransform: "none" },
+                    }}
+                  >
+                    <ToggleButton value="fast">Fast</ToggleButton>
+                    <ToggleButton value="balanced">Balanced</ToggleButton>
+                    <ToggleButton value="deep">Deep</ToggleButton>
+                    <ToggleButton value="custom" disabled>
+                      Custom
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    Fast skips AI and deep scans. Deep includes adjudication, base intel, and layer extraction.
+                  </Typography>
+                  <FormGroup>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={dockerIncludeAi}
+                          onChange={(e) => setDockerIncludeAi(e.target.checked)}
+                          disabled={dockerLoading}
+                        />
+                      }
+                      label="AI security analysis"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={dockerAdjudicateFindings}
+                          onChange={(e) => setDockerAdjudicateFindings(e.target.checked)}
+                          disabled={dockerLoading}
+                        />
+                      }
+                      label="AI false-positive adjudication"
+                    />
+                    <FormControl size="small" sx={{ mt: 1 }} disabled={!dockerAdjudicateFindings || dockerLoading}>
+                      <InputLabel>Adjudication skepticism</InputLabel>
+                      <Select
+                        label="Adjudication skepticism"
+                        value={dockerSkepticismLevel}
+                        onChange={(e) => setDockerSkepticismLevel(e.target.value as "high" | "medium" | "low")}
+                      >
+                        <MenuItem value="high">High (strict)</MenuItem>
+                        <MenuItem value="medium">Medium</MenuItem>
+                        <MenuItem value="low">Low (lenient)</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={dockerDeepScan}
+                          onChange={(e) => setDockerDeepScan(e.target.checked)}
+                          disabled={dockerLoading}
+                        />
+                      }
+                      label="Deep layer scan (recoverable secrets)"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={dockerCheckBaseImage}
+                          onChange={(e) => setDockerCheckBaseImage(e.target.checked)}
+                          disabled={dockerLoading}
+                        />
+                      }
+                      label="Base image intelligence"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={dockerScanCves}
+                          onChange={(e) => setDockerScanCves(e.target.checked)}
+                          disabled={dockerLoading}
+                        />
+                      }
+                      label="Scan packages for CVEs"
+                    />
+                  </FormGroup>
+                  {dockerScanCves && (
+                    <Box sx={{ pl: 3, mt: 1 }}>
+                      <FormGroup row>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={dockerIncludeNvd}
+                              onChange={(e) => setDockerIncludeNvd(e.target.checked)}
+                              disabled={dockerLoading}
+                            />
+                          }
+                          label={<Typography variant="caption">NVD enrichment</Typography>}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={dockerIncludeKev}
+                              onChange={(e) => setDockerIncludeKev(e.target.checked)}
+                              disabled={dockerLoading}
+                            />
+                          }
+                          label={<Typography variant="caption">CISA KEV</Typography>}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={dockerIncludeEpss}
+                              onChange={(e) => setDockerIncludeEpss(e.target.checked)}
+                              disabled={dockerLoading}
+                            />
+                          }
+                          label={<Typography variant="caption">EPSS scores</Typography>}
+                        />
+                      </FormGroup>
+                    </Box>
+                  )}
+                  {dockerDeepScan && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      Deep scans use <code>docker save</code> to inspect up to 20 layers and may take longer.
+                    </Alert>
+                  )}
+
                   <Divider sx={{ my: 3 }} />
 
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -14114,7 +15483,31 @@ export default function ReverseEngineeringHub() {
                 )}
                 {dockerResult && !dockerLoading && (
                   <>
-                    <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+                    <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2, gap: 1, flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        startIcon={exportingDocker ? <CircularProgress size={20} /> : <DownloadIcon />}
+                        onClick={(e) => setDockerExportAnchor(e.currentTarget)}
+                        disabled={exportingDocker}
+                      >
+                        Export
+                      </Button>
+                      <Menu
+                        anchorEl={dockerExportAnchor}
+                        open={Boolean(dockerExportAnchor)}
+                        onClose={() => setDockerExportAnchor(null)}
+                      >
+                        <MenuItem onClick={() => exportDockerResult("markdown")}>
+                          Export as Markdown
+                        </MenuItem>
+                        <MenuItem onClick={() => exportDockerResult("pdf")}>
+                          Export as PDF
+                        </MenuItem>
+                        <MenuItem onClick={() => exportDockerResult("docx")}>
+                          Export as Word
+                        </MenuItem>
+                      </Menu>
                       <Button
                         variant="contained"
                         color="success"

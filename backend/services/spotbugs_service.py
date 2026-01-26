@@ -7,7 +7,7 @@ including security vulnerabilities using the Find Security Bugs plugin.
 
 import subprocess
 import tempfile
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional

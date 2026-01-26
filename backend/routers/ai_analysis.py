@@ -9,10 +9,13 @@ Provides REST API endpoints for AI-powered security analysis:
 - Comprehensive analysis
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from datetime import datetime
+
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 
 from backend.services.ai_security_analysis_service import (
     get_chain_analyzer,
@@ -74,7 +77,7 @@ class ComprehensiveAnalysisRequest(BaseModel):
 # =============================================================================
 
 @router.post("/exploit-chains")
-async def analyze_exploit_chains(request: AnalyzeFindingsRequest) -> Dict:
+async def analyze_exploit_chains(request: AnalyzeFindingsRequest, current_user: User = Depends(get_current_active_user)) -> Dict:
     """
     Analyze findings to identify potential exploit chains.
     
@@ -103,7 +106,7 @@ async def analyze_exploit_chains(request: AnalyzeFindingsRequest) -> Dict:
 
 
 @router.get("/exploit-chains/relationships")
-async def get_chain_relationships() -> Dict:
+async def get_chain_relationships(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get the known technique chain relationships."""
     from services.ai_security_analysis_service import ExploitChainAnalyzer
     
@@ -122,7 +125,7 @@ async def get_chain_relationships() -> Dict:
 # =============================================================================
 
 @router.post("/root-causes")
-async def analyze_root_causes(request: AnalyzeFindingsRequest) -> Dict:
+async def analyze_root_causes(request: AnalyzeFindingsRequest, current_user: User = Depends(get_current_active_user)) -> Dict:
     """
     Analyze findings to identify root causes.
     
@@ -155,7 +158,7 @@ async def analyze_root_causes(request: AnalyzeFindingsRequest) -> Dict:
 
 
 @router.get("/root-causes/categories")
-async def get_root_cause_categories() -> Dict:
+async def get_root_cause_categories(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get available root cause categories."""
     from services.ai_security_analysis_service import RootCauseCategory
     
@@ -176,7 +179,7 @@ async def get_root_cause_categories() -> Dict:
 # =============================================================================
 
 @router.post("/impact")
-async def assess_impact(request: ImpactRequest) -> Dict:
+async def assess_impact(request: ImpactRequest, current_user: User = Depends(get_current_active_user)) -> Dict:
     """
     Assess the business and technical impact of findings.
     
@@ -203,6 +206,7 @@ async def assess_impact(request: ImpactRequest) -> Dict:
 async def assess_single_impact(
     finding: Finding,
     business_context: Optional[BusinessContext] = None,
+    current_user: User = Depends(get_current_active_user),
 ) -> Dict:
     """Assess impact of a single finding."""
     try:
@@ -222,7 +226,7 @@ async def assess_single_impact(
 
 
 @router.get("/impact/categories")
-async def get_impact_categories() -> Dict:
+async def get_impact_categories(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get available impact categories."""
     from services.ai_security_analysis_service import ImpactCategory
     
@@ -243,7 +247,7 @@ async def get_impact_categories() -> Dict:
 # =============================================================================
 
 @router.post("/remediation")
-async def prioritize_remediation(request: AnalyzeFindingsRequest) -> Dict:
+async def prioritize_remediation(request: AnalyzeFindingsRequest, current_user: User = Depends(get_current_active_user)) -> Dict:
     """
     Generate a prioritized remediation plan.
     
@@ -280,7 +284,7 @@ async def prioritize_remediation(request: AnalyzeFindingsRequest) -> Dict:
 
 
 @router.get("/remediation/effort-estimates")
-async def get_effort_estimates() -> Dict:
+async def get_effort_estimates(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get effort estimates by technique."""
     from services.ai_security_analysis_service import RemediationPrioritizer
     
@@ -295,7 +299,7 @@ async def get_effort_estimates() -> Dict:
 # =============================================================================
 
 @router.post("/comprehensive")
-async def comprehensive_analysis(request: ComprehensiveAnalysisRequest) -> Dict:
+async def comprehensive_analysis(request: ComprehensiveAnalysisRequest, current_user: User = Depends(get_current_active_user)) -> Dict:
     """
     Perform comprehensive AI security analysis.
     
@@ -335,7 +339,7 @@ async def comprehensive_analysis(request: ComprehensiveAnalysisRequest) -> Dict:
 # =============================================================================
 
 @router.get("/attack-stages")
-async def get_attack_stages() -> Dict:
+async def get_attack_stages(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get attack stages and technique mappings."""
     from services.ai_security_analysis_service import AttackStage, TECHNIQUE_ATTACK_STAGE
     
@@ -360,7 +364,7 @@ async def get_attack_stages() -> Dict:
 # =============================================================================
 
 @router.get("/techniques")
-async def get_technique_info() -> Dict:
+async def get_technique_info(current_user: User = Depends(get_current_active_user)) -> Dict:
     """Get all technique analysis information."""
     from services.ai_security_analysis_service import (
         TECHNIQUE_ATTACK_STAGE,

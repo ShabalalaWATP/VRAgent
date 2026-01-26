@@ -73,6 +73,7 @@ class SeedGenerationResult:
     recommended_dictionary: List[str]
     fuzzing_strategy: str
     target_analysis: str
+    generation_method: str = "heuristic"
 
 
 @dataclass
@@ -270,6 +271,7 @@ async def generate_smart_seeds(
                 recommended_dictionary=dictionary,
                 fuzzing_strategy=strategy,
                 target_analysis=json.dumps(context, indent=2),
+                generation_method="ai",
             )
         except Exception as e:
             logger.error(f"AI seed generation failed: {e}")
@@ -334,7 +336,7 @@ Respond in this exact JSON format:
 }}"""
 
     response = genai_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=prompt,
     )
     
@@ -354,7 +356,7 @@ Respond in this exact JSON format:
             if seed_data.get("content_type") == "hex":
                 try:
                     content = bytes.fromhex(content.replace(" ", ""))
-                except:
+                except ValueError:
                     content = content.encode()
             else:
                 content = content.encode() if isinstance(content, str) else content
@@ -425,6 +427,7 @@ def _generate_fallback_seeds(binary_info: BinaryInfo, format_type: str, num_seed
         recommended_dictionary=binary_info.strings[:20],
         fuzzing_strategy="Standard mutation-based fuzzing",
         target_analysis="Basic binary analysis (AI unavailable)",
+        generation_method="heuristic",
     )
 
 
@@ -577,7 +580,7 @@ Provide your analysis in this exact JSON format:
 }}"""
 
     response = genai_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=prompt,
     )
     
@@ -745,7 +748,7 @@ Respond in this exact JSON format:
 }}"""
 
     response = genai_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=prompt,
     )
     

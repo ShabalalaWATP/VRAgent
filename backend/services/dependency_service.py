@@ -16,7 +16,7 @@ for precise versions. Deduplication is performed to avoid duplicates.
 
 import json
 import re
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 

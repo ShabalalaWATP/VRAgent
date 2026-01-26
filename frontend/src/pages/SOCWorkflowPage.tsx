@@ -71,11 +71,150 @@ const bestPractices = [
 ];
 
 const commonTools = [
-  "SIEM (Splunk, Sentinel, Elastic)",
-  "EDR (CrowdStrike, Defender, SentinelOne)",
-  "Threat Intel (VirusTotal, MISP, OTX)",
-  "Ticketing (Jira, ServiceNow)",
-  "SOAR (Phantom, XSOAR, Shuffle)",
+  "SIEM: Splunk, Elastic, Microsoft Sentinel, IBM QRadar",
+  "EDR/XDR: CrowdStrike Falcon, Microsoft Defender for Endpoint, SentinelOne, Carbon Black",
+  "Threat Intel: VirusTotal, MISP, Recorded Future, AlienVault OTX",
+  "Ticketing/Case: ServiceNow, Jira, TheHive, Zendesk",
+  "SOAR: Splunk SOAR (Phantom), Palo Alto XSOAR, Swimlane, Tines, Shuffle",
+  "Network Visibility: Zeek, Suricata, Corelight, Palo Alto NGFW",
+  "Email Security: Proofpoint, Mimecast, Defender for Office 365",
+];
+
+const toolingLandscape = [
+  {
+    category: "SIEM / Log Analytics",
+    purpose: "Centralize logs, search quickly, correlate events, and generate alerts.",
+    examples: ["Splunk Enterprise/Cloud", "Elastic Security (ELK)", "Microsoft Sentinel", "IBM QRadar", "LogRhythm"],
+  },
+  {
+    category: "EDR / XDR",
+    purpose: "Endpoint telemetry, process trees, and one-click response actions.",
+    examples: ["CrowdStrike Falcon", "Microsoft Defender for Endpoint", "SentinelOne", "VMware Carbon Black", "Cortex XDR"],
+  },
+  {
+    category: "SOAR / Automation",
+    purpose: "Automate enrichment, ticket updates, and containment steps.",
+    examples: ["Splunk SOAR (Phantom)", "Palo Alto XSOAR", "Swimlane", "Tines", "Torq"],
+  },
+  {
+    category: "Threat Intelligence",
+    purpose: "Reputation and context for IPs, domains, hashes, and actors.",
+    examples: ["VirusTotal", "MISP", "Recorded Future", "Anomali", "AlienVault OTX"],
+  },
+  {
+    category: "Network Visibility",
+    purpose: "Detect beaconing, lateral movement, and suspicious destinations.",
+    examples: ["Zeek", "Suricata", "Corelight", "Palo Alto NGFW", "Fortinet FortiGate"],
+  },
+  {
+    category: "Email Security",
+    purpose: "Phishing detection, attachment scanning, and URL rewriting.",
+    examples: ["Proofpoint", "Mimecast", "Microsoft Defender for Office 365", "Abnormal Security"],
+  },
+  {
+    category: "Identity and SSO",
+    purpose: "Authentication logs, MFA signals, and identity risk posture.",
+    examples: ["Microsoft Entra ID (Azure AD)", "Okta", "Duo", "Ping Identity"],
+  },
+  {
+    category: "Cloud Security",
+    purpose: "Cloud-native detections and audit trails.",
+    examples: ["AWS CloudTrail/GuardDuty", "Azure Defender", "GCP Security Command Center"],
+  },
+  {
+    category: "Case Management",
+    purpose: "Track investigations, approvals, and audit-ready documentation.",
+    examples: ["ServiceNow", "Jira", "TheHive", "Zendesk"],
+  },
+  {
+    category: "Forensics and Triage",
+    purpose: "Host collection, live response, and artifact analysis.",
+    examples: ["Velociraptor", "KAPE", "FTK", "Autopsy"],
+  },
+  {
+    category: "Asset/Vulnerability Context",
+    purpose: "Asset criticality, ownership, and known exposures.",
+    examples: ["Tenable", "Qualys", "Rapid7", "CMDB"],
+  },
+  {
+    category: "UEBA",
+    purpose: "Behavior baselines and anomaly detection for users and hosts.",
+    examples: ["Exabeam", "Securonix", "Splunk UBA"],
+  },
+];
+
+const dataPipelineSteps = [
+  {
+    step: "Collect",
+    detail: "Agents, forwarders, and APIs pull raw events from endpoints, servers, network devices, and SaaS.",
+    examples: ["Sysmon/Windows Event Logs", "Linux auditd", "CloudTrail", "Okta auth logs"],
+  },
+  {
+    step: "Normalize",
+    detail: "Logs are parsed into consistent fields so searches and correlations work across sources.",
+    examples: ["ECS (Elastic)", "CIM (Splunk)", "CEF", "JSON parsing"],
+  },
+  {
+    step: "Enrich",
+    detail: "Context is added: asset owner, business criticality, threat intel, GeoIP, and ASN data.",
+    examples: ["CMDB owner", "VirusTotal reputation", "GeoIP/ASN"],
+  },
+  {
+    step: "Correlate",
+    detail: "Signals are linked to build a coherent timeline across hosts, users, and IPs.",
+    examples: ["EDR + proxy + auth logs", "DNS + firewall + cloud audit"],
+  },
+  {
+    step: "Detect",
+    detail: "Rules, analytics, and anomaly models raise alerts with evidence attached.",
+    examples: ["Sigma rules", "ATT&CK technique mapping", "UEBA anomalies"],
+  },
+  {
+    step: "Respond",
+    detail: "Analysts or SOAR take action, update tickets, and coordinate containment.",
+    examples: ["Isolate host", "Disable account", "Block indicator"],
+  },
+];
+
+const evidenceQualitySignals = [
+  "Multiple telemetry sources confirm the same behavior",
+  "High-fidelity artifacts: full command line, parent process, hash",
+  "Asset context indicates business criticality or privileged access",
+  "Timing aligns with known threat intel or active campaign",
+  "Activity repeats across hosts or users in a short window",
+];
+
+const caseWalkthrough = [
+  {
+    phase: "Alert Trigger",
+    detail: "SIEM rule fires for a suspicious PowerShell command on a finance workstation.",
+    example: "Encoded command with web download, parent process is an email client.",
+  },
+  {
+    phase: "Triage",
+    detail: "Validate alert fidelity, check user role, and confirm if the activity is expected.",
+    example: "User is not admin, no scheduled scripts, recent phishing email present.",
+  },
+  {
+    phase: "Enrichment",
+    detail: "Query EDR for process tree, proxy for destination, and intel for hashes.",
+    example: "Domain has poor reputation; hash seen in recent malware campaign.",
+  },
+  {
+    phase: "Scope",
+    detail: "Search for the same indicator across the environment and time window.",
+    example: "Two additional hosts show the same download URL in proxy logs.",
+  },
+  {
+    phase: "Containment",
+    detail: "Isolate affected hosts and disable compromised accounts.",
+    example: "EDR isolation applied, account password reset initiated.",
+  },
+  {
+    phase: "Document and Hand Off",
+    detail: "Record findings, add timeline, and escalate to IR with evidence.",
+    example: "Ticket includes timestamps, IOCs, and actions taken.",
+  },
 ];
 
 const triageQuestions = [
@@ -1088,21 +1227,25 @@ export default function SOCWorkflowPage() {
   const [activeSection, setActiveSection] = useState<string>("");
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const pageContext = `SOC Analyst Workflow Guide - Covers the Security Operations Center analyst workflow including alert triage, initial analysis, enrichment, determination, response/escalation, and documentation. Includes triage questions, alert categories, core telemetry sources, enrichment sources, investigation checklists, disposition rubric, escalation criteria, escalation packet checklists, containment actions, documentation fields, shift handoff steps, SOC metrics, best practices, tier responsibilities (Tier 1-3), common tools, alert-type playbooks, and a detection feedback loop.`;
+  const pageContext = `SOC Analyst Workflow Guide - Covers the Security Operations Center analyst workflow including alert triage, initial analysis, enrichment, determination, response/escalation, and documentation. Includes triage questions, alert categories, core telemetry sources, enrichment sources, investigation checklists, disposition rubric, escalation criteria, escalation packet checklists, containment actions, documentation fields, shift handoff steps, SOC metrics, best practices, tier responsibilities (Tier 1-3), common tools and products, a SOC data pipeline overview, evidence quality signals, alert-type playbooks, example case walkthroughs, and a detection feedback loop.`;
 
   const sectionNavItems = [
     { id: "intro", label: "Overview", icon: <SupportAgentIcon /> },
     { id: "workflow", label: "Workflow", icon: <PlaylistAddCheckIcon /> },
+    { id: "data-pipeline", label: "Data Pipeline", icon: <TrackChangesIcon /> },
     { id: "telemetry", label: "Telemetry", icon: <SourceIcon /> },
+    { id: "evidence-quality", label: "Evidence Quality", icon: <CheckCircleIcon /> },
     { id: "disposition", label: "Disposition", icon: <AssignmentIcon /> },
     { id: "escalation", label: "Escalation", icon: <PriorityHighIcon /> },
     { id: "documentation", label: "Documentation", icon: <AssignmentIcon /> },
     { id: "best-practices", label: "Best Practices", icon: <CheckCircleIcon /> },
+    { id: "tooling-landscape", label: "Tooling", icon: <AssignmentIcon /> },
     { id: "metrics", label: "Metrics & Pitfalls", icon: <TrackChangesIcon /> },
     { id: "lifecycle", label: "Alert Lifecycle", icon: <ArrowForwardIcon /> },
     { id: "playbooks", label: "Playbooks", icon: <AssignmentIcon /> },
     { id: "siem-queries", label: "SIEM Queries", icon: <SourceIcon /> },
     { id: "triage-scenarios", label: "Scenarios", icon: <WarningIcon /> },
+    { id: "case-walkthrough", label: "Case Walkthrough", icon: <ListAltIcon /> },
     { id: "tuning", label: "Tuning", icon: <TrackChangesIcon /> },
     { id: "feedback-loop", label: "Feedback Loop", icon: <SwapHorizIcon /> },
     { id: "related", label: "Related", icon: <ListAltIcon /> },
@@ -1491,12 +1634,16 @@ export default function SOCWorkflowPage() {
               {[
                 { label: "Overview", id: "intro" },
                 { label: "Workflow", id: "workflow" },
+                { label: "Pipeline", id: "data-pipeline" },
                 { label: "Telemetry", id: "telemetry" },
+                { label: "Evidence", id: "evidence-quality" },
                 { label: "Disposition", id: "disposition" },
                 { label: "Escalation", id: "escalation" },
                 { label: "Playbooks", id: "playbooks" },
+                { label: "Tooling", id: "tooling-landscape" },
                 { label: "Queries", id: "siem-queries" },
                 { label: "Scenarios", id: "triage-scenarios" },
+                { label: "Walkthrough", id: "case-walkthrough" },
                 { label: "Quiz", id: "quiz" },
               ].map((nav) => (
                 <Chip
@@ -1537,11 +1684,27 @@ export default function SOCWorkflowPage() {
             incidents, and responding to threats. A structured workflow ensures consistent, thorough analysis 
             and helps teams scale while maintaining quality.
           </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mt: 2 }}>
+            A modern SOC is not just people watching dashboards. It is a coordinated system of log collection, 
+            analytics, threat intelligence, and case management. Analysts must handle noisy alerts, prioritize 
+            high-risk activity, and communicate clearly with engineers, IT, and leadership. The goal is to reduce 
+            risk quickly while preserving evidence for audits and incident response.
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mt: 2 }}>
+            This page expands the workflow into practical details: what telemetry matters, how alerts are created, 
+            which tools are commonly used (Splunk, Elastic, Microsoft Sentinel, CrowdStrike, and more), and how to 
+            build a clear case narrative. If you are new to SOC work, focus on the flow from alert to evidence to action.
+          </Typography>
         </Paper>
 
         {/* Workflow Steps */}
         <Typography id="workflow" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
           Investigation Workflow
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+          A consistent workflow keeps investigations repeatable and lowers the chance of missing critical evidence.
+          Even when the tools or alert types change, the sequence stays the same: validate the alert, gather context,
+          enrich with additional data, decide on the disposition, respond, and document for future learning.
         </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {workflowSteps.map((ws, i) => (
@@ -1584,6 +1747,35 @@ export default function SOCWorkflowPage() {
           ))}
         </Grid>
 
+        {/* SOC Data Pipeline */}
+        <Typography id="data-pipeline" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          SOC Data Pipeline: From Logs to Alerts
+        </Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03) }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Alerts do not appear out of nowhere. They are the output of a pipeline that collects raw events,
+            normalizes fields, enriches with context, and applies detections. Understanding this pipeline helps
+            analysts troubleshoot missing data, explain why an alert fired, and tune detections with confidence.
+          </Typography>
+          <Grid container spacing={2}>
+            {dataPipelineSteps.map((step, index) => (
+              <Grid item xs={12} md={6} key={step.step}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {index + 1}. {step.step}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {step.detail}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                    Examples: {step.examples.join(", ")}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
         {/* Triage Questions */}
         <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#ef4444", 0.03) }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1622,6 +1814,10 @@ export default function SOCWorkflowPage() {
         <Typography id="telemetry" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
           Core Telemetry Sources
         </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+          Strong investigations come from multiple data sources. Endpoint logs show what ran, identity logs show who did it,
+          and network logs show where data went. If one source is missing, your confidence drops and your false positives rise.
+        </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {telemetrySources.map((source) => (
             <Grid item xs={12} md={6} key={source.source}>
@@ -1659,6 +1855,36 @@ export default function SOCWorkflowPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Evidence Quality Signals */}
+        <Paper
+          id="evidence-quality"
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 3,
+            bgcolor: alpha("#10b981", 0.03),
+            scrollMarginTop: 180,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            <CheckCircleIcon sx={{ color: "#10b981" }} /> Evidence Quality Signals
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Not all evidence is equal. High-quality signals reduce false positives and make investigations faster.
+            Use this list to judge whether an alert has enough substance to escalate or whether it needs more context.
+          </Typography>
+          <List dense>
+            {evidenceQualitySignals.map((item, i) => (
+              <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <CheckCircleIcon sx={{ fontSize: 16, color: "#10b981" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
 
         {/* Tier Responsibilities */}
         <Paper
@@ -1850,6 +2076,9 @@ export default function SOCWorkflowPage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <PlaylistAddCheckIcon sx={{ color: "#10b981" }} /> Best Practices
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                These habits keep investigations consistent, reduce noise, and help future analysts understand your decisions.
+              </Typography>
               <List dense>
                 {bestPractices.map((bp, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1867,6 +2096,9 @@ export default function SOCWorkflowPage() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
                 <AssignmentIcon sx={{ color: "#8b5cf6" }} /> Common Tools
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Most SOCs combine a SIEM, EDR, ticketing, and enrichment tools. Product names change, but the workflow stays the same.
+              </Typography>
               <List dense>
                 {commonTools.map((tool, i) => (
                   <ListItem key={i} sx={{ py: 0.25, px: 0 }}>
@@ -1880,6 +2112,35 @@ export default function SOCWorkflowPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Tooling Landscape */}
+        <Typography id="tooling-landscape" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Tooling Landscape: Common SOC Products
+        </Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03) }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            SOCs are built from multiple tools, each focused on a slice of the problem. Most environments use a SIEM
+            for log search and alerting, an EDR for endpoint visibility, and a case system for workflow. The product
+            names below are common in real SOCs, but the workflow concepts remain the same no matter which tools are used.
+          </Typography>
+          <Grid container spacing={2}>
+            {toolingLandscape.map((tool) => (
+              <Grid item xs={12} md={6} key={tool.category}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 0.5 }}>
+                    {tool.category}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {tool.purpose}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                    Examples: {tool.examples.join(", ")}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
 
         {/* Metrics and Pitfalls */}
         <Typography id="metrics" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
@@ -2092,6 +2353,11 @@ export default function SOCWorkflowPage() {
         <Typography id="siem-queries" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
           Example SIEM Queries
         </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+          Query language varies by platform (Splunk SPL, Elastic KQL, Sentinel KQL). The examples below are written
+          in a generic SPL-like style, but the investigative logic is universal: find patterns, aggregate counts,
+          and pivot on users, hosts, and IPs.
+        </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {exampleSiemQueries.map((q, i) => (
             <Grid item xs={12} md={6} key={i}>
@@ -2157,6 +2423,35 @@ export default function SOCWorkflowPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Case Walkthrough */}
+        <Typography id="case-walkthrough" variant="h5" sx={{ fontWeight: 700, mb: 3, scrollMarginTop: 180 }}>
+          Example Case Walkthrough
+        </Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#10b981", 0.03) }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            The steps below illustrate how a single alert becomes a full investigation. This is the mental model
+            analysts use: start with the detection, validate context, enrich, scope, contain, and document.
+            You can reuse this structure for almost any alert type.
+          </Typography>
+          <Grid container spacing={2}>
+            {caseWalkthrough.map((step, index) => (
+              <Grid item xs={12} md={6} key={step.phase}>
+                <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {index + 1}. {step.phase}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {step.detail}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                    Example: {step.example}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
 
         {/* Detection Tuning Tips */}
         <Paper

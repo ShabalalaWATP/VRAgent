@@ -1,0 +1,185 @@
+groups:
+  - name: vragent_api_alerts
+    interval: 30s
+    rules:
+      - alert: HighAPIErrorRate
+        expr: rate(vragent_api_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanize }} errors/sec for endpoint {{ $labels.endpoint }}"
+
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.99, sum(rate(vragent_api_request_duration_seconds_bucket[5m])) by (le, endpoint)) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "P99 latency is {{ $value | humanize }}s for endpoint {{ $labels.endpoint }}"
+
+      - alert: APIDown
+        expr: up{job="vragent-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "VRAgent API is down"
+          description: "Backend API has been down for more than 1 minute"
+
+  - name: vragent_cache_alerts
+    interval: 30s
+    rules:
+      - alert: LowCacheHitRate
+        expr: (sum(rate(vragent_cache_hits_total[5m])) / (sum(rate(vragent_cache_hits_total[5m])) + sum(rate(vragent_cache_misses_total[5m])))) * 100 < 50
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Cache hit rate below 50%"
+          description: "Cache hit rate is {{ $value | humanize }}% - consider adjusting TTL policies or cache warming"
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage above 90%"
+          description: "Redis is using {{ $value | humanize }}% of available memory"
+
+      - alert: RedisConnectionsHigh
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "High number of Redis connections"
+          description: "Redis has {{ $value }} connected clients (threshold: 100)"
+
+  - name: vragent_database_alerts
+    interval: 30s
+    rules:
+      - alert: HighDatabaseConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Active connections: {{ $value }} / 100 limit"
+
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, sum(rate(vragent_database_query_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database queries are slow"
+          description: "P95 query duration is {{ $value | humanize }}s (threshold: 1s)"
+
+      - alert: HighDatabaseRollbackRate
+        expr: rate(pg_stat_database_xact_rollback{datname="vragent"}[5m]) / rate(pg_stat_database_xact_commit{datname="vragent"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database transaction rollback rate"
+          description: "Rollback rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      - alert: DatabaseDeadlocks
+        expr: increase(pg_stat_database_deadlocks{datname="vragent"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database deadlocks detected"
+          description: "{{ $value }} deadlocks detected in the last 5 minutes"
+
+  - name: vragent_fuzzing_alerts
+    interval: 30s
+    rules:
+      - alert: FuzzingCampaignStuck
+        expr: rate(vragent_fuzz_executions_total[5m]) == 0 and vragent_fuzz_campaigns_active > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: fuzzing
+        annotations:
+          summary: "Fuzzing campaign appears stuck"
+          description: "Campaign {{ $labels.campaign_id }} has not executed for 15 minutes"
+
+      - alert: HighCrashRate
+        expr: rate(vragent_crashes_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: info
+          component: fuzzing
+        annotations:
+          summary: "High crash discovery rate"
+          description: "Discovering {{ $value | humanize }} crashes/sec - campaign is finding bugs!"
+
+      - alert: NoFuzzingProgress
+        expr: rate(vragent_fuzz_coverage_edges[30m]) == 0 and vragent_fuzz_campaigns_active > 0
+        for: 30m
+        labels:
+          severity: info
+          component: fuzzing
+        annotations:
+          summary: "No new coverage discovered"
+          description: "Campaign {{ $labels.campaign_id }} has not discovered new coverage in 30 minutes"
+
+  - name: vragent_system_alerts
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanize }}% (threshold: 90%)"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}% (threshold: 90%)"
+
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value | humanize }}% (threshold: 85%)"
+
+      - alert: CriticalDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk usage is {{ $value | humanize }}% (threshold: 95%) - immediate action required"

@@ -65,7 +65,7 @@ def create_project(db: Session, project_in: ProjectCreate, owner_id: Optional[in
         name=project_in.name,
         description=project_in.description,
         git_url=project_in.git_url,
-        is_shared="true" if project_in.is_shared else "false",
+        is_shared=project_in.is_shared,
         owner_id=owner_id,
     )
     db.add(project)

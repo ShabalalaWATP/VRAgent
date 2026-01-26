@@ -835,7 +835,7 @@ export default function SecurityScanGuidePage() {
   const pageContext = `Comprehensive guide to VRAgent's security scanning pipeline. Covers the 10-phase scanning process (extraction, parallel SAST, CVE enrichment, reachability, Agentic AI deep scan), 11 SAST scanners with smart language selection, and AI analysis features (multi-pass scanning, agentic corroboration, false positive detection, attack chain discovery, severity adjustment, exploit scenarios). Learn how VRAgent uses Google Gemini AI to transform raw vulnerability data into actionable security intelligence.`;
 
   return (
-    <LearnPageLayout pageTitle="Security Scan Guide" pageContext={pageContext}>
+    <LearnPageLayout pageTitle="Static Analysis Scanner" pageContext={pageContext}>
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Back Button */}
         <Chip
@@ -861,10 +861,10 @@ export default function SecurityScanGuidePage() {
               WebkitTextFillColor: "transparent",
             }}
           >
-            🔍 Security Scan &amp; AI Analysis Guide
+            🔍 Static Analysis Scanner
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 900 }}>
-            Complete technical walkthrough of VRAgent's security scanning pipeline—from code extraction through multi-pass Agentic AI analysis with Google Gemini.
+            Complete technical walkthrough of VRAgent's static analysis pipeline—from code extraction through multi-pass Agentic AI analysis with Google Gemini.
           </Typography>
         </Box>
 

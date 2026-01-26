@@ -2,8 +2,11 @@
 Whiteboard WebSocket endpoint for real-time collaboration.
 """
 import json
+import html
+import re
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.orm import Session
@@ -17,15 +20,26 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ws/whiteboard", tags=["whiteboard-websocket"])
 
+# Security constants
+MAX_BATCH_UPDATES = 100
+MAX_CONTENT_LENGTH = 50000  # 50KB max for text content
+ALLOWED_IMAGE_SCHEMES = {'http', 'https', 'data'}
+ALLOWED_ELEMENT_UPDATES = {
+    'x', 'y', 'width', 'height', 'rotation', 'fill_color', 'stroke_color',
+    'stroke_width', 'opacity', 'content', 'font_size', 'font_family',
+    'text_align', 'z_index', 'points', 'start_element_id', 'end_element_id',
+    'arrow_start', 'arrow_end'
+}
 
-def check_project_access(db: Session, user_id: int, project_id: int) -> bool:
-    """Check if user has access to project."""
+
+def check_project_access(db: Session, user_id: int, project_id: int) -> Tuple[bool, str]:
+    """Check if user has access to project. Returns (has_access, role)."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        return False
+        return False, "none"
     
     if project.owner_id == user_id:
-        return True
+        return True, "owner"
     
     from sqlalchemy import and_
     collab = db.query(ProjectCollaborator).filter(
@@ -36,7 +50,39 @@ def check_project_access(db: Session, user_id: int, project_id: int) -> bool:
         )
     ).first()
     
-    return collab is not None
+    if collab:
+        return True, collab.role or "viewer"
+    return False, "none"
+
+
+def sanitize_content(content: Optional[str]) -> Optional[str]:
+    """Sanitize text content to prevent XSS."""
+    if content is None:
+        return None
+    # Truncate overly long content
+    if len(content) > MAX_CONTENT_LENGTH:
+        content = content[:MAX_CONTENT_LENGTH]
+    # HTML escape to prevent XSS
+    return html.escape(content)
+
+
+def validate_image_url(url: Optional[str]) -> Optional[str]:
+    """Validate image URL to prevent SSRF and XSS."""
+    if url is None:
+        return None
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ALLOWED_IMAGE_SCHEMES:
+            logger.warning(f"Blocked image URL with invalid scheme: {parsed.scheme}")
+            return None
+        # Block obvious javascript: or data: with suspicious content
+        if parsed.scheme == 'data':
+            # Only allow image data URIs
+            if not url.startswith('data:image/'):
+                return None
+        return url
+    except Exception:
+        return None
 
 
 @router.websocket("/{whiteboard_id}")
@@ -74,7 +120,12 @@ async def whiteboard_websocket(
     if not payload:
         await websocket.close(code=4001, reason="Invalid token")
         return
-    
+
+    # Verify this is an access token, not a refresh token
+    if payload.get("type") != "access":
+        await websocket.close(code=4001, reason="Invalid token type")
+        return
+
     user_id = payload.get("sub")
     if not user_id:
         await websocket.close(code=4001, reason="Invalid token")
@@ -97,9 +148,13 @@ async def whiteboard_websocket(
             await websocket.close(code=4004, reason="Whiteboard not found")
             return
         
-        if not check_project_access(db, user.id, whiteboard.project_id):
+        has_access, user_role = check_project_access(db, user.id, whiteboard.project_id)
+        if not has_access:
             await websocket.close(code=4003, reason="Access denied")
             return
+        
+        # Viewers can only observe, not edit
+        is_editor = user_role in ("owner", "editor", "admin")
         
         # Connect to whiteboard
         connection = await whiteboard_manager.connect(
@@ -136,7 +191,26 @@ async def whiteboard_websocket(
                 
                 elif msg_type == "create":
                     # Create new element
+                    if not is_editor:
+                        await websocket.send_json({"type": "error", "message": "Viewers cannot create elements"})
+                        continue
+                    
+                    # Rate limit check for modification operations
+                    if not connection.check_rate_limit():
+                        await websocket.send_json({"type": "error", "message": "Rate limit exceeded. Please slow down."})
+                        continue
+                    
+                    # Check if whiteboard is locked
+                    db.refresh(whiteboard)
+                    if whiteboard.is_locked and whiteboard.locked_by != user.id:
+                        await websocket.send_json({"type": "error", "message": "Whiteboard is locked"})
+                        continue
+                    
                     element_data = data.get("element", {})
+                    
+                    # Sanitize content and validate image URL
+                    content = sanitize_content(element_data.get("content"))
+                    image_url = validate_image_url(element_data.get("image_url"))
                     
                     # Save to database
                     import uuid
@@ -153,11 +227,11 @@ async def whiteboard_websocket(
                         stroke_color=element_data.get("stroke_color", "#ffffff"),
                         stroke_width=element_data.get("stroke_width", 2),
                         opacity=element_data.get("opacity", 1.0),
-                        content=element_data.get("content"),
+                        content=content,
                         font_size=element_data.get("font_size", 16),
                         font_family=element_data.get("font_family", "Inter"),
                         text_align=element_data.get("text_align", "left"),
-                        image_url=element_data.get("image_url"),
+                        image_url=image_url,
                         points=element_data.get("points"),
                         z_index=element_data.get("z_index", 0),
                         created_by=user.id
@@ -184,6 +258,21 @@ async def whiteboard_websocket(
                 
                 elif msg_type == "update":
                     # Update element
+                    if not is_editor:
+                        await websocket.send_json({"type": "error", "message": "Viewers cannot update elements"})
+                        continue
+                    
+                    # Rate limit check for modification operations
+                    if not connection.check_rate_limit():
+                        await websocket.send_json({"type": "error", "message": "Rate limit exceeded. Please slow down."})
+                        continue
+                    
+                    # Check if whiteboard is locked
+                    db.refresh(whiteboard)
+                    if whiteboard.is_locked and whiteboard.locked_by != user.id:
+                        await websocket.send_json({"type": "error", "message": "Whiteboard is locked"})
+                        continue
+                    
                     element_id = data.get("element_id")
                     updates = data.get("updates", {})
                     
@@ -197,21 +286,43 @@ async def whiteboard_websocket(
                         ).first()
                         
                         if element:
+                            # Apply only whitelisted attributes
                             for key, value in updates.items():
-                                if hasattr(element, key):
+                                if key in ALLOWED_ELEMENT_UPDATES and hasattr(element, key):
+                                    # Sanitize content field
+                                    if key == 'content':
+                                        value = sanitize_content(value)
+                                    elif key == 'image_url':
+                                        value = validate_image_url(value)
                                     setattr(element, key, value)
                             db.commit()
                         
-                        # Broadcast to others
+                        # Broadcast to others (filter updates to allowed keys)
+                        safe_updates = {k: v for k, v in updates.items() if k in ALLOWED_ELEMENT_UPDATES}
                         await whiteboard_manager.broadcast_element_update(
                             whiteboard_id=whiteboard_id,
                             user_id=user.id,
                             element_id=element_id,
-                            updates=updates
+                            updates=safe_updates
                         )
                 
                 elif msg_type == "delete":
                     # Delete element
+                    if not is_editor:
+                        await websocket.send_json({"type": "error", "message": "Viewers cannot delete elements"})
+                        continue
+                    
+                    # Rate limit check for modification operations
+                    if not connection.check_rate_limit():
+                        await websocket.send_json({"type": "error", "message": "Rate limit exceeded. Please slow down."})
+                        continue
+                    
+                    # Check if whiteboard is locked
+                    db.refresh(whiteboard)
+                    if whiteboard.is_locked and whiteboard.locked_by != user.id:
+                        await websocket.send_json({"type": "error", "message": "Whiteboard is locked"})
+                        continue
+                    
                     element_id = data.get("element_id")
                     
                     if element_id:
@@ -236,31 +347,79 @@ async def whiteboard_websocket(
                 
                 elif msg_type == "batch_update":
                     # Batch update multiple elements
+                    if not is_editor:
+                        await websocket.send_json({"type": "error", "message": "Viewers cannot update elements"})
+                        continue
+                    
+                    # Rate limit check for modification operations
+                    if not connection.check_rate_limit():
+                        await websocket.send_json({"type": "error", "message": "Rate limit exceeded. Please slow down."})
+                        continue
+                    
+                    # Check if whiteboard is locked
+                    db.refresh(whiteboard)
+                    if whiteboard.is_locked and whiteboard.locked_by != user.id:
+                        await websocket.send_json({"type": "error", "message": "Whiteboard is locked"})
+                        continue
+                    
                     updates = data.get("updates", [])
+                    
+                    # Enforce batch limit to prevent DoS
+                    if len(updates) > MAX_BATCH_UPDATES:
+                        logger.warning(f"User {user.id} exceeded batch update limit: {len(updates)}")
+                        updates = updates[:MAX_BATCH_UPDATES]
+                    
+                    # Track successful and failed updates
+                    successful_updates = []
+                    failed_updates = []
                     
                     for update in updates:
                         element_id = update.get("element_id")
                         if element_id:
-                            from sqlalchemy import and_
-                            element = db.query(WhiteboardElement).filter(
-                                and_(
-                                    WhiteboardElement.whiteboard_id == whiteboard_id,
-                                    WhiteboardElement.element_id == element_id
-                                )
-                            ).first()
-                            
-                            if element:
-                                for key, value in update.items():
-                                    if key != "element_id" and hasattr(element, key):
-                                        setattr(element, key, value)
+                            try:
+                                from sqlalchemy import and_
+                                element = db.query(WhiteboardElement).filter(
+                                    and_(
+                                        WhiteboardElement.whiteboard_id == whiteboard_id,
+                                        WhiteboardElement.element_id == element_id
+                                    )
+                                ).first()
+                                
+                                if element:
+                                    # Apply only whitelisted attributes
+                                    for key, value in update.items():
+                                        if key != "element_id" and key in ALLOWED_ELEMENT_UPDATES and hasattr(element, key):
+                                            if key == 'content':
+                                                value = sanitize_content(value)
+                                            elif key == 'image_url':
+                                                value = validate_image_url(value)
+                                            setattr(element, key, value)
+                                    successful_updates.append(update)
+                                else:
+                                    failed_updates.append({"element_id": element_id, "reason": "not_found"})
+                            except Exception as e:
+                                logger.warning(f"Failed to update element {element_id}: {e}")
+                                failed_updates.append({"element_id": element_id, "reason": "error"})
                     
                     db.commit()
                     
-                    # Broadcast to others
+                    # Notify client of any failures
+                    if failed_updates:
+                        await websocket.send_json({
+                            "type": "batch_update_partial",
+                            "successful": len(successful_updates),
+                            "failed": failed_updates
+                        })
+                    
+                    # Broadcast to others (filter updates to allowed keys, only successful ones)
+                    safe_updates = [
+                        {k: v for k, v in u.items() if k == 'element_id' or k in ALLOWED_ELEMENT_UPDATES}
+                        for u in successful_updates
+                    ]
                     await whiteboard_manager.broadcast_batch_update(
                         whiteboard_id=whiteboard_id,
                         user_id=user.id,
-                        updates=updates
+                        updates=safe_updates
                     )
                 
                 elif msg_type == "viewport":
@@ -284,7 +443,7 @@ async def whiteboard_websocket(
             try:
                 await websocket.send_json({
                     "type": "error",
-                    "message": str(e)
+                    "message": "An unexpected error occurred"
                 })
             except:
                 pass

@@ -1,36 +1,62 @@
 import {
   Box,
   Typography,
-  Container,
   Paper,
   alpha,
   useTheme,
-  IconButton,
+  useMediaQuery,
   Chip,
   Grid,
-  Tabs,
-  Tab,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   TextField,
   InputAdornment,
   Link,
-  Divider,
   Alert,
-  Card,
-  CardContent,
   Button,
+  Drawer,
+  Fab,
+  LinearProgress,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Collapse,
 } from "@mui/material";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SearchIcon from "@mui/icons-material/Search";
 import LaunchIcon from "@mui/icons-material/Launch";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import BookIcon from "@mui/icons-material/Book";
+import ChecklistIcon from "@mui/icons-material/Checklist";
+import GpsFixedIcon from "@mui/icons-material/GpsFixed";
+import BuildIcon from "@mui/icons-material/Build";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
+import FlashOnIcon from "@mui/icons-material/FlashOn";
+import PushPinIcon from "@mui/icons-material/PushPin";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import ExploreIcon from "@mui/icons-material/Explore";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import InventoryIcon from "@mui/icons-material/Inventory";
+import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import WarningIcon from "@mui/icons-material/Warning";
+import SettingsIcon from "@mui/icons-material/Settings";
+import DataUsageIcon from "@mui/icons-material/DataUsage";
+import LinkIcon from "@mui/icons-material/Link";
 
 interface Technique {
   id: string;
@@ -394,6 +420,7 @@ const reportingMetrics = [
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#3b82f6";
+const ACCENT_COLOR = "#dc2626";
 const quizQuestions: QuizQuestion[] = [
   {
     id: 1,
@@ -1000,35 +1027,356 @@ const quizQuestions: QuizQuestion[] = [
 export default function MitreAttackPage() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [selectedTab, setSelectedTab] = useState(0);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const accent = ACCENT_COLOR;
   const [searchQuery, setSearchQuery] = useState("");
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+  const [expandedTactics, setExpandedTactics] = useState<string[]>(["TA0043"]);
 
-  const filteredTechniques = useMemo(() => {
-    if (!searchQuery.trim()) return tactics[selectedTab].techniques;
-    const query = searchQuery.toLowerCase();
-    return tactics[selectedTab].techniques.filter(
-      (t) => t.name.toLowerCase().includes(query) || t.id.toLowerCase().includes(query) || t.description.toLowerCase().includes(query)
+  // Icons for each tactic
+  const tacticIcons: Record<string, React.ReactNode> = {
+    "TA0043": <GpsFixedIcon />,        // Reconnaissance
+    "TA0042": <BuildIcon />,           // Resource Development
+    "TA0001": <MeetingRoomIcon />,     // Initial Access
+    "TA0002": <FlashOnIcon />,         // Execution
+    "TA0003": <PushPinIcon />,         // Persistence
+    "TA0004": <TrendingUpIcon />,      // Privilege Escalation
+    "TA0005": <VisibilityOffIcon />,   // Defense Evasion
+    "TA0006": <VpnKeyIcon />,          // Credential Access
+    "TA0007": <ExploreIcon />,         // Discovery
+    "TA0008": <SwapHorizIcon />,       // Lateral Movement
+    "TA0009": <InventoryIcon />,       // Collection
+    "TA0011": <SettingsRemoteIcon />,  // Command and Control
+    "TA0010": <CloudUploadIcon />,     // Exfiltration
+    "TA0040": <WarningIcon />,         // Impact
+  };
+
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "beginner-guide", label: "Beginner Guide", icon: <BookIcon /> },
+    { id: "operationalizing", label: "Operationalizing", icon: <SettingsIcon /> },
+    { id: "tactics-matrix", label: "ATT&CK Matrix", icon: <ListAltIcon />, isHeader: true },
+    // All 14 tactics
+    ...tactics.map((tactic, index) => ({
+      id: `tactic-${tactic.id}`,
+      label: `${index + 1}. ${tactic.shortName}`,
+      icon: tacticIcons[tactic.id] || <ListAltIcon />,
+      indent: true,
+      color: tactic.color,
+    })),
+    { id: "telemetry", label: "Telemetry & Metrics", icon: <DataUsageIcon /> },
+    { id: "misconceptions", label: "Misconceptions", icon: <WarningIcon /> },
+    { id: "resources", label: "Resources", icon: <LinkIcon /> },
+    { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+  ];
+
+  const handleTacticToggle = (tacticId: string) => {
+    setExpandedTactics((prev) =>
+      prev.includes(tacticId) ? prev.filter((id) => id !== tacticId) : [...prev, tacticId]
     );
-  }, [selectedTab, searchQuery]);
+  };
+
+  const expandAllTactics = () => setExpandedTactics(tactics.map((t) => t.id));
+  const collapseAllTactics = () => setExpandedTactics([]);
+
+  const filteredTactics = useMemo(() => {
+    if (!searchQuery.trim()) return tactics;
+    const query = searchQuery.toLowerCase();
+    return tactics.map((tactic) => ({
+      ...tactic,
+      techniques: tactic.techniques.filter(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          t.id.toLowerCase().includes(query) ||
+          t.description.toLowerCase().includes(query)
+      ),
+    })).filter((tactic) => tactic.techniques.length > 0 || tactic.name.toLowerCase().includes(query));
+  }, [searchQuery]);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = sections[0];
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const progressPercent =
+    ((sectionNavItems.findIndex((item) => item.id === activeSection) + 1) /
+      sectionNavItems.length) *
+    100;
+
+  const totalTechniques = tactics.reduce((acc, t) => acc + t.techniques.length, 0);
+
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        position: "sticky",
+        top: 80,
+        width: 220,
+        flexShrink: 0,
+        borderRadius: 3,
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        backdropFilter: "blur(10px)",
+        overflow: "hidden",
+        display: { xs: "none", md: "block" },
+      }}
+    >
+      <Box sx={{ p: 2, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+          On This Page
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={progressPercent}
+          sx={{
+            mt: 1,
+            height: 4,
+            borderRadius: 2,
+            bgcolor: alpha(accent, 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: accent },
+          }}
+        />
+      </Box>
+      <List dense sx={{ py: 1, maxHeight: "calc(100vh - 280px)", overflowY: "auto" }}>
+        {sectionNavItems.map((item: any) => (
+          <ListItemButton
+            key={item.id}
+            onClick={() => {
+              scrollToSection(item.id);
+              // If clicking a tactic, expand it
+              if (item.id.startsWith("tactic-")) {
+                const tacticId = item.id.replace("tactic-", "");
+                if (!expandedTactics.includes(tacticId)) {
+                  setExpandedTactics((prev) => [...prev, tacticId]);
+                }
+              }
+            }}
+            selected={activeSection === item.id}
+            sx={{
+              py: item.indent ? 0.5 : 0.75,
+              px: 2,
+              pl: item.indent ? 3 : 2,
+              borderLeft: `3px solid ${activeSection === item.id ? (item.color || accent) : "transparent"}`,
+              bgcolor: activeSection === item.id ? alpha(item.color || accent, 0.08) : "transparent",
+              "&:hover": { bgcolor: alpha(item.color || accent, 0.05) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: item.indent ? 24 : 32, color: activeSection === item.id ? (item.color || accent) : "text.secondary", "& .MuiSvgIcon-root": { fontSize: item.indent ? "1rem" : "1.25rem" } }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                fontWeight: activeSection === item.id ? 600 : (item.isHeader ? 600 : 400),
+                color: activeSection === item.id ? (item.color || accent) : "text.secondary",
+                fontSize: item.indent ? "0.7rem" : "0.8rem",
+                noWrap: true,
+              }}
+            />
+          </ListItemButton>
+        ))}
+      </List>
+      <Box sx={{ p: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Button
+          component={RouterLink}
+          to="/learn"
+          startIcon={<ArrowBackIcon />}
+          size="small"
+          fullWidth
+          sx={{ justifyContent: "flex-start", color: "text.secondary" }}
+        >
+          Learning Hub
+        </Button>
+      </Box>
+    </Paper>
+  );
 
   const pageContext = `MITRE ATT&CK Framework Guide - Comprehensive coverage of adversary tactics, techniques, and procedures (TTPs). Covers all MITRE ATT&CK tactics: Reconnaissance, Resource Development, Initial Access, Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Discovery, Lateral Movement, Collection, Command and Control, Exfiltration, and Impact. Each tactic includes specific techniques with IDs, descriptions, and real-world examples used by threat actors. Essential knowledge for threat intelligence, red team operations, and security analysis.`;
 
   return (
     <LearnPageLayout pageTitle="MITRE ATT&CK Framework" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Back Button */}
-      <Chip
-        component={RouterLink}
-        to="/learn"
-        icon={<ArrowBackIcon />}
-        label="Back to Learning Hub"
-        clickable
-        variant="outlined"
-        sx={{ borderRadius: 2, mb: 3 }}
-      />
+      {/* Mobile FABs */}
+      {isMobile && (
+        <>
+          <Fab
+            size="small"
+            onClick={() => setNavDrawerOpen(true)}
+            sx={{
+              position: "fixed",
+              bottom: 80,
+              right: 16,
+              zIndex: 1000,
+              bgcolor: accent,
+              color: "white",
+              "&:hover": { bgcolor: alpha(accent, 0.9) },
+            }}
+          >
+            <ListAltIcon />
+          </Fab>
+          <Fab
+            size="small"
+            onClick={scrollToTop}
+            sx={{
+              position: "fixed",
+              bottom: 24,
+              right: 16,
+              zIndex: 1000,
+              bgcolor: alpha(theme.palette.background.paper, 0.9),
+              border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+              "&:hover": { bgcolor: theme.palette.background.paper },
+            }}
+          >
+            <KeyboardArrowUpIcon />
+          </Fab>
+        </>
+      )}
 
-      {/* Header */}
-      <Box sx={{ mb: 5 }}>
+      {/* Mobile Drawer */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: 280,
+            bgcolor: theme.palette.background.default,
+            p: 2,
+          },
+        }}
+      >
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Navigate
+          </Typography>
+          <Tooltip title="Close">
+            <Fab size="small" onClick={() => setNavDrawerOpen(false)} sx={{ boxShadow: 0 }}>
+              <CloseIcon />
+            </Fab>
+          </Tooltip>
+        </Box>
+        <List dense sx={{ maxHeight: "60vh", overflowY: "auto" }}>
+          {sectionNavItems.map((item: any) => (
+            <ListItemButton
+              key={item.id}
+              onClick={() => {
+                scrollToSection(item.id);
+                // If clicking a tactic, expand it
+                if (item.id.startsWith("tactic-")) {
+                  const tacticId = item.id.replace("tactic-", "");
+                  if (!expandedTactics.includes(tacticId)) {
+                    setExpandedTactics((prev) => [...prev, tacticId]);
+                  }
+                }
+              }}
+              selected={activeSection === item.id}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                ml: item.indent ? 2 : 0,
+                bgcolor: activeSection === item.id ? alpha(item.color || accent, 0.1) : "transparent",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: item.indent ? 28 : 36, color: activeSection === item.id ? (item.color || accent) : "text.secondary", "& .MuiSvgIcon-root": { fontSize: item.indent ? "1rem" : "1.25rem" } }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontWeight: activeSection === item.id ? 600 : (item.isHeader ? 600 : 400),
+                  color: activeSection === item.id ? (item.color || accent) : "text.primary",
+                  fontSize: item.indent ? "0.85rem" : "1rem",
+                }}
+              />
+            </ListItemButton>
+          ))}
+        </List>
+        <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+          <Button size="small" variant="outlined" onClick={scrollToTop} startIcon={<KeyboardArrowUpIcon />}>
+            Top
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => scrollToSection("quiz-section")}
+            startIcon={<QuizIcon />}
+            sx={{ bgcolor: accent, "&:hover": { bgcolor: alpha(accent, 0.9) } }}
+          >
+            Quiz
+          </Button>
+        </Box>
+        <Box sx={{ mt: 3, pt: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+          <Button
+            component={RouterLink}
+            to="/learn"
+            startIcon={<ArrowBackIcon />}
+            fullWidth
+            variant="outlined"
+          >
+            Back to Learning Hub
+          </Button>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 3,
+          maxWidth: 1200,
+          mx: "auto",
+          px: { xs: 2, md: 3 },
+          py: 4,
+        }}
+      >
+        {sidebarNav}
+
+        {/* Main Content */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
+          <Chip
+            component={RouterLink}
+            to="/learn"
+            icon={<ArrowBackIcon />}
+            label="Back to Learning Hub"
+            clickable
+            variant="outlined"
+            sx={{ borderRadius: 2, mb: 3 }}
+          />
+
+          {/* Header */}
+          <Box id="intro" sx={{ mb: 5 }}>
         <Typography
           variant="h3"
           sx={{
@@ -1094,7 +1442,7 @@ export default function MitreAttackPage() {
       </Paper>
 
       {/* Beginner Guide */}
-      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
+      <Paper id="beginner-guide" sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
           Beginner Guide to ATT&CK
         </Typography>
@@ -1111,6 +1459,7 @@ export default function MitreAttackPage() {
 
       {/* Operational Guidance */}
       <Paper
+        id="operationalizing"
         sx={{
           p: 4,
           mb: 5,
@@ -1153,161 +1502,192 @@ export default function MitreAttackPage() {
         </Alert>
       </Paper>
 
-      {/* Workflow Example */}
-      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.12)}` }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-          A Simple Workflow Example
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
-          Imagine you receive an alert that a user clicked a suspicious link and then a PowerShell process started. You might map the click to "Phishing" (Initial Access) and the PowerShell activity to "Command and Scripting Interpreter" (Execution). Once mapped, you can ask: do we have telemetry for this technique, and do we have a playbook for containing it?
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
-          Next, you can look at adjacent techniques. If an attacker executed PowerShell, they may attempt Credential Access or Persistence soon after. That insight helps you scope your investigation and prioritize defensive actions. This is how ATT&CK turns single alerts into a broader, structured response.
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9 }}>
-          For beginners, try mapping a handful of real or simulated events to ATT&CK. The goal is not perfect accuracy but building familiarity with the taxonomy. Over time, mapping becomes second nature and helps you reason about incidents more quickly.
-        </Typography>
-      </Paper>
-
-      {/* Tactics Overview Cards */}
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-        📋 14 Tactics Overview
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
-        Each card represents a tactic, or attacker goal. Click a card to explore the techniques that support that goal. If you are new, start with Initial Access and Execution, then move to Persistence, Privilege Escalation, and Credential Access. These are common early steps in many real incidents and will give you a strong baseline.
-      </Typography>
-      <Box sx={{ display: "flex", overflowX: "auto", gap: 1.5, mb: 4, pb: 2 }}>
-        {tactics.map((tactic, index) => (
-          <Card
-            key={tactic.id}
-            onClick={() => setSelectedTab(index)}
-            sx={{
-              minWidth: 110,
-              flexShrink: 0,
-              cursor: "pointer",
-              border: `2px solid ${selectedTab === index ? tactic.color : "transparent"}`,
-              bgcolor: selectedTab === index ? alpha(tactic.color, 0.1) : "background.paper",
-              transition: "all 0.2s",
-              "&:hover": { bgcolor: alpha(tactic.color, 0.05), transform: "translateY(-2px)" },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", p: 2, "&:last-child": { pb: 2 } }}>
-              <Typography variant="h5" sx={{ mb: 0.5 }}>{tactic.icon}</Typography>
-              <Typography variant="caption" sx={{ fontWeight: 600, color: tactic.color, display: "block" }}>
-                {tactic.shortName}
-              </Typography>
-              <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.65rem" }}>
-                {tactic.techniques.length} techniques
-              </Typography>
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
-
-      {/* Tactic Detail */}
-      <Paper sx={{ mb: 4, borderRadius: 3, overflow: "hidden" }}>
-        <Box sx={{ p: 4, bgcolor: alpha(tactics[selectedTab].color, 0.05), borderBottom: `3px solid ${tactics[selectedTab].color}` }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <Typography variant="h3">{tactics[selectedTab].icon}</Typography>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                {tactics[selectedTab].name}
-              </Typography>
-              <Chip label={tactics[selectedTab].id} size="small" sx={{ mt: 0.5, bgcolor: alpha(tactics[selectedTab].color, 0.1), color: tactics[selectedTab].color }} />
+      {/* ATT&CK Matrix - All 14 Tactics */}
+      <Box id="tactics-matrix" sx={{ mb: 5 }}>
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 3, background: `linear-gradient(135deg, ${alpha("#dc2626", 0.05)}, ${alpha("#f59e0b", 0.05)})` }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
+            🎯 The ATT&CK Matrix
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3 }}>
+            Below you'll find all <strong>14 tactics</strong> and their <strong>{totalTechniques} techniques</strong> organized by attack lifecycle. 
+            Each tactic represents an adversary goal, and techniques are the specific methods used to achieve that goal. 
+            Click on any tactic to expand and explore its techniques. Use the search to filter across all tactics and techniques.
+          </Typography>
+          
+          {/* Search and Controls */}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center", mb: 3 }}>
+            <TextField
+              size="small"
+              placeholder="Search all techniques..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ minWidth: 300, flex: 1, maxWidth: 400 }}
+            />
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button size="small" variant="outlined" onClick={expandAllTactics}>
+                Expand All
+              </Button>
+              <Button size="small" variant="outlined" onClick={collapseAllTactics}>
+                Collapse All
+              </Button>
             </Box>
           </Box>
-          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
-            {tactics[selectedTab].description}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
-            Beginner tip: use the search box below to narrow techniques by name, ID, or keyword. The technique cards show a short description, and the ID links to the official ATT&CK entry where you can read examples, detection ideas, and mitigations. As you learn, try to map real alerts or lab exercises to these techniques.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, mb: 2 }}>
-            You can also treat each tactic as a mini curriculum. Spend time with a single tactic, read a few technique pages, and note the common data sources and mitigations. This builds familiarity without overwhelming you. Once you are comfortable, expand to neighboring tactics that attackers often chain together.
-          </Typography>
-          <Link
-            href={`https://attack.mitre.org/tactics/${tactics[selectedTab].id}/`}
-            target="_blank"
-            rel="noopener"
-            sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.875rem" }}
-          >
-            View on MITRE ATT&CK <LaunchIcon fontSize="small" />
-          </Link>
-        </Box>
 
-        {/* Search */}
-        <Box sx={{ p: 3, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search techniques..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ maxWidth: 400 }}
-          />
-        </Box>
+          {/* Stats Bar */}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 2 }}>
+            <Chip label={`${filteredTactics.length} Tactics`} sx={{ bgcolor: alpha("#dc2626", 0.1), color: "#dc2626", fontWeight: 600 }} />
+            <Chip label={`${filteredTactics.reduce((acc, t) => acc + t.techniques.length, 0)} Techniques`} variant="outlined" />
+            {searchQuery && <Chip label={`Searching: "${searchQuery}"`} onDelete={() => setSearchQuery("")} size="small" />}
+          </Box>
+        </Paper>
 
-        {/* Techniques */}
-        <Box sx={{ p: 3 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-            {filteredTechniques.length} Techniques
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.9, mb: 3 }}>
-            Techniques describe behaviors, not specific tools. The same technique can be executed by many different tools or scripts, which is why behavior based detection is so valuable. As you read each card, try to imagine how the behavior would appear in logs. That mental exercise is the bridge between theory and detection engineering.
-          </Typography>
-          {filteredTechniques.length === 0 ? (
-            <Alert severity="info">No techniques match your search.</Alert>
-          ) : (
-            <Grid container spacing={2}>
-              {filteredTechniques.map((technique) => (
-                <Grid item xs={12} md={6} key={technique.id}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      height: "100%",
-                      border: `1px solid ${alpha(tactics[selectedTab].color, 0.15)}`,
-                      transition: "all 0.2s",
-                      "&:hover": { borderColor: tactics[selectedTab].color, bgcolor: alpha(tactics[selectedTab].color, 0.02) },
-                    }}
-                  >
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                        {technique.name}
-                      </Typography>
-                      <Link
-                        href={`https://attack.mitre.org/techniques/${technique.id}/`}
-                        target="_blank"
-                        rel="noopener"
-                        sx={{ display: "flex", alignItems: "center" }}
-                      >
-                        <Chip
-                          label={technique.id}
-                          size="small"
-                          clickable
-                          sx={{ fontSize: "0.7rem", bgcolor: alpha(tactics[selectedTab].color, 0.1), color: tactics[selectedTab].color }}
+        {/* All Tactics as Accordions */}
+        {filteredTactics.length === 0 ? (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            No tactics or techniques match your search. Try a different keyword.
+          </Alert>
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {filteredTactics.map((tactic, index) => (
+              <Accordion
+                key={tactic.id}
+                id={`tactic-${tactic.id}`}
+                expanded={expandedTactics.includes(tactic.id)}
+                onChange={() => handleTacticToggle(tactic.id)}
+                sx={{
+                  borderRadius: "12px !important",
+                  overflow: "hidden",
+                  border: `2px solid ${alpha(tactic.color, 0.2)}`,
+                  "&:before": { display: "none" },
+                  bgcolor: alpha(theme.palette.background.paper, 0.8),
+                  "&.Mui-expanded": { 
+                    border: `2px solid ${tactic.color}`,
+                    boxShadow: `0 4px 20px ${alpha(tactic.color, 0.15)}` 
+                  },
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon sx={{ color: tactic.color }} />}
+                  sx={{
+                    bgcolor: alpha(tactic.color, 0.05),
+                    "&:hover": { bgcolor: alpha(tactic.color, 0.1) },
+                    minHeight: 72,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%", pr: 2 }}>
+                    <Typography variant="h4" sx={{ minWidth: 50 }}>{tactic.icon}</Typography>
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          {index + 1}. {tactic.name}
+                        </Typography>
+                        <Chip 
+                          label={tactic.id} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: alpha(tactic.color, 0.15), 
+                            color: tactic.color, 
+                            fontWeight: 600,
+                            fontSize: "0.7rem" 
+                          }} 
                         />
-                      </Link>
+                        <Chip
+                          label={`${tactic.techniques.length} techniques`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: alpha(tactic.color, 0.3), color: tactic.color, fontSize: "0.7rem" }}
+                        />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: { xs: "none", sm: "block" } }}>
+                        {tactic.description}
+                      </Typography>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                      {technique.description}
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 3, bgcolor: alpha(tactic.color, 0.02) }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3, display: { xs: "block", sm: "none" } }}>
+                    {tactic.description}
+                  </Typography>
+                  
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: tactic.color }}>
+                      Techniques
                     </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
-      </Paper>
+                    <Link
+                      href={`https://attack.mitre.org/tactics/${tactic.id}/`}
+                      target="_blank"
+                      rel="noopener"
+                      sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.875rem" }}
+                    >
+                      View on MITRE <LaunchIcon fontSize="small" />
+                    </Link>
+                  </Box>
+
+                  <Grid container spacing={2}>
+                    {tactic.techniques.map((technique) => (
+                      <Grid item xs={12} md={6} lg={4} key={technique.id}>
+                        <Paper
+                          sx={{
+                            p: 2,
+                            height: "100%",
+                            border: `1px solid ${alpha(tactic.color, 0.15)}`,
+                            borderRadius: 2,
+                            transition: "all 0.2s",
+                            "&:hover": { 
+                              borderColor: tactic.color, 
+                              bgcolor: alpha(tactic.color, 0.05),
+                              transform: "translateY(-2px)",
+                              boxShadow: `0 4px 12px ${alpha(tactic.color, 0.1)}`
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                              {technique.name}
+                            </Typography>
+                            <Link
+                              href={`https://attack.mitre.org/techniques/${technique.id}/`}
+                              target="_blank"
+                              rel="noopener"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Chip
+                                label={technique.id}
+                                size="small"
+                                clickable
+                                sx={{ 
+                                  fontSize: "0.65rem", 
+                                  height: 22,
+                                  bgcolor: alpha(tactic.color, 0.1), 
+                                  color: tactic.color,
+                                  "&:hover": { bgcolor: alpha(tactic.color, 0.2) }
+                                }}
+                              />
+                            </Link>
+                          </Box>
+                          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, fontSize: "0.85rem" }}>
+                            {technique.description}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
+        )}
+      </Box>
 
       {/* Telemetry and Measurement */}
-      <Paper sx={{ p: 4, mb: 5, borderRadius: 3 }}>
+      <Paper id="telemetry" sx={{ p: 4, mb: 5, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
           Telemetry, Validation, and Metrics
         </Typography>
@@ -1364,7 +1744,7 @@ export default function MitreAttackPage() {
       </Paper>
 
       {/* Common Misconceptions */}
-      <Paper sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.04), border: `1px solid ${alpha("#f59e0b", 0.12)}` }}>
+      <Paper id="misconceptions" sx={{ p: 4, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.04), border: `1px solid ${alpha("#f59e0b", 0.12)}` }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
           Common Misconceptions
         </Typography>
@@ -1377,7 +1757,7 @@ export default function MitreAttackPage() {
       </Paper>
 
       {/* Resources */}
-      <Paper sx={{ p: 4, borderRadius: 3 }}>
+      <Paper id="resources" sx={{ p: 4, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
           🔗 Resources
         </Typography>
@@ -1438,18 +1818,62 @@ export default function MitreAttackPage() {
         />
       </Paper>
 
+      {/* Related Learning Topics */}
+      <Paper sx={{ p: 4, mt: 5, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
+          📚 Related Learning Topics
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            { title: "Cyber Kill Chain", path: "/learn/kill-chain", desc: "Linear attack model that complements ATT&CK", icon: "🎯" },
+            { title: "Threat Hunting", path: "/learn/threat-hunting", desc: "Proactive detection using ATT&CK hypotheses", icon: "🔍" },
+            { title: "Incident Response", path: "/learn/incident-response", desc: "Response procedures mapped to ATT&CK", icon: "🚨" },
+            { title: "Malware Analysis", path: "/learn/malware-analysis", desc: "Analyze samples and map to techniques", icon: "🦠" },
+          ].map((topic) => (
+            <Grid item xs={12} sm={6} key={topic.path}>
+              <Paper
+                component={RouterLink}
+                to={topic.path}
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  textDecoration: "none",
+                  border: `1px solid ${alpha(accent, 0.15)}`,
+                  borderRadius: 2,
+                  transition: "all 0.2s",
+                  "&:hover": { borderColor: accent, bgcolor: alpha(accent, 0.05), transform: "translateX(4px)" },
+                }}
+              >
+                <Typography variant="h5">{topic.icon}</Typography>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
+                    {topic.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {topic.desc}
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
       {/* Bottom Navigation */}
       <Box sx={{ mt: 4, textAlign: "center" }}>
         <Button
           variant="outlined"
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+          sx={{ borderColor: accent, color: accent }}
         >
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

@@ -57,6 +57,7 @@ import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
 import LockIcon from "@mui/icons-material/Lock";
 import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import RadarIcon from "@mui/icons-material/Radar";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SearchIcon from "@mui/icons-material/Search";
@@ -80,6 +81,7 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import SettingsRemoteIcon from "@mui/icons-material/SettingsRemote";
 import RouterIcon from "@mui/icons-material/Router";
+import RadioIcon from "@mui/icons-material/Radio";
 import StorageIcon from "@mui/icons-material/Storage";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import FilterListIcon from "@mui/icons-material/FilterList";
@@ -102,6 +104,8 @@ import AppleIcon from "@mui/icons-material/Apple";
 import ViewInArIcon from "@mui/icons-material/ViewInAr";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 interface LearnCard {
   title: string;
@@ -127,7 +131,7 @@ interface CategorySection {
 // ========== CATEGORY: About VRAgent ==========
 const appCards: LearnCard[] = [
   {
-    title: "Security Scan & AI Analysis Guide",
+    title: "Static Analysis Scanner",
     description: "Complete guide to VRAgent's 10-phase scanning pipeline, 11 SAST scanners, and AI-powered analysis with Agentic corroboration, attack chains, and exploit scenarios.",
     icon: <SecurityIcon sx={{ fontSize: 40 }} />,
     path: "/learn/scanning",
@@ -144,15 +148,15 @@ const appCards: LearnCard[] = [
     tags: ["Docker", "FastAPI", "PostgreSQL"],
   },
   {
-    title: "Network Analysis Hub Guide",
-    description: "Learn what the Network Analysis Hub does: 10 tools including Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer, and MITM.",
+    title: "Dynamic Analysis Hub Guide",
+    description: "Learn what the Dynamic Analysis Hub does: 10 tools including Dynamic Scanner, Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer, and MITM.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/network-hub",
     color: "#0ea5e9",
-    tags: ["Nmap", "PCAP", "API Tester", "Fuzzing"],
+    tags: ["Dynamic Scanner", "Nmap", "PCAP", "Fuzzing"],
   },
   {
-    title: "Wireshark PCAP Guide",
+    title: "PCAP Analyzer Guide",
     description: "VRAgent's PCAP Analyzer: packet capture analysis, display filters, protocol dissection, and security findings.",
     icon: <WifiIcon sx={{ fontSize: 40 }} />,
     path: "/learn/wireshark",
@@ -160,12 +164,12 @@ const appCards: LearnCard[] = [
     tags: ["Filters", "BPF", "Packets"],
   },
   {
-    title: "Nmap Scanner Guide",
-    description: "VRAgent's Nmap integration: port scanning, service detection, NSE scripts, and vulnerability discovery.",
-    icon: <RadarIcon sx={{ fontSize: 40 }} />,
-    path: "/learn/nmap",
+    title: "Dynamic Scanner Guide",
+    description: "AI-orchestrated pentesting: combines Nmap, ZAP, Nuclei, OpenVAS, SQLMap for automated vulnerability discovery and exploit chains.",
+    icon: <AutoAwesomeIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/dynamic-scanner",
     color: "#8b5cf6",
-    tags: ["Port Scanning", "NSE", "Discovery"],
+    tags: ["AI-Powered", "Pentesting", "Automated"],
   },
   {
     title: "SSL/TLS Scanner Guide",
@@ -184,12 +188,12 @@ const appCards: LearnCard[] = [
     tags: ["DNS", "Subdomains", "Email Security"],
   },
   {
-    title: "Traceroute Analyzer Guide",
-    description: "VRAgent's Traceroute: network path analysis, hop-by-hop diagnostics, latency interpretation, and visualization.",
+    title: "Nmap & Traceroute Analyzer",
+    description: "4-in-1 network analysis tool: Traceroute path discovery, live Nmap scanning (14 types), file analysis, and command builder.",
     icon: <RouteIcon sx={{ fontSize: 40 }} />,
     path: "/learn/traceroute",
     color: "#ec4899",
-    tags: ["Path Analysis", "Latency", "Visualization"],
+    tags: ["Nmap", "Traceroute", "NSE Scripts", "Network Analysis"],
   },
   {
     title: "API Endpoint Tester Guide",
@@ -266,7 +270,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/windows-basics",
     color: "#0078d4",
     tags: ["Windows", "NTFS", "Registry", "PowerShell"],
-    badge: "New",
   },
   {
     title: "Linux Fundamentals",
@@ -275,7 +278,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/linux-fundamentals",
     color: "#f97316",
     tags: ["Linux", "Bash", "Permissions", "CLI"],
-    badge: "New",
   },
   {
     title: "Computer Networking",
@@ -284,7 +286,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/networking",
     color: "#0ea5e9",
     tags: ["TCP/IP", "OSI", "DNS", "Subnetting"],
-    badge: "New",
   },
   {
     title: "Computer Science Fundamentals",
@@ -293,7 +294,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/cs-fundamentals",
     color: "#6366f1",
     tags: ["Data Structures", "Algorithms", "OOP", "SOLID"],
-    badge: "New",
   },
   {
     title: "IT Hardware",
@@ -302,7 +302,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/it-hardware",
     color: "#8b5cf6",
     tags: ["Hardware", "Components", "Cables", "A+"],
-    badge: "New",
   },
   {
     title: "Cloud Computing",
@@ -311,7 +310,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/cloud-computing",
     color: "#0ea5e9",
     tags: ["AWS", "Azure", "GCP", "IaaS"],
-    badge: "New",
   },
   {
     title: "Systems Administration",
@@ -320,7 +318,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/systems-admin",
     color: "#3b82f6",
     tags: ["Servers", "AD", "Linux", "DevOps"],
-    badge: "New",
   },
   {
     title: "Artificial Intelligence",
@@ -329,7 +326,6 @@ const itFundamentalsCards: LearnCard[] = [
     path: "/learn/artificial-intelligence",
     color: "#8b5cf6",
     tags: ["AI", "ML", "LLMs", "Deep Learning"],
-    badge: "New",
   },
 ];
 
@@ -367,6 +363,38 @@ const networkCards: LearnCard[] = [
     color: "#0891b2",
     tags: ["WiFi", "Bluetooth", "RF"],
   },
+  {
+    title: "DMR Hacking",
+    description: "Digital Mobile Radio security: protocol analysis, encryption weaknesses, SDR reconnaissance, and exploitation techniques.",
+    icon: <RadioIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/dmr-hacking",
+    color: "#06b6d4",
+    tags: ["DMR", "SDR", "Radio"],
+  },
+  {
+    title: "Counter-UAS & Drone Hacking",
+    description: "Drone security: detection methods, GPS spoofing, RF attacks, protocol exploitation, and counter-drone techniques.",
+    icon: <RadarIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/counter-uas",
+    color: "#8b5cf6",
+    tags: ["Drones", "C-UAS", "GPS"],
+  },
+  {
+    title: "Wireshark Deep Dive",
+    description: "Master packet analysis: display filters, capture filters, TShark CLI, TLS decryption, protocol dissection, security analysis, and forensics.",
+    icon: <HubIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/wireshark-deep-dive",
+    color: "#0ea5e9",
+    tags: ["PCAP", "Filters", "Forensics", "TShark"],
+  },
+  {
+    title: "SDR & Signals Intelligence",
+    description: "Software Defined Radio fundamentals: hardware selection, RF basics, signal analysis, GNU Radio, protocol decoding, and SIGINT concepts.",
+    icon: <RadioIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/sdr-signals-intelligence",
+    color: "#a855f7",
+    tags: ["SDR", "RF", "SIGINT", "GNU Radio"],
+  },
 ];
 
 // ========== CATEGORY: Reverse Engineering ==========
@@ -403,7 +431,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/binary-ninja",
     color: "#14b8a6",
     tags: ["IL", "Scripting", "Types"],
-    badge: "New",
   },
   {
     title: "IDA Pro Essentials",
@@ -412,7 +439,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/ida-pro",
     color: "#2563eb",
     tags: ["IDA", "Decompiler", "IDAPython"],
-    badge: "New",
   },
   {
     title: "Android Reverse Engineering",
@@ -429,7 +455,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/ios-reverse-engineering",
     color: "#3b82f6",
     tags: ["iOS", "Mach-O", "LLDB"],
-    badge: "New",
   },
   {
     title: "Windows Internals for RE",
@@ -446,7 +471,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/linux-internals",
     color: "#f97316",
     tags: ["ELF", "GDB", "Exploitation"],
-    badge: "New",
   },
   {
     title: "Malware Analysis",
@@ -455,7 +479,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/malware-analysis",
     color: "#ef4444",
     tags: ["Malware", "Sandbox", "YARA", "Threat Intel"],
-    badge: "New",
   },
   {
     title: "Anti-Debugging Techniques",
@@ -464,7 +487,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/anti-debugging",
     color: "#f97316",
     tags: ["Anti-Debug", "Evasion", "Protection", "Bypass"],
-    badge: "New",
   },
   {
     title: "Firmware Reverse Engineering Fundamentals",
@@ -473,7 +495,6 @@ const reverseEngineeringCards: LearnCard[] = [
     path: "/learn/firmware-re",
     color: "#06b6d4",
     tags: ["Firmware", "IoT", "Hardware"],
-    badge: "New",
   },
 ];
 
@@ -486,7 +507,6 @@ const vulnResearchCards: LearnCard[] = [
     path: "/learn/buffer-overflow",
     color: "#dc2626",
     tags: ["Memory", "Exploitation", "C/C++"],
-    badge: "New",
   },
   {
     title: "Return-Oriented Programming (ROP)",
@@ -641,6 +661,14 @@ const offensiveSecurityCards: LearnCard[] = [
     tags: ["Red Team", "Beacon", "Infrastructure"],
   },
   {
+    title: "Initial Access",
+    description: "Red team initial access techniques: phishing, drive-by compromise, exploiting public apps, supply chain attacks.",
+    icon: <RocketLaunchIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/initial-access",
+    color: "#dc2626",
+    tags: ["Phishing", "Exploitation", "Supply Chain"],
+  },
+  {
     title: "Privilege Escalation",
     description: "Linux & Windows privesc techniques: SUID, sudo, kernel exploits, token impersonation, GTFOBins, LOLBAS.",
     icon: <AdminPanelSettingsIcon sx={{ fontSize: 40 }} />,
@@ -711,6 +739,30 @@ const offensiveSecurityCards: LearnCard[] = [
     path: "/learn/container-k8s",
     color: "#38bdf8",
     tags: ["Containers", "Kubernetes", "RBAC"],
+  },
+  {
+    title: "AI/ML Security & Hacking",
+    description: "Adversarial ML, prompt injection, LLM jailbreaking, data poisoning, model extraction, and OWASP LLM Top 10.",
+    icon: <PsychologyIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/ai-hacking",
+    color: "#dc2626",
+    tags: ["Adversarial ML", "Prompt Injection", "LLM Security"],
+  },
+  {
+    title: "Payload Development & AV Evasion",
+    description: "Shellcode fundamentals, process injection, AMSI bypass, EDR evasion, direct syscalls, and offensive tradecraft.",
+    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/payload-development",
+    color: "#dc2626",
+    tags: ["Shellcode", "EDR Evasion", "Process Injection"],
+  },
+  {
+    title: "Exploit Development",
+    description: "Buffer overflows, heap exploitation, ROP chains, format strings, shellcode, and bypassing modern protections.",
+    icon: <BugReportIcon sx={{ fontSize: 40 }} />,
+    path: "/learn/exploit-development",
+    color: "#dc2626",
+    tags: ["Buffer Overflow", "ROP", "Heap Exploits"],
   },
 ];
 
@@ -791,7 +843,6 @@ const mobileSecurityCards: LearnCard[] = [
     path: "/learn/android-pentesting",
     color: "#22c55e",
     tags: ["Android", "Pentesting", "MASTG"],
-    badge: "New",
   },
   {
     title: "iOS Pentesting",
@@ -828,7 +879,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/software-engineering-fundamentals",
     color: "#f97316",
     tags: ["Beginner", "Git", "IDEs", "Workflows"],
-    badge: "New",
   },
   {
     title: "Secure by Design",
@@ -837,7 +887,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/secure-by-design",
     color: "#dc2626",
     tags: ["Security", "OWASP", "Threat Modeling", "Cryptography"],
-    badge: "New",
   },
   {
     title: "Python Fundamentals",
@@ -846,7 +895,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/python-fundamentals",
     color: "#3776ab",
     tags: ["Python", "Beginner", "Syntax", "Automation"],
-    badge: "New",
   },
   {
     title: "Assembly Language",
@@ -855,7 +903,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/assembly",
     color: "#f97316",
     tags: ["x86", "x64", "Registers", "CPU"],
-    badge: "New",
   },
   {
     title: "HTML & CSS Fundamentals",
@@ -864,7 +911,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/html-css",
     color: "#e91e63",
     tags: ["HTML5", "CSS3", "Flexbox", "Grid"],
-    badge: "New",
   },
   {
     title: "JavaScript Fundamentals",
@@ -873,7 +919,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/javascript",
     color: "#f7df1e",
     tags: ["ES6+", "React", "Node.js", "TypeScript"],
-    badge: "New",
   },
   {
     title: "C Programming",
@@ -882,7 +927,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/c-programming",
     color: "#5c6bc0",
     tags: ["Pointers", "Memory", "Systems", "Low-Level"],
-    badge: "New",
   },
   {
     title: "C++ Programming",
@@ -891,7 +935,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/cpp-programming",
     color: "#e91e63",
     tags: ["OOP", "Templates", "STL", "Modern C++"],
-    badge: "New",
   },
   {
     title: "Go Programming",
@@ -900,7 +943,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/go-programming",
     color: "#00ADD8",
     tags: ["Golang", "Concurrency", "Cloud", "DevOps"],
-    badge: "New",
   },
   {
     title: "Rust Programming",
@@ -909,7 +951,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/rust-programming",
     color: "#DEA584",
     tags: ["Systems", "Memory Safety", "Concurrency", "WASM"],
-    badge: "New",
   },
   {
     title: "Java Programming",
@@ -918,7 +959,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/java-programming",
     color: "#E76F00",
     tags: ["OOP", "Enterprise", "Spring", "Android"],
-    badge: "New",
   },
   {
     title: "PHP Programming",
@@ -927,7 +967,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/php-programming",
     color: "#777BB4",
     tags: ["Web", "Laravel", "MySQL", "WordPress"],
-    badge: "New",
   },
   {
     title: "C# Programming",
@@ -936,7 +975,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/csharp-programming",
     color: "#512BD4",
     tags: [".NET", "Unity", "ASP.NET", "Enterprise"],
-    badge: "New",
   },
   {
     title: "Kotlin Programming",
@@ -945,7 +983,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/kotlin-programming",
     color: "#7F52FF",
     tags: ["Android", "Multiplatform", "Coroutines", "JetBrains"],
-    badge: "New",
   },
   {
     title: "Swift Programming",
@@ -954,7 +991,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/swift-programming",
     color: "#F05138",
     tags: ["iOS", "macOS", "SwiftUI", "Apple"],
-    badge: "New",
   },
   {
     title: "Git & Version Control",
@@ -963,7 +999,6 @@ const softwareEngineeringCards: LearnCard[] = [
     path: "/learn/git-version-control",
     color: "#f14e32",
     tags: ["Git", "GitHub", "Branching", "Collaboration"],
-    badge: "New",
   },
 ];
 
@@ -976,7 +1011,6 @@ const projectServiceManagementCards: LearnCard[] = [
     path: "/learn/agile-pm",
     color: "#6366f1",
     tags: ["Scrum", "Kanban", "Sprints", "User Stories"],
-    badge: "New",
   },
   {
     title: "The Scrum Guide",
@@ -985,7 +1019,6 @@ const projectServiceManagementCards: LearnCard[] = [
     path: "/learn/scrum",
     color: "#0891b2",
     tags: ["Framework", "Sprints", "Roles", "Artifacts"],
-    badge: "New",
   },
   {
     title: "PRINCE2 Guide",
@@ -994,7 +1027,6 @@ const projectServiceManagementCards: LearnCard[] = [
     path: "/learn/prince2",
     color: "#7c3aed",
     tags: ["Methodology", "Governance", "AXELOS", "Processes"],
-    badge: "New",
   },
   {
     title: "ITIL 4 Guide",
@@ -1003,7 +1035,6 @@ const projectServiceManagementCards: LearnCard[] = [
     path: "/learn/itil-v4",
     color: "#059669",
     tags: ["ITSM", "Practices", "AXELOS", "Service Value"],
-    badge: "New",
   },
 ];
 
@@ -1039,7 +1070,7 @@ const careerCards: LearnCard[] = [
 const referenceCards: LearnCard[] = [
   {
     title: "Security Glossary",
-    description: "Comprehensive dictionary of 120+ cybersecurity terms with definitions and category filtering.",
+    description: "Comprehensive dictionary of 900+ cybersecurity terms with definitions and category filtering.",
     icon: <MenuBookIcon sx={{ fontSize: 40 }} />,
     path: "/learn/glossary",
     color: "#10b981",
@@ -1295,6 +1326,9 @@ export default function LearnHubPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   
+  // Tool Hub Carousel state
+  const [toolHubSlide, setToolHubSlide] = useState(0);
+  
   // Quick navigation state
   const [quickNavOpen, setQuickNavOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -1455,10 +1489,10 @@ export default function LearnHubPage() {
 
   // Quick Navigation Sidebar Content
   const QuickNavContent = (
-    <Box sx={{ width: isLargeScreen ? 280 : 300, p: 2 }}>
+    <Box sx={{ width: isLargeScreen ? 220 : 300, p: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
-          <ListAltIcon color="primary" /> Quick Navigation
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1, fontSize: "0.95rem" }}>
+          <ListAltIcon color="primary" fontSize="small" /> Quick Navigation
         </Typography>
         {!isLargeScreen && (
           <IconButton size="small" onClick={() => setQuickNavOpen(false)}>
@@ -1517,8 +1551,8 @@ export default function LearnHubPage() {
           sx={{
             position: "fixed",
             left: 0,
-            top: 80,
-            height: "calc(100vh - 80px)",
+            top: 100,
+            height: "calc(100vh - 100px)",
             overflowY: "auto",
             zIndex: 100,
             borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
@@ -1548,7 +1582,7 @@ export default function LearnHubPage() {
       </Drawer>
 
       {/* Main Content - offset on large screens for sidebar */}
-      <Box sx={{ ml: isLargeScreen ? "280px" : 0 }}>
+      <Box sx={{ ml: isLargeScreen ? "220px" : 0 }}>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           {/* Header */}
           <Box sx={{ textAlign: "center", mb: 4 }}>
@@ -1758,7 +1792,7 @@ export default function LearnHubPage() {
             </Box>
           </Box>
 
-          {/* Quick Access to Tool Hubs */}
+          {/* Quick Access to Tool Hubs - Perspective Carousel */}
           <Paper
             elevation={0}
             sx={{
@@ -1767,137 +1801,211 @@ export default function LearnHubPage() {
               borderRadius: 3,
               background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
               border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+              overflow: "visible",
             }}
           >
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
               <RocketLaunchIcon sx={{ color: theme.palette.primary.main }} />
               Quick Access to Tool Hubs
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <Card
-                  sx={{
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    border: `1px solid ${alpha("#6366f1", 0.2)}`,
-                    "&:hover": {
-                      transform: "translateY(-2px)",
-                      boxShadow: `0 4px 20px ${alpha("#6366f1", 0.2)}`,
-                      borderColor: "#6366f1",
-                    },
-                  }}
-                  onClick={() => navigate("/")}
-                >
-                  <CardActionArea sx={{ p: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
+            
+            {/* Carousel Container */}
+            <Box sx={{ position: "relative", py: 2 }}>
+              {/* Carousel Track - Perspective Style */}
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  position: "relative",
+                  height: 180,
+                  perspective: "1200px",
+                }}
+              >
+                {[
+                  {
+                    title: "Projects Hub",
+                    description: "Manage & scan your repositories",
+                    icon: <FolderSpecialIcon sx={{ fontSize: 32 }} />,
+                    color: "#6366f1",
+                    path: "/projects",
+                  },
+                  {
+                    title: "Static Analysis Hub",
+                    description: "AI-powered code vulnerability scanning",
+                    icon: <SecurityIcon sx={{ fontSize: 32 }} />,
+                    color: "#22c55e",
+                    path: "/static",
+                  },
+                  {
+                    title: "Dynamic Analysis Hub",
+                    description: "Network, PCAP, SSL & DNS analysis",
+                    icon: <HubIcon sx={{ fontSize: 32 }} />,
+                    color: "#0ea5e9",
+                    path: "/dynamic",
+                  },
+                  {
+                    title: "Reverse Engineering Hub",
+                    description: "APK, Binary & Docker analysis",
+                    icon: <BuildIcon sx={{ fontSize: 32 }} />,
+                    color: "#a855f7",
+                    path: "/reverse",
+                  },
+                ].map((hub, index) => {
+                  const totalSlides = 4;
+                  const offset = (index - toolHubSlide + totalSlides) % totalSlides;
+                  const normalizedOffset = offset > totalSlides / 2 ? offset - totalSlides : offset;
+                  const isActive = normalizedOffset === 0;
+                  const isAdjacent = Math.abs(normalizedOffset) === 1;
+                  const isVisible = Math.abs(normalizedOffset) <= 1;
+
+                  return (
+                    <Box
+                      key={hub.title}
+                      onClick={() => isActive ? navigate(hub.path) : setToolHubSlide(index)}
+                      sx={{
+                        position: "absolute",
+                        width: { xs: "80%", sm: "60%", md: "50%" },
+                        maxWidth: 400,
+                        transition: "all 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+                        transform: isActive
+                          ? "translateX(0) scale(1) rotateY(0deg)"
+                          : normalizedOffset < 0
+                            ? "translateX(-75%) scale(0.8) rotateY(25deg)"
+                            : "translateX(75%) scale(0.8) rotateY(-25deg)",
+                        opacity: isActive ? 1 : isAdjacent ? 0.5 : 0,
+                        zIndex: isActive ? 10 : isAdjacent ? 5 : 0,
+                        pointerEvents: isVisible ? "auto" : "none",
+                        cursor: "pointer",
+                        filter: isActive ? "none" : "blur(1px)",
+                      }}
+                    >
+                      <Card
                         sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 2,
-                          bgcolor: alpha("#6366f1", 0.1),
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          p: 2.5,
+                          borderRadius: 3,
+                          background: `linear-gradient(135deg, ${alpha(hub.color, 0.15)} 0%, ${alpha(hub.color, 0.03)} 100%)`,
+                          backdropFilter: "blur(24px)",
+                          border: `1px solid ${alpha(hub.color, isActive ? 0.4 : 0.2)}`,
+                          minHeight: 140,
+                          boxShadow: isActive
+                            ? `0 16px 40px ${alpha(hub.color, 0.35)}`
+                            : `0 8px 20px ${alpha("#000", 0.2)}`,
+                          "&:hover": isActive ? {
+                            boxShadow: `0 20px 50px ${alpha(hub.color, 0.45)}`,
+                            borderColor: hub.color,
+                          } : {},
                         }}
                       >
-                        <FolderSpecialIcon sx={{ fontSize: 28, color: "#6366f1" }} />
-                      </Box>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          Projects
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Manage & scan your repositories
-                        </Typography>
-                      </Box>
+                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                          <Box
+                            sx={{
+                              width: 56,
+                              height: 56,
+                              borderRadius: 2,
+                              background: `linear-gradient(135deg, ${hub.color}, ${alpha(hub.color, 0.7)})`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#fff",
+                              flexShrink: 0,
+                              boxShadow: `0 8px 24px ${alpha(hub.color, 0.4)}`,
+                            }}
+                          >
+                            {hub.icon}
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+                              {hub.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                              {hub.description}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Card>
                     </Box>
-                  </CardActionArea>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Card
-                  sx={{
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    border: `1px solid ${alpha("#0ea5e9", 0.2)}`,
-                    "&:hover": {
-                      transform: "translateY(-2px)",
-                      boxShadow: `0 4px 20px ${alpha("#0ea5e9", 0.2)}`,
-                      borderColor: "#0ea5e9",
-                    },
-                  }}
-                  onClick={() => navigate("/network")}
-                >
-                  <CardActionArea sx={{ p: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 2,
-                          bgcolor: alpha("#0ea5e9", 0.1),
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <HubIcon sx={{ fontSize: 28, color: "#0ea5e9" }} />
-                      </Box>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          Network Analysis Hub
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Nmap, PCAP, SSL, DNS, API Tester
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardActionArea>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Card
-                  sx={{
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    border: `1px solid ${alpha("#a855f7", 0.2)}`,
-                    "&:hover": {
-                      transform: "translateY(-2px)",
-                      boxShadow: `0 4px 20px ${alpha("#a855f7", 0.2)}`,
-                      borderColor: "#a855f7",
-                    },
-                  }}
-                  onClick={() => navigate("/reverse")}
-                >
-                  <CardActionArea sx={{ p: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 2,
-                          bgcolor: alpha("#a855f7", 0.1),
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <BuildIcon sx={{ fontSize: 28, color: "#a855f7" }} />
-                      </Box>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          Reverse Engineering Hub
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          APK, Binary, Docker analysis
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardActionArea>
-                </Card>
-              </Grid>
-            </Grid>
+                  );
+                })}
+              </Box>
+
+              {/* Navigation Arrows */}
+              <Box
+                onClick={() => setToolHubSlide((prev: number) => (prev - 1 + 4) % 4)}
+                sx={{
+                  position: "absolute",
+                  left: { xs: 4, md: 16 },
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  background: alpha(theme.palette.background.paper, 0.9),
+                  backdropFilter: "blur(10px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                  zIndex: 20,
+                  "&:hover": {
+                    background: alpha(theme.palette.primary.main, 0.1),
+                    transform: "translateY(-50%) scale(1.1)",
+                  },
+                }}
+              >
+                <ChevronLeftIcon />
+              </Box>
+              <Box
+                onClick={() => setToolHubSlide((prev: number) => (prev + 1) % 4)}
+                sx={{
+                  position: "absolute",
+                  right: { xs: 4, md: 16 },
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  background: alpha(theme.palette.background.paper, 0.9),
+                  backdropFilter: "blur(10px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                  zIndex: 20,
+                  "&:hover": {
+                    background: alpha(theme.palette.primary.main, 0.1),
+                    transform: "translateY(-50%) scale(1.1)",
+                  },
+                }}
+              >
+                <ChevronRightIcon />
+              </Box>
+
+              {/* Carousel Dots */}
+              <Box sx={{ display: "flex", justifyContent: "center", gap: 1, mt: 2 }}>
+                {[0, 1, 2, 3].map((index) => (
+                  <Box
+                    key={index}
+                    onClick={() => setToolHubSlide(index)}
+                    sx={{
+                      width: toolHubSlide === index ? 24 : 8,
+                      height: 8,
+                      borderRadius: 4,
+                      bgcolor: toolHubSlide === index ? theme.palette.primary.main : alpha(theme.palette.primary.main, 0.3),
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                      "&:hover": {
+                        bgcolor: toolHubSlide === index ? theme.palette.primary.main : alpha(theme.palette.primary.main, 0.5),
+                      },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
           </Paper>
 
           {/* Quick Jump Chips - Horizontal scroll on mobile */}
@@ -1957,8 +2065,8 @@ export default function LearnHubPage() {
         {[
           { value: allCategories.length.toString(), label: "Categories" },
           { value: totalCards.toString(), label: "Learning Topics" },
-          { value: "120+", label: "Glossary Terms" },
-          { value: "200+", label: "Commands" },
+          { value: "900+", label: "Glossary Terms" }, // Updated count
+          { value: "700+", label: "Commands" }, // Updated count
         ].map((stat, i) => (
           <Box key={i} sx={{ textAlign: "center", minWidth: 100 }}>
             <Typography variant="h4" sx={{ fontWeight: 800, color: "primary.main" }}>
@@ -2217,7 +2325,7 @@ export default function LearnHubPage() {
             onClick={scrollToTop}
             sx={{
               position: "fixed",
-              bottom: 20,
+              bottom: 90,
               right: 20,
               zIndex: 1000,
               boxShadow: `0 4px 20px ${alpha(theme.palette.secondary.main, 0.4)}`,

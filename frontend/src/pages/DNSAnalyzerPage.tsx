@@ -86,6 +86,22 @@ import DeviceHubIcon from "@mui/icons-material/DeviceHub";
 import ReactMarkdown from "react-markdown";
 import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import ForceGraph2D from "react-force-graph-2d";
+import DownloadIcon from "@mui/icons-material/Download";
+import { jsPDF } from "jspdf";
+import {
+  Document as DocxDocument,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Table as DocxTable,
+  TableRow as DocxTableRow,
+  TableCell as DocxTableCell,
+  WidthType,
+  AlignmentType,
+  ISectionOptions,
+} from "docx";
+import { saveAs } from "file-saver";
 import {
   apiClient,
   DNSScanType,
@@ -202,6 +218,897 @@ function CopyButton({ text, size = "small" }: { text: string; size?: "small" | "
       </IconButton>
     </Tooltip>
   );
+}
+
+// =============================================================================
+// EXPORT FUNCTIONS
+// =============================================================================
+
+/**
+ * Generate comprehensive Markdown report from DNS reconnaissance results
+ */
+function generateDNSMarkdown(result: DNSReconResult): string {
+  const lines: string[] = [];
+  const timestamp = new Date().toLocaleString();
+
+  // Title and metadata
+  lines.push(`# DNS Reconnaissance Report: ${result.domain}`);
+  lines.push("");
+  lines.push(`**Generated:** ${timestamp}`);
+  lines.push(`**Scan Duration:** ${result.scan_duration_seconds.toFixed(2)} seconds`);
+  lines.push(`**Report ID:** ${result.report_id || "N/A"}`);
+  lines.push("");
+
+  // Executive Summary
+  lines.push("---");
+  lines.push("");
+  lines.push("## Executive Summary");
+  lines.push("");
+  lines.push("| Metric | Value |");
+  lines.push("|--------|-------|");
+  lines.push(`| **DNS Records** | ${result.total_records} |`);
+  lines.push(`| **Subdomains Found** | ${result.total_subdomains} |`);
+  lines.push(`| **Unique IPs** | ${result.unique_ips.length} |`);
+  lines.push(`| **Nameservers** | ${result.nameservers.length} |`);
+  lines.push(`| **Mail Servers** | ${result.mail_servers.length} |`);
+  lines.push(`| **Zone Transfer** | ${result.zone_transfer_possible ? "⚠️ **VULNERABLE**" : "✅ Protected"} |`);
+  if (result.security) {
+    lines.push(`| **Mail Security Score** | ${result.security.mail_security_score}/100 |`);
+  }
+  if (result.takeover_risks && result.takeover_risks.length > 0) {
+    lines.push(`| **Takeover Risks** | ⚠️ ${result.takeover_risks.length} found |`);
+  }
+  if (result.has_wildcard) {
+    lines.push(`| **Wildcard DNS** | ⚡ Detected |`);
+  }
+  lines.push("");
+
+  // Zone Transfer Warning
+  if (result.zone_transfer_possible) {
+    lines.push("### ⚠️ CRITICAL: Zone Transfer Vulnerability");
+    lines.push("");
+    lines.push("> **This domain allows DNS zone transfers (AXFR), exposing all DNS records to attackers.**");
+    lines.push("> This is a serious misconfiguration that should be fixed immediately.");
+    lines.push("");
+  }
+
+  // Email Security Analysis
+  if (result.security) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## Email Security Analysis");
+    lines.push("");
+    lines.push(`**Mail Security Score:** ${result.security.mail_security_score}/100`);
+    lines.push("");
+    lines.push("### Security Controls Status");
+    lines.push("");
+    lines.push("| Control | Status | Details |");
+    lines.push("|---------|--------|---------|");
+    lines.push(`| **SPF** | ${result.security.has_spf ? "✅ Present" : "❌ Missing"} | ${result.security.spf_record || "Not configured"} |`);
+    lines.push(`| **DMARC** | ${result.security.has_dmarc ? "✅ Present" : "❌ Missing"} | ${result.security.dmarc_record || "Not configured"} |`);
+    lines.push(`| **DKIM** | ${result.security.has_dkim ? "✅ Found" : "❌ Not found"} | Selectors: ${result.security.dkim_selectors_found?.join(", ") || "None"} |`);
+    lines.push(`| **DNSSEC** | ${result.security.has_dnssec ? "✅ Enabled" : "⚠️ Not enabled"} | ${result.security.dnssec_details || "-"} |`);
+    lines.push(`| **CAA** | ${result.security.has_caa ? "✅ Present" : "⚠️ Missing"} | ${result.security.caa_records?.join(", ") || "Not configured"} |`);
+    lines.push(`| **BIMI** | ${result.security.has_bimi ? "✅ Present" : "⚠️ Missing"} | ${result.security.bimi_record || "-"} |`);
+    lines.push(`| **MTA-STS** | ${result.security.has_mta_sts ? "✅ Present" : "⚠️ Missing"} | ${result.security.mta_sts_record || "-"} |`);
+    lines.push("");
+
+    // Security Issues
+    if (result.security.overall_issues && result.security.overall_issues.length > 0) {
+      lines.push("### ⚠️ Security Issues");
+      lines.push("");
+      result.security.overall_issues.forEach(issue => {
+        lines.push(`- ${issue}`);
+      });
+      lines.push("");
+    }
+
+    // Recommendations
+    if (result.security.recommendations && result.security.recommendations.length > 0) {
+      lines.push("### 💡 Recommendations");
+      lines.push("");
+      result.security.recommendations.forEach(rec => {
+        lines.push(`- ${rec}`);
+      });
+      lines.push("");
+    }
+  }
+
+  // DNS Records
+  lines.push("---");
+  lines.push("");
+  lines.push("## DNS Records");
+  lines.push("");
+  if (result.records && result.records.length > 0) {
+    lines.push("| Type | Name | Value | TTL | Priority |");
+    lines.push("|------|------|-------|-----|----------|");
+    result.records.forEach(record => {
+      const value = record.value.length > 60 ? record.value.substring(0, 57) + "..." : record.value;
+      lines.push(`| \`${record.record_type}\` | ${record.name} | \`${value}\` | ${record.ttl || "-"} | ${record.priority ?? "-"} |`);
+    });
+    lines.push("");
+  } else {
+    lines.push("*No DNS records found.*");
+    lines.push("");
+  }
+
+  // Nameservers
+  if (result.nameservers && result.nameservers.length > 0) {
+    lines.push("### Nameservers");
+    lines.push("");
+    result.nameservers.forEach(ns => {
+      lines.push(`- \`${ns}\``);
+    });
+    lines.push("");
+  }
+
+  // Mail Servers
+  if (result.mail_servers && result.mail_servers.length > 0) {
+    lines.push("### Mail Servers");
+    lines.push("");
+    lines.push("| Priority | Server |");
+    lines.push("|----------|--------|");
+    result.mail_servers.forEach(mx => {
+      lines.push(`| ${mx.priority} | \`${mx.server}\` |`);
+    });
+    lines.push("");
+  }
+
+  // Subdomains
+  lines.push("---");
+  lines.push("");
+  lines.push("## Subdomains");
+  lines.push("");
+  if (result.subdomains && result.subdomains.length > 0) {
+    lines.push(`**Total Found:** ${result.total_subdomains}`);
+    lines.push("");
+    lines.push("| Subdomain | Full Domain | IP Addresses | CNAME |");
+    lines.push("|-----------|-------------|--------------|-------|");
+    result.subdomains.slice(0, 100).forEach(sub => {
+      const ips = sub.ip_addresses?.join(", ") || "-";
+      lines.push(`| ${sub.subdomain} | \`${sub.full_domain}\` | ${ips} | ${sub.cname || "-"} |`);
+    });
+    if (result.subdomains.length > 100) {
+      lines.push("");
+      lines.push(`*... and ${result.subdomains.length - 100} more subdomains*`);
+    }
+    lines.push("");
+  } else {
+    lines.push("*No subdomains found.*");
+    lines.push("");
+  }
+
+  // Subdomain Takeover Risks
+  if (result.takeover_risks && result.takeover_risks.length > 0) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## ⚠️ Subdomain Takeover Risks");
+    lines.push("");
+    lines.push("| Subdomain | CNAME Target | Provider | Risk Level | Vulnerable |");
+    lines.push("|-----------|--------------|----------|------------|------------|");
+    result.takeover_risks.forEach(risk => {
+      const vulnStatus = risk.is_vulnerable ? "**YES**" : "No";
+      lines.push(`| \`${risk.subdomain}\` | \`${risk.cname_target}\` | ${risk.provider} | **${risk.risk_level.toUpperCase()}** | ${vulnStatus} |`);
+    });
+    lines.push("");
+  }
+
+  // Dangling CNAMEs
+  if (result.dangling_cnames && result.dangling_cnames.length > 0) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## 🔗 Dangling CNAMEs");
+    lines.push("");
+    lines.push("*These CNAMEs point to non-resolving targets and may be vulnerable to takeover.*");
+    lines.push("");
+    result.dangling_cnames.forEach(dc => {
+      lines.push(`- \`${dc.subdomain}\` → \`${dc.cname}\``);
+    });
+    lines.push("");
+  }
+
+  // Cloud Providers
+  if (result.cloud_providers && result.cloud_providers.length > 0) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## ☁️ Cloud Infrastructure Detected");
+    lines.push("");
+    const providerGroups: Record<string, typeof result.cloud_providers> = {};
+    result.cloud_providers.forEach(cp => {
+      const key = cp.provider.toUpperCase();
+      if (!providerGroups[key]) providerGroups[key] = [];
+      providerGroups[key].push(cp);
+    });
+
+    Object.entries(providerGroups).forEach(([provider, items]) => {
+      lines.push(`### ${provider}`);
+      lines.push("");
+      items.slice(0, 10).forEach(item => {
+        const cdn = item.is_cdn ? " (CDN)" : "";
+        const service = item.service ? ` - ${item.service}` : "";
+        lines.push(`- \`${item.ip_or_domain}\`${service}${cdn}`);
+      });
+      if (items.length > 10) {
+        lines.push(`- *... and ${items.length - 10} more*`);
+      }
+      lines.push("");
+    });
+  }
+
+  // ASN Information
+  if (result.asn_info && result.asn_info.length > 0) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## 🌐 ASN/Network Information");
+    lines.push("");
+    lines.push("| IP Address | ASN | Organization | Country |");
+    lines.push("|------------|-----|--------------|---------|");
+    result.asn_info.forEach(asn => {
+      lines.push(`| \`${asn.ip_address}\` | ${asn.asn || "-"} | ${asn.asn_name || "-"} | ${asn.country || "-"} |`);
+    });
+    lines.push("");
+  }
+
+  // Unique IPs
+  if (result.unique_ips && result.unique_ips.length > 0) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## 📍 Unique IP Addresses");
+    lines.push("");
+    lines.push("```");
+    result.unique_ips.forEach(ip => {
+      const rdns = result.reverse_dns?.[ip];
+      lines.push(rdns ? `${ip} (${rdns})` : ip);
+    });
+    lines.push("```");
+    lines.push("");
+  }
+
+  // AI Analysis
+  if (result.ai_analysis && typeof result.ai_analysis === "object" && !result.ai_analysis.error) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## 🤖 AI Security Analysis");
+    lines.push("");
+
+    if (result.ai_analysis.risk_level) {
+      lines.push(`**Overall Risk Level:** ${result.ai_analysis.risk_level.toUpperCase()}`);
+      lines.push("");
+    }
+
+    if (result.ai_analysis.executive_summary) {
+      lines.push("### Executive Summary");
+      lines.push("");
+      lines.push(result.ai_analysis.executive_summary);
+      lines.push("");
+    }
+
+    if (result.ai_analysis.key_findings && result.ai_analysis.key_findings.length > 0) {
+      lines.push("### Key Findings");
+      lines.push("");
+      result.ai_analysis.key_findings.forEach((finding: any, i: number) => {
+        lines.push(`#### ${i + 1}. ${finding.finding} [${finding.severity?.toUpperCase()}]`);
+        lines.push("");
+        if (finding.description) lines.push(finding.description);
+        if (finding.impact) lines.push(`\n**Impact:** ${finding.impact}`);
+        if (finding.recommendation) lines.push(`\n**Recommendation:** ${finding.recommendation}`);
+        lines.push("");
+      });
+    }
+  }
+
+  // Footer
+  lines.push("---");
+  lines.push("");
+  lines.push("*Report generated by VRAgent DNS Reconnaissance Tool*");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+/**
+ * Generate PDF report from DNS reconnaissance results
+ */
+function generateDNSPDF(result: DNSReconResult): void {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - 2 * margin;
+  let y = margin;
+
+  // Helper functions
+  const addPage = () => {
+    doc.addPage();
+    y = margin;
+  };
+
+  const checkPageBreak = (height: number) => {
+    if (y + height > pageHeight - margin) {
+      addPage();
+    }
+  };
+
+  const addTitle = (text: string, size: number = 20, color: [number, number, number] = [0, 100, 200]) => {
+    checkPageBreak(15);
+    doc.setFontSize(size);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(color[0], color[1], color[2]);
+    doc.text(text, margin, y);
+    y += size * 0.5 + 5;
+  };
+
+  const addSubtitle = (text: string, size: number = 14) => {
+    checkPageBreak(12);
+    doc.setFontSize(size);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(60, 60, 60);
+    doc.text(text, margin, y);
+    y += size * 0.4 + 4;
+  };
+
+  const addText = (text: string, size: number = 10, bold: boolean = false) => {
+    doc.setFontSize(size);
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setTextColor(40, 40, 40);
+    const lines = doc.splitTextToSize(text, contentWidth);
+    lines.forEach((line: string) => {
+      checkPageBreak(size * 0.4 + 2);
+      doc.text(line, margin, y);
+      y += size * 0.4 + 2;
+    });
+  };
+
+  const addBullet = (text: string, indent: number = 5) => {
+    checkPageBreak(8);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(40, 40, 40);
+    const lines = doc.splitTextToSize(text, contentWidth - indent - 5);
+    doc.text("•", margin + indent, y);
+    lines.forEach((line: string, i: number) => {
+      doc.text(line, margin + indent + 5, y);
+      y += 5;
+    });
+  };
+
+  const addKeyValue = (key: string, value: string) => {
+    checkPageBreak(8);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(60, 60, 60);
+    doc.text(key + ":", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(40, 40, 40);
+    doc.text(value, margin + 50, y);
+    y += 6;
+  };
+
+  // Title
+  addTitle(`DNS Reconnaissance Report`, 22, [0, 80, 180]);
+  addTitle(result.domain, 18, [0, 120, 200]);
+  y += 5;
+
+  // Metadata
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+  y += 5;
+  doc.text(`Scan Duration: ${result.scan_duration_seconds.toFixed(2)} seconds`, margin, y);
+  y += 10;
+
+  // Executive Summary Box
+  doc.setFillColor(240, 248, 255);
+  doc.rect(margin, y, contentWidth, 45, "F");
+  doc.setDrawColor(0, 100, 200);
+  doc.rect(margin, y, contentWidth, 45, "S");
+  y += 8;
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 80, 160);
+  doc.text("Executive Summary", margin + 5, y);
+  y += 8;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(40, 40, 40);
+  doc.text(`DNS Records: ${result.total_records}`, margin + 5, y);
+  doc.text(`Subdomains: ${result.total_subdomains}`, margin + 70, y);
+  doc.text(`Unique IPs: ${result.unique_ips.length}`, margin + 130, y);
+  y += 7;
+  doc.text(`Nameservers: ${result.nameservers.length}`, margin + 5, y);
+  doc.text(`Mail Servers: ${result.mail_servers.length}`, margin + 70, y);
+  y += 7;
+
+  // Zone Transfer Status
+  if (result.zone_transfer_possible) {
+    doc.setTextColor(220, 38, 38);
+    doc.setFont("helvetica", "bold");
+    doc.text("⚠ ZONE TRANSFER VULNERABLE", margin + 5, y);
+  } else {
+    doc.setTextColor(34, 197, 94);
+    doc.text("✓ Zone Transfer Protected", margin + 5, y);
+  }
+
+  // Mail Security Score
+  if (result.security) {
+    doc.setTextColor(40, 40, 40);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Mail Security: ${result.security.mail_security_score}/100`, margin + 100, y);
+  }
+  y += 15;
+
+  // Email Security Section
+  if (result.security) {
+    addSubtitle("Email Security Analysis");
+
+    const securityItems = [
+      { name: "SPF", status: result.security.has_spf, detail: result.security.spf_record },
+      { name: "DMARC", status: result.security.has_dmarc, detail: result.security.dmarc_record },
+      { name: "DKIM", status: result.security.has_dkim, detail: result.security.dkim_selectors_found?.join(", ") },
+      { name: "DNSSEC", status: result.security.has_dnssec, detail: result.security.dnssec_details },
+      { name: "CAA", status: result.security.has_caa, detail: result.security.caa_records?.join(", ") },
+    ];
+
+    securityItems.forEach(item => {
+      checkPageBreak(8);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(item.status ? 34 : 220, item.status ? 197 : 38, item.status ? 94 : 38);
+      doc.text(item.status ? "✓" : "✗", margin, y);
+      doc.setTextColor(60, 60, 60);
+      doc.text(item.name + ":", margin + 8, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 80, 80);
+      const detail = item.detail ? (item.detail.length > 60 ? item.detail.substring(0, 57) + "..." : item.detail) : "Not configured";
+      doc.text(detail, margin + 35, y);
+      y += 6;
+    });
+    y += 5;
+
+    // Security Issues
+    if (result.security.overall_issues && result.security.overall_issues.length > 0) {
+      addSubtitle("Security Issues", 12);
+      result.security.overall_issues.forEach(issue => {
+        addBullet(issue);
+      });
+      y += 5;
+    }
+  }
+
+  // DNS Records Section
+  addSubtitle("DNS Records");
+  if (result.records && result.records.length > 0) {
+    result.records.slice(0, 30).forEach(record => {
+      checkPageBreak(6);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 100, 200);
+      doc.text(record.record_type, margin, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+      const value = record.value.length > 80 ? record.value.substring(0, 77) + "..." : record.value;
+      doc.text(value, margin + 20, y);
+      y += 5;
+    });
+    if (result.records.length > 30) {
+      addText(`... and ${result.records.length - 30} more records`);
+    }
+  }
+  y += 5;
+
+  // Subdomains Section
+  if (result.subdomains && result.subdomains.length > 0) {
+    addSubtitle("Subdomains Found");
+    addText(`Total: ${result.total_subdomains} subdomains discovered`);
+    y += 3;
+
+    result.subdomains.slice(0, 25).forEach(sub => {
+      checkPageBreak(6);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(40, 40, 40);
+      const ips = sub.ip_addresses?.slice(0, 2).join(", ") || "No IP";
+      doc.text(`• ${sub.full_domain} → ${ips}`, margin, y);
+      y += 5;
+    });
+    if (result.subdomains.length > 25) {
+      addText(`... and ${result.subdomains.length - 25} more subdomains`);
+    }
+    y += 5;
+  }
+
+  // Takeover Risks Section
+  if (result.takeover_risks && result.takeover_risks.length > 0) {
+    addSubtitle("⚠ Subdomain Takeover Risks", 14);
+    result.takeover_risks.forEach(risk => {
+      checkPageBreak(10);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(risk.is_vulnerable ? 220 : 245, risk.is_vulnerable ? 38 : 158, risk.is_vulnerable ? 38 : 11);
+      doc.text(`${risk.subdomain} [${risk.risk_level.toUpperCase()}]`, margin, y);
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 80, 80);
+      doc.setFontSize(9);
+      doc.text(`→ ${risk.cname_target} (${risk.provider})`, margin + 5, y);
+      y += 6;
+    });
+    y += 5;
+  }
+
+  // Footer
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: "center" });
+    doc.text("Generated by VRAgent DNS Reconnaissance", pageWidth / 2, pageHeight - 5, { align: "center" });
+  }
+
+  // Save
+  doc.save(`dns-report-${result.domain}-${new Date().toISOString().split("T")[0]}.pdf`);
+}
+
+/**
+ * Generate Word document from DNS reconnaissance results
+ */
+async function generateDNSWord(result: DNSReconResult): Promise<void> {
+  const children: (Paragraph | DocxTable)[] = [];
+  const timestamp = new Date().toLocaleString();
+
+  // Title
+  children.push(
+    new Paragraph({
+      children: [
+        new TextRun({ text: "DNS Reconnaissance Report", bold: true, size: 48, color: "0066CC" }),
+      ],
+      heading: HeadingLevel.TITLE,
+      spacing: { after: 200 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: result.domain, bold: true, size: 36, color: "0088DD" }),
+      ],
+      spacing: { after: 400 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: `Generated: ${timestamp}`, italics: true, size: 20, color: "666666" }),
+      ],
+      spacing: { after: 100 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: `Scan Duration: ${result.scan_duration_seconds.toFixed(2)} seconds`, italics: true, size: 20, color: "666666" }),
+      ],
+      spacing: { after: 400 },
+    })
+  );
+
+  // Executive Summary
+  children.push(
+    new Paragraph({
+      children: [new TextRun({ text: "Executive Summary", bold: true, size: 32, color: "0066CC" })],
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    })
+  );
+
+  // Summary Table
+  const summaryRows = [
+    new DocxTableRow({
+      children: [
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Metric", bold: true })] })], width: { size: 40, type: WidthType.PERCENTAGE } }),
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Value", bold: true })] })], width: { size: 60, type: WidthType.PERCENTAGE } }),
+      ],
+      tableHeader: true,
+    }),
+    new DocxTableRow({
+      children: [
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "DNS Records" })] })] }),
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${result.total_records}`, bold: true })] })] }),
+      ],
+    }),
+    new DocxTableRow({
+      children: [
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Subdomains Found" })] })] }),
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${result.total_subdomains}`, bold: true })] })] }),
+      ],
+    }),
+    new DocxTableRow({
+      children: [
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Unique IPs" })] })] }),
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${result.unique_ips.length}`, bold: true })] })] }),
+      ],
+    }),
+    new DocxTableRow({
+      children: [
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Zone Transfer" })] })] }),
+        new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: result.zone_transfer_possible ? "⚠️ VULNERABLE" : "✅ Protected", bold: true, color: result.zone_transfer_possible ? "DC2626" : "22C55E" })] })] }),
+      ],
+    }),
+  ];
+
+  if (result.security) {
+    summaryRows.push(
+      new DocxTableRow({
+        children: [
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Mail Security Score" })] })] }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${result.security.mail_security_score}/100`, bold: true })] })] }),
+        ],
+      })
+    );
+  }
+
+  children.push(
+    new DocxTable({
+      rows: summaryRows,
+      width: { size: 100, type: WidthType.PERCENTAGE },
+    })
+  );
+
+  // Zone Transfer Warning
+  if (result.zone_transfer_possible) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: "⚠️ CRITICAL: Zone Transfer Vulnerability Detected!", bold: true, size: 24, color: "DC2626" }),
+        ],
+        spacing: { before: 300, after: 100 },
+        shading: { fill: "FEE2E2" },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: "This domain allows DNS zone transfers (AXFR), exposing all DNS records to attackers. This is a serious misconfiguration that should be fixed immediately.", color: "991B1B" }),
+        ],
+        spacing: { after: 300 },
+        shading: { fill: "FEE2E2" },
+      })
+    );
+  }
+
+  // Email Security Section
+  if (result.security) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: "Email Security Analysis", bold: true, size: 32, color: "0066CC" })],
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 400, after: 200 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Mail Security Score: ", bold: true }),
+          new TextRun({ text: `${result.security.mail_security_score}/100`, bold: true, size: 28, color: result.security.mail_security_score >= 70 ? "22C55E" : result.security.mail_security_score >= 40 ? "F59E0B" : "DC2626" }),
+        ],
+        spacing: { after: 200 },
+      })
+    );
+
+    // Security Controls
+    const controls = [
+      { name: "SPF", status: result.security.has_spf, detail: result.security.spf_record || "Not configured" },
+      { name: "DMARC", status: result.security.has_dmarc, detail: result.security.dmarc_record || "Not configured" },
+      { name: "DKIM", status: result.security.has_dkim, detail: result.security.dkim_selectors_found?.join(", ") || "Not found" },
+      { name: "DNSSEC", status: result.security.has_dnssec, detail: result.security.dnssec_details || "Not enabled" },
+      { name: "CAA", status: result.security.has_caa, detail: result.security.caa_records?.join(", ") || "Not configured" },
+      { name: "BIMI", status: result.security.has_bimi, detail: result.security.bimi_record || "Not configured" },
+      { name: "MTA-STS", status: result.security.has_mta_sts, detail: result.security.mta_sts_record || "Not configured" },
+    ];
+
+    controls.forEach(ctrl => {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: ctrl.status ? "✅ " : "❌ ", color: ctrl.status ? "22C55E" : "DC2626" }),
+            new TextRun({ text: ctrl.name + ": ", bold: true }),
+            new TextRun({ text: ctrl.detail.length > 80 ? ctrl.detail.substring(0, 77) + "..." : ctrl.detail, font: "Courier New", size: 18 }),
+          ],
+          spacing: { after: 100 },
+        })
+      );
+    });
+
+    // Security Issues
+    if (result.security.overall_issues && result.security.overall_issues.length > 0) {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: "Security Issues", bold: true, size: 26, color: "DC2626" })],
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 150 },
+        })
+      );
+      result.security.overall_issues.forEach(issue => {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: `• ${issue}` })],
+            indent: { left: 300 },
+            spacing: { after: 80 },
+          })
+        );
+      });
+    }
+
+    // Recommendations
+    if (result.security.recommendations && result.security.recommendations.length > 0) {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: "💡 Recommendations", bold: true, size: 26, color: "0066CC" })],
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 150 },
+        })
+      );
+      result.security.recommendations.forEach(rec => {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: `• ${rec}` })],
+            indent: { left: 300 },
+            spacing: { after: 80 },
+          })
+        );
+      });
+    }
+  }
+
+  // DNS Records Section
+  children.push(
+    new Paragraph({
+      children: [new TextRun({ text: "DNS Records", bold: true, size: 32, color: "0066CC" })],
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: `Total: ${result.total_records} records found` })],
+      spacing: { after: 200 },
+    })
+  );
+
+  if (result.records && result.records.length > 0) {
+    const recordRows = [
+      new DocxTableRow({
+        children: [
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Type", bold: true })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Name", bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Value", bold: true })] })], width: { size: 45, type: WidthType.PERCENTAGE } }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "TTL", bold: true })] })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+        ],
+        tableHeader: true,
+      }),
+      ...result.records.slice(0, 50).map(record =>
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: record.record_type, bold: true, color: "0066CC" })] })] }),
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: record.name, font: "Courier New", size: 18 })] })] }),
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: record.value.length > 50 ? record.value.substring(0, 47) + "..." : record.value, font: "Courier New", size: 18 })] })] }),
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${record.ttl || "-"}` })] })] }),
+          ],
+        })
+      ),
+    ];
+
+    children.push(
+      new DocxTable({
+        rows: recordRows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+      })
+    );
+
+    if (result.records.length > 50) {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: `... and ${result.records.length - 50} more records`, italics: true, color: "666666" })],
+          spacing: { before: 100 },
+        })
+      );
+    }
+  }
+
+  // Subdomains Section
+  if (result.subdomains && result.subdomains.length > 0) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: "Subdomains", bold: true, size: 32, color: "0066CC" })],
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 400, after: 200 },
+      }),
+      new Paragraph({
+        children: [new TextRun({ text: `Total: ${result.total_subdomains} subdomains discovered` })],
+        spacing: { after: 200 },
+      })
+    );
+
+    const subdomainRows = [
+      new DocxTableRow({
+        children: [
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Subdomain", bold: true })] })], width: { size: 30, type: WidthType.PERCENTAGE } }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "IP Addresses", bold: true })] })], width: { size: 40, type: WidthType.PERCENTAGE } }),
+          new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: "CNAME", bold: true })] })], width: { size: 30, type: WidthType.PERCENTAGE } }),
+        ],
+        tableHeader: true,
+      }),
+      ...result.subdomains.slice(0, 50).map(sub =>
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: sub.full_domain, font: "Courier New", size: 18 })] })] }),
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: sub.ip_addresses?.join(", ") || "-", font: "Courier New", size: 18 })] })] }),
+            new DocxTableCell({ children: [new Paragraph({ children: [new TextRun({ text: sub.cname || "-", font: "Courier New", size: 18 })] })] }),
+          ],
+        })
+      ),
+    ];
+
+    children.push(
+      new DocxTable({
+        rows: subdomainRows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+      })
+    );
+  }
+
+  // Takeover Risks Section
+  if (result.takeover_risks && result.takeover_risks.length > 0) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: "⚠️ Subdomain Takeover Risks", bold: true, size: 32, color: "DC2626" })],
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 400, after: 200 },
+      })
+    );
+
+    result.takeover_risks.forEach(risk => {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: risk.subdomain, bold: true }),
+            new TextRun({ text: ` [${risk.risk_level.toUpperCase()}]`, bold: true, color: risk.risk_level === "critical" ? "DC2626" : "F59E0B" }),
+            risk.is_vulnerable ? new TextRun({ text: " - VULNERABLE", bold: true, color: "DC2626" }) : new TextRun({ text: "" }),
+          ],
+          spacing: { before: 150, after: 50 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "CNAME: ", bold: true }),
+            new TextRun({ text: risk.cname_target, font: "Courier New", size: 18 }),
+          ],
+          indent: { left: 300 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Provider: ", bold: true }),
+            new TextRun({ text: risk.provider }),
+          ],
+          indent: { left: 300 },
+          spacing: { after: 150 },
+        })
+      );
+    });
+  }
+
+  // Footer
+  children.push(
+    new Paragraph({
+      children: [
+        new TextRun({ text: "Report generated by VRAgent DNS Reconnaissance Tool", italics: true, size: 18, color: "999999" }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600 },
+    })
+  );
+
+  // Create document
+  const doc = new DocxDocument({
+    sections: [{
+      properties: {},
+      children: children,
+    }],
+  });
+
+  // Save
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `dns-report-${result.domain}-${new Date().toISOString().split("T")[0]}.docx`);
 }
 
 // Network graph component
@@ -755,7 +1662,7 @@ export default function DNSAnalyzerPage() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 2 }}>
-          <MuiLink component={Link} to="/network" color="inherit" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <MuiLink component={Link} to="/dynamic" color="inherit" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <HubIcon fontSize="small" />
             Network Analysis
           </MuiLink>
@@ -1041,6 +1948,65 @@ export default function DNSAnalyzerPage() {
                   </Card>
                 </Grid>
               </Grid>
+
+              {/* Export Buttons */}
+              <Paper sx={{ p: 2, mb: 3 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+                  <Typography variant="h6" fontWeight={600} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <DownloadIcon />
+                    Export Report
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => {
+                        const markdown = generateDNSMarkdown(result);
+                        const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+                        saveAs(blob, `dns-report-${result.domain}-${new Date().toISOString().split("T")[0]}.md`);
+                        setSnackbar({ open: true, message: "Markdown report downloaded!" });
+                      }}
+                      sx={{
+                        borderColor: "#6366f1",
+                        color: "#6366f1",
+                        "&:hover": { borderColor: "#4f46e5", bgcolor: alpha("#6366f1", 0.1) },
+                      }}
+                    >
+                      📝 Markdown
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={() => {
+                        generateDNSPDF(result);
+                        setSnackbar({ open: true, message: "PDF report downloaded!" });
+                      }}
+                      sx={{
+                        borderColor: "#dc2626",
+                        color: "#dc2626",
+                        "&:hover": { borderColor: "#b91c1c", bgcolor: alpha("#dc2626", 0.1) },
+                      }}
+                    >
+                      📄 PDF
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={async () => {
+                        await generateDNSWord(result);
+                        setSnackbar({ open: true, message: "Word document downloaded!" });
+                      }}
+                      sx={{
+                        borderColor: "#2563eb",
+                        color: "#2563eb",
+                        "&:hover": { borderColor: "#1d4ed8", bgcolor: alpha("#2563eb", 0.1) },
+                      }}
+                    >
+                      📃 Word
+                    </Button>
+                  </Box>
+                </Box>
+              </Paper>
 
               {/* Zone Transfer Warning */}
               {result.zone_transfer_possible && (

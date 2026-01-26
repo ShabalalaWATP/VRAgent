@@ -1175,7 +1175,7 @@ export default function PcapAnalyzerPage() {
         ) : (
           <MuiLink
             component={Link}
-            to="/network"
+            to="/dynamic"
             sx={{ 
               display: 'flex', 
               alignItems: 'center', 

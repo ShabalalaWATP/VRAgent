@@ -9,6 +9,9 @@ import {
   Badge,
   CircularProgress,
   Alert,
+  Fade,
+  alpha,
+  Skeleton,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -17,13 +20,19 @@ import {
   Message as MessagesIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import UserSearchTab from '../components/social/UserSearchTab';
-import FriendRequestsTab from '../components/social/FriendRequestsTab';
-import FriendsListTab from '../components/social/FriendsListTab';
-import MessagesTab from '../components/social/MessagesTab';
-import { StatusSelector } from '../components/social/StatusSelector';
-import { PresenceStatus } from '../components/social/PresenceIndicator';
+import {
+  UserSearchTab,
+  FriendRequestsTab,
+  FriendsListTab,
+  MessagesTab,
+  StatusSelector,
+} from '../components/social';
+import type { PresenceStatus } from '../components/social';
 import { socialApi, FriendRequestListResponse, UnreadCountResponse } from '../api/client';
+
+// Polling intervals (in ms) - increased to reduce server load since WebSocket handles real-time
+const POLLING_INTERVAL_VISIBLE = 60000; // 60 seconds when tab is visible
+const POLLING_INTERVAL_HIDDEN = 120000; // 2 minutes when tab is hidden
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -34,15 +43,17 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`social-tabpanel-${index}`}
-      aria-labelledby={`social-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
+    <Fade in={value === index} timeout={300}>
+      <div
+        role="tabpanel"
+        hidden={value !== index}
+        id={`social-tabpanel-${index}`}
+        aria-labelledby={`social-tab-${index}`}
+        {...other}
+      >
+        {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
+      </div>
+    </Fade>
   );
 }
 
@@ -53,7 +64,7 @@ export default function SocialPage() {
   const [unreadCounts, setUnreadCounts] = useState<UnreadCountResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Presence state
   const [myPresence, setMyPresence] = useState<{
     status: PresenceStatus;
@@ -81,11 +92,38 @@ export default function SocialPage() {
   useEffect(() => {
     loadCounts();
     loadMyPresence();
-    // Refresh counts every 30 seconds
-    const interval = setInterval(loadCounts, 30000);
-    return () => clearInterval(interval);
+
+    // Track polling interval ref for dynamic adjustment
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      // Use longer interval when tab is hidden to save resources
+      const interval = document.hidden ? POLLING_INTERVAL_HIDDEN : POLLING_INTERVAL_VISIBLE;
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(loadCounts, interval);
+    };
+
+    const handleVisibilityChange = () => {
+      // Refresh immediately when tab becomes visible
+      if (!document.hidden) {
+        loadCounts();
+      }
+      // Adjust polling interval based on visibility
+      startPolling();
+    };
+
+    // Start initial polling
+    startPolling();
+
+    // Listen for visibility changes to optimize polling
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [loadCounts]);
-  
+
   const loadMyPresence = async () => {
     try {
       const response = await fetch('/api/social/presence/me', {
@@ -105,7 +143,7 @@ export default function SocialPage() {
       console.error('Failed to load presence:', err);
     }
   };
-  
+
   const handleStatusChange = async (
     status: PresenceStatus,
     customStatus?: string,
@@ -145,17 +183,32 @@ export default function SocialPage() {
   if (!user) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="warning">Please log in to access social features.</Alert>
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
+          Please log in to access social features.
+        </Alert>
       </Container>
     );
   }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Social Hub
-        </Typography>
+      {/* Header */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 3,
+        }}
+      >
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: -0.5 }}>
+            Social Hub
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Connect and collaborate with your team
+          </Typography>
+        </Box>
         <StatusSelector
           currentStatus={myPresence.status}
           customStatus={myPresence.custom_status}
@@ -164,65 +217,134 @@ export default function SocialPage() {
         />
       </Box>
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="fullWidth"
+      {/* Main Content */}
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.8),
+        }}
+      >
+        {/* Tabs */}
+        <Box
           sx={{
             borderBottom: '1px solid',
             borderColor: 'divider',
-            '& .MuiTab-root': { minHeight: 64 },
+            bgcolor: (theme) => alpha(theme.palette.background.default, 0.5),
           }}
         >
-          <Tab
-            icon={<SearchIcon />}
-            label="Find Users"
-            iconPosition="start"
-          />
-          <Tab
-            icon={
-              <Badge
-                badgeContent={friendRequests?.incoming_count || 0}
-                color="error"
-                max={99}
-              >
-                <RequestsIcon />
-              </Badge>
-            }
-            label="Contact Requests"
-            iconPosition="start"
-          />
-          <Tab
-            icon={<PeopleIcon />}
-            label="Contacts"
-            iconPosition="start"
-          />
-          <Tab
-            icon={
-              <Badge
-                badgeContent={unreadCounts?.total_unread || 0}
-                color="primary"
-                max={99}
-              >
-                <MessagesIcon />
-              </Badge>
-            }
-            label="Messages"
-            iconPosition="start"
-          />
-        </Tabs>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            TabIndicatorProps={{
+              sx: {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+              },
+            }}
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 56,
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.9rem',
+                color: 'text.secondary',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  color: 'text.primary',
+                  bgcolor: (theme) => alpha(theme.palette.action.hover, 0.5),
+                },
+                '&.Mui-selected': {
+                  color: 'primary.main',
+                  fontWeight: 600,
+                },
+              },
+            }}
+          >
+            <Tab
+              icon={<SearchIcon sx={{ fontSize: 20 }} />}
+              label="Find Users"
+              iconPosition="start"
+              sx={{ gap: 1 }}
+            />
+            <Tab
+              icon={
+                <Badge
+                  badgeContent={friendRequests?.incoming_count || 0}
+                  color="error"
+                  max={99}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '0.7rem',
+                      minWidth: 18,
+                      height: 18,
+                    },
+                  }}
+                >
+                  <RequestsIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              }
+              label="Requests"
+              iconPosition="start"
+              sx={{ gap: 1 }}
+            />
+            <Tab
+              icon={<PeopleIcon sx={{ fontSize: 20 }} />}
+              label="Contacts"
+              iconPosition="start"
+              sx={{ gap: 1 }}
+            />
+            <Tab
+              icon={
+                <Badge
+                  badgeContent={unreadCounts?.total_unread || 0}
+                  color="primary"
+                  max={99}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '0.7rem',
+                      minWidth: 18,
+                      height: 18,
+                    },
+                  }}
+                >
+                  <MessagesIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              }
+              label="Messages"
+              iconPosition="start"
+              sx={{ gap: 1 }}
+            />
+          </Tabs>
+        </Box>
 
+        {/* Tab Content */}
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Skeleton variant="circular" width={48} height={48} />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="text" width="40%" height={24} />
+                    <Skeleton variant="text" width="60%" height={20} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
           </Box>
         ) : (
           <>
             {error && (
-              <Alert severity="error" sx={{ m: 2 }}>
-                {error}
-              </Alert>
+              <Fade in>
+                <Alert severity="error" sx={{ m: 2, borderRadius: 2 }}>
+                  {error}
+                </Alert>
+              </Fade>
             )}
 
             <TabPanel value={tabValue} index={0}>

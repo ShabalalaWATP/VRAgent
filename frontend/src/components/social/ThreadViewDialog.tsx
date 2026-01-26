@@ -22,10 +22,13 @@ import {
   Send as SendIcon,
   Reply as ReplyIcon,
   Forum as ThreadIcon,
+  ExpandMore as LoadMoreIcon,
 } from "@mui/icons-material";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { socialApi, SocialMessage } from "../../api/client";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+
+const REPLIES_PER_PAGE = 20;
 
 interface ThreadViewDialogProps {
   open: boolean;
@@ -48,16 +51,33 @@ export const ThreadViewDialog: React.FC<ThreadViewDialogProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch thread replies
-  const threadQuery = useQuery({
+  // Fetch thread replies with pagination using infinite query
+  const threadQuery = useInfiniteQuery({
     queryKey: ["thread", conversationId, parentMessage.id],
-    queryFn: () => socialApi.getThreadReplies(conversationId, parentMessage.id),
+    queryFn: async ({ pageParam = 0 }) => {
+      return socialApi.getThreadReplies(
+        conversationId,
+        parentMessage.id,
+        pageParam,
+        REPLIES_PER_PAGE
+      );
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      const totalLoaded = allPages.reduce((sum, page) => sum + page.replies.length, 0);
+      if (totalLoaded < lastPage.total_replies) {
+        return totalLoaded; // Return the skip value for next page
+      }
+      return undefined; // No more pages
+    },
     enabled: open,
-    refetchInterval: open ? 3000 : false,
+    refetchInterval: open ? 5000 : false, // Reduced polling frequency
   });
 
-  const replies = threadQuery.data?.replies || [];
-  const totalReplies = threadQuery.data?.total_replies || 0;
+  // Flatten all replies from paginated data
+  const replies = threadQuery.data?.pages.flatMap(page => page.replies) || [];
+  const totalReplies = threadQuery.data?.pages[0]?.total_replies || 0;
+  const hasMoreReplies = threadQuery.hasNextPage;
+  const isLoadingMore = threadQuery.isFetchingNextPage;
 
   // Send reply mutation
   const sendReplyMutation = useMutation({
@@ -241,9 +261,24 @@ export const ThreadViewDialog: React.FC<ThreadViewDialogProps> = ({
         ) : replies.length > 0 ? (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
-              {totalReplies} {totalReplies === 1 ? "reply" : "replies"}
+              {replies.length} of {totalReplies} {totalReplies === 1 ? "reply" : "replies"}
             </Typography>
             {replies.map((reply) => renderMessage(reply))}
+            
+            {/* Load More Button */}
+            {hasMoreReplies && (
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 2, mb: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={isLoadingMore ? <CircularProgress size={16} /> : <LoadMoreIcon />}
+                  onClick={() => threadQuery.fetchNextPage()}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "Loading..." : `Load more (${totalReplies - replies.length} remaining)`}
+                </Button>
+              </Box>
+            )}
           </>
         ) : (
           <Box sx={{ textAlign: "center", py: 4 }}>

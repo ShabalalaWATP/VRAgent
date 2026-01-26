@@ -218,6 +218,86 @@ def generate_ssl_markdown_report(
             if len(findings) > 10:
                 lines.append(f"- ... and {len(findings) - 10} more")
         
+        # SSL Grade (New Feature)
+        ssl_grade = result.get('ssl_grade')
+        if ssl_grade:
+            lines.append(f"\n**SSL Security Grade:** {ssl_grade.get('grade', 'N/A')} ({ssl_grade.get('numeric_score', 'N/A')}/100)")
+            if ssl_grade.get('grade_details'):
+                lines.append(f"  - {ssl_grade['grade_details']}")
+            if ssl_grade.get('grade_cap'):
+                lines.append(f"  - ⚠️ Grade capped by: {', '.join(ssl_grade.get('cap_reasons', []))}")
+            if ssl_grade.get('deductions'):
+                lines.append("  - Score deductions:")
+                for ded in ssl_grade['deductions'][:5]:
+                    lines.append(f"    - {ded.get('item', 'Unknown')}: -{ded.get('points', 0)} pts ({ded.get('category', '')})")
+        
+        # Mozilla TLS Compliance (New Feature)
+        mozilla = result.get('mozilla_compliance')
+        if mozilla:
+            status = "✅ Compliant" if mozilla.get('is_compliant') else "❌ Non-Compliant"
+            lines.append(f"\n**Mozilla TLS Compliance:** {status}")
+            lines.append(f"  - Profile: {mozilla.get('profile_tested', 'N/A')} ({mozilla.get('compliance_score', 0)}%)")
+            if mozilla.get('violations'):
+                lines.append("  - Violations:")
+                for v in mozilla['violations'][:5]:
+                    lines.append(f"    - [{v.get('severity', 'INFO')}] {v.get('issue', 'Unknown')}")
+            if mozilla.get('recommendations'):
+                lines.append("  - Recommendations:")
+                for rec in mozilla['recommendations'][:3]:
+                    lines.append(f"    - {rec}")
+        
+        # Client Compatibility (New Feature)
+        client_compat = result.get('client_compatibility')
+        if client_compat:
+            total = client_compat.get('clients_tested', 0)
+            compat = client_compat.get('compatible_clients', 0)
+            pct = (compat / total * 100) if total > 0 else 0
+            lines.append(f"\n**Client Compatibility:** {compat}/{total} clients ({pct:.0f}%)")
+            if client_compat.get('incompatible_clients', 0) > 0:
+                lines.append(f"  - ⚠️ {client_compat['incompatible_clients']} incompatible clients")
+            if client_compat.get('handshake_simulations'):
+                incompat = [s for s in client_compat['handshake_simulations'] if not s.get('success')]
+                if incompat:
+                    lines.append("  - Incompatible with:")
+                    for sim in incompat[:5]:
+                        lines.append(f"    - {sim.get('client_name', 'Unknown')} v{sim.get('client_version', '?')}: {sim.get('error', 'Failed')}")
+        
+        # Post-Quantum Cryptography (New Feature)
+        pq = result.get('post_quantum_analysis')
+        if pq:
+            status = "✅ PQ Ready" if pq.get('pq_ready') else "❌ Not PQ Ready"
+            lines.append(f"\n**Post-Quantum Cryptography:** {status}")
+            lines.append(f"  - Future Proof Score: {pq.get('future_proof_score', 0)}/100")
+            if pq.get('nist_compliant'):
+                lines.append("  - ✅ NIST PQ standards compliant")
+            if pq.get('supported_kems'):
+                lines.append(f"  - KEMs: {', '.join(pq['supported_kems'][:5])}")
+            if pq.get('supported_signatures'):
+                lines.append(f"  - Signatures: {', '.join(pq['supported_signatures'][:5])}")
+            if pq.get('hybrid_support'):
+                lines.append("  - ✅ Hybrid mode enabled (classical + PQ)")
+            if pq.get('recommendations'):
+                lines.append("  - Recommendations:")
+                for rec in pq['recommendations'][:3]:
+                    lines.append(f"    - {rec}")
+        
+        # STARTTLS Info (New Feature)
+        starttls = result.get('starttls_info')
+        if starttls:
+            status = "✅ Supported" if starttls.get('starttls_supported') else "❌ Not Supported"
+            lines.append(f"\n**STARTTLS ({starttls.get('protocol', 'Unknown')}):** {status}")
+            if starttls.get('starttls_supported'):
+                if starttls.get('starttls_required'):
+                    lines.append("  - ✅ STARTTLS is required (secure)")
+                else:
+                    lines.append("  - ⚠️ STARTTLS not required (stripping possible)")
+                if starttls.get('implicit_tls_supported'):
+                    lines.append("  - ✅ Implicit TLS also supported")
+                if starttls.get('plain_auth_before_tls'):
+                    lines.append("  - ⚠️ Plain authentication offered before TLS (security risk)")
+                if starttls.get('stripping_possible'):
+                    lines.append("  - ⚠️ STARTTLS stripping attack possible")
+        
         lines.append("")
     
     # AI Exploitation Analysis

@@ -5,8 +5,7 @@ import {
   Paper,
   alpha,
   useTheme,
-  Tabs,
-  Tab,
+  useMediaQuery,
   Chip,
   Grid,
   Card,
@@ -31,13 +30,16 @@ import {
   Step,
   StepLabel,
   StepContent,
-  Button,
+  Drawer,
+  Fab,
 } from "@mui/material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, Link } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 // Page context for AI chat
 const pageContext = `This is a comprehensive Incident Response Guide based on the NIST SP 800-61 framework covering:
@@ -131,9 +133,37 @@ import SpeedIcon from "@mui/icons-material/Speed";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import QuizIcon from "@mui/icons-material/Quiz";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#3b82f6";
+
+// Theme colors for consistent styling
+const themeColors = {
+  primary: "#ef4444",
+  primaryLight: "#f87171",
+  secondary: "#f59e0b",
+  accent: "#3b82f6",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(239, 68, 68, 0.2)",
+  textMuted: "#94a3b8",
+};
+
+// Section navigation items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: SchoolIcon },
+  { id: "overview", label: "Overview", icon: SecurityIcon },
+  { id: "ir-phases", label: "IR Phases", icon: TimelineIcon },
+  { id: "incident-types", label: "Incident Types", icon: WarningAmberIcon },
+  { id: "playbooks", label: "Playbooks", icon: AssignmentIcon },
+  { id: "detection", label: "Detection", icon: SearchIcon },
+  { id: "tools", label: "Tools", icon: BuildIcon },
+  { id: "documentation", label: "Documentation", icon: ArticleIcon },
+  { id: "resources", label: "Resources", icon: MenuBookIcon },
+  { id: "quiz-section", label: "Knowledge Check", icon: QuizIcon },
+];
+
 const quizQuestions: QuizQuestion[] = [
   {
     id: 1,
@@ -1546,7 +1576,75 @@ const regulatoryRequirements = [
 export default function IncidentResponseGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [activeSection, setActiveSection] = useState("intro");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Scroll to section handler
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (isMobile) setMobileNavOpen(false);
+  };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => document.getElementById(item.id));
+      const scrollPosition = window.scrollY + 100;
+
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = sections[i];
+        if (section && section.offsetTop <= scrollPosition) {
+          setActiveSection(sectionNavItems[i].id);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <List sx={{ p: 0 }}>
+      {sectionNavItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeSection === item.id;
+        return (
+          <ListItem
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              cursor: "pointer",
+              borderRadius: 2,
+              mb: 0.5,
+              bgcolor: isActive ? alpha(themeColors.primary, 0.1) : "transparent",
+              borderLeft: isActive ? `3px solid ${themeColors.primary}` : "3px solid transparent",
+              "&:hover": { bgcolor: alpha(themeColors.primary, 0.05) },
+              transition: "all 0.2s ease",
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              <Icon sx={{ fontSize: 18, color: isActive ? themeColors.primary : themeColors.textMuted }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                fontSize: "0.85rem",
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? themeColors.primary : themeColors.textMuted,
+              }}
+            />
+          </ListItem>
+        );
+      })}
+    </List>
+  );
 
   const CodeBlock = ({ children }: { children: string }) => (
     <Paper
@@ -1576,144 +1674,397 @@ export default function IncidentResponseGuidePage() {
 
   return (
     <LearnPageLayout pageTitle="Incident Response Guide" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
-
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <Box
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation */}
+          <Grid
+            item
+            md={2.5}
             sx={{
-              width: 56,
-              height: 56,
-              borderRadius: 2,
-              bgcolor: alpha("#ef4444", 0.1),
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#ef4444",
+              display: { xs: "none", md: "block" },
+              position: "sticky",
+              top: 80,
+              alignSelf: "flex-start",
+              maxHeight: "calc(100vh - 100px)",
+              overflowY: "auto",
             }}
           >
-            <SecurityIcon sx={{ fontSize: 32 }} />
-          </Box>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              Incident Response Guide
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              NIST-based framework for detecting, responding to, and recovering from security incidents
-            </Typography>
-          </Box>
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          {["NIST", "DFIR", "Playbooks", "Forensics", "Detection"].map((tag) => (
-            <Chip
-              key={tag}
-              label={tag}
-              size="small"
-              sx={{ bgcolor: alpha("#ef4444", 0.1), color: "#ef4444" }}
-            />
-          ))}
-        </Box>
-      </Box>
-
-      {/* Tabs */}
-      <Paper sx={{ borderRadius: 2, mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: "divider" }}
-        >
-          <Tab label="IR Phases" icon={<TimelineIcon />} iconPosition="start" />
-          <Tab label="Incident Types" icon={<WarningAmberIcon />} iconPosition="start" />
-          <Tab label="Playbooks" icon={<AssignmentIcon />} iconPosition="start" />
-          <Tab label="Detection" icon={<SearchIcon />} iconPosition="start" />
-          <Tab label="Tools" icon={<BuildIcon />} iconPosition="start" />
-          <Tab label="Documentation" icon={<ArticleIcon />} iconPosition="start" />
-          <Tab label="Resources" icon={<SchoolIcon />} iconPosition="start" />
-        </Tabs>
-      </Paper>
-
-      {/* Tab 0: IR Phases */}
-      {activeTab === 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>NIST Incident Response Framework (SP 800-61 Rev. 2)</AlertTitle>
-            The NIST framework provides a structured approach to handling security incidents through six phases. 
-            Each phase builds on the previous and may require iteration as new information is discovered.
-          </Alert>
-
-          {/* Quick Reference Cards */}
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <Card sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <AccessTimeIcon sx={{ color: "#3b82f6" }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Golden Hour</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  The first 60 minutes are critical. Focus on evidence preservation and containment before cleanup.
-                </Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Card sx={{ p: 2, bgcolor: alpha("#ef4444", 0.05), border: `1px solid ${alpha("#ef4444", 0.2)}` }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <MemoryIcon sx={{ color: "#ef4444" }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Volatility Order</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Collect volatile evidence first: Memory → Network state → Running processes → Disk
-                </Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Card sx={{ p: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <ArticleIcon sx={{ color: "#10b981" }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Document Everything</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  If it's not documented, it didn't happen. Use UTC timestamps for all records.
-                </Typography>
-              </Card>
-            </Grid>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: themeColors.bgCard,
+                borderRadius: 3,
+                border: `1px solid ${themeColors.border}`,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                Navigation
+              </Typography>
+              {sidebarNav}
+            </Paper>
           </Grid>
 
-          {irPhases.map((phase, idx) => (
-            <Accordion key={idx} defaultExpanded={idx === 0}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            {/* Introduction Section */}
+            <Box id="intro" sx={{ scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                {/* Back Link */}
+                <Chip
+                  component={Link}
+                  to="/learn"
+                  icon={<ArrowBackIcon />}
+                  label="Back to Learning Hub"
+                  clickable
+                  variant="outlined"
+                  sx={{ borderRadius: 2, mb: 3, borderColor: themeColors.border }}
+                />
+
+                {/* Header */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
                   <Box
                     sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2,
-                      bgcolor: alpha(phase.color, 0.1),
-                      color: phase.color,
+                      width: 64,
+                      height: 64,
+                      borderRadius: 3,
+                      bgcolor: alpha(themeColors.primary, 0.1),
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    {phase.icon}
+                    <SecurityIcon sx={{ fontSize: 36, color: themeColors.primary }} />
                   </Box>
                   <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: phase.color }}>
-                      {phase.phase}
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 800,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      Incident Response Guide
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body1" sx={{ color: themeColors.textMuted }}>
+                      NIST-based framework for detecting, responding to, and recovering from security incidents
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Tags */}
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                  {["NIST", "DFIR", "Playbooks", "Forensics", "Detection", "Recovery"].map((tag) => (
+                    <Chip
+                      key={tag}
+                      label={tag}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(themeColors.primary, 0.1),
+                        color: themeColors.primary,
+                        fontWeight: 600,
+                      }}
+                    />
+                  ))}
+                </Box>
+
+                {/* What You'll Learn */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    📚 What You'll Learn
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {[
+                      "NIST IR framework phases and best practices",
+                      "How to handle different incident types (ransomware, phishing, breaches)",
+                      "Response playbooks and step-by-step procedures",
+                      "Detection techniques and Windows Event IDs",
+                      "Essential IR tools and forensic collection methods",
+                      "Documentation requirements and regulatory compliance",
+                    ].map((item, idx) => (
+                      <Grid item xs={12} sm={6} key={idx}>
+                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                          <CheckCircleIcon sx={{ fontSize: 18, color: themeColors.primary, mt: 0.3 }} />
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{item}</Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+
+                <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    🧭 Beginner Lesson: The First 24 Hours Matter Most
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                    Incident response is a race against time and uncertainty. In the first hours, you rarely know the full
+                    scope of the incident. Your job is to stabilize the situation, preserve evidence, and prevent the attacker
+                    from spreading. Think of it like triage in a hospital: stop the bleeding first, then diagnose and treat.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Beginners often want to immediately remove malware or wipe systems. That can destroy evidence and make
+                    root-cause analysis impossible. The safer order is: identify, contain, preserve, then eradicate. If you
+                    need to take a system offline, document the reason and capture volatile data first whenever possible.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                    A good habit is to keep an incident log from minute one with UTC timestamps, actions taken, and who
+                    approved them. This log becomes the backbone of your final report.
+                  </Typography>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* Overview Section */}
+            <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SecurityIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      🎯 Overview & Quick Reference
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+
+                {/* Quick Reference Cards */}
+                <Grid container spacing={2} sx={{ mb: 4 }}>
+                  <Grid item xs={12} md={4}>
+                    <Card sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}`, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <AccessTimeIcon sx={{ color: "#3b82f6" }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Golden Hour</Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                        The first 60 minutes are critical. Focus on evidence preservation and containment before cleanup.
+                      </Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Card sx={{ p: 2, bgcolor: alpha("#ef4444", 0.05), border: `1px solid ${alpha("#ef4444", 0.2)}`, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <MemoryIcon sx={{ color: "#ef4444" }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Volatility Order</Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                        Collect volatile evidence first: Memory → Network state → Running processes → Disk
+                      </Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Card sx={{ p: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}`, height: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <ArticleIcon sx={{ color: "#10b981" }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Document Everything</Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
+                        If it's not documented, it didn't happen. Use UTC timestamps for all records.
+                      </Typography>
+                    </Card>
+                  </Grid>
+                </Grid>
+
+                <Paper sx={{ p: 3, mb: 4, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    🧠 Incident Response Mindset for Beginners
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: themeColors.textMuted, lineHeight: 1.8, mb: 2 }}>
+                    Incident response is not just a technical task. It is a coordinated business process that protects
+                    operations, customers, and reputation. You must balance speed with accuracy. Move too slowly and
+                    attackers spread; move too fast and you may destroy evidence or disrupt critical systems.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                    Always ask three questions: What is happening? What systems are at risk? What evidence do we need
+                    to preserve? These questions guide your priorities when information is incomplete.
+                  </Typography>
+                </Paper>
+
+                {/* Key Metrics */}
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primaryLight }}>📊 Key IR Metrics & Benchmarks</Typography>
+                <Grid container spacing={2}>
+                  {irMetrics.map((m) => (
+                    <Grid item xs={12} sm={6} md={4} key={m.metric}>
+                      <Card sx={{ p: 2, textAlign: "center", bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, height: "100%" }}>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: themeColors.primary }}>
+                          {m.metric}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                          {m.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted, display: "block" }}>
+                          {m.description}
+                        </Typography>
+                        <Divider sx={{ my: 1 }} />
+                        <Typography variant="body2" sx={{ color: "#10b981", fontWeight: 600 }}>
+                          Target: {m.target}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: themeColors.textMuted }}>
+                          Industry avg: {m.industry}
+                        </Typography>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                <Paper sx={{ p: 3, mt: 4, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    First 72 Hours: Practical Timeline
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    This timeline gives beginners a realistic structure for the first three days of an incident. Use it as
+                    a guide, not a rigid schedule. Large incidents may stretch these windows, but the priorities remain similar.
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Time Window</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Primary Goals</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Typical Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {[
+                          {
+                            window: "0-4 hours",
+                            goals: "Contain spread, preserve evidence, establish command",
+                            actions: "Isolate hosts, capture memory, notify leadership, start incident log",
+                          },
+                          {
+                            window: "4-24 hours",
+                            goals: "Scope impact, confirm access paths, collect key artifacts",
+                            actions: "Build timeline, identify affected systems, collect logs, validate backups",
+                          },
+                          {
+                            window: "24-72 hours",
+                            goals: "Eradicate, recover services, prepare initial report",
+                            actions: "Remove persistence, reset credentials, restore services, brief stakeholders",
+                          },
+                        ].map((row) => (
+                          <TableRow key={row.window}>
+                            <TableCell>{row.window}</TableCell>
+                            <TableCell>{row.goals}</TableCell>
+                            <TableCell>{row.actions}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* IR Phases Section */}
+            <Box id="ir-phases" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <TimelineIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      📋 NIST Incident Response Phases
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+
+                <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>NIST Incident Response Framework (SP 800-61 Rev. 2)</AlertTitle>
+                  The NIST framework provides a structured approach to handling security incidents through six phases. 
+                  Each phase builds on the previous and may require iteration as new information is discovered.
+                </Alert>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Beginners often assume the phases are strictly linear. In reality, you frequently loop back. For example,
+                  while containing an incident you may discover new systems affected, which pushes you back into detection
+                  and analysis. Treat the phases as a guide for priorities, not a rigid checklist.
+                </Typography>
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Beginner Walkthrough: How the Phases Look in Real Life
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Example scenario: an alert shows a suspicious login from a new country. You start in Detection & Analysis,
+                    confirm the login is real, then move to Containment by disabling the account. While doing so, you discover
+                    a mailbox forwarding rule (back to Detection & Analysis). After containment, you reset passwords and remove
+                    persistence (Eradication), then restore normal access (Recovery). Finally, you run a Lessons Learned review
+                    to update MFA policies and detection rules.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                    This flow shows why phases overlap. The goal is not perfect order, but consistent priorities and clear
+                    documentation.
+                  </Typography>
+                </Paper>
+
+                {irPhases.map((phase, idx) => (
+                  <Accordion key={idx} defaultExpanded={idx === 0} sx={{ mb: 1, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <Box
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            bgcolor: alpha(phase.color, 0.1),
+                            color: phase.color,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {phase.icon}
+                        </Box>
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: phase.color }}>
+                            {phase.phase}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>
                       {phase.description}
                     </Typography>
                   </Box>
@@ -1786,380 +2137,495 @@ export default function IncidentResponseGuidePage() {
             </Accordion>
           ))}
 
-          {/* Severity Levels */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Incident Severity Classification
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Proper severity classification ensures appropriate resource allocation and response times.
-            </Typography>
-            {severityLevels.map((sev) => (
-              <Accordion key={sev.level} sx={{ mb: 1 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                    <Chip label={sev.level} size="small" sx={{ bgcolor: alpha(sev.color, 0.1), color: sev.color, fontWeight: 700, minWidth: 100 }} />
-                    <Typography variant="body2" sx={{ flex: 1 }}>{sev.criteria}</Typography>
-                    <Chip label={`SLA: ${sev.sla}`} size="small" variant="outlined" />
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Examples</Typography>
-                      <List dense>
-                        {sev.examples?.map((ex, i) => (
-                          <ListItem key={i} sx={{ py: 0.25 }}>
-                            <ListItemIcon sx={{ minWidth: 20 }}>
-                              <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: sev.color }} />
-                            </ListItemIcon>
-                            <ListItemText primary={ex} primaryTypographyProps={{ variant: "body2" }} />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Escalation</Typography>
-                      <Typography variant="body2" color="text.secondary">{sev.escalation}</Typography>
-                    </Grid>
-                  </Grid>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </Paper>
-
-          {/* Key Metrics */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Key IR Metrics & Benchmarks
-            </Typography>
-            <Grid container spacing={2}>
-              {irMetrics.map((m) => (
-                <Grid item xs={12} sm={6} md={4} key={m.metric}>
-                  <Card sx={{ p: 2, textAlign: "center", bgcolor: alpha(theme.palette.primary.main, 0.05), height: "100%" }}>
-                    <Typography variant="h5" sx={{ fontWeight: 800, color: "primary.main" }}>
-                      {m.metric}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      {m.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                      {m.description}
-                    </Typography>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="body2" sx={{ color: "success.main", fontWeight: 600 }}>
-                      Target: {m.target}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Industry avg: {m.industry}
-                    </Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
-
-          {/* IR Readiness Checklist */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <ShieldIcon sx={{ color: "primary.main" }} /> IR Readiness Checklist
-            </Typography>
-            <List dense>
-              {readinessChecklist.map((item, i) => (
-                <ListItem key={i} sx={{ py: 0.5 }}>
-                  <ListItemIcon sx={{ minWidth: 28 }}>
-                    <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
-                  </ListItemIcon>
-                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-
-          {/* Stakeholder Matrix */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <GroupIcon sx={{ color: "primary.main" }} /> Stakeholder Notification Matrix
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Stakeholder</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>When to Notify</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {stakeholderMatrix.map((row) => (
-                    <TableRow key={row.stakeholder}>
-                      <TableCell sx={{ fontWeight: 600 }}>{row.stakeholder}</TableCell>
-                      <TableCell>{row.when}</TableCell>
-                      <TableCell>{row.purpose}</TableCell>
-                    </TableRow>
+                {/* Severity Levels */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Incident Severity Classification
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Proper severity classification ensures appropriate resource allocation and response times.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Severity is about business impact, not just technical impact. A malware infection on a lab machine is
+                    lower severity than a credential theft on a finance server. Use severity to decide who must be notified
+                    and how fast response actions must happen.
+                  </Typography>
+                  {severityLevels.map((sev) => (
+                    <Accordion key={sev.level} sx={{ mb: 1, bgcolor: themeColors.bgCard, "&:before": { display: "none" } }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <Chip label={sev.level} size="small" sx={{ bgcolor: alpha(sev.color, 0.1), color: sev.color, fontWeight: 700, minWidth: 100 }} />
+                          <Typography variant="body2" sx={{ flex: 1 }}>{sev.criteria}</Typography>
+                          <Chip label={`SLA: ${sev.sla}`} size="small" variant="outlined" />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Examples</Typography>
+                            <List dense>
+                              {sev.examples?.map((ex, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemIcon sx={{ minWidth: 20 }}>
+                                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: sev.color }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={ex} primaryTypographyProps={{ variant: "body2" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Escalation</Typography>
+                            <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{sev.escalation}</Typography>
+                          </Grid>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
+                </Paper>
 
-          {/* Evidence Handling */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <FolderIcon sx={{ color: "primary.main" }} /> Evidence Handling Quick Checklist
-            </Typography>
-            <List dense>
-              {evidenceHandlingChecklist.map((item, i) => (
-                <ListItem key={i} sx={{ py: 0.5 }}>
-                  <ListItemIcon sx={{ minWidth: 28 }}>
-                    <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
-                  </ListItemIcon>
-                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
+                {/* IR Readiness Checklist */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: themeColors.primary }}>
+                    <ShieldIcon sx={{ color: themeColors.primary }} /> IR Readiness Checklist
+                  </Typography>
+                  <List dense>
+                    {readinessChecklist.map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                    Readiness is the difference between panic and control. If you already know who to call, where logs are
+                    stored, and how to isolate systems, you can act quickly without improvising. Treat readiness as a living
+                    program: update it after every incident and exercise it regularly.
+                  </Typography>
+                </Paper>
 
-          {/* Containment Decision Factors */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <PolicyIcon sx={{ color: "primary.main" }} /> Containment Decision Factors
-            </Typography>
-            <List dense>
-              {containmentDecisionFactors.map((item, i) => (
-                <ListItem key={i} sx={{ py: 0.5 }}>
-                  <ListItemIcon sx={{ minWidth: 28 }}>
-                    <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
-                  </ListItemIcon>
-                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
+                {/* Stakeholder Matrix */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: themeColors.primary }}>
+                    <GroupIcon sx={{ color: themeColors.primary }} /> Stakeholder Notification Matrix
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Stakeholder</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>When to Notify</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {stakeholderMatrix.map((row) => (
+                          <TableRow key={row.stakeholder}>
+                            <TableCell sx={{ fontWeight: 600 }}>{row.stakeholder}</TableCell>
+                            <TableCell>{row.when}</TableCell>
+                            <TableCell>{row.purpose}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
 
-          {/* Communication Cadence */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <NotificationsActiveIcon sx={{ color: "primary.main" }} /> Communication Cadence
-            </Typography>
-            <List dense>
-              {commsCadence.map((item, i) => (
-                <ListItem key={i} sx={{ py: 0.5 }}>
-                  <ListItemIcon sx={{ minWidth: 28 }}>
-                    <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
-                  </ListItemIcon>
-                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-        </Box>
-      )}
+                {/* Evidence Handling */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: themeColors.primary }}>
+                    <FolderIcon sx={{ color: themeColors.primary }} /> Evidence Handling Quick Checklist
+                  </Typography>
+                  <List dense>
+                    {evidenceHandlingChecklist.map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                    Evidence handling is about trust. If you cannot prove evidence was protected from tampering, it may be
+                    inadmissible in court or useless for regulatory audits. Beginners should always capture hashes at the
+                    time of collection and store evidence in a controlled location with access logs.
+                  </Typography>
+                </Paper>
 
-      {/* Tab 1: Incident Types */}
-      {activeTab === 1 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Understanding Attack Vectors</AlertTitle>
-            Each incident type requires specific detection strategies, containment procedures, and forensic approaches.
-            Use the technical indicators and investigation queries for immediate triage.
-          </Alert>
+                {/* Containment Decision Factors */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: themeColors.primary }}>
+                    <PolicyIcon sx={{ color: themeColors.primary }} /> Containment Decision Factors
+                  </Typography>
+                  <List dense>
+                    {containmentDecisionFactors.map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                    Containment is a business decision as much as a technical one. Disconnecting a critical server may stop
+                    an attacker but also halt operations. When in doubt, consider partial containment (blocking outbound
+                    traffic, disabling accounts) before full shutdown. Document the trade-offs you chose.
+                  </Typography>
+                </Paper>
 
-          {incidentTypes.map((incident, idx) => (
-            <Accordion key={idx} defaultExpanded={idx === 0}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2,
-                      bgcolor: alpha(
-                        incident.severity === "Critical" ? "#dc2626" : 
-                        incident.severity === "High" ? "#f59e0b" : 
-                        incident.severity === "Medium" ? "#3b82f6" : "#10b981",
-                        0.1
-                      ),
-                      color: incident.severity === "Critical" ? "#dc2626" : 
-                             incident.severity === "High" ? "#f59e0b" : 
-                             incident.severity === "Medium" ? "#3b82f6" : "#10b981",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {incident.icon}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {incident.type}
+                {/* Communication Cadence */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1, color: themeColors.primary }}>
+                    <NotificationsActiveIcon sx={{ color: themeColors.primary }} /> Communication Cadence
+                  </Typography>
+                  <List dense>
+                    {commsCadence.map((item, i) => (
+                      <ListItem key={i} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mt: 2 }}>
+                    Consistent updates reduce panic. Even if you have no new findings, send a short status update to
+                    stakeholders. "No change" is better than silence, especially during high-severity incidents.
+                  </Typography>
+                </Paper>
+
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Lessons Learned: Post-Incident Review
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    The lessons learned phase is where response turns into improvement. It is not about blame; it is about
+                    identifying gaps and preventing recurrence. For beginners, the easiest way to run this is with a simple
+                    timeline review: What happened? When did we detect it? What slowed us down? What should we automate?
+                  </Typography>
+                  <List dense>
+                    {[
+                      "Review the incident timeline end-to-end with all stakeholders.",
+                      "Identify detection gaps and add new rules or data sources.",
+                      "Assess response delays (approvals, tooling, unclear ownership).",
+                      "Document what worked well and repeat it in future playbooks.",
+                      "Create concrete action items with owners and due dates.",
+                    ].map((item) => (
+                      <ListItem key={item} sx={{ py: 0.5 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                    A good lessons learned review ends with changes: updated playbooks, tuned detections, or improved training.
+                    If no changes occur, the review was incomplete.
+                  </Typography>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* Incident Types Section */}
+            <Box id="incident-types" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <WarningAmberIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      ⚠️ Incident Types & Response Procedures
                     </Typography>
                   </Box>
-                  <Chip 
-                    label={`Severity: ${incident.severity}`} 
-                    size="small" 
-                    sx={{ 
-                      bgcolor: alpha(
-                        incident.severity === "Critical" ? "#dc2626" : 
-                        incident.severity === "High" ? "#f59e0b" : 
-                        incident.severity === "Medium" ? "#3b82f6" : "#10b981",
-                        0.1
-                      ), 
-                      color: incident.severity === "Critical" ? "#dc2626" : 
-                             incident.severity === "High" ? "#f59e0b" : 
-                             incident.severity === "Medium" ? "#3b82f6" : "#10b981"
-                    }} 
-                  />
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
                 </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      Indicators of Compromise
+
+                <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>Understanding Attack Vectors</AlertTitle>
+                  Each incident type requires specific detection strategies, containment procedures, and forensic approaches.
+                  Use the technical indicators and investigation queries for immediate triage.
+                </Alert>
+
+                {incidentTypes.map((incident, idx) => (
+                  <Accordion key={idx} defaultExpanded={idx === 0} sx={{ mb: 1, bgcolor: themeColors.bgNested, "&:before": { display: "none" } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                        <Box
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            bgcolor: alpha(
+                              incident.severity === "Critical" ? "#dc2626" : 
+                              incident.severity === "High" ? "#f59e0b" : 
+                              incident.severity === "Medium" ? "#3b82f6" : "#10b981",
+                              0.1
+                            ),
+                            color: incident.severity === "Critical" ? "#dc2626" : 
+                                   incident.severity === "High" ? "#f59e0b" : 
+                                   incident.severity === "Medium" ? "#3b82f6" : "#10b981",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {incident.icon}
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                            {incident.type}
+                          </Typography>
+                        </Box>
+                        <Chip 
+                          label={`Severity: ${incident.severity}`} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: alpha(
+                              incident.severity === "Critical" ? "#dc2626" : 
+                              incident.severity === "High" ? "#f59e0b" : 
+                              incident.severity === "Medium" ? "#3b82f6" : "#10b981",
+                              0.1
+                            ), 
+                            color: incident.severity === "Critical" ? "#dc2626" : 
+                                   incident.severity === "High" ? "#f59e0b" : 
+                                   incident.severity === "Medium" ? "#3b82f6" : "#10b981"
+                          }} 
+                        />
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                            Indicators of Compromise
+                          </Typography>
+                          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                            {incident.indicators.map((ind, i) => (
+                              <Chip key={i} label={ind} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                            ))}
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                            Initial Response Steps
+                          </Typography>
+                          <Stepper orientation="vertical" sx={{ "& .MuiStepLabel-root": { py: 0 } }}>
+                            {incident.initialSteps.map((step, i) => (
+                              <Step key={i} active>
+                                <StepLabel>
+                                  <Typography variant="body2">{step}</Typography>
+                                </StepLabel>
+                              </Step>
+                            ))}
+                          </Stepper>
+                        </Grid>
+
+                        {/* Technical Indicators */}
+                        <Grid item xs={12}>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                            Technical Indicators
+                          </Typography>
+                          <List dense>
+                            {incident.technicalIndicators?.map((ti, i) => (
+                              <ListItem key={i} sx={{ py: 0.25 }}>
+                                <ListItemIcon sx={{ minWidth: 24 }}>
+                                  <WarningAmberIcon sx={{ fontSize: 14, color: "warning.main" }} />
+                                </ListItemIcon>
+                                <ListItemText primary={ti} primaryTypographyProps={{ variant: "body2" }} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Grid>
+
+                        {/* Investigation Queries */}
+                        {incident.investigationQueries && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                              Investigation Queries
+                            </Typography>
+                            <Paper
+                              sx={{
+                                p: 2,
+                                bgcolor: "#1a1a2e",
+                                borderRadius: 1,
+                                fontFamily: "monospace",
+                                fontSize: "0.75rem",
+                                overflow: "auto",
+                                maxHeight: 200,
+                              }}
+                            >
+                              <pre style={{ margin: 0, color: "#22d3ee", whiteSpace: "pre-wrap" }}>
+                                {incident.investigationQueries}
+                              </pre>
+                            </Paper>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+
+                {/* Attack Chain Reference */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mt: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    MITRE ATT&CK - Common Attack Chain
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Most attacks follow a predictable kill chain. Understanding this helps prioritize detection at each stage.
+                  </Typography>
+                  <Stepper alternativeLabel sx={{ mb: 2 }}>
+                    {["Recon", "Weaponize", "Deliver", "Exploit", "Install", "C2", "Actions"].map((stage) => (
+                      <Step key={stage} completed>
+                        <StepLabel>{stage}</StepLabel>
+                      </Step>
+                    ))}
+                  </Stepper>
+                  <Alert severity="warning">
+                    <AlertTitle>Detection Priority</AlertTitle>
+                    Focus detection efforts on Delivery, Exploitation, and C2 stages - these offer the best 
+                    balance of detection fidelity and remediation opportunity before significant damage occurs.
+                  </Alert>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* Playbooks Section */}
+            <Box id="playbooks" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <AssignmentIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      📖 Incident Response Playbooks
                     </Typography>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {incident.indicators.map((ind, i) => (
-                        <Chip key={i} label={ind} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
-                      ))}
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      Initial Response Steps
-                    </Typography>
-                    <Stepper orientation="vertical" sx={{ "& .MuiStepLabel-root": { py: 0 } }}>
-                      {incident.initialSteps.map((step, i) => (
-                        <Step key={i} active>
-                          <StepLabel>
-                            <Typography variant="body2">{step}</Typography>
-                          </StepLabel>
-                        </Step>
-                      ))}
-                    </Stepper>
-                  </Grid>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
 
-                  {/* Technical Indicators */}
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      Technical Indicators
-                    </Typography>
-                    <List dense>
-                      {incident.technicalIndicators?.map((ti, i) => (
-                        <ListItem key={i} sx={{ py: 0.25 }}>
-                          <ListItemIcon sx={{ minWidth: 24 }}>
-                            <WarningAmberIcon sx={{ fontSize: 14, color: "warning.main" }} />
-                          </ListItemIcon>
-                          <ListItemText primary={ti} primaryTypographyProps={{ variant: "body2" }} />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Grid>
+                <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>Incident Response Playbooks</AlertTitle>
+                  Playbooks provide step-by-step procedures for handling specific incident types. Customize these for your organization.
+                </Alert>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Playbooks are not just checklists. They are decision guides that help teams respond consistently under
+                  pressure. A good playbook tells you what to do, why it matters, and when to escalate. For beginners,
+                  the most useful playbooks include clear stop points: "pause here and notify legal" or "pause here and
+                  confirm containment before proceeding."
+                </Typography>
 
-                  {/* Investigation Queries */}
-                  {incident.investigationQueries && (
-                    <Grid item xs={12}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                        Investigation Queries
-                      </Typography>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          bgcolor: "#1a1a2e",
-                          borderRadius: 1,
-                          fontFamily: "monospace",
-                          fontSize: "0.75rem",
-                          overflow: "auto",
-                          maxHeight: 200,
-                        }}
-                      >
-                        <pre style={{ margin: 0, color: "#22d3ee", whiteSpace: "pre-wrap" }}>
-                          {incident.investigationQueries}
-                        </pre>
-                      </Paper>
-                    </Grid>
-                  )}
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          ))}
-
-          {/* Attack Chain Reference */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              MITRE ATT&CK - Common Attack Chain
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Most attacks follow a predictable kill chain. Understanding this helps prioritize detection at each stage.
-            </Typography>
-            <Stepper alternativeLabel sx={{ mb: 2 }}>
-              {["Recon", "Weaponize", "Deliver", "Exploit", "Install", "C2", "Actions"].map((stage) => (
-                <Step key={stage} completed>
-                  <StepLabel>{stage}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-            <Alert severity="warning">
-              <AlertTitle>Detection Priority</AlertTitle>
-              Focus detection efforts on Delivery, Exploitation, and C2 stages - these offer the best 
-              balance of detection fidelity and remediation opportunity before significant damage occurs.
-            </Alert>
-          </Paper>
-        </Box>
-      )}
-
-      {/* Tab 2: Playbooks */}
-      {activeTab === 2 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Incident Response Playbooks</AlertTitle>
-            Playbooks provide step-by-step procedures for handling specific incident types. Customize these for your organization.
-          </Alert>
-
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Ransomware Response Playbook
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#dc2626" }}>
-              Immediate Actions (First 15 minutes)
-            </Typography>
-            <CodeBlock>{`1. ISOLATE affected systems - disconnect from network (DO NOT power off)
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Ransomware Response Playbook
+                  </Typography>
+                  <Divider sx={{ mb: 2, borderColor: themeColors.border }} />
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Ransomware response is time-sensitive because encryption can spread. Your priorities are to stop
+                    the spread, preserve evidence, and protect backups. Do not reimage or wipe systems until evidence
+                    is captured and leadership approves the recovery plan.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Beginner tip: treat every infected system as a potential foothold. Even after encryption stops, the
+                    attacker may still be present. That is why evidence collection and persistence checks are critical.
+                  </Typography>
+                  
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#dc2626" }}>
+                    Immediate Actions (First 15 minutes)
+                  </Typography>
+                  <CodeBlock>{`1. ISOLATE affected systems - disconnect from network (DO NOT power off)
 2. ALERT IR team lead and escalate to management
 3. PRESERVE memory dump before any other actions
 4. IDENTIFY ransomware variant (check ransom note, file extensions)
 5. DOCUMENT everything - screenshots, timestamps, affected systems`}</CodeBlock>
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1, color: "#f59e0b" }}>
-              Investigation Phase (1-4 hours)
-            </Typography>
-            <CodeBlock>{`1. Determine initial infection vector (phishing, RDP, vulnerability)
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1, color: "#f59e0b" }}>
+                    Investigation Phase (1-4 hours)
+                  </Typography>
+                  <CodeBlock>{`1. Determine initial infection vector (phishing, RDP, vulnerability)
 2. Identify patient zero and timeline
 3. Map lateral movement and affected systems
 4. Check for data exfiltration (double extortion)
 5. Assess backup integrity and availability
 6. Collect IOCs (hashes, IPs, domains)`}</CodeBlock>
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1, color: "#10b981" }}>
-              Recovery Considerations
-            </Typography>
-            <CodeBlock>{`1. DO NOT pay ransom without executive/legal approval
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1, color: "#10b981" }}>
+                    Recovery Considerations
+                  </Typography>
+                  <CodeBlock>{`1. DO NOT pay ransom without executive/legal approval
 2. Check for decryptor availability (NoMoreRansom.org)
 3. Restore from clean backups (verify integrity first)
 4. Rebuild systems if backups unavailable
 5. Implement additional controls before reconnecting
 6. Report to law enforcement (FBI IC3, local authorities)`}</CodeBlock>
-          </Paper>
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Phishing/Credential Compromise Playbook
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            <CodeBlock>{`IMMEDIATE ACTIONS:
+                  <Paper sx={{ p: 2, mt: 3, borderRadius: 2, bgcolor: alpha("#0f172a", 0.5) }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#e2e8f0" }}>
+                      Walkthrough: First-Hour Ransomware Response
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7 }}>
+                      Minute 0-10: isolate affected hosts and capture memory. Minute 10-30: identify the ransomware variant,
+                      confirm scope, and secure backups. Minute 30-60: notify leadership, begin broader containment, and
+                      start initial forensics collection. This timeline keeps evidence intact while limiting damage.
+                    </Typography>
+                  </Paper>
+                </Paper>
+
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Phishing/Credential Compromise Playbook
+                  </Typography>
+                  <Divider sx={{ mb: 2, borderColor: themeColors.border }} />
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Phishing incidents move fast because a single stolen credential can lead to email forwarding rules,
+                    lateral movement, and data theft. The key is to identify who interacted with the email, revoke access,
+                    and search for post-compromise activity. Treat every affected account as potentially compromised.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Beginner tip: after resetting passwords, check for persistence mechanisms like OAuth app grants,
+                    mailbox rules, or MFA device changes. Attackers often leave these behind to regain access later.
+                  </Typography>
+                  
+                  <CodeBlock>{`IMMEDIATE ACTIONS:
 1. Block sender domain/email address
 2. Quarantine similar emails in all mailboxes
 3. Identify all recipients who clicked/opened
@@ -2178,15 +2644,24 @@ REMEDIATION:
 2. Update email filtering rules
 3. Conduct user awareness training
 4. Report to anti-phishing working group`}</CodeBlock>
-          </Paper>
+                </Paper>
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Data Breach Response Playbook
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            <CodeBlock>{`IMMEDIATE ACTIONS:
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Data Breach Response Playbook
+                  </Typography>
+                  <Divider sx={{ mb: 2, borderColor: themeColors.border }} />
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Data breaches are primarily legal and reputational events, not just technical ones. Your first goal
+                    is to stop the leak. Your second goal is to accurately measure impact. Any public statement must be
+                    coordinated with legal and communications teams to avoid regulatory penalties.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    Beginner tip: document exactly what data was accessed or exfiltrated. Regulators and customers will
+                    ask for specifics, and vague answers can increase penalties or loss of trust.
+                  </Typography>
+                  
+                  <CodeBlock>{`IMMEDIATE ACTIONS:
 1. Contain the breach - stop ongoing data loss
 2. Preserve all evidence and logs
 3. Notify legal, compliance, and executive team
@@ -2205,195 +2680,276 @@ NOTIFICATION (as required by law/regulation):
 3. Notify regulators (GDPR: 72 hours)
 4. Prepare public statement if necessary
 5. Set up support resources (credit monitoring, hotline)`}</CodeBlock>
-          </Paper>
-        </Box>
-      )}
+                </Paper>
+              </Paper>
+            </Box>
 
-      {/* Tab 3: Detection */}
-      {activeTab === 3 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Detection & Monitoring</AlertTitle>
-            Effective detection requires monitoring multiple data sources, correlating events, and understanding common attack patterns.
-          </Alert>
-
-          {/* Critical Windows Event IDs */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Critical Windows Event IDs
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              These Windows Event IDs are essential for detecting common attack techniques. Configure your SIEM to alert on these events.
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Event ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Importance</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {windowsEventIds.map((evt) => (
-                    <TableRow key={evt.id}>
-                      <TableCell>
-                        <Chip label={evt.id} size="small" sx={{ fontWeight: 700, fontFamily: "monospace" }} />
-                      </TableCell>
-                      <TableCell>{evt.description}</TableCell>
-                      <TableCell>
-                        <Chip label={evt.category} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" color="text.secondary">{evt.importance}</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-
-          {/* Key Data Sources */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Key Data Sources
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: "Windows Event Logs", examples: "Security, System, PowerShell, Sysmon", icon: <ComputerIcon /> },
-                { name: "Network Traffic", examples: "Firewall logs, IDS/IPS, NetFlow, DNS", icon: <NetworkCheckIcon /> },
-                { name: "Endpoint Detection", examples: "EDR alerts, AV logs, process monitoring", icon: <SecurityIcon /> },
-                { name: "Authentication", examples: "AD logs, SSO, VPN, MFA", icon: <LockIcon /> },
-                { name: "Email Security", examples: "Email gateway, phishing reports, DLP", icon: <EmailIcon /> },
-                { name: "Cloud Services", examples: "Azure AD, AWS CloudTrail, GCP audit", icon: <CloudIcon /> },
-              ].map((src) => (
-                <Grid item xs={12} sm={6} md={4} key={src.name}>
-                  <Card sx={{ p: 2, bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                      {src.icon}
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{src.name}</Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">{src.examples}</Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
-
-          {/* Sigma Detection Rules */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Sigma Detection Rules
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Sigma is a generic signature format for SIEM systems. These rules can be converted to your specific platform (Splunk, Elastic, etc.)
-            </Typography>
-            {sigmaRules.map((rule, idx) => (
-              <Accordion key={idx}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
-                    <DataObjectIcon sx={{ color: "primary.main" }} />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{rule.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{rule.description}</Typography>
-                    </Box>
+            {/* Detection Section */}
+            <Box id="detection" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SearchIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      🔍 Detection & Monitoring
+                    </Typography>
                   </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem", overflow: "auto" }}>
-                    <pre style={{ margin: 0, color: "#22d3ee", whiteSpace: "pre-wrap" }}>{rule.rule}</pre>
-                  </Paper>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </Paper>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
 
-          {/* MITRE ATT&CK Detection Mapping */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              MITRE ATT&CK Detection Mapping
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Map detections to ATT&CK techniques for coverage analysis
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Data Source</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Detection Method</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {[
-                    { tech: "Initial Access - Phishing", id: "T1566", source: "Email Gateway", method: "Attachment/link analysis" },
-                    { tech: "Execution - PowerShell", id: "T1059.001", source: "Process Logs", method: "Script block logging" },
-                    { tech: "Persistence - Scheduled Task", id: "T1053", source: "Windows Events", method: "Task creation monitoring" },
-                    { tech: "Credential Access - LSASS", id: "T1003.001", source: "Sysmon", method: "Process access monitoring" },
-                    { tech: "Lateral Movement - RDP", id: "T1021.001", source: "Auth Logs", method: "Remote login correlation" },
-                    { tech: "Discovery - Network Scanning", id: "T1046", source: "Network Logs", method: "Port scan detection" },
-                    { tech: "Collection - Data Staging", id: "T1074", source: "File Monitoring", method: "Unusual file aggregation" },
-                    { tech: "Exfiltration - C2 Channel", id: "T1041", source: "Network Traffic", method: "Anomaly detection" },
-                  ].map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{row.tech}</TableCell>
-                      <TableCell><Chip label={row.id} size="small" /></TableCell>
-                      <TableCell>{row.source}</TableCell>
-                      <TableCell>{row.method}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
-      )}
-
-      {/* Tab 4: Tools */}
-      {activeTab === 4 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Incident Response Tools</AlertTitle>
-            Essential tools for detection, collection, analysis, and case management. Build your IR toolkit based on your environment needs.
-          </Alert>
-
-          {/* Tools by Category */}
-          {["Memory Forensics", "Disk Forensics", "Network Analysis", "Log Analysis", "Malware Analysis", "Case Management"].map((category) => {
-            const categoryTools = irTools.filter(t => t.category === category);
-            if (categoryTools.length === 0) return null;
-            return (
-              <Paper key={category} sx={{ p: 3, borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                  {category}
+                <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>Detection & Monitoring</AlertTitle>
+                  Effective detection requires monitoring multiple data sources, correlating events, and understanding common attack patterns.
+                </Alert>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Beginners should think of detection as a layered safety net. One log source is not enough. A suspicious
+                  process in endpoint data becomes stronger evidence when the same host also shows anomalous network
+                  connections or unusual authentication activity. The goal is not to find a single "smoking gun," but to
+                  build a consistent picture across multiple sources.
                 </Typography>
-                <Grid container spacing={2}>
-                  {categoryTools.map((tool) => (
-                    <Grid item xs={12} md={6} key={tool.name}>
-                      <Card sx={{ p: 2, height: "100%", border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", mb: 1 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{tool.name}</Typography>
-                          <Chip label={tool.platform || "Cross-platform"} size="small" variant="outlined" sx={{ fontSize: "0.65rem" }} />
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Start with high-confidence signals: admin account changes, new services, unusual login locations, or
+                  execution of tools like PowerShell and PsExec. Then move toward behavioral indicators like beaconing,
+                  data staging, or privilege escalation. This progression helps reduce false positives.
+                </Typography>
+
+                {/* Critical Windows Event IDs */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Critical Windows Event IDs
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    These Windows Event IDs are essential for detecting common attack techniques. Configure your SIEM to alert on these events.
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Event ID</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Importance</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {windowsEventIds.map((evt) => (
+                          <TableRow key={evt.id}>
+                            <TableCell>
+                              <Chip label={evt.id} size="small" sx={{ fontWeight: 700, fontFamily: "monospace" }} />
+                            </TableCell>
+                            <TableCell>{evt.description}</TableCell>
+                            <TableCell>
+                              <Chip label={evt.category} size="small" variant="outlined" />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{evt.importance}</Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+
+                {/* Key Data Sources */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Key Data Sources
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    These sources give you visibility across the environment. If you are missing one, document the gap and
+                    prioritize it in your IR readiness plan. Data completeness matters as much as data volume.
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {[
+                      { name: "Windows Event Logs", examples: "Security, System, PowerShell, Sysmon", icon: <ComputerIcon /> },
+                      { name: "Network Traffic", examples: "Firewall logs, IDS/IPS, NetFlow, DNS", icon: <NetworkCheckIcon /> },
+                      { name: "Endpoint Detection", examples: "EDR alerts, AV logs, process monitoring", icon: <SecurityIcon /> },
+                      { name: "Authentication", examples: "AD logs, SSO, VPN, MFA", icon: <LockIcon /> },
+                      { name: "Email Security", examples: "Email gateway, phishing reports, DLP", icon: <EmailIcon /> },
+                      { name: "Cloud Services", examples: "Azure AD, AWS CloudTrail, GCP audit", icon: <CloudIcon /> },
+                    ].map((src) => (
+                      <Grid item xs={12} sm={6} md={4} key={src.name}>
+                        <Card sx={{ p: 2, bgcolor: alpha(themeColors.primary, 0.05), border: `1px solid ${themeColors.border}` }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                            {src.icon}
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{src.name}</Typography>
+                          </Box>
+                          <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{src.examples}</Typography>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+
+                {/* Sigma Detection Rules */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Sigma Detection Rules
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Sigma is a generic signature format for SIEM systems. These rules can be converted to your specific platform (Splunk, Elastic, etc.)
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    For beginners, Sigma rules are a great way to learn detection patterns without being locked to a single
+                    SIEM. Treat them as templates and adjust field names to match your data. Always test a rule against
+                    known benign activity to understand expected false positives.
+                  </Typography>
+                  {sigmaRules.map((rule, idx) => (
+                    <Accordion key={idx} sx={{ mb: 1, bgcolor: themeColors.bgCard, "&:before": { display: "none" } }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+                          <DataObjectIcon sx={{ color: themeColors.primary }} />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{rule.name}</Typography>
+                            <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{rule.description}</Typography>
+                          </Box>
                         </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          {tool.description}
-                        </Typography>
-                        {tool.usage && (
-                          <Paper sx={{ p: 1, bgcolor: "#1a1a2e", borderRadius: 1, mb: 1 }}>
-                            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#22d3ee", fontSize: "0.7rem" }}>
-                              {tool.usage}
-                            </Typography>
-                          </Paper>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem", overflow: "auto" }}>
+                          <pre style={{ margin: 0, color: "#22d3ee", whiteSpace: "pre-wrap" }}>{rule.rule}</pre>
+                        </Paper>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Paper>
+
+                {/* MITRE ATT&CK Detection Mapping */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    MITRE ATT&CK Detection Mapping
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Map detections to ATT&CK techniques for coverage analysis
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Technique</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>ID</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Data Source</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Detection Method</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {[
+                          { tech: "Initial Access - Phishing", id: "T1566", source: "Email Gateway", method: "Attachment/link analysis" },
+                          { tech: "Execution - PowerShell", id: "T1059.001", source: "Process Logs", method: "Script block logging" },
+                          { tech: "Persistence - Scheduled Task", id: "T1053", source: "Windows Events", method: "Task creation monitoring" },
+                          { tech: "Credential Access - LSASS", id: "T1003.001", source: "Sysmon", method: "Process access monitoring" },
+                          { tech: "Lateral Movement - RDP", id: "T1021.001", source: "Auth Logs", method: "Remote login correlation" },
+                          { tech: "Discovery - Network Scanning", id: "T1046", source: "Network Logs", method: "Port scan detection" },
+                          { tech: "Collection - Data Staging", id: "T1074", source: "File Monitoring", method: "Unusual file aggregation" },
+                          { tech: "Exfiltration - C2 Channel", id: "T1041", source: "Network Traffic", method: "Anomaly detection" },
+                        ].map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell>{row.tech}</TableCell>
+                            <TableCell><Chip label={row.id} size="small" /></TableCell>
+                            <TableCell>{row.source}</TableCell>
+                            <TableCell>{row.method}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* Tools Section */}
+            <Box id="tools" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <BuildIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      🛠️ Incident Response Tools
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+
+                <Alert severity="info" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>Incident Response Tools</AlertTitle>
+                  Essential tools for detection, collection, analysis, and case management. Build your IR toolkit based on your environment needs.
+                </Alert>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Tools are only useful if you know what question they answer. For beginners, focus on a small, reliable
+                  toolkit: one memory tool, one disk tool, one network tool, and one case management system. Master those
+                  first before expanding. Consistency improves the quality of your evidence and your reporting.
+                </Typography>
+
+                {/* Tools by Category */}
+                {["Memory Forensics", "Disk Forensics", "Network Analysis", "Log Analysis", "Malware Analysis", "Case Management"].map((category) => {
+                  const categoryTools = irTools.filter(t => t.category === category);
+                  if (categoryTools.length === 0) return null;
+                  return (
+                    <Paper key={category} sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                        {category}
+                      </Typography>
+                      <Grid container spacing={2}>
+                        {categoryTools.map((tool) => (
+                          <Grid item xs={12} md={6} key={tool.name}>
+                            <Card sx={{ p: 2, height: "100%", bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", mb: 1 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{tool.name}</Typography>
+                                <Chip label={tool.platform || "Cross-platform"} size="small" variant="outlined" sx={{ fontSize: "0.65rem" }} />
+                              </Box>
+                              <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>
+                                {tool.description}
+                              </Typography>
+                              {tool.usage && (
+                                <Paper sx={{ p: 1, bgcolor: "#1a1a2e", borderRadius: 1, mb: 1 }}>
+                                  <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#22d3ee", fontSize: "0.7rem" }}>
+                                    {tool.usage}
+                                  </Typography>
+                                </Paper>
                         )}
                         <Typography
                           component="a"
                           href={tool.url}
                           target="_blank"
                           rel="noopener"
-                          sx={{ color: "primary.main", fontSize: "0.85rem", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+                          sx={{ color: themeColors.primary, fontSize: "0.85rem", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
                         >
                           Documentation →
                         </Typography>
@@ -2405,14 +2961,18 @@ NOTIFICATION (as required by law/regulation):
             );
           })}
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Quick Collection Commands
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 2, mb: 1 }}>
-              Windows Evidence Collection
-            </Typography>
-            <CodeBlock>{`# Volatile data collection (run first!)
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Quick Collection Commands
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 2 }}>
+                    These commands are designed for rapid triage. Use them when you need a fast snapshot of system state
+                    before containment changes the environment. Always record timestamps and store outputs in a case folder.
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 2, mb: 1 }}>
+                    Windows Evidence Collection
+                  </Typography>
+                  <CodeBlock>{`# Volatile data collection (run first!)
 systeminfo > systeminfo.txt
 tasklist /v > processes.txt
 netstat -anob > netstat.txt
@@ -2431,10 +2991,10 @@ wevtutil epl "Microsoft-Windows-PowerShell/Operational" powershell.evtx
 # Memory dump (requires admin)
 winpmem_mini_x64.exe memory.raw`}</CodeBlock>
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>
-              Linux Evidence Collection
-            </Typography>
-            <CodeBlock>{`# Volatile data
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>
+                    Linux Evidence Collection
+                  </Typography>
+                  <CodeBlock>{`# Volatile data
 date > timestamp.txt
 uname -a > system_info.txt
 ps auxf > processes.txt
@@ -2453,10 +3013,10 @@ journalctl --since "24 hours ago" > journal.txt
 # Memory dump
 sudo ./linpmem -o memory.lime`}</CodeBlock>
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>
-              Network Evidence Collection
-            </Typography>
-            <CodeBlock>{`# Packet capture with tcpdump
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>
+                    Network Evidence Collection
+                  </Typography>
+                  <CodeBlock>{`# Packet capture with tcpdump
 tcpdump -i eth0 -w capture.pcap -c 10000
 
 # Capture specific traffic
@@ -2469,119 +3029,169 @@ tcpdump -i any port 53 -w dns_queries.pcap
 # Zeek (formerly Bro) for traffic analysis
 zeek -r capture.pcap local
 zeek-cut id.orig_h id.resp_h id.resp_p < conn.log`}</CodeBlock>
-          </Paper>
-        </Box>
-      )}
+                </Paper>
+              </Paper>
+            </Box>
 
-      {/* Tab 5: Documentation */}
-      {activeTab === 5 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Documentation is Critical</AlertTitle>
-            Proper documentation supports legal proceedings, compliance requirements, and lessons learned. All timestamps should be in UTC.
-          </Alert>
-
-          {/* Documentation Templates */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Essential Documentation Templates
-            </Typography>
-            <Grid container spacing={2}>
-              {documentationTemplates.map((doc) => (
-                <Grid item xs={12} md={6} key={doc.name}>
-                  <Card sx={{ p: 2, height: "100%", border: doc.critical ? `2px solid ${alpha("#ef4444", 0.5)}` : undefined }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                      <ArticleIcon sx={{ color: doc.critical ? "#ef4444" : "primary.main" }} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{doc.name}</Typography>
-                      {doc.critical && <Chip label="Critical" size="small" color="error" sx={{ fontSize: "0.65rem" }} />}
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{doc.purpose}</Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary", fontStyle: "italic" }}>
-                      Fields: {doc.fields}
+            {/* Documentation Section */}
+            <Box id="documentation" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ArticleIcon sx={{ color: themeColors.primary }} />
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      📄 Documentation & Templates
                     </Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
-
-          {/* Communication Templates */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Communication Templates
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Pre-approved communication templates help ensure consistent, accurate, and timely notifications during incidents.
-            </Typography>
-            {communicationTemplates.map((template, idx) => (
-              <Accordion key={idx}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <NotificationsActiveIcon sx={{ color: "primary.main" }} />
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{template.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">Audience: {template.audience}</Typography>
-                    </Box>
                   </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderRadius: 1, fontFamily: "monospace", fontSize: "0.8rem" }}>
-                    <pre style={{ margin: 0, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{template.template}</pre>
-                  </Paper>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </Paper>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
 
-          {/* Regulatory Requirements */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Regulatory Notification Requirements
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Different regulations have specific breach notification requirements. Consult with legal counsel for your specific obligations.
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Regulation</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Requirement</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Scope</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Penalty</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {regulatoryRequirements.map((reg) => (
-                    <TableRow key={reg.regulation}>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <GavelIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{reg.regulation}</Typography>
+                <Alert severity="warning" sx={{ borderRadius: 2, mb: 3 }}>
+                  <AlertTitle>Documentation is Critical</AlertTitle>
+                  Proper documentation supports legal proceedings, compliance requirements, and lessons learned. All timestamps should be in UTC.
+                </Alert>
+                <Typography variant="body2" sx={{ color: themeColors.textMuted, lineHeight: 1.7, mb: 3 }}>
+                  Documentation is your evidence trail. If you cannot show who did what, when, and why, your response
+                  will not be defensible. For beginners, the simplest habit is to write down every action and include
+                  the exact time in UTC. Even a short note like "Isolated host WS-12 at 14:23 UTC" can be critical later.
+                </Typography>
+
+                {/* Documentation Templates */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Essential Documentation Templates
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    Templates standardize how your team records incidents. This reduces confusion and speeds up review.
+                    Beginners should start by using the same template for every case, even small ones. Consistency makes
+                    your reporting clearer and easier to audit.
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {documentationTemplates.map((doc) => (
+                      <Grid item xs={12} md={6} key={doc.name}>
+                        <Card sx={{ p: 2, height: "100%", bgcolor: themeColors.bgCard, border: doc.critical ? `2px solid ${alpha("#ef4444", 0.5)}` : `1px solid ${themeColors.border}` }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                            <ArticleIcon sx={{ color: doc.critical ? "#ef4444" : themeColors.primary }} />
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{doc.name}</Typography>
+                            {doc.critical && <Chip label="Critical" size="small" color="error" sx={{ fontSize: "0.65rem" }} />}
+                          </Box>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>{doc.purpose}</Typography>
+                          <Typography variant="caption" sx={{ color: themeColors.textMuted, fontStyle: "italic" }}>
+                            Fields: {doc.fields}
+                          </Typography>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+
+                {/* Communication Templates */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Communication Templates
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Pre-approved communication templates help ensure consistent, accurate, and timely notifications during incidents.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    The goal is to communicate facts, not speculation. Use calm language, avoid blame, and update stakeholders
+                    regularly. For external communication, always route through legal and communications teams.
+                  </Typography>
+                  {communicationTemplates.map((template, idx) => (
+                    <Accordion key={idx} sx={{ mb: 1, bgcolor: themeColors.bgCard, "&:before": { display: "none" } }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <NotificationsActiveIcon sx={{ color: themeColors.primary }} />
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{template.name}</Typography>
+                            <Typography variant="caption" sx={{ color: themeColors.textMuted }}>Audience: {template.audience}</Typography>
+                          </Box>
                         </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{reg.requirement}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" color="text.secondary">{reg.scope}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" sx={{ color: "error.main" }}>{reg.penalty}</Typography>
-                      </TableCell>
-                    </TableRow>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderRadius: 1, fontFamily: "monospace", fontSize: "0.8rem" }}>
+                          <pre style={{ margin: 0, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{template.template}</pre>
+                        </Paper>
+                      </AccordionDetails>
+                    </Accordion>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
+                </Paper>
 
-          {/* Incident Report Template */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Incident Report Template
-            </Typography>
-            <CodeBlock>{`INCIDENT REPORT
+                {/* Regulatory Requirements */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Regulatory Notification Requirements
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2 }}>
+                    Different regulations have specific breach notification requirements. Consult with legal counsel for your specific obligations.
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    These rules often include strict time limits. If you miss them, penalties can be severe. During an incident,
+                    identify which regulations apply and document when you notified regulators or affected individuals.
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Regulation</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Requirement</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Scope</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Penalty</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {regulatoryRequirements.map((reg) => (
+                          <TableRow key={reg.regulation}>
+                            <TableCell>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <GavelIcon sx={{ fontSize: 16, color: themeColors.textMuted }} />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>{reg.regulation}</Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">{reg.requirement}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" sx={{ color: themeColors.textMuted }}>{reg.scope}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" sx={{ color: "error.main" }}>{reg.penalty}</Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+
+                {/* Incident Report Template */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Incident Report Template
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    The report is the final product of an incident response. It must be readable by non-technical leaders
+                    and defensible for auditors. Avoid assumptions. Use evidence and cite where each finding came from.
+                  </Typography>
+                  <CodeBlock>{`INCIDENT REPORT
 ===============
 
 EXECUTIVE SUMMARY
@@ -2637,14 +3247,79 @@ LESSONS LEARNED
 - What worked well?
 - What could be improved?
 - Training needs identified?`}</CodeBlock>
-          </Paper>
+                </Paper>
 
-          {/* Chain of Custody Log */}
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Chain of Custody Log
-            </Typography>
-            <CodeBlock>{`CHAIN OF CUSTODY LOG
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Example: Completed Incident Report (Beginner-Friendly)
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 2, lineHeight: 1.7 }}>
+                    This example shows how a finished report looks with clear facts, simple language, and evidence-backed
+                    findings. Notice how each claim is tied to a log source or artifact.
+                  </Typography>
+                  <CodeBlock>{`INCIDENT REPORT (EXAMPLE)
+=========================
+
+EXECUTIVE SUMMARY
+-----------------
+Incident ID: INC-2024-042
+Date Detected: 2024-03-18 09:12 UTC
+Date Reported: 2024-03-18 09:30 UTC
+Classification: Credential Compromise
+Severity: High
+Status: Contained
+
+SUMMARY
+-------
+We detected a suspicious login to a finance mailbox from an unfamiliar IP
+address. The attacker created a mailbox forwarding rule and attempted to
+download sensitive attachments. The account was reset and access revoked.
+
+TIMELINE
+--------
+2024-03-18 09:12 UTC  Alert: New country login (M365 sign-in logs)
+2024-03-18 09:16 UTC  Forwarding rule created (Exchange audit logs)
+2024-03-18 09:20 UTC  Token revoked, password reset (Azure AD logs)
+2024-03-18 09:35 UTC  No further suspicious activity observed
+
+AFFECTED SYSTEMS
+----------------
+- Account: j.smith@company.com
+- Mailbox: Finance Team Shared Mailbox
+- Source IP: 185.11.22.33 (Geo: RU)
+
+ROOT CAUSE
+----------
+Credential theft via phishing email on 2024-03-17. User reported clicking a
+link and entering credentials on a fake login page.
+
+IMPACT ASSESSMENT
+-----------------
+- Data Exposed: 12 emails accessed, no confirmed download of attachments
+- Business Impact: Low to Moderate (finance mailbox exposure)
+- Regulatory Impact: None (no sensitive regulated data confirmed)
+
+RESPONSE ACTIONS
+----------------
+1. Disabled account and revoked active sessions (09:20 UTC)
+2. Removed mailbox forwarding rule (09:22 UTC)
+3. Forced password reset and MFA re-registration (09:25 UTC)
+4. Searched for similar logins across tenant (09:40 UTC)
+
+RECOMMENDATIONS
+---------------
+1. Enforce phishing-resistant MFA for finance users
+2. Enable alerting on mailbox forwarding rule creation
+3. Provide targeted phishing training to finance department
+`}</CodeBlock>
+                </Paper>
+
+                {/* Chain of Custody Log */}
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Chain of Custody Log
+                  </Typography>
+                  <CodeBlock>{`CHAIN OF CUSTODY LOG
 ====================
 
 Evidence ID: EVD-2024-XXX
@@ -2672,159 +3347,240 @@ Date: YYYY-MM-DD
 Verified By: [Name]
 Hash Match: [Yes/No]
 Notes: [Any observations]`}</CodeBlock>
-          </Paper>
-        </Box>
-      )}
+                </Paper>
+              </Paper>
+            </Box>
 
-      {/* Tab 6: Resources */}
-      {activeTab === 6 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Standards & Frameworks
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: "NIST SP 800-61", desc: "Computer Security Incident Handling Guide", url: "https://csrc.nist.gov/publications/detail/sp/800-61/rev-2/final" },
-                { name: "SANS Incident Handler's Handbook", desc: "Practical IR methodology", url: "https://www.sans.org/white-papers/33901/" },
-                { name: "CISA Incident Response Playbooks", desc: "Federal IR guidance", url: "https://www.cisa.gov/sites/default/files/publications/Federal_Government_Cybersecurity_Incident_and_Vulnerability_Response_Playbooks_508C.pdf" },
-                { name: "FIRST CSIRT Services Framework", desc: "CSIRT capability building", url: "https://www.first.org/standards/frameworks/csirts/csirt_services_framework_v2.1" },
-              ].map((res) => (
-                <Grid item xs={12} sm={6} key={res.name}>
-                  <Card sx={{ p: 2, height: "100%" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{res.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{res.desc}</Typography>
+            {/* Resources Section */}
+            <Box id="resources" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <MenuBookIcon sx={{ color: themeColors.primary }} />
                     <Typography
-                      component="a"
-                      href={res.url}
-                      target="_blank"
-                      rel="noopener"
-                      sx={{ color: "primary.main", fontSize: "0.85rem" }}
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
                     >
-                      View Resource →
+                      📚 Resources & Further Learning
                     </Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Training & Certifications
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: "SANS FOR508", desc: "Advanced Incident Response, Threat Hunting", provider: "SANS", level: "Advanced" },
-                { name: "SANS FOR500", desc: "Windows Forensic Analysis", provider: "SANS", level: "Intermediate" },
-                { name: "GCIH", desc: "GIAC Certified Incident Handler", provider: "GIAC", level: "Intermediate" },
-                { name: "GCFA", desc: "GIAC Certified Forensic Analyst", provider: "GIAC", level: "Advanced" },
-                { name: "eCIR", desc: "Certified Incident Responder", provider: "INE", level: "Intermediate" },
-                { name: "BTL1", desc: "Blue Team Level 1", provider: "Security Blue Team", level: "Entry" },
-              ].map((cert) => (
-                <Grid item xs={12} sm={6} md={4} key={cert.name}>
-                  <Card sx={{ p: 2, height: "100%" }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{cert.name}</Typography>
-                      <Chip label={cert.level} size="small" sx={{ fontSize: "0.65rem" }} />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">{cert.desc}</Typography>
-                    <Typography variant="caption" sx={{ color: "primary.main" }}>{cert.provider}</Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Standards & Frameworks
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {[
+                      { name: "NIST SP 800-61", desc: "Computer Security Incident Handling Guide", url: "https://csrc.nist.gov/publications/detail/sp/800-61/rev-2/final" },
+                      { name: "SANS Incident Handler's Handbook", desc: "Practical IR methodology", url: "https://www.sans.org/white-papers/33901/" },
+                      { name: "CISA Incident Response Playbooks", desc: "Federal IR guidance", url: "https://www.cisa.gov/sites/default/files/publications/Federal_Government_Cybersecurity_Incident_and_Vulnerability_Response_Playbooks_508C.pdf" },
+                      { name: "FIRST CSIRT Services Framework", desc: "CSIRT capability building", url: "https://www.first.org/standards/frameworks/csirts/csirt_services_framework_v2.1" },
+                    ].map((res) => (
+                      <Grid item xs={12} sm={6} key={res.name}>
+                        <Card sx={{ p: 2, height: "100%", bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{res.name}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>{res.desc}</Typography>
+                          <Typography
+                            component="a"
+                            href={res.url}
+                            target="_blank"
+                            rel="noopener"
+                            sx={{ color: themeColors.primary, fontSize: "0.85rem" }}
+                          >
+                            View Resource →
+                          </Typography>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Practice Labs & Ranges
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: "CyberDefenders", desc: "Blue team CTF challenges with real DFIR scenarios", url: "https://cyberdefenders.org" },
-                { name: "Blue Team Labs Online", desc: "Hands-on defensive security labs", url: "https://blueteamlabs.online" },
-                { name: "LetsDefend", desc: "SOC analyst training platform", url: "https://letsdefend.io" },
-                { name: "SANS Holiday Hack", desc: "Annual DFIR challenge", url: "https://holidayhackchallenge.com" },
-              ].map((lab) => (
-                <Grid item xs={12} sm={6} key={lab.name}>
-                  <Card sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{lab.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{lab.desc}</Typography>
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Training & Certifications
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {[
+                      { name: "SANS FOR508", desc: "Advanced Incident Response, Threat Hunting", provider: "SANS", level: "Advanced" },
+                      { name: "SANS FOR500", desc: "Windows Forensic Analysis", provider: "SANS", level: "Intermediate" },
+                      { name: "GCIH", desc: "GIAC Certified Incident Handler", provider: "GIAC", level: "Intermediate" },
+                      { name: "GCFA", desc: "GIAC Certified Forensic Analyst", provider: "GIAC", level: "Advanced" },
+                      { name: "eCIR", desc: "Certified Incident Responder", provider: "INE", level: "Intermediate" },
+                      { name: "BTL1", desc: "Blue Team Level 1", provider: "Security Blue Team", level: "Entry" },
+                    ].map((cert) => (
+                      <Grid item xs={12} sm={6} md={4} key={cert.name}>
+                        <Card sx={{ p: 2, height: "100%", bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}>
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{cert.name}</Typography>
+                            <Chip label={cert.level} size="small" sx={{ fontSize: "0.65rem" }} />
+                          </Box>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted }}>{cert.desc}</Typography>
+                          <Typography variant="caption" sx={{ color: themeColors.primary }}>{cert.provider}</Typography>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}`, mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Practice Labs & Ranges
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {[
+                      { name: "CyberDefenders", desc: "Blue team CTF challenges with real DFIR scenarios", url: "https://cyberdefenders.org" },
+                      { name: "Blue Team Labs Online", desc: "Hands-on defensive security labs", url: "https://blueteamlabs.online" },
+                      { name: "LetsDefend", desc: "SOC analyst training platform", url: "https://letsdefend.io" },
+                      { name: "SANS Holiday Hack", desc: "Annual DFIR challenge", url: "https://holidayhackchallenge.com" },
+                    ].map((lab) => (
+                      <Grid item xs={12} sm={6} key={lab.name}>
+                        <Card sx={{ p: 2, bgcolor: themeColors.bgCard, border: `1px solid ${themeColors.border}` }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{lab.name}</Typography>
+                          <Typography variant="body2" sx={{ color: themeColors.textMuted, mb: 1 }}>{lab.desc}</Typography>
+                          <Typography
+                            component="a"
+                            href={lab.url}
+                            target="_blank"
+                            rel="noopener"
+                            sx={{ color: themeColors.primary, fontSize: "0.85rem" }}
+                          >
+                            Visit →
+                          </Typography>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+
+                <Paper sx={{ p: 3, borderRadius: 2, bgcolor: themeColors.bgNested, border: `1px solid ${themeColors.border}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: themeColors.primary }}>
+                    Community Resources
+                  </Typography>
+                  <List>
+                    {[
+                      { name: "DFIR Discord", desc: "Active community of DFIR practitioners" },
+                      { name: "r/computerforensics", desc: "Reddit community for digital forensics" },
+                      { name: "This Week in 4n6", desc: "Weekly DFIR newsletter" },
+                      { name: "13Cubed YouTube", desc: "Excellent DFIR tutorials and walkthroughs" },
+                      { name: "SANS DFIR Blog", desc: "Research and case studies from SANS" },
+                    ].map((res) => (
+                      <ListItem key={res.name}>
+                        <ListItemIcon>
+                          <InfoIcon sx={{ color: themeColors.primary }} />
+                        </ListItemIcon>
+                        <ListItemText primary={res.name} secondary={res.desc} secondaryTypographyProps={{ sx: { color: themeColors.textMuted } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Paper>
+            </Box>
+
+            {/* Quiz Section */}
+            <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${themeColors.border}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <QuizIcon sx={{ color: themeColors.primary }} />
                     <Typography
-                      component="a"
-                      href={lab.url}
-                      target="_blank"
-                      rel="noopener"
-                      sx={{ color: "primary.main", fontSize: "0.85rem" }}
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${themeColors.primary}, ${themeColors.primaryLight})`,
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
                     >
-                      Visit →
+                      📝 Knowledge Check
                     </Typography>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
 
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Community Resources
-            </Typography>
-            <List>
-              {[
-                { name: "DFIR Discord", desc: "Active community of DFIR practitioners" },
-                { name: "r/computerforensics", desc: "Reddit community for digital forensics" },
-                { name: "This Week in 4n6", desc: "Weekly DFIR newsletter" },
-                { name: "13Cubed YouTube", desc: "Excellent DFIR tutorials and walkthroughs" },
-                { name: "SANS DFIR Blog", desc: "Research and case studies from SANS" },
-              ].map((res) => (
-                <ListItem key={res.name}>
-                  <ListItemIcon>
-                    <InfoIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText primary={res.name} secondary={res.desc} />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-        </Box>
-      )}
+                <QuizSection
+                  questions={quizQuestions}
+                  accentColor={themeColors.primary}
+                  title="Incident Response Knowledge Check"
+                  description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                  questionsPerQuiz={QUIZ_QUESTION_COUNT}
+                />
+              </Paper>
+            </Box>
+          </Grid>
+        </Grid>
 
-      <Paper
-        id="quiz-section"
-        sx={{
-          mt: 5,
-          p: 4,
-          borderRadius: 3,
-          border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          bgcolor: alpha(QUIZ_ACCENT_COLOR, 0.03),
-        }}
-      >
-        <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-          <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-          Knowledge Check
-        </Typography>
-        <QuizSection
-          questions={quizQuestions}
-          accentColor={QUIZ_ACCENT_COLOR}
-          title="Incident Response Knowledge Check"
-          description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-          questionsPerQuiz={QUIZ_QUESTION_COUNT}
-        />
-      </Paper>
-
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+        {/* Mobile Navigation Drawer */}
+        <Drawer
+          anchor="left"
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          sx={{ display: { xs: "block", md: "none" } }}
         >
-          Back to Learning Hub
-        </Button>
-      </Box>
-    </Container>
+          <Box sx={{ width: 280, pt: 2, pb: 4, bgcolor: themeColors.bgCard, height: "100%" }}>
+            <Typography variant="h6" sx={{ px: 2, mb: 2, fontWeight: 700, color: themeColors.primary }}>
+              Navigation
+            </Typography>
+            {sidebarNav}
+          </Box>
+        </Drawer>
+
+        {/* Mobile FABs */}
+        <Fab
+          size="small"
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 16,
+            display: { xs: "flex", md: "none" },
+            bgcolor: themeColors.primary,
+            "&:hover": { bgcolor: themeColors.primaryLight },
+          }}
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <ListAltIcon />
+        </Fab>
+        <Fab
+          size="small"
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            display: { xs: "flex", md: "none" },
+            bgcolor: themeColors.primary,
+            "&:hover": { bgcolor: themeColors.primaryLight },
+          }}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Container>
     </LearnPageLayout>
   );
 }

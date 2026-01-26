@@ -23,9 +23,9 @@ import binascii
 import string
 import uuid
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Set
 from dataclasses import dataclass, field, asdict
-from xml.etree import ElementTree
+from defusedxml import ElementTree  # Use defusedxml to prevent XXE attacks
 
 from backend.core.logging import get_logger
 from backend.core.config import settings
@@ -82,10 +82,43 @@ except ImportError:
 try:
     import capstone
     from capstone import Cs, CS_ARCH_X86, CS_ARCH_ARM, CS_ARCH_ARM64, CS_ARCH_MIPS
-    from capstone import CS_MODE_32, CS_MODE_64, CS_MODE_ARM, CS_MODE_THUMB
+    from capstone import CS_MODE_32, CS_MODE_64, CS_MODE_ARM, CS_MODE_THUMB, CS_MODE_MIPS32, CS_MODE_MIPS64
     CAPSTONE_AVAILABLE = True
+    
+    # Extended architecture support (capstone 5.0+)
+    try:
+        from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCV64
+    except ImportError:
+        CS_ARCH_RISCV = None
+        CS_MODE_RISCV32 = None
+        CS_MODE_RISCV64 = None
+    
+    try:
+        from capstone import CS_ARCH_PPC
+    except ImportError:
+        CS_ARCH_PPC = None
+    
+    try:
+        from capstone import CS_ARCH_SPARC
+    except ImportError:
+        CS_ARCH_SPARC = None
+    
+    try:
+        from capstone import CS_ARCH_M68K
+    except ImportError:
+        CS_ARCH_M68K = None
+    
+    try:
+        from capstone import CS_ARCH_BPF, CS_MODE_BPF
+    except ImportError:
+        CS_ARCH_BPF = None
+        CS_MODE_BPF = None
+
 except ImportError:
     CAPSTONE_AVAILABLE = False
+    CS_ARCH_RISCV = CS_MODE_RISCV32 = CS_MODE_RISCV64 = None
+    CS_ARCH_PPC = CS_ARCH_SPARC = CS_ARCH_M68K = None
+    CS_ARCH_BPF = CS_MODE_BPF = None
     logger.warning("capstone not installed - disassembly not available")
 
 # Try to import androguard for APK analysis
@@ -119,6 +152,42 @@ try:
 except ImportError:
     TLSH_AVAILABLE = False
     logger.warning("tlsh not installed - TLSH hashing disabled")
+
+# Try to import Unicorn for CPU emulation (lightweight code snippet emulation)
+try:
+    from unicorn import Uc, UC_ARCH_X86, UC_ARCH_ARM, UC_ARCH_ARM64, UC_ARCH_MIPS
+    from unicorn import UC_MODE_32, UC_MODE_64, UC_MODE_ARM, UC_MODE_THUMB, UC_MODE_MIPS32
+    from unicorn.x86_const import (
+        UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDX,
+        UC_X86_REG_ESI, UC_X86_REG_EDI, UC_X86_REG_EBP, UC_X86_REG_ESP, UC_X86_REG_EIP,
+        UC_X86_REG_RAX, UC_X86_REG_RBX, UC_X86_REG_RCX, UC_X86_REG_RDX,
+        UC_X86_REG_RSI, UC_X86_REG_RDI, UC_X86_REG_RBP, UC_X86_REG_RSP, UC_X86_REG_RIP,
+        UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_R10, UC_X86_REG_R11,
+        UC_X86_REG_R12, UC_X86_REG_R13, UC_X86_REG_R14, UC_X86_REG_R15,
+        UC_X86_REG_EFLAGS, UC_X86_REG_CS, UC_X86_REG_DS, UC_X86_REG_ES,
+        UC_X86_REG_FS, UC_X86_REG_GS, UC_X86_REG_SS,
+    )
+    UNICORN_AVAILABLE = True
+except ImportError:
+    UNICORN_AVAILABLE = False
+    logger.warning("unicorn not installed - CPU emulation not available")
+
+# Try to import angr for symbolic execution
+try:
+    import angr
+    import claripy
+    ANGR_AVAILABLE = True
+except (ImportError, AttributeError, Exception) as e:
+    ANGR_AVAILABLE = False
+    logger.warning(f"angr not available - symbolic execution disabled: {e}")
+
+# Try to import ropper for ROP gadget finding
+try:
+    from ropper import RopperService
+    ROPPER_AVAILABLE = True
+except ImportError:
+    ROPPER_AVAILABLE = False
+    logger.warning("ropper not installed - ROP gadget finding not available")
 
 
 # ============================================================================
@@ -341,7 +410,7 @@ class ELFSymbol:
 
 @dataclass
 class DisassemblyInstruction:
-    """A disassembled instruction."""
+    """A disassembled instruction with enhanced metadata."""
     address: int
     mnemonic: str
     op_str: str
@@ -349,29 +418,493 @@ class DisassemblyInstruction:
     size: int
     is_call: bool = False
     is_jump: bool = False
+    is_conditional_jump: bool = False
+    is_return: bool = False
     is_suspicious: bool = False
     comment: Optional[str] = None
+    # Enhanced fields for better analysis
+    target_address: Optional[int] = None  # Branch/call target if resolvable
+    reads_regs: List[str] = field(default_factory=list)  # Registers read
+    writes_regs: List[str] = field(default_factory=list)  # Registers written
+    memory_refs: List[str] = field(default_factory=list)  # Memory references
+    string_ref: Optional[str] = None  # Referenced string if any
+    xrefs_from: List[int] = field(default_factory=list)  # Addresses that reference this
+    xrefs_to: List[int] = field(default_factory=list)  # Addresses this references
+
+
+@dataclass
+class BasicBlock:
+    """A basic block in the control flow graph."""
+    start_address: int
+    end_address: int
+    instructions: List[DisassemblyInstruction]
+    predecessors: List[int] = field(default_factory=list)  # Start addresses of predecessor blocks
+    successors: List[int] = field(default_factory=list)  # Start addresses of successor blocks
+    is_entry: bool = False
+    is_exit: bool = False
+    block_type: str = "normal"  # normal, call_block, loop_header, switch_case
+
+
+@dataclass
+class ControlFlowGraph:
+    """Control flow graph for a function."""
+    blocks: Dict[int, BasicBlock] = field(default_factory=dict)  # address -> block
+    entry_block: Optional[int] = None
+    exit_blocks: List[int] = field(default_factory=list)
+    loop_headers: List[int] = field(default_factory=list)
+    complexity: int = 0  # Cyclomatic complexity
+
+
+@dataclass
+class CrossReference:
+    """Cross-reference between addresses."""
+    from_address: int
+    to_address: int
+    xref_type: str  # call, jump, data_read, data_write
+    from_function: Optional[str] = None
+    to_function: Optional[str] = None
 
 
 @dataclass
 class DisassemblyFunction:
-    """Disassembly of a function."""
+    """Disassembly of a function with CFG."""
     name: str
     address: int
     size: int
     instructions: List[DisassemblyInstruction]
     calls: List[str]  # Functions called
     suspicious_patterns: List[str]
+    # Enhanced fields
+    cfg: Optional[ControlFlowGraph] = None
+    local_vars: List[str] = field(default_factory=list)  # Detected stack variables
+    arguments: List[str] = field(default_factory=list)  # Detected arguments
+    calling_convention: Optional[str] = None
+    cyclomatic_complexity: int = 1
+    is_leaf: bool = True  # True if function makes no calls
+    is_recursive: bool = False
+    stack_frame_size: Optional[int] = None
 
 
 @dataclass
 class DisassemblyResult:
-    """Complete disassembly result."""
+    """Complete disassembly result with enhanced analysis."""
     entry_point_disasm: List[DisassemblyInstruction]
     functions: List[DisassemblyFunction]
     suspicious_instructions: List[Dict[str, Any]]
     architecture: str
     mode: str
+    # Enhanced fields
+    cross_references: List[CrossReference] = field(default_factory=list)
+    string_references: Dict[int, str] = field(default_factory=dict)  # address -> string
+    import_references: Dict[int, str] = field(default_factory=dict)  # address -> import name
+    total_instructions: int = 0
+    coverage_percent: float = 0.0  # Percentage of .text section disassembled
+
+
+# ============================================================================
+# Data Flow Analysis Types
+# ============================================================================
+
+@dataclass
+class TaintSource:
+    """A source of tainted (untrusted) data."""
+    address: int
+    source_type: str  # "user_input", "network", "file", "environment", "argv"
+    register_or_memory: str  # Which register or memory location is tainted
+    function_name: Optional[str] = None
+    description: str = ""
+
+
+@dataclass
+class TaintSink:
+    """A dangerous sink where tainted data should not reach."""
+    address: int
+    sink_type: str  # "exec", "sql", "file_write", "format_string", "memcpy"
+    function_name: str
+    cwe_id: str = ""
+    description: str = ""
+
+
+@dataclass
+class TaintedValue:
+    """A value that is tainted (derived from untrusted input)."""
+    location: str  # Register name or memory address
+    source: TaintSource
+    transformations: List[str] = field(default_factory=list)  # Operations applied
+    confidence: float = 1.0  # How confident we are it's still tainted
+
+
+@dataclass
+class DataFlowPath:
+    """A path from a taint source to a sink."""
+    source: TaintSource
+    sink: TaintSink
+    path: List[int]  # Addresses along the path
+    instructions: List[str]  # Instruction summaries along path
+    is_exploitable: bool = False
+    sanitizers_found: List[str] = field(default_factory=list)
+    confidence: float = 0.0
+    vulnerability_type: Optional[str] = None
+    cwe_id: Optional[str] = None
+
+
+@dataclass 
+class DataFlowAnalysisResult:
+    """Complete data flow analysis result."""
+    taint_sources: List[TaintSource]
+    taint_sinks: List[TaintSink]
+    data_flow_paths: List[DataFlowPath]
+    vulnerable_paths: List[DataFlowPath]
+    total_paths_analyzed: int = 0
+    analysis_coverage: float = 0.0
+
+
+# ============================================================================
+# Type Recovery Types
+# ============================================================================
+
+@dataclass
+class RecoveredField:
+    """A recovered struct/class field."""
+    offset: int
+    size: int
+    inferred_type: str  # "int", "ptr", "char[]", "float", "unknown"
+    access_pattern: str  # "read", "write", "read_write"
+    name: Optional[str] = None  # Recovered or generated name
+
+
+@dataclass
+class RecoveredStruct:
+    """A recovered structure/class type."""
+    address: int  # Where it's allocated or referenced
+    total_size: int
+    fields: List[RecoveredField]
+    inferred_name: Optional[str] = None
+    confidence: float = 0.0
+    usage_count: int = 0  # How many times this struct pattern appears
+
+
+@dataclass
+class RecoveredArgument:
+    """A recovered function argument."""
+    index: int
+    register_or_stack: str  # "rdi", "rsi", "[rbp+0x10]", etc.
+    inferred_type: str
+    inferred_name: Optional[str] = None
+    is_pointer: bool = False
+    points_to: Optional[str] = None  # What the pointer points to
+
+
+@dataclass
+class RecoveredLocalVar:
+    """A recovered local variable."""
+    stack_offset: int
+    size: int
+    inferred_type: str
+    scope_start: int  # First instruction that uses it
+    scope_end: int  # Last instruction that uses it
+    inferred_name: Optional[str] = None
+
+
+@dataclass
+class RecoveredFunctionSignature:
+    """Recovered function signature with types."""
+    address: int
+    name: str
+    return_type: str
+    arguments: List[RecoveredArgument]
+    local_vars: List[RecoveredLocalVar]
+    calling_convention: str
+    is_variadic: bool = False
+    confidence: float = 0.0
+
+
+@dataclass
+class TypeRecoveryResult:
+    """Complete type recovery result."""
+    functions: List[RecoveredFunctionSignature]
+    structs: List[RecoveredStruct]
+    global_vars: List[Dict[str, Any]]
+    vtables: List[Dict[str, Any]]  # Virtual function tables (C++)
+    total_types_recovered: int = 0
+
+
+# ============================================================================
+# Emulation Types
+# ============================================================================
+
+@dataclass
+class EmulationMemoryAccess:
+    """A memory access during emulation."""
+    address: int
+    access_type: str  # "read", "write", "execute"
+    size: int
+    value: Optional[int] = None
+    instruction_address: int = 0
+
+
+@dataclass
+class EmulationSyscall:
+    """A system call during emulation."""
+    address: int
+    syscall_number: int
+    syscall_name: str
+    arguments: List[int]
+    return_value: Optional[int] = None
+
+
+@dataclass
+class EmulationApiCall:
+    """An API/library call during emulation."""
+    address: int
+    function_name: str
+    arguments: List[Any]
+    return_value: Optional[Any] = None
+    library: Optional[str] = None
+
+
+@dataclass
+class EmulationState:
+    """CPU state at a point in emulation."""
+    address: int
+    registers: Dict[str, int]
+    flags: Dict[str, bool]
+    stack_top: List[int]  # Top N values on stack
+    instruction_count: int = 0
+
+
+@dataclass
+class DecodedString:
+    """A string decoded during emulation."""
+    address: int
+    decoded_value: str
+    encoding: str  # "ascii", "utf-16", "xor", "base64"
+    decoding_method: str  # How it was decoded
+    original_bytes: bytes = b""
+
+
+@dataclass
+class EmulationTrace:
+    """A trace of emulation execution."""
+    start_address: int
+    end_address: int
+    instructions_executed: int
+    states: List[EmulationState]
+    memory_accesses: List[EmulationMemoryAccess]
+    syscalls: List[EmulationSyscall]
+    api_calls: List[EmulationApiCall]
+    decoded_strings: List[DecodedString]
+    loops_detected: List[Dict[str, Any]]
+    suspicious_behaviors: List[str]
+    error: Optional[str] = None
+
+
+@dataclass
+class EmulationResult:
+    """Complete emulation analysis result."""
+    traces: List[EmulationTrace]
+    decoded_strings: List[DecodedString]
+    api_calls: List[EmulationApiCall]
+    syscalls: List[EmulationSyscall]
+    self_modifying_code: List[Dict[str, Any]]
+    unpacked_code: Optional[bytes] = None
+    shellcode_detected: bool = False
+    anti_analysis_detected: List[str] = field(default_factory=list)
+    total_instructions_emulated: int = 0
+    emulation_coverage: float = 0.0
+
+
+# ============================================================================
+# Symbolic Execution Types
+# ============================================================================
+
+@dataclass
+class SymbolicInput:
+    """A symbolic input discovered during exploration."""
+    name: str
+    type: str  # 'stdin', 'argv', 'file', 'network', 'memory'
+    size_bits: int
+    constraints: List[str]  # String representation of constraints
+    concrete_examples: List[str]  # Concrete values that satisfy constraints
+
+
+@dataclass
+class SymbolicPath:
+    """A path discovered during symbolic execution."""
+    path_id: int
+    depth: int  # Number of branches taken
+    constraints_count: int
+    is_feasible: bool
+    termination_reason: str  # 'reached_target', 'deadended', 'errored', 'timeout'
+    addresses_visited: List[int]
+    branches_taken: List[Tuple[int, bool]]  # (address, taken/not-taken)
+
+
+@dataclass
+class CrashInput:
+    """Input that causes a crash."""
+    input_type: str  # 'stdin', 'argv', 'file'
+    input_value: bytes
+    crash_address: int
+    crash_type: str  # 'segfault', 'abort', 'div_by_zero', 'stack_overflow'
+    vulnerability_type: str  # 'buffer_overflow', 'use_after_free', 'format_string'
+    cwe_id: Optional[str] = None
+    exploitability: str = "unknown"  # 'exploitable', 'probably_exploitable', 'not_exploitable'
+
+
+@dataclass
+class TargetReach:
+    """Result of trying to reach a specific target address."""
+    target_address: int
+    target_name: Optional[str]
+    reached: bool
+    input_to_reach: Optional[bytes]
+    path_length: int
+    constraints_solved: int
+
+
+@dataclass  
+class SymbolicExecutionResult:
+    """Complete symbolic execution analysis result."""
+    paths_explored: int
+    paths_deadended: int
+    paths_errored: int
+    max_depth_reached: int
+    symbolic_inputs: List[SymbolicInput]
+    crash_inputs: List[CrashInput]
+    target_reaches: List[TargetReach]
+    interesting_paths: List[SymbolicPath]
+    vulnerabilities_found: List[Dict[str, Any]]
+    execution_time_seconds: float
+    memory_used_mb: float
+    timeout_reached: bool = False
+    error: Optional[str] = None
+
+
+# ============================================================================
+# Binary Diffing Types
+# ============================================================================
+
+@dataclass
+class FunctionDiff:
+    """Difference between two functions."""
+    address_a: int
+    address_b: Optional[int]  # None if function doesn't exist in B
+    name: str
+    match_type: str  # 'identical', 'modified', 'added', 'removed'
+    similarity_score: float  # 0.0 - 1.0
+    size_a: int
+    size_b: Optional[int]
+    instructions_changed: int
+    blocks_changed: int
+    calls_added: List[str]
+    calls_removed: List[str]
+    is_security_relevant: bool  # True if related to security functions
+    diff_summary: Optional[str] = None
+
+
+@dataclass
+class BlockDiff:
+    """Difference at basic block level."""
+    address_a: int
+    address_b: Optional[int]
+    function_name: str
+    match_type: str
+    instructions_a: List[str]
+    instructions_b: List[str]
+    similarity: float
+
+
+@dataclass
+class StringDiff:
+    """Difference in strings between binaries."""
+    value: str
+    status: str  # 'added', 'removed', 'unchanged'
+    address_a: Optional[int]
+    address_b: Optional[int]
+    is_security_relevant: bool  # URLs, credentials, commands
+
+
+@dataclass
+class ImportDiff:
+    """Difference in imports between binaries."""
+    name: str
+    library: str
+    status: str  # 'added', 'removed', 'unchanged'
+    is_security_relevant: bool
+
+
+@dataclass
+class BinaryDiffResult:
+    """Complete binary diffing result."""
+    file_a: str
+    file_b: str
+    architecture_a: str
+    architecture_b: str
+    functions_identical: int
+    functions_modified: int
+    functions_added: int
+    functions_removed: int
+    overall_similarity: float
+    function_diffs: List[FunctionDiff]
+    block_diffs: List[BlockDiff]  # Only for modified functions
+    string_diffs: List[StringDiff]
+    import_diffs: List[ImportDiff]
+    security_relevant_changes: List[Dict[str, Any]]
+    patch_analysis: Optional[str]  # AI-generated summary of patch
+    is_same_binary: bool  # True if binaries are functionally identical
+    error: Optional[str] = None
+
+
+# ============================================================================
+# ROP Gadget Types
+# ============================================================================
+
+@dataclass
+class ROPGadget:
+    """A single ROP gadget."""
+    address: int
+    instructions: List[str]  # e.g., ['pop rdi', 'ret']
+    gadget_string: str  # Full string representation
+    gadget_type: str  # 'pop', 'mov', 'xchg', 'syscall', 'jmp', 'call', 'arithmetic'
+    size_bytes: int
+    registers_controlled: List[str]
+    is_useful: bool  # True if commonly useful in exploits
+    quality_score: float  # 0.0-1.0, higher = cleaner gadget
+
+
+@dataclass
+class ROPChainTemplate:
+    """A template for a common ROP chain."""
+    name: str  # 'execve_shellcode', 'mprotect_rwx', 'write_primitive'
+    description: str
+    required_gadgets: List[str]
+    available_gadgets: List[ROPGadget]
+    is_buildable: bool  # True if all required gadgets are available
+    chain_addresses: List[int]  # Addresses in order for the chain
+    payload_template: Optional[str]  # Python code template to build payload
+
+
+@dataclass
+class ROPGadgetResult:
+    """Complete ROP gadget analysis result."""
+    total_gadgets: int
+    unique_gadgets: int
+    gadgets_by_type: Dict[str, int]
+    gadgets: List[ROPGadget]
+    useful_gadgets: List[ROPGadget]  # Filtered to most useful
+    # Chain building support
+    pop_gadgets: List[ROPGadget]  # For controlling registers
+    syscall_gadgets: List[ROPGadget]  # syscall/int 0x80
+    write_gadgets: List[ROPGadget]  # mov [reg], reg style
+    pivot_gadgets: List[ROPGadget]  # Stack pivots
+    chain_templates: List[ROPChainTemplate]
+    # Security assessment
+    nx_bypass_possible: bool
+    execve_chain_buildable: bool
+    mprotect_chain_buildable: bool
+    rop_difficulty: str  # 'easy', 'medium', 'hard', 'very_hard'
+    error: Optional[str] = None
 
 
 @dataclass
@@ -395,6 +928,13 @@ class BinaryAnalysisResult:
     ai_analysis: Optional[str] = None
     ghidra_analysis: Optional[Dict[str, Any]] = None
     ghidra_ai_summaries: Optional[List[Dict[str, Any]]] = None
+    # New advanced analysis fields
+    data_flow_analysis: Optional[DataFlowAnalysisResult] = None
+    type_recovery: Optional[TypeRecoveryResult] = None
+    emulation_analysis: Optional[EmulationResult] = None
+    # Symbolic execution, diffing, ROP analysis
+    symbolic_execution: Optional[SymbolicExecutionResult] = None
+    rop_gadgets: Optional[ROPGadgetResult] = None
     error: Optional[str] = None
 
 
@@ -1036,17 +1576,141 @@ SUSPICIOUS_ELF_FUNCTIONS = {
     "kill": "Send signals to processes",
 }
 
-# Suspicious x86/x64 instruction patterns
+# Suspicious x86/x64 instruction patterns - comprehensive list
 SUSPICIOUS_INSTRUCTIONS = {
+    # System calls
     "int 0x80": "Linux syscall (x86)",
     "syscall": "Linux syscall (x64)",
     "sysenter": "Fast syscall entry",
     "int 0x2e": "Windows syscall (legacy)",
-    "int3": "Debugger breakpoint",
-    "cpuid": "CPU identification (VM detection)",
+    
+    # Anti-debugging / Anti-VM
+    "int3": "Debugger breakpoint (anti-debug)",
+    "int 1": "Single-step trap (anti-debug)",
+    "cpuid": "CPU identification (VM/sandbox detection)",
     "rdtsc": "Timestamp counter (timing attacks/anti-debug)",
-    "in al": "I/O port access (rootkit behavior)",
-    "out": "I/O port write (rootkit behavior)",
+    "rdtscp": "Timestamp counter with processor ID",
+    "rdpmc": "Performance counter read (anti-debug)",
+    "icebp": "ICE breakpoint (anti-debug)",
+    "ud2": "Undefined instruction (anti-debug trigger)",
+    
+    # Privileged/Ring0 operations
+    "in al": "I/O port read (rootkit/driver behavior)",
+    "in ax": "I/O port read word (rootkit/driver behavior)",
+    "in eax": "I/O port read dword (rootkit/driver behavior)",
+    "out": "I/O port write (rootkit/driver behavior)",
+    "cli": "Disable interrupts (kernel/rootkit)",
+    "sti": "Enable interrupts (kernel/rootkit)",
+    "hlt": "Halt processor (DoS/rootkit)",
+    "lidt": "Load IDT (rootkit hooking)",
+    "sidt": "Store IDT (VM detection)",
+    "lgdt": "Load GDT (rootkit)",
+    "sgdt": "Store GDT (VM detection)",
+    "sldt": "Store LDT (VM detection)",
+    "str": "Store task register (VM detection)",
+    "ltr": "Load task register (rootkit)",
+    "lldt": "Load LDT (rootkit)",
+    "lmsw": "Load machine status word",
+    "clts": "Clear task-switched flag (rootkit)",
+    "invd": "Invalidate cache (DoS)",
+    "wbinvd": "Write-back and invalidate cache",
+    "invlpg": "Invalidate TLB entry",
+    "wrmsr": "Write MSR (rootkit/hypervisor)",
+    "rdmsr": "Read MSR (fingerprinting)",
+    
+    # Memory manipulation
+    "swapgs": "Swap GS base (kernel exploit)",
+    "xsave": "Save processor state",
+    "xrstor": "Restore processor state",
+    
+    # Crypto operations (potential ransomware indicators)
+    "aesenc": "AES encryption round (crypto/ransomware)",
+    "aesenclast": "AES final encryption round",
+    "aesdec": "AES decryption round",
+    "aesdeclast": "AES final decryption round",
+    "aesimc": "AES inverse mix columns",
+    "aeskeygenassist": "AES key generation",
+    "pclmulqdq": "Carryless multiplication (crypto)",
+    "sha1": "SHA1 instruction (crypto)",
+    "sha256": "SHA256 instruction (crypto)",
+    
+    # Self-modifying code indicators
+    "stosb": "Store string byte (potential code modification)",
+    "stosw": "Store string word",
+    "stosd": "Store string dword",
+    "stosq": "Store string qword",
+    "rep stos": "Repeated store (memory fill/clear)",
+    "rep movs": "Repeated move (memory copy)",
+    
+    # Indirect control flow (potential ROP/JOP)
+    "jmp dword ptr": "Indirect jump (potential ROP gadget)",
+    "jmp qword ptr": "Indirect jump 64-bit (potential ROP)",
+    "call dword ptr": "Indirect call (potential shellcode)",
+    "call qword ptr": "Indirect call 64-bit",
+    "jmp rax": "Register indirect jump (ROP)",
+    "jmp rbx": "Register indirect jump (ROP)",
+    "jmp rcx": "Register indirect jump (ROP)",
+    "jmp rdx": "Register indirect jump (ROP)",
+    "jmp rsi": "Register indirect jump (ROP)",
+    "jmp rdi": "Register indirect jump (ROP)",
+    "call rax": "Register indirect call",
+    "call rbx": "Register indirect call",
+    "ret": "Return (ROP gadget terminator)",
+    
+    # Process/thread manipulation
+    "vmptrld": "VMX load pointer (hypervisor)",
+    "vmptrst": "VMX store pointer",
+    "vmclear": "VMX clear VMCS",
+    "vmread": "VMX read VMCS field",
+    "vmwrite": "VMX write VMCS field",
+    "vmlaunch": "VMX launch VM",
+    "vmresume": "VMX resume VM",
+    "vmxoff": "Exit VMX operation",
+    "vmxon": "Enter VMX operation",
+    "vmcall": "VMX call hypervisor",
+    "vmfunc": "VMX function",
+    
+    # SGX instructions (enclave operations)
+    "enclu": "SGX user-mode enclave operation",
+    "encls": "SGX supervisor enclave operation",
+    
+    # Potential shellcode patterns
+    "fstenv": "Store FPU environment (shellcode decoder)",
+    "fnstenv": "Store FPU environment no-wait",
+    "fldenv": "Load FPU environment",
+    "fxsave": "Save FPU/MMX/SSE state",
+    "fxrstor": "Restore FPU/MMX/SSE state",
+}
+
+# Anti-analysis function names
+ANTI_ANALYSIS_FUNCTIONS = {
+    "IsDebuggerPresent": "Windows debugger detection",
+    "CheckRemoteDebuggerPresent": "Remote debugger check",
+    "NtQueryInformationProcess": "Process info query (anti-debug)",
+    "NtSetInformationThread": "Thread info manipulation",
+    "OutputDebugStringA": "Debug output (anti-debug technique)",
+    "OutputDebugStringW": "Debug output (anti-debug technique)",
+    "QueryPerformanceCounter": "Timing check (anti-debug)",
+    "GetTickCount": "Timing check (anti-debug)",
+    "GetTickCount64": "Timing check (anti-debug)",
+    "ptrace": "Linux debugger detection/manipulation",
+    "getenv": "Environment check (sandbox detection)",
+    "VirtualAlloc": "Memory allocation (shellcode loader)",
+    "VirtualProtect": "Memory protection change (shellcode)",
+    "NtAllocateVirtualMemory": "Low-level memory alloc",
+    "NtProtectVirtualMemory": "Low-level memory protection",
+    "CreateRemoteThread": "Remote code injection",
+    "NtCreateThreadEx": "Thread creation (injection)",
+    "WriteProcessMemory": "Process memory write (injection)",
+    "ReadProcessMemory": "Process memory read",
+    "LoadLibraryA": "DLL loading",
+    "LoadLibraryW": "DLL loading",
+    "GetProcAddress": "Function resolution (shellcode)",
+    "LdrLoadDll": "Low-level DLL loading",
+    "mmap": "Memory mapping (shellcode loader)",
+    "mprotect": "Memory protection change (shellcode)",
+    "dlopen": "Dynamic library loading",
+    "dlsym": "Dynamic symbol resolution",
 }
 
 
@@ -1071,9 +1735,9 @@ def extract_strings(data: bytes, min_length: int = 4, max_strings: int = 5000) -
                 encoding="ascii",
                 category=categorize_string(value),
             ))
-        except:
+        except UnicodeDecodeError:
             pass
-    
+
     # Extract UTF-16 LE strings
     utf16_pattern = re.compile(rb'(?:[\x20-\x7e]\x00){' + str(min_length).encode() + rb',}')
     for match in utf16_pattern.finditer(data):
@@ -1087,7 +1751,7 @@ def extract_strings(data: bytes, min_length: int = 4, max_strings: int = 5000) -
                 encoding="utf16",
                 category=categorize_string(value),
             ))
-        except:
+        except UnicodeDecodeError:
             pass
     
     # Deduplicate by value
@@ -1185,7 +1849,23 @@ def parse_pe_header(data: bytes) -> Optional[BinaryMetadata]:
         timestamp = struct.unpack('<I', data[coff_offset+4:coff_offset+8])[0]
         
         # Determine architecture
-        arch_map = {0x14c: "x86", 0x8664: "x64", 0x1c0: "ARM", 0xaa64: "ARM64"}
+        arch_map = {
+            # x86 family
+            0x14c: "x86",  # IMAGE_FILE_MACHINE_I386
+            0x8664: "x64",  # IMAGE_FILE_MACHINE_AMD64
+            # ARM family
+            0x1c0: "ARM",  # IMAGE_FILE_MACHINE_ARM
+            0x1c2: "ARM_THUMB",  # IMAGE_FILE_MACHINE_THUMB (NEW: IoT devices)
+            0x1c4: "ARM",  # IMAGE_FILE_MACHINE_ARMNT
+            0xaa64: "ARM64",  # IMAGE_FILE_MACHINE_ARM64
+            # RISC-V (NEW: 20+ billion cores)
+            0x5032: "RISCV32",  # IMAGE_FILE_MACHINE_RISCV32
+            0x5064: "RISCV64",  # IMAGE_FILE_MACHINE_RISCV64
+            0x5128: "RISCV128",  # IMAGE_FILE_MACHINE_RISCV128
+            # PowerPC (IBM servers)
+            0x1f0: "PPC",  # IMAGE_FILE_MACHINE_POWERPC (NEW)
+            0x1f1: "PPC",  # IMAGE_FILE_MACHINE_POWERPCFP
+        }
         architecture = arch_map.get(machine, f"unknown (0x{machine:x})")
         
         # Parse optional header
@@ -2259,11 +2939,24 @@ def parse_pe_with_pefile(file_path: Path) -> tuple[Optional[BinaryMetadata], Lis
         
         # Architecture
         arch_map = {
+            # x86 family
             pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_I386']: "x86",
             pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_AMD64']: "x64",
+            # ARM family
             pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_ARM']: "ARM",
             pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_ARM64']: "ARM64",
         }
+        # Add ARM Thumb if available
+        if 'IMAGE_FILE_MACHINE_THUMB' in pefile.MACHINE_TYPE:
+            arch_map[pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_THUMB']] = "ARM_THUMB"
+        # Add RISC-V if available (newer pefile versions)
+        if 'IMAGE_FILE_MACHINE_RISCV32' in pefile.MACHINE_TYPE:
+            arch_map[pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_RISCV32']] = "RISCV32"
+        if 'IMAGE_FILE_MACHINE_RISCV64' in pefile.MACHINE_TYPE:
+            arch_map[pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_RISCV64']] = "RISCV64"
+        # Add PowerPC if available
+        if 'IMAGE_FILE_MACHINE_POWERPC' in pefile.MACHINE_TYPE:
+            arch_map[pefile.MACHINE_TYPE['IMAGE_FILE_MACHINE_POWERPC']] = "PPC"
         architecture = arch_map.get(pe.FILE_HEADER.Machine, f"unknown (0x{pe.FILE_HEADER.Machine:x})")
         
         # Entry point
@@ -2418,12 +3111,28 @@ def parse_elf_header(data: bytes) -> Optional[BinaryMetadata]:
             e_entry = struct.unpack('<I', data[24:28])[0]
         
         arch_map = {
+            # x86 family
             0x03: "x86",
             0x3E: "x86_64",
+            # ARM family
             0x28: "ARM",
             0xB7: "ARM64",
+            # MIPS family
             0x08: "MIPS",
+            0x09: "MIPS64",
+            # PowerPC (IBM servers, automotive)
             0x14: "PowerPC",
+            0x15: "PowerPC64",
+            # SPARC (legacy enterprise)
+            0x02: "SPARC",
+            0x12: "SPARC32PLUS",
+            0x2B: "SPARC64",
+            # RISC-V (20+ billion cores by 2025)
+            0xF3: "RISCV",
+            # Motorola 68k (legacy embedded)
+            0x04: "M68K",
+            # eBPF (Linux kernel)
+            0xF7: "BPF",
         }
         architecture = arch_map.get(e_machine, f"unknown (0x{e_machine:x})")
         
@@ -2458,14 +3167,29 @@ def parse_elf_with_pyelftools(file_path: Path) -> tuple[Optional[BinaryMetadata]
             # Basic metadata
             is_64bit = elf.elfclass == 64
             arch_map = {
+                # x86 family
                 'EM_386': 'x86',
                 'EM_X86_64': 'x86_64',
+                # ARM family
                 'EM_ARM': 'ARM',
                 'EM_AARCH64': 'ARM64',
+                # MIPS family
                 'EM_MIPS': 'MIPS',
-                'EM_PPC': 'PowerPC',
-                'EM_PPC64': 'PowerPC64',
-                'EM_RISCV': 'RISC-V',
+                'EM_MIPS_X': 'MIPS',
+                # PowerPC (IBM servers, automotive, aerospace)
+                'EM_PPC': 'PPC',
+                'EM_PPC64': 'PPC64',
+                # SPARC (legacy enterprise, Oracle/Sun)
+                'EM_SPARC': 'SPARC',
+                'EM_SPARC32PLUS': 'SPARC',
+                'EM_SPARCV9': 'SPARC64',
+                # RISC-V (20+ billion cores by 2025)
+                'EM_RISCV': 'RISCV',
+                # Motorola 68k (legacy embedded)
+                'EM_68K': 'M68K',
+                'EM_88K': 'M88K',
+                # eBPF (Linux kernel programs)
+                'EM_BPF': 'BPF',
             }
             architecture = arch_map.get(elf['e_machine'], elf['e_machine'])
             
@@ -2811,7 +3535,7 @@ def calculate_entropy(data: bytes) -> float:
 
 
 # ============================================================================
-# Capstone Disassembly Functions
+# Capstone Disassembly Functions - Enhanced with CFG and Cross-References
 # ============================================================================
 
 def get_capstone_instance(architecture: str) -> Optional[Any]:
@@ -2820,29 +3544,183 @@ def get_capstone_instance(architecture: str) -> Optional[Any]:
         return None
     
     arch_mode_map = {
+        # x86 family
         'x86': (CS_ARCH_X86, CS_MODE_32),
         'x86_64': (CS_ARCH_X86, CS_MODE_64),
+        'i386': (CS_ARCH_X86, CS_MODE_32),
+        'AMD64': (CS_ARCH_X86, CS_MODE_64),
+
+        # ARM family
         'ARM': (CS_ARCH_ARM, CS_MODE_ARM),
         'ARM64': (CS_ARCH_ARM64, CS_MODE_ARM),
-        'MIPS': (CS_ARCH_MIPS, CS_MODE_32),
+        'AArch64': (CS_ARCH_ARM64, CS_MODE_ARM),
+        'ARM_THUMB': (CS_ARCH_ARM, CS_MODE_THUMB),  # NEW: Cortex-M, IoT devices
+        'ARMTHUMB': (CS_ARCH_ARM, CS_MODE_THUMB),
+        'THUMB': (CS_ARCH_ARM, CS_MODE_THUMB),
+
+        # MIPS family
+        'MIPS': (CS_ARCH_MIPS, CS_MODE_MIPS32),
+        'MIPS64': (CS_ARCH_MIPS, CS_MODE_MIPS64),
+
+        # RISC-V (CRITICAL: 20+ billion cores by 2025)
+        'RISCV': (CS_ARCH_RISCV, CS_MODE_RISCV32),  # NEW: Default to 32-bit
+        'RISCV32': (CS_ARCH_RISCV, CS_MODE_RISCV32),  # NEW
+        'RISCV64': (CS_ARCH_RISCV, CS_MODE_RISCV64),  # NEW
+        'RV32': (CS_ARCH_RISCV, CS_MODE_RISCV32),
+        'RV64': (CS_ARCH_RISCV, CS_MODE_RISCV64),
+
+        # PowerPC (IBM servers, automotive, aerospace)
+        'PPC': (CS_ARCH_PPC, CS_MODE_32),  # NEW
+        'PPC64': (CS_ARCH_PPC, CS_MODE_64),  # NEW
+        'POWERPC': (CS_ARCH_PPC, CS_MODE_32),
+        'POWERPC64': (CS_ARCH_PPC, CS_MODE_64),
+
+        # SPARC (legacy enterprise, Oracle/Sun)
+        'SPARC': (CS_ARCH_SPARC, CS_MODE_32),  # NEW
+        'SPARC64': (CS_ARCH_SPARC, CS_MODE_64),  # NEW
+
+        # Motorola 68k (legacy embedded)
+        'M68K': (CS_ARCH_M68K, CS_MODE_32),  # NEW
+        'M680X0': (CS_ARCH_M68K, CS_MODE_32),
+
+        # eBPF (Linux kernel programs)
+        'BPF': (CS_ARCH_BPF, CS_MODE_BPF),  # NEW
+        'EBPF': (CS_ARCH_BPF, CS_MODE_BPF),
     }
     
     if architecture not in arch_mode_map:
+        # Try fuzzy matching
+        arch_lower = architecture.lower()
+        if 'x86' in arch_lower and '64' in arch_lower:
+            architecture = 'x86_64'
+        elif 'x86' in arch_lower or 'i386' in arch_lower or 'i686' in arch_lower:
+            architecture = 'x86'
+        elif 'riscv' in arch_lower or 'risc-v' in arch_lower:
+            if '64' in arch_lower:
+                architecture = 'RISCV64'
+            else:
+                architecture = 'RISCV32'
+        elif 'thumb' in arch_lower:
+            architecture = 'ARM_THUMB'
+        elif 'arm' in arch_lower and '64' in arch_lower:
+            architecture = 'ARM64'
+        elif 'arm' in arch_lower:
+            architecture = 'ARM'
+        elif 'ppc' in arch_lower or 'powerpc' in arch_lower:
+            if '64' in arch_lower:
+                architecture = 'PPC64'
+            else:
+                architecture = 'PPC'
+        elif 'sparc' in arch_lower:
+            if '64' in arch_lower:
+                architecture = 'SPARC64'
+            else:
+                architecture = 'SPARC'
+        elif 'm68k' in arch_lower or '68000' in arch_lower:
+            architecture = 'M68K'
+        elif 'bpf' in arch_lower or 'ebpf' in arch_lower:
+            architecture = 'BPF'
+        else:
+            return None
+    
+    arch, mode = arch_mode_map.get(architecture, (None, None))
+    if arch is None:
         return None
     
-    arch, mode = arch_mode_map[architecture]
     try:
         md = Cs(arch, mode)
-        md.detail = True
+        md.detail = True  # Enable detailed instruction info
+        md.skipdata = True  # Skip data when disassembling
         return md
     except Exception as e:
         logger.error(f"Failed to create Capstone instance: {e}")
         return None
 
 
+def is_control_flow_instruction(mnemonic: str) -> Dict[str, bool]:
+    """Determine the type of control flow instruction."""
+    mnemonic_lower = mnemonic.lower()
+    
+    # Call instructions
+    call_mnemonics = {'call', 'bl', 'blx', 'blr', 'jal', 'jalr', 'bctrl'}
+    
+    # Unconditional jumps
+    unconditional_jumps = {'jmp', 'b', 'br', 'j', 'jr', 'bx'}
+    
+    # Conditional jumps (x86/x64)
+    conditional_jumps = {
+        'je', 'jne', 'jz', 'jnz', 'ja', 'jae', 'jb', 'jbe', 'jg', 'jge', 'jl', 'jle',
+        'jo', 'jno', 'js', 'jns', 'jp', 'jnp', 'jpe', 'jpo', 'jecxz', 'jrcxz',
+        'loop', 'loope', 'loopne', 'loopz', 'loopnz',
+        # ARM conditional branches
+        'beq', 'bne', 'bgt', 'blt', 'bge', 'ble', 'bhi', 'bls', 'bcc', 'bcs',
+        'bmi', 'bpl', 'bvs', 'bvc', 'cbz', 'cbnz', 'tbz', 'tbnz',
+    }
+    
+    # Return instructions
+    return_mnemonics = {'ret', 'retn', 'retf', 'iret', 'iretd', 'iretq', 'bx lr', 'pop pc'}
+    
+    is_call = mnemonic_lower in call_mnemonics
+    is_uncond_jump = mnemonic_lower in unconditional_jumps
+    is_cond_jump = mnemonic_lower in conditional_jumps
+    is_ret = mnemonic_lower in return_mnemonics or mnemonic_lower.startswith('ret')
+    
+    return {
+        'is_call': is_call,
+        'is_jump': is_uncond_jump or is_cond_jump,
+        'is_conditional_jump': is_cond_jump,
+        'is_return': is_ret,
+        'terminates_block': is_ret or is_uncond_jump or is_cond_jump or is_call,
+    }
+
+
+def extract_target_address(insn, op_str: str, current_address: int) -> Optional[int]:
+    """Extract the target address from a branch/call instruction."""
+    try:
+        # Check Capstone operands first
+        if hasattr(insn, 'operands') and insn.operands:
+            for op in insn.operands:
+                if hasattr(op, 'type') and hasattr(op, 'imm'):
+                    # Immediate operand (direct address)
+                    if op.type == 2:  # CS_OP_IMM
+                        return op.imm
+                    # Memory operand with displacement
+                    if op.type == 3 and hasattr(op, 'mem'):  # CS_OP_MEM
+                        if hasattr(op.mem, 'disp') and op.mem.disp != 0:
+                            return op.mem.disp
+        
+        # Fallback: Parse operand string
+        op_str_clean = op_str.strip()
+        
+        # Direct address: "0x401000"
+        if op_str_clean.startswith('0x'):
+            addr_str = op_str_clean.split()[0].rstrip(',')
+            return int(addr_str, 16)
+        
+        # RIP-relative: "[rip + 0x1234]" or "qword ptr [rip + 0x1234]"
+        rip_match = re.search(r'\[rip\s*[+-]\s*(0x[0-9a-fA-F]+)\]', op_str_clean)
+        if rip_match:
+            offset = int(rip_match.group(1), 16)
+            if '+' in op_str_clean:
+                return current_address + insn.size + offset
+            else:
+                return current_address + insn.size - offset
+        
+        # Relative offset for jumps
+        if op_str_clean.startswith('-') or op_str_clean.startswith('+'):
+            offset = int(op_str_clean.replace(' ', ''), 0)
+            return current_address + insn.size + offset
+            
+    except Exception:
+        pass
+    
+    return None
+
+
 def disassemble_at_address(data: bytes, base_address: int, start_offset: int, 
-                           architecture: str, max_instructions: int = 100) -> List[DisassemblyInstruction]:
-    """Disassemble code at a given offset."""
+                           architecture: str, max_instructions: int = 100,
+                           string_map: Optional[Dict[int, str]] = None) -> List[DisassemblyInstruction]:
+    """Disassemble code at a given offset with enhanced analysis."""
     if not CAPSTONE_AVAILABLE:
         return []
     
@@ -2851,20 +3729,16 @@ def disassemble_at_address(data: bytes, base_address: int, start_offset: int,
         return []
     
     instructions = []
-    call_mnemonics = {'call', 'bl', 'blx', 'jal', 'jalr'}
-    jump_mnemonics = {'jmp', 'je', 'jne', 'jz', 'jnz', 'ja', 'jb', 'jg', 'jl', 'jge', 'jle',
-                      'b', 'beq', 'bne', 'bgt', 'blt', 'bge', 'ble'}
+    string_map = string_map or {}
     
     try:
-        code = data[start_offset:start_offset + 4096]  # Disassemble up to 4KB
+        code = data[start_offset:start_offset + 8192]  # Disassemble up to 8KB
         
         for insn in md.disasm(code, base_address + start_offset):
             if len(instructions) >= max_instructions:
                 break
             
-            mnemonic_lower = insn.mnemonic.lower()
-            is_call = mnemonic_lower in call_mnemonics
-            is_jump = mnemonic_lower in jump_mnemonics
+            cf_info = is_control_flow_instruction(insn.mnemonic)
             
             # Check for suspicious instructions
             is_suspicious = False
@@ -2877,17 +3751,54 @@ def disassemble_at_address(data: bytes, base_address: int, start_offset: int,
                     comment = desc
                     break
             
+            # Extract target address for branches/calls
+            target_addr = None
+            if cf_info['is_call'] or cf_info['is_jump']:
+                target_addr = extract_target_address(insn, insn.op_str, insn.address)
+            
+            # Extract register info
+            reads_regs = []
+            writes_regs = []
+            memory_refs = []
+            
+            if hasattr(insn, 'regs_read') and insn.regs_read:
+                reads_regs = [insn.reg_name(r) for r in insn.regs_read if insn.reg_name(r)]
+            if hasattr(insn, 'regs_write') and insn.regs_write:
+                writes_regs = [insn.reg_name(r) for r in insn.regs_write if insn.reg_name(r)]
+            
+            # Check for string references
+            string_ref = None
+            if target_addr and target_addr in string_map:
+                string_ref = string_map[target_addr][:64]  # Truncate long strings
+            
+            # Extract memory references from operand string
+            mem_match = re.findall(r'\[([^\]]+)\]', insn.op_str)
+            memory_refs = mem_match[:3]  # Limit to 3 references
+            
             instructions.append(DisassemblyInstruction(
                 address=insn.address,
                 mnemonic=insn.mnemonic,
                 op_str=insn.op_str,
                 bytes_hex=insn.bytes.hex(),
                 size=insn.size,
-                is_call=is_call,
-                is_jump=is_jump,
+                is_call=cf_info['is_call'],
+                is_jump=cf_info['is_jump'],
+                is_conditional_jump=cf_info['is_conditional_jump'],
+                is_return=cf_info['is_return'],
                 is_suspicious=is_suspicious,
                 comment=comment,
+                target_address=target_addr,
+                reads_regs=reads_regs,
+                writes_regs=writes_regs,
+                memory_refs=memory_refs,
+                string_ref=string_ref,
             ))
+            
+            # Stop at return or unconditional jump to unknown
+            if cf_info['is_return']:
+                break
+            if cf_info['is_jump'] and not cf_info['is_conditional_jump'] and target_addr is None:
+                break
             
     except Exception as e:
         logger.error(f"Disassembly failed: {e}")
@@ -2895,50 +3806,438 @@ def disassemble_at_address(data: bytes, base_address: int, start_offset: int,
     return instructions
 
 
-def disassemble_function(data: bytes, base_address: int, func_offset: int, func_size: int,
-                        func_name: str, architecture: str, symbols: List[ELFSymbol]) -> DisassemblyFunction:
-    """Disassemble a complete function."""
-    instructions = disassemble_at_address(
-        data, base_address, func_offset, architecture, 
-        max_instructions=min(func_size // 2, 500)  # Rough estimate
+def recursive_disassemble(data: bytes, base_address: int, start_offset: int,
+                          architecture: str, max_instructions: int = 1000,
+                          string_map: Optional[Dict[int, str]] = None,
+                          visited: Optional[Set[int]] = None) -> Dict[int, DisassemblyInstruction]:
+    """Recursively disassemble following control flow (recursive descent)."""
+    if not CAPSTONE_AVAILABLE:
+        return {}
+    
+    md = get_capstone_instance(architecture)
+    if not md:
+        return {}
+    
+    visited = visited or set()
+    instructions_map = {}
+    work_queue = [start_offset]
+    string_map = string_map or {}
+    data_len = len(data)
+    
+    while work_queue and len(instructions_map) < max_instructions:
+        offset = work_queue.pop(0)
+        
+        if offset in visited or offset < 0 or offset >= data_len:
+            continue
+        
+        visited.add(offset)
+        
+        try:
+            code = data[offset:offset + 4096]
+            if not code:
+                continue
+            
+            for insn in md.disasm(code, base_address + offset):
+                if insn.address in instructions_map:
+                    break
+                if len(instructions_map) >= max_instructions:
+                    break
+                
+                cf_info = is_control_flow_instruction(insn.mnemonic)
+                
+                # Check for suspicious instructions
+                is_suspicious = False
+                comment = None
+                full_insn = f"{insn.mnemonic} {insn.op_str}"
+                for pattern, desc in SUSPICIOUS_INSTRUCTIONS.items():
+                    if pattern.lower() in full_insn.lower():
+                        is_suspicious = True
+                        comment = desc
+                        break
+                
+                # Extract target address
+                target_addr = None
+                if cf_info['is_call'] or cf_info['is_jump']:
+                    target_addr = extract_target_address(insn, insn.op_str, insn.address)
+                
+                # Extract register info
+                reads_regs = []
+                writes_regs = []
+                if hasattr(insn, 'regs_read') and insn.regs_read:
+                    reads_regs = [insn.reg_name(r) for r in insn.regs_read if insn.reg_name(r)]
+                if hasattr(insn, 'regs_write') and insn.regs_write:
+                    writes_regs = [insn.reg_name(r) for r in insn.regs_write if insn.reg_name(r)]
+                
+                # Check string references
+                string_ref = None
+                if target_addr and target_addr in string_map:
+                    string_ref = string_map[target_addr][:64]
+                
+                mem_refs = re.findall(r'\[([^\]]+)\]', insn.op_str)[:3]
+                
+                instr = DisassemblyInstruction(
+                    address=insn.address,
+                    mnemonic=insn.mnemonic,
+                    op_str=insn.op_str,
+                    bytes_hex=insn.bytes.hex(),
+                    size=insn.size,
+                    is_call=cf_info['is_call'],
+                    is_jump=cf_info['is_jump'],
+                    is_conditional_jump=cf_info['is_conditional_jump'],
+                    is_return=cf_info['is_return'],
+                    is_suspicious=is_suspicious,
+                    comment=comment,
+                    target_address=target_addr,
+                    reads_regs=reads_regs,
+                    writes_regs=writes_regs,
+                    memory_refs=mem_refs,
+                    string_ref=string_ref,
+                )
+                instructions_map[insn.address] = instr
+                
+                # Follow control flow
+                if target_addr:
+                    target_offset = target_addr - base_address
+                    if 0 <= target_offset < data_len and target_offset not in visited:
+                        if cf_info['is_conditional_jump']:
+                            # For conditional jumps, explore both paths
+                            work_queue.append(target_offset)
+                        elif cf_info['is_jump'] and not cf_info['is_call']:
+                            # For unconditional jumps, only follow target
+                            work_queue.insert(0, target_offset)
+                            break
+                        elif cf_info['is_call']:
+                            # Don't follow calls, but record them
+                            work_queue.append(target_offset)
+                
+                # Stop at return
+                if cf_info['is_return']:
+                    break
+                    
+                # Stop at unconditional jump to register (can't follow)
+                if cf_info['is_jump'] and not cf_info['is_conditional_jump'] and target_addr is None:
+                    break
+                
+        except Exception as e:
+            logger.debug(f"Recursive disassembly error at offset {offset}: {e}")
+    
+    return instructions_map
+
+
+def build_basic_blocks(instructions: Dict[int, DisassemblyInstruction]) -> Dict[int, BasicBlock]:
+    """Build basic blocks from disassembled instructions."""
+    if not instructions:
+        return {}
+    
+    # Sort instructions by address
+    sorted_addrs = sorted(instructions.keys())
+    
+    # Find block boundaries
+    block_starts = {sorted_addrs[0]}  # First instruction starts a block
+    
+    # Instructions that are jump targets start new blocks
+    for addr in sorted_addrs:
+        instr = instructions[addr]
+        if instr.target_address and instr.target_address in instructions:
+            block_starts.add(instr.target_address)
+    
+    # Instructions following jumps/calls/returns start new blocks
+    for addr in sorted_addrs:
+        instr = instructions[addr]
+        if instr.is_jump or instr.is_return or instr.is_call:
+            # Next instruction starts a new block
+            next_addr = addr + instr.size
+            if next_addr in instructions:
+                block_starts.add(next_addr)
+    
+    # Build blocks
+    blocks = {}
+    sorted_starts = sorted(block_starts)
+    
+    for i, start_addr in enumerate(sorted_starts):
+        # Find end of this block
+        if i + 1 < len(sorted_starts):
+            next_block_start = sorted_starts[i + 1]
+        else:
+            next_block_start = max(sorted_addrs) + instructions[max(sorted_addrs)].size + 1
+        
+        # Collect instructions in this block
+        block_instructions = []
+        for addr in sorted_addrs:
+            if start_addr <= addr < next_block_start:
+                block_instructions.append(instructions[addr])
+        
+        if not block_instructions:
+            continue
+        
+        end_addr = block_instructions[-1].address + block_instructions[-1].size
+        last_instr = block_instructions[-1]
+        
+        # Determine block type
+        block_type = "normal"
+        if last_instr.is_call:
+            block_type = "call_block"
+        
+        blocks[start_addr] = BasicBlock(
+            start_address=start_addr,
+            end_address=end_addr,
+            instructions=block_instructions,
+            is_entry=(start_addr == sorted_starts[0]),
+            is_exit=last_instr.is_return,
+            block_type=block_type,
+        )
+    
+    # Connect blocks (build CFG edges)
+    for start_addr, block in blocks.items():
+        if not block.instructions:
+            continue
+        
+        last_instr = block.instructions[-1]
+        
+        # Fallthrough to next block (if not unconditional jump or return)
+        if not last_instr.is_return and not (last_instr.is_jump and not last_instr.is_conditional_jump):
+            next_addr = last_instr.address + last_instr.size
+            if next_addr in blocks:
+                block.successors.append(next_addr)
+                blocks[next_addr].predecessors.append(start_addr)
+        
+        # Jump target
+        if last_instr.target_address and last_instr.target_address in blocks:
+            if last_instr.target_address not in block.successors:
+                block.successors.append(last_instr.target_address)
+                if start_addr not in blocks[last_instr.target_address].predecessors:
+                    blocks[last_instr.target_address].predecessors.append(start_addr)
+    
+    return blocks
+
+
+def build_cfg(instructions: Dict[int, DisassemblyInstruction]) -> ControlFlowGraph:
+    """Build a control flow graph from instructions."""
+    blocks = build_basic_blocks(instructions)
+    
+    if not blocks:
+        return ControlFlowGraph()
+    
+    # Find entry block
+    sorted_starts = sorted(blocks.keys())
+    entry_block = sorted_starts[0]
+    
+    # Find exit blocks
+    exit_blocks = [addr for addr, block in blocks.items() if block.is_exit]
+    
+    # Detect loop headers (blocks with back-edges)
+    loop_headers = []
+    for addr, block in blocks.items():
+        for pred_addr in block.predecessors:
+            if pred_addr >= addr:  # Back edge detected
+                loop_headers.append(addr)
+                block.block_type = "loop_header"
+                break
+    
+    # Calculate cyclomatic complexity: E - N + 2P
+    # E = edges, N = nodes, P = connected components (usually 1)
+    num_edges = sum(len(block.successors) for block in blocks.values())
+    num_nodes = len(blocks)
+    complexity = num_edges - num_nodes + 2
+    
+    return ControlFlowGraph(
+        blocks=blocks,
+        entry_block=entry_block,
+        exit_blocks=exit_blocks,
+        loop_headers=loop_headers,
+        complexity=max(1, complexity),
     )
+
+
+def disassemble_function(data: bytes, base_address: int, func_offset: int, func_size: int,
+                        func_name: str, architecture: str, symbols: List[ELFSymbol],
+                        string_map: Optional[Dict[int, str]] = None) -> DisassemblyFunction:
+    """Disassemble a complete function with CFG and enhanced analysis."""
+    string_map = string_map or {}
+    
+    # Use recursive descent for better coverage
+    max_instrs = min(func_size * 2, 2000)  # Allow more instructions for complex functions
+    instructions_map = recursive_disassemble(
+        data, base_address, func_offset, architecture, 
+        max_instructions=max_instrs, string_map=string_map
+    )
+    
+    # Build CFG
+    cfg = build_cfg(instructions_map)
     
     # Build symbol address map for call resolution
     symbol_map = {s.address: s.name for s in symbols if s.symbol_type == 'STT_FUNC'}
     
     calls = []
     suspicious_patterns = []
+    is_leaf = True
+    is_recursive = False
+    stack_frame_size = None
     
-    for insn in instructions:
+    # Analyze instructions
+    instructions_list = sorted(instructions_map.values(), key=lambda x: x.address)
+    
+    for insn in instructions_list:
         if insn.is_call:
+            is_leaf = False
             # Try to resolve call target
-            try:
-                # Extract address from operand
-                if insn.op_str.startswith('0x'):
-                    target_addr = int(insn.op_str, 16)
-                    if target_addr in symbol_map:
-                        calls.append(symbol_map[target_addr])
-                    else:
-                        calls.append(f"sub_{target_addr:x}")
-            except:
+            if insn.target_address:
+                target_addr = insn.target_address
+                if target_addr in symbol_map:
+                    called_name = symbol_map[target_addr]
+                    calls.append(called_name)
+                    if called_name == func_name:
+                        is_recursive = True
+                else:
+                    calls.append(f"sub_{target_addr:x}")
+            else:
                 calls.append(insn.op_str)
         
         if insn.is_suspicious:
             suspicious_patterns.append(f"{insn.mnemonic} {insn.op_str}: {insn.comment}")
+        
+        # Detect stack frame setup
+        if stack_frame_size is None:
+            # Look for "sub rsp, X" or "sub esp, X" patterns
+            if insn.mnemonic.lower() == 'sub' and 'sp' in insn.op_str.lower():
+                match = re.search(r'0x([0-9a-fA-F]+)', insn.op_str)
+                if match:
+                    stack_frame_size = int(match.group(1), 16)
+    
+    # Detect calling convention (heuristic)
+    calling_convention = None
+    if instructions_list:
+        first_instrs = instructions_list[:10]
+        uses_rbp = any('rbp' in str(i.op_str) or 'rbp' in str(i.writes_regs) for i in first_instrs)
+        uses_rdi = any('rdi' in str(i.reads_regs) for i in first_instrs)
+        uses_rcx = any('rcx' in str(i.reads_regs) for i in first_instrs)
+        
+        if uses_rdi:
+            calling_convention = "System V AMD64 ABI"
+        elif uses_rcx:
+            calling_convention = "Microsoft x64"
+        elif uses_rbp:
+            calling_convention = "cdecl/stdcall (x86)"
     
     return DisassemblyFunction(
         name=func_name,
         address=base_address + func_offset,
         size=func_size,
-        instructions=instructions[:200],  # Limit for response size
+        instructions=instructions_list[:500],  # Limit for response size
         calls=list(set(calls)),
         suspicious_patterns=suspicious_patterns,
+        cfg=cfg,
+        calling_convention=calling_convention,
+        cyclomatic_complexity=cfg.complexity if cfg else 1,
+        is_leaf=is_leaf,
+        is_recursive=is_recursive,
+        stack_frame_size=stack_frame_size,
     )
+
+
+def build_cross_references(functions: List[DisassemblyFunction], 
+                           string_map: Dict[int, str]) -> List[CrossReference]:
+    """Build cross-reference list from analyzed functions."""
+    xrefs = []
+    
+    # Build function address map
+    func_map = {f.address: f.name for f in functions}
+    
+    for func in functions:
+        for instr in func.instructions:
+            # Code references (calls and jumps)
+            if instr.target_address:
+                if instr.is_call:
+                    xref_type = "call"
+                elif instr.is_jump:
+                    xref_type = "jump"
+                else:
+                    xref_type = "reference"
+                
+                to_func = func_map.get(instr.target_address, None)
+                
+                xrefs.append(CrossReference(
+                    from_address=instr.address,
+                    to_address=instr.target_address,
+                    xref_type=xref_type,
+                    from_function=func.name,
+                    to_function=to_func,
+                ))
+            
+            # String references
+            if instr.string_ref:
+                xrefs.append(CrossReference(
+                    from_address=instr.address,
+                    to_address=0,  # String address would need to be tracked
+                    xref_type="string_ref",
+                    from_function=func.name,
+                    to_function=None,
+                ))
+    
+    return xrefs
+
+
+def detect_function_boundaries(data: bytes, base_address: int, text_offset: int, 
+                               text_size: int, architecture: str) -> List[Tuple[int, int]]:
+    """Detect function boundaries using pattern matching."""
+    if not CAPSTONE_AVAILABLE:
+        return []
+    
+    md = get_capstone_instance(architecture)
+    if not md:
+        return []
+    
+    functions = []
+    
+    # Common function prologue patterns
+    x86_prologues = [
+        b'\x55\x89\xe5',           # push ebp; mov ebp, esp (32-bit)
+        b'\x55\x48\x89\xe5',       # push rbp; mov rbp, rsp (64-bit)
+        b'\x48\x83\xec',           # sub rsp, X (64-bit)
+        b'\x48\x81\xec',           # sub rsp, X (64-bit, large frame)
+        b'\x83\xec',               # sub esp, X (32-bit)
+        b'\x81\xec',               # sub esp, X (32-bit, large frame)
+    ]
+    
+    arm_prologues = [
+        b'\x00\x48\x2d\xe9',       # push {fp, lr} (ARM)
+        b'\xf0\x4f\x2d\xe9',       # push {r4-r11, lr}
+    ]
+    
+    prologues = x86_prologues if 'x86' in architecture.lower() or 'amd64' in architecture.lower() else arm_prologues
+    
+    # Scan for function prologues
+    code = data[text_offset:text_offset + text_size]
+    
+    for prologue in prologues:
+        offset = 0
+        while True:
+            idx = code.find(prologue, offset)
+            if idx == -1:
+                break
+            
+            func_addr = base_address + text_offset + idx
+            functions.append((func_addr, 0))  # Size unknown
+            offset = idx + 1
+    
+    # Sort and deduplicate
+    functions = sorted(set(functions))
+    
+    # Estimate sizes
+    sized_functions = []
+    for i, (addr, _) in enumerate(functions):
+        if i + 1 < len(functions):
+            size = functions[i + 1][0] - addr
+        else:
+            size = min(4096, text_size - (addr - base_address - text_offset))
+        sized_functions.append((addr, max(16, min(size, 16384))))
+    
+    return sized_functions[:100]  # Limit to 100 detected functions
 
 
 def disassemble_binary(file_path: Path, metadata: BinaryMetadata, 
                        symbols: List[ELFSymbol]) -> Optional[DisassemblyResult]:
-    """Perform disassembly analysis of a binary."""
+    """Perform enhanced disassembly analysis of a binary with CFG and cross-references."""
     if not CAPSTONE_AVAILABLE:
         return None
     
@@ -2947,9 +4246,27 @@ def disassemble_binary(file_path: Path, metadata: BinaryMetadata,
             data = f.read()
         
         architecture = metadata.architecture
-        if architecture not in ('x86', 'x86_64', 'ARM', 'ARM64'):
-            logger.info(f"Disassembly not supported for architecture: {architecture}")
-            return None
+        if architecture not in ('x86', 'x86_64', 'ARM', 'ARM64', 'i386', 'AMD64', 'AArch64'):
+            # Try to normalize architecture
+            arch_lower = architecture.lower() if architecture else ''
+            if 'x86' in arch_lower and '64' in arch_lower:
+                architecture = 'x86_64'
+            elif 'x86' in arch_lower or 'i386' in arch_lower:
+                architecture = 'x86'
+            elif 'arm64' in arch_lower or 'aarch64' in arch_lower:
+                architecture = 'ARM64'
+            elif 'arm' in arch_lower:
+                architecture = 'ARM'
+            else:
+                logger.info(f"Disassembly not supported for architecture: {architecture}")
+                return None
+        
+        # Build string map for reference resolution
+        strings = extract_strings(data, min_length=4, max_strings=10000)
+        string_map = {s.offset: s.value for s in strings}
+        
+        # Build import map for reference resolution
+        import_map = {}
         
         # Find .text section
         text_section = None
@@ -2961,82 +4278,2120 @@ def disassemble_binary(file_path: Path, metadata: BinaryMetadata,
         if not text_section:
             # Try to disassemble from entry point
             entry_point = metadata.entry_point or 0
-            entry_disasm = disassemble_at_address(data, 0, entry_point, architecture, 50)
+            entry_disasm = disassemble_at_address(data, 0, entry_point, architecture, 100, string_map)
             return DisassemblyResult(
                 entry_point_disasm=entry_disasm,
                 functions=[],
                 suspicious_instructions=[{"note": "Could not find .text section"}],
                 architecture=architecture,
                 mode="64-bit" if "64" in architecture else "32-bit",
+                total_instructions=len(entry_disasm),
             )
         
         text_addr = text_section.get("address", 0)
         text_size = text_section.get("size", 0)
         
         # Calculate file offset for .text section
-        # For ELF, we need to find the section in the file
         text_offset = 0
         if PYELFTOOLS_AVAILABLE:
-            with open(file_path, 'rb') as f:
-                elf = ELFFile(f)
-                for section in elf.iter_sections():
-                    if section.name == '.text':
-                        text_offset = section['sh_offset']
-                        break
+            try:
+                with open(file_path, 'rb') as f:
+                    elf = ELFFile(f)
+                    for section in elf.iter_sections():
+                        if section.name == '.text':
+                            text_offset = section['sh_offset']
+                            break
+            except Exception:
+                pass
         
-        # Disassemble entry point (first 50 instructions)
+        # Disassemble entry point with CFG
         entry_point = metadata.entry_point or text_addr
         entry_offset = entry_point - text_addr + text_offset if entry_point >= text_addr else text_offset
-        entry_disasm = disassemble_at_address(data, text_addr, entry_offset, architecture, 50)
+        
+        # Use recursive descent for entry point
+        entry_instrs_map = recursive_disassemble(
+            data, text_addr, entry_offset, architecture, 
+            max_instructions=200, string_map=string_map
+        )
+        entry_disasm = sorted(entry_instrs_map.values(), key=lambda x: x.address)
         
         # Disassemble interesting functions
         functions = []
         suspicious_instructions = []
+        total_instructions = len(entry_disasm)
+        all_xrefs = []
         
         # Find functions with symbols
         func_symbols = [s for s in symbols if s.symbol_type == 'STT_FUNC' and s.size > 0]
+        
+        # If no symbols, try to detect function boundaries
+        if not func_symbols:
+            detected = detect_function_boundaries(data, text_addr, text_offset, text_size, architecture)
+            for i, (addr, size) in enumerate(detected[:30]):
+                func_symbols.append(ELFSymbol(
+                    name=f"sub_{addr:x}",
+                    address=addr,
+                    size=size,
+                    symbol_type='STT_FUNC',
+                    binding='STB_LOCAL',
+                    visibility='STV_DEFAULT',
+                    section='.text',
+                    is_suspicious=False,
+                ))
         
         # Prioritize suspicious functions and main/init functions
         priority_funcs = []
         other_funcs = []
         
+        priority_names = {'main', '_start', '__libc_start_main', 'init', '_init', '__init', 
+                          'entry', 'start', 'WinMain', 'wWinMain', 'DllMain', '_DllMain'}
+        
         for sym in func_symbols:
-            if sym.is_suspicious or sym.name in ('main', '_start', '__libc_start_main', 'init', '_init'):
+            if sym.is_suspicious or sym.name in priority_names or 'main' in sym.name.lower():
                 priority_funcs.append(sym)
             else:
                 other_funcs.append(sym)
         
-        # Disassemble up to 10 priority functions and 5 other functions
-        for sym in priority_funcs[:10] + other_funcs[:5]:
+        # Also look for anti-analysis functions
+        for sym in func_symbols:
+            if sym.name in ANTI_ANALYSIS_FUNCTIONS:
+                if sym not in priority_funcs:
+                    priority_funcs.insert(0, sym)
+        
+        # Disassemble up to 15 priority functions and 10 other functions
+        funcs_to_analyze = priority_funcs[:15] + other_funcs[:10]
+        
+        for sym in funcs_to_analyze:
             try:
                 func_offset = sym.address - text_addr + text_offset
                 if 0 <= func_offset < len(data):
                     func_disasm = disassemble_function(
                         data, text_addr, func_offset, sym.size,
-                        sym.name, architecture, symbols
+                        sym.name, architecture, symbols, string_map
                     )
                     functions.append(func_disasm)
+                    total_instructions += len(func_disasm.instructions)
                     
                     # Collect suspicious patterns
                     for pattern in func_disasm.suspicious_patterns:
                         suspicious_instructions.append({
                             "function": sym.name,
                             "pattern": pattern,
+                            "address": f"0x{func_disasm.address:x}",
                         })
+                    
+                    # Check for anti-analysis function calls
+                    for call in func_disasm.calls:
+                        if call in ANTI_ANALYSIS_FUNCTIONS:
+                            suspicious_instructions.append({
+                                "function": sym.name,
+                                "pattern": f"Calls {call}: {ANTI_ANALYSIS_FUNCTIONS[call]}",
+                                "severity": "medium",
+                            })
+                            
             except Exception as e:
                 logger.warning(f"Failed to disassemble function {sym.name}: {e}")
         
+        # Build cross-references
+        all_xrefs = build_cross_references(functions, string_map)
+        
+        # Calculate coverage
+        coverage = (total_instructions * 4) / max(text_size, 1) * 100  # Rough estimate
+        coverage = min(100.0, coverage)
+        
+        # Build string reference map for result
+        string_refs = {}
+        for func in functions:
+            for instr in func.instructions:
+                if instr.string_ref:
+                    string_refs[instr.address] = instr.string_ref
+        
         return DisassemblyResult(
-            entry_point_disasm=entry_disasm,
+            entry_point_disasm=entry_disasm[:100],
             functions=functions,
             suspicious_instructions=suspicious_instructions,
             architecture=architecture,
             mode="64-bit" if "64" in architecture else "32-bit",
+            cross_references=all_xrefs[:500],  # Limit xrefs
+            string_references=string_refs,
+            import_references=import_map,
+            total_instructions=total_instructions,
+            coverage_percent=round(coverage, 2),
         )
         
     except Exception as e:
         logger.error(f"Binary disassembly failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
+
+
+# ============================================================================
+# Data Flow Analysis (Taint Tracking)
+# ============================================================================
+
+# Common taint sources (where untrusted data enters)
+TAINT_SOURCES = {
+    # Linux syscalls
+    "read": ("user_input", "Reads from file descriptor"),
+    "recv": ("network", "Receives network data"),
+    "recvfrom": ("network", "Receives UDP data"),
+    "recvmsg": ("network", "Receives message"),
+    "accept": ("network", "Accepts connection"),
+    "getenv": ("environment", "Gets environment variable"),
+    "fgets": ("user_input", "Reads string from stream"),
+    "gets": ("user_input", "DANGEROUS: Reads unbounded string"),
+    "scanf": ("user_input", "Formatted input"),
+    "fscanf": ("user_input", "Formatted file input"),
+    # Windows APIs
+    "ReadFile": ("user_input", "Reads from file"),
+    "ReadConsole": ("user_input", "Reads console input"),
+    "recv": ("network", "Receives network data"),
+    "WSARecv": ("network", "Windows socket receive"),
+    "InternetReadFile": ("network", "HTTP data read"),
+    "GetEnvironmentVariable": ("environment", "Gets env var"),
+    "RegQueryValueEx": ("environment", "Registry read"),
+    "GetCommandLine": ("argv", "Command line arguments"),
+}
+
+# Dangerous sinks where tainted data causes vulnerabilities
+TAINT_SINKS = {
+    # Command injection
+    "system": ("exec", "CWE-78", "Command injection"),
+    "popen": ("exec", "CWE-78", "Command injection via popen"),
+    "execve": ("exec", "CWE-78", "Direct execution"),
+    "execl": ("exec", "CWE-78", "Direct execution"),
+    "execv": ("exec", "CWE-78", "Direct execution"),
+    "ShellExecute": ("exec", "CWE-78", "Windows shell execute"),
+    "CreateProcess": ("exec", "CWE-78", "Windows process creation"),
+    "WinExec": ("exec", "CWE-78", "Windows execution"),
+    # Format string
+    "printf": ("format_string", "CWE-134", "Format string if arg is tainted"),
+    "sprintf": ("format_string", "CWE-134", "Format string"),
+    "fprintf": ("format_string", "CWE-134", "Format string"),
+    "syslog": ("format_string", "CWE-134", "Format string in logging"),
+    # Buffer overflow
+    "strcpy": ("memcpy", "CWE-120", "Unbounded string copy"),
+    "strcat": ("memcpy", "CWE-120", "Unbounded string concat"),
+    "gets": ("memcpy", "CWE-120", "CRITICAL: No bounds check"),
+    "sprintf": ("memcpy", "CWE-120", "No bounds on output"),
+    "memcpy": ("memcpy", "CWE-120", "Memory copy with tainted size"),
+    "memmove": ("memcpy", "CWE-120", "Memory move"),
+    # SQL injection
+    "sqlite3_exec": ("sql", "CWE-89", "SQLite execution"),
+    "mysql_query": ("sql", "CWE-89", "MySQL query"),
+    "PQexec": ("sql", "CWE-89", "PostgreSQL execution"),
+    # File operations
+    "fopen": ("file_write", "CWE-22", "Path traversal if tainted path"),
+    "open": ("file_write", "CWE-22", "Path traversal"),
+    "CreateFile": ("file_write", "CWE-22", "Windows file open"),
+    "unlink": ("file_write", "CWE-22", "File deletion"),
+    "remove": ("file_write", "CWE-22", "File removal"),
+}
+
+
+def analyze_data_flow(instructions_map: Dict[int, DisassemblyInstruction],
+                      cfg: Optional[ControlFlowGraph],
+                      imports: List[ImportedFunction],
+                      architecture: str) -> DataFlowAnalysisResult:
+    """
+    Perform taint analysis / data flow analysis on disassembled code.
+    
+    This is a simplified intraprocedural analysis that tracks:
+    1. Where untrusted data enters (sources)
+    2. Where it flows through registers/memory
+    3. Whether it reaches dangerous operations (sinks)
+    """
+    taint_sources = []
+    taint_sinks = []
+    data_flow_paths = []
+    
+    if not instructions_map:
+        return DataFlowAnalysisResult(
+            taint_sources=[], taint_sinks=[], data_flow_paths=[],
+            vulnerable_paths=[], total_paths_analyzed=0
+        )
+    
+    # Build import address map
+    import_map = {imp.name.lower(): imp for imp in imports}
+    
+    # First pass: identify sources and sinks
+    for addr, instr in sorted(instructions_map.items()):
+        if instr.is_call:
+            # Check if calling a taint source
+            target_name = instr.op_str.lower().strip()
+            for func_name, (source_type, desc) in TAINT_SOURCES.items():
+                if func_name.lower() in target_name:
+                    # Return value (rax/eax) is tainted
+                    ret_reg = "rax" if "64" in architecture else "eax"
+                    taint_sources.append(TaintSource(
+                        address=addr,
+                        source_type=source_type,
+                        register_or_memory=ret_reg,
+                        function_name=func_name,
+                        description=desc
+                    ))
+                    break
+            
+            # Check if calling a taint sink
+            for func_name, (sink_type, cwe, desc) in TAINT_SINKS.items():
+                if func_name.lower() in target_name:
+                    taint_sinks.append(TaintSink(
+                        address=addr,
+                        sink_type=sink_type,
+                        function_name=func_name,
+                        cwe_id=cwe,
+                        description=desc
+                    ))
+                    break
+    
+    # Second pass: simple taint propagation
+    # Track which registers are tainted
+    tainted_regs: Dict[int, Set[str]] = {}  # address -> set of tainted registers
+    
+    current_taint: Set[str] = set()
+    
+    for addr, instr in sorted(instructions_map.items()):
+        # Check if this is a source - taints return register
+        for source in taint_sources:
+            if source.address == addr:
+                current_taint.add(source.register_or_memory)
+        
+        # Propagate taint through mov instructions
+        mnemonic = instr.mnemonic.lower()
+        if mnemonic in ('mov', 'movzx', 'movsx', 'lea'):
+            # Parse operands
+            parts = instr.op_str.split(',')
+            if len(parts) == 2:
+                dest = parts[0].strip().lower()
+                src = parts[1].strip().lower()
+                
+                # If source is tainted, destination becomes tainted
+                if any(t in src for t in current_taint):
+                    current_taint.add(dest)
+                # If destination is written with clean value, remove taint
+                elif dest in current_taint and not any(t in src for t in current_taint):
+                    # Only remove if source is clearly a constant
+                    if src.startswith('0x') or src.isdigit():
+                        current_taint.discard(dest)
+        
+        # Check for xor reg, reg (clears register)
+        if mnemonic == 'xor':
+            parts = instr.op_str.split(',')
+            if len(parts) == 2 and parts[0].strip() == parts[1].strip():
+                current_taint.discard(parts[0].strip().lower())
+        
+        tainted_regs[addr] = current_taint.copy()
+        
+        # Check if tainted data reaches a sink
+        for sink in taint_sinks:
+            if sink.address == addr:
+                # Check calling convention - first arg in rdi/rcx, second in rsi/rdx
+                arg_regs = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9'] if '64' in architecture else ['eax', 'ecx', 'edx']
+                
+                if any(reg in current_taint for reg in arg_regs):
+                    # Find which source this came from
+                    for source in taint_sources:
+                        if source.address < sink.address:
+                            # Build path
+                            path_addrs = [a for a in sorted(instructions_map.keys()) 
+                                         if source.address <= a <= sink.address]
+                            path_instrs = [f"{instructions_map[a].mnemonic} {instructions_map[a].op_str}" 
+                                          for a in path_addrs[:20]]
+                            
+                            data_flow_paths.append(DataFlowPath(
+                                source=source,
+                                sink=sink,
+                                path=path_addrs,
+                                instructions=path_instrs,
+                                is_exploitable=True,
+                                confidence=0.7,
+                                vulnerability_type=sink.sink_type,
+                                cwe_id=sink.cwe_id
+                            ))
+    
+    vulnerable_paths = [p for p in data_flow_paths if p.is_exploitable]
+    
+    return DataFlowAnalysisResult(
+        taint_sources=taint_sources,
+        taint_sinks=taint_sinks,
+        data_flow_paths=data_flow_paths,
+        vulnerable_paths=vulnerable_paths,
+        total_paths_analyzed=len(data_flow_paths),
+        analysis_coverage=min(100.0, len(instructions_map) / 10)  # Rough estimate
+    )
+
+
+# ============================================================================
+# Type Recovery
+# ============================================================================
+
+# Common type signatures based on instruction patterns
+TYPE_PATTERNS = {
+    # Integer operations
+    "add|sub|imul|idiv|inc|dec": "int",
+    # Floating point
+    "movss|movsd|addss|subss|mulss|divss|cvt": "float",
+    # String operations
+    "rep movs|rep stos|scas|cmps": "char*",
+    # Memory allocation patterns
+    "call.*malloc|call.*calloc|call.*realloc": "void*",
+}
+
+
+def recover_types(instructions_map: Dict[int, DisassemblyInstruction],
+                  cfg: Optional[ControlFlowGraph],
+                  architecture: str) -> TypeRecoveryResult:
+    """
+    Recover type information from disassembled code.
+    
+    Uses heuristics based on:
+    1. Instruction patterns (float ops = float type)
+    2. Stack frame layout
+    3. Calling convention
+    4. Memory access patterns
+    """
+    functions = []
+    structs = []
+    global_vars = []
+    
+    if not instructions_map:
+        return TypeRecoveryResult(functions=[], structs=[], global_vars=[], vtables=[])
+    
+    # Analyze stack frame
+    stack_accesses: Dict[int, List[Tuple[int, str, int]]] = {}  # offset -> [(addr, access_type, size)]
+    current_function_start = min(instructions_map.keys())
+    
+    is_64bit = "64" in architecture
+    ptr_size = 8 if is_64bit else 4
+    
+    for addr, instr in sorted(instructions_map.items()):
+        # Look for stack accesses [rbp-X] or [rsp+X]
+        bp_match = re.search(r'\[(r?[be]bp)\s*([+-])\s*(0x[0-9a-fA-F]+|\d+)\]', instr.op_str)
+        sp_match = re.search(r'\[(r?[es]sp)\s*\+\s*(0x[0-9a-fA-F]+|\d+)\]', instr.op_str)
+        
+        offset = None
+        if bp_match:
+            sign = 1 if bp_match.group(2) == '+' else -1
+            offset = sign * int(bp_match.group(3), 0)
+        elif sp_match:
+            offset = int(sp_match.group(2), 0)
+        
+        if offset is not None:
+            access_type = "write" if instr.op_str.startswith('[') or ',' in instr.op_str and '[' in instr.op_str.split(',')[0] else "read"
+            
+            # Infer size from instruction
+            if 'qword' in instr.op_str or instr.mnemonic in ('movq', 'pushq', 'popq'):
+                size = 8
+            elif 'dword' in instr.op_str or instr.mnemonic.endswith('d'):
+                size = 4
+            elif 'word' in instr.op_str or instr.mnemonic.endswith('w'):
+                size = 2
+            elif 'byte' in instr.op_str or instr.mnemonic.endswith('b'):
+                size = 1
+            else:
+                size = ptr_size
+            
+            if offset not in stack_accesses:
+                stack_accesses[offset] = []
+            stack_accesses[offset].append((addr, access_type, size))
+    
+    # Build local variables from stack accesses
+    local_vars = []
+    for offset, accesses in sorted(stack_accesses.items()):
+        if offset < 0:  # Local variables are at negative offsets from RBP
+            sizes = [a[2] for a in accesses]
+            most_common_size = max(set(sizes), key=sizes.count)
+            
+            # Infer type from size
+            if most_common_size == 1:
+                inferred_type = "char"
+            elif most_common_size == 2:
+                inferred_type = "short"
+            elif most_common_size == 4:
+                inferred_type = "int"
+            elif most_common_size == 8:
+                inferred_type = "long/ptr"
+            else:
+                inferred_type = f"byte[{most_common_size}]"
+            
+            local_vars.append(RecoveredLocalVar(
+                stack_offset=offset,
+                size=most_common_size,
+                inferred_type=inferred_type,
+                scope_start=min(a[0] for a in accesses),
+                scope_end=max(a[0] for a in accesses)
+            ))
+    
+    # Detect function arguments based on calling convention
+    args = []
+    if is_64bit:
+        # System V AMD64: rdi, rsi, rdx, rcx, r8, r9
+        # Windows x64: rcx, rdx, r8, r9
+        arg_regs = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+        for idx, reg in enumerate(arg_regs):
+            # Check if register is used early in function
+            for addr, instr in list(sorted(instructions_map.items()))[:20]:
+                if reg in instr.op_str.lower() and reg not in instr.mnemonic.lower():
+                    args.append(RecoveredArgument(
+                        index=idx,
+                        register_or_stack=reg,
+                        inferred_type="unknown",
+                        is_pointer=False
+                    ))
+                    break
+    else:
+        # x86 cdecl: arguments on stack
+        for offset, accesses in stack_accesses.items():
+            if offset > 0:  # Arguments at positive offsets from EBP
+                sizes = [a[2] for a in accesses]
+                most_common_size = max(set(sizes), key=sizes.count) if sizes else 4
+                args.append(RecoveredArgument(
+                    index=len(args),
+                    register_or_stack=f"[ebp+{offset}]",
+                    inferred_type="int" if most_common_size == 4 else f"byte[{most_common_size}]",
+                    is_pointer=False
+                ))
+    
+    # Create recovered function signature
+    if instructions_map:
+        func_start = min(instructions_map.keys())
+        func_end = max(instructions_map.keys())
+        
+        functions.append(RecoveredFunctionSignature(
+            address=func_start,
+            name=f"sub_{func_start:x}",
+            return_type="int",  # Default assumption
+            arguments=args[:6],  # Limit to reasonable number
+            local_vars=local_vars,
+            calling_convention="System V AMD64" if is_64bit else "cdecl",
+            confidence=0.5
+        ))
+    
+    # Detect potential struct patterns (repeated access at fixed offsets)
+    struct_patterns: Dict[int, List[int]] = {}  # base_reg_addr -> [offsets]
+    
+    for addr, instr in instructions_map.items():
+        # Look for [reg+offset] patterns that suggest struct access
+        struct_match = re.search(r'\[(r[a-z0-9]+)\s*\+\s*(0x[0-9a-fA-F]+|\d+)\]', instr.op_str)
+        if struct_match:
+            offset = int(struct_match.group(2), 0)
+            if addr not in struct_patterns:
+                struct_patterns[addr] = []
+            struct_patterns[addr].append(offset)
+    
+    # Group offsets to find struct layouts
+    offset_groups: Dict[frozenset, int] = {}
+    for addr, offsets in struct_patterns.items():
+        key = frozenset(offsets)
+        if len(key) >= 2:  # At least 2 field accesses
+            offset_groups[key] = offset_groups.get(key, 0) + 1
+    
+    # Create struct definitions for common patterns
+    for offsets, count in sorted(offset_groups.items(), key=lambda x: -x[1])[:5]:
+        if count >= 2:  # Pattern appears multiple times
+            fields = []
+            sorted_offsets = sorted(offsets)
+            for i, off in enumerate(sorted_offsets):
+                next_off = sorted_offsets[i + 1] if i + 1 < len(sorted_offsets) else off + ptr_size
+                size = next_off - off
+                fields.append(RecoveredField(
+                    offset=off,
+                    size=min(size, 64),
+                    inferred_type="int" if size == 4 else "long/ptr" if size == 8 else f"byte[{size}]",
+                    access_pattern="read_write"
+                ))
+            
+            structs.append(RecoveredStruct(
+                address=0,
+                total_size=max(offsets) + ptr_size if offsets else 0,
+                fields=fields,
+                inferred_name=f"struct_{len(structs)}",
+                confidence=min(1.0, count / 10),
+                usage_count=count
+            ))
+    
+    return TypeRecoveryResult(
+        functions=functions,
+        structs=structs,
+        global_vars=global_vars,
+        vtables=[],
+        total_types_recovered=len(functions) + len(structs)
+    )
+
+
+# ============================================================================
+# Unicorn-based CPU Emulation
+# ============================================================================
+
+class BinaryEmulator:
+    """
+    Unicorn-based CPU emulator for analyzing code behavior.
+    
+    Use cases:
+    - Shellcode analysis
+    - String deobfuscation (run decryption loops)
+    - Understanding self-modifying code
+    - Tracing execution paths
+    """
+    
+    def __init__(self, architecture: str, data: bytes, base_address: int = 0x400000):
+        self.architecture = architecture
+        self.data = data
+        self.base_address = base_address
+        self.uc = None
+        self.trace: List[EmulationState] = []
+        self.memory_accesses: List[EmulationMemoryAccess] = []
+        self.decoded_strings: List[DecodedString] = []
+        self.instruction_count = 0
+        self.max_instructions = 100000  # Prevent infinite loops
+        
+        # Memory regions
+        self.code_base = base_address
+        self.code_size = len(data)
+        self.stack_base = 0x7fff0000
+        self.stack_size = 0x10000
+        self.heap_base = 0x10000000
+        self.heap_size = 0x100000
+        
+        self._setup_emulator()
+    
+    def _setup_emulator(self):
+        """Initialize Unicorn emulator with appropriate architecture."""
+        if not UNICORN_AVAILABLE:
+            logger.warning("Unicorn not available - emulation disabled")
+            return
+        
+        try:
+            if 'x86_64' in self.architecture or 'AMD64' in self.architecture:
+                self.uc = Uc(UC_ARCH_X86, UC_MODE_64)
+                self.is_64bit = True
+            elif 'x86' in self.architecture or 'i386' in self.architecture:
+                self.uc = Uc(UC_ARCH_X86, UC_MODE_32)
+                self.is_64bit = False
+            elif 'ARM64' in self.architecture or 'AArch64' in self.architecture:
+                self.uc = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
+                self.is_64bit = True
+            elif 'ARM' in self.architecture:
+                self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
+                self.is_64bit = False
+            else:
+                logger.warning(f"Unsupported architecture for emulation: {self.architecture}")
+                return
+            
+            # Map memory regions
+            # Code section
+            code_aligned_size = ((self.code_size + 0xfff) // 0x1000) * 0x1000
+            self.uc.mem_map(self.code_base, max(code_aligned_size, 0x1000))
+            self.uc.mem_write(self.code_base, self.data)
+            
+            # Stack
+            self.uc.mem_map(self.stack_base - self.stack_size, self.stack_size)
+            
+            # Heap (for allocated memory during emulation)
+            self.uc.mem_map(self.heap_base, self.heap_size)
+            
+            # Initialize stack pointer
+            sp = self.stack_base - 0x1000
+            if self.is_64bit:
+                self.uc.reg_write(UC_X86_REG_RSP, sp)
+                self.uc.reg_write(UC_X86_REG_RBP, sp)
+            else:
+                self.uc.reg_write(UC_X86_REG_ESP, sp)
+                self.uc.reg_write(UC_X86_REG_EBP, sp)
+            
+            # Add hooks
+            self._add_hooks()
+            
+        except Exception as e:
+            logger.error(f"Failed to setup emulator: {e}")
+            self.uc = None
+    
+    def _add_hooks(self):
+        """Add emulation hooks for tracing."""
+        if not self.uc:
+            return
+        
+        # Hook all code execution
+        def hook_code(uc, address, size, user_data):
+            self.instruction_count += 1
+            if self.instruction_count > self.max_instructions:
+                uc.emu_stop()
+                return
+            
+            # Capture state periodically
+            if self.instruction_count % 100 == 0:
+                state = self._capture_state(address)
+                self.trace.append(state)
+        
+        self.uc.hook_add(1, hook_code)  # UC_HOOK_CODE = 1
+        
+        # Hook memory access
+        def hook_mem_access(uc, access, address, size, value, user_data):
+            access_type = "write" if access == 17 else "read"  # UC_MEM_WRITE = 17
+            self.memory_accesses.append(EmulationMemoryAccess(
+                address=address,
+                access_type=access_type,
+                size=size,
+                value=value if access == 17 else None,
+                instruction_address=0
+            ))
+        
+        self.uc.hook_add(18, hook_mem_access)  # UC_HOOK_MEM_WRITE = 18
+        self.uc.hook_add(16, hook_mem_access)  # UC_HOOK_MEM_READ = 16
+    
+    def _capture_state(self, address: int) -> EmulationState:
+        """Capture current CPU state."""
+        regs = {}
+        if self.is_64bit:
+            regs = {
+                "rax": self.uc.reg_read(UC_X86_REG_RAX),
+                "rbx": self.uc.reg_read(UC_X86_REG_RBX),
+                "rcx": self.uc.reg_read(UC_X86_REG_RCX),
+                "rdx": self.uc.reg_read(UC_X86_REG_RDX),
+                "rsi": self.uc.reg_read(UC_X86_REG_RSI),
+                "rdi": self.uc.reg_read(UC_X86_REG_RDI),
+                "rsp": self.uc.reg_read(UC_X86_REG_RSP),
+                "rbp": self.uc.reg_read(UC_X86_REG_RBP),
+                "rip": self.uc.reg_read(UC_X86_REG_RIP),
+                "r8": self.uc.reg_read(UC_X86_REG_R8),
+                "r9": self.uc.reg_read(UC_X86_REG_R9),
+            }
+        else:
+            regs = {
+                "eax": self.uc.reg_read(UC_X86_REG_EAX),
+                "ebx": self.uc.reg_read(UC_X86_REG_EBX),
+                "ecx": self.uc.reg_read(UC_X86_REG_ECX),
+                "edx": self.uc.reg_read(UC_X86_REG_EDX),
+                "esi": self.uc.reg_read(UC_X86_REG_ESI),
+                "edi": self.uc.reg_read(UC_X86_REG_EDI),
+                "esp": self.uc.reg_read(UC_X86_REG_ESP),
+                "ebp": self.uc.reg_read(UC_X86_REG_EBP),
+                "eip": self.uc.reg_read(UC_X86_REG_EIP),
+            }
+        
+        eflags = self.uc.reg_read(UC_X86_REG_EFLAGS)
+        flags = {
+            "CF": bool(eflags & 0x1),
+            "ZF": bool(eflags & 0x40),
+            "SF": bool(eflags & 0x80),
+            "OF": bool(eflags & 0x800),
+        }
+        
+        return EmulationState(
+            address=address,
+            registers=regs,
+            flags=flags,
+            stack_top=[],
+            instruction_count=self.instruction_count
+        )
+    
+    def emulate(self, start_address: int, end_address: int = 0, 
+                timeout_ms: int = 5000) -> EmulationTrace:
+        """
+        Emulate code from start_address.
+        
+        Args:
+            start_address: Address to start emulation
+            end_address: Address to stop (0 = run until stop/error)
+            timeout_ms: Maximum emulation time in milliseconds
+        
+        Returns:
+            EmulationTrace with results
+        """
+        if not self.uc:
+            return EmulationTrace(
+                start_address=start_address,
+                end_address=0,
+                instructions_executed=0,
+                states=[],
+                memory_accesses=[],
+                syscalls=[],
+                api_calls=[],
+                decoded_strings=[],
+                loops_detected=[],
+                suspicious_behaviors=[],
+                error="Emulator not available"
+            )
+        
+        self.instruction_count = 0
+        self.trace = []
+        self.memory_accesses = []
+        
+        # Capture initial state
+        initial_state = self._capture_state(start_address)
+        self.trace.append(initial_state)
+        
+        error = None
+        end_addr = 0
+        
+        try:
+            if end_address:
+                self.uc.emu_start(start_address, end_address, timeout=timeout_ms * 1000)
+            else:
+                # Run until we hit unmapped memory, invalid instruction, or timeout
+                self.uc.emu_start(start_address, self.code_base + self.code_size, 
+                                  timeout=timeout_ms * 1000, count=self.max_instructions)
+            
+            end_addr = self.uc.reg_read(UC_X86_REG_RIP if self.is_64bit else UC_X86_REG_EIP)
+            
+        except Exception as e:
+            error = str(e)
+            end_addr = start_address
+        
+        # Capture final state
+        if self.uc:
+            final_state = self._capture_state(end_addr)
+            self.trace.append(final_state)
+        
+        # Analyze for decoded strings in memory
+        self._scan_for_strings()
+        
+        # Detect loops
+        loops = self._detect_loops()
+        
+        # Check for suspicious behaviors
+        suspicious = self._analyze_suspicious_behavior()
+        
+        return EmulationTrace(
+            start_address=start_address,
+            end_address=end_addr,
+            instructions_executed=self.instruction_count,
+            states=self.trace,
+            memory_accesses=self.memory_accesses[:1000],  # Limit
+            syscalls=[],
+            api_calls=[],
+            decoded_strings=self.decoded_strings,
+            loops_detected=loops,
+            suspicious_behaviors=suspicious,
+            error=error
+        )
+    
+    def _scan_for_strings(self):
+        """Scan memory for strings that appeared during emulation."""
+        if not self.uc:
+            return
+        
+        try:
+            # Read heap memory looking for strings
+            heap_data = self.uc.mem_read(self.heap_base, min(self.heap_size, 0x10000))
+            
+            # Find ASCII strings
+            ascii_pattern = re.compile(rb'[\x20-\x7e]{4,}')
+            for match in ascii_pattern.finditer(heap_data):
+                try:
+                    decoded = match.group().decode('ascii')
+                    self.decoded_strings.append(DecodedString(
+                        address=self.heap_base + match.start(),
+                        decoded_value=decoded,
+                        encoding="ascii",
+                        decoding_method="emulation",
+                        original_bytes=match.group()
+                    ))
+                except:
+                    pass
+        except:
+            pass
+    
+    def _detect_loops(self) -> List[Dict[str, Any]]:
+        """Detect execution loops from trace."""
+        loops = []
+        address_counts: Dict[int, int] = {}
+        
+        for state in self.trace:
+            addr = state.address
+            address_counts[addr] = address_counts.get(addr, 0) + 1
+        
+        for addr, count in address_counts.items():
+            if count >= 3:  # Address visited 3+ times = likely a loop
+                loops.append({
+                    "address": addr,
+                    "iterations": count,
+                    "type": "potential_loop"
+                })
+        
+        return loops[:20]  # Limit to top 20
+    
+    def _analyze_suspicious_behavior(self) -> List[str]:
+        """Analyze emulation results for suspicious patterns."""
+        suspicious = []
+        
+        # Check for self-modifying code (writes to code section)
+        for access in self.memory_accesses:
+            if access.access_type == "write":
+                if self.code_base <= access.address < self.code_base + self.code_size:
+                    suspicious.append(f"Self-modifying code detected at 0x{access.address:x}")
+        
+        # Check for high instruction count (potential unpacking loop)
+        if self.instruction_count > 50000:
+            suspicious.append(f"High instruction count ({self.instruction_count}) - possible unpacking/decryption loop")
+        
+        # Check for decoded strings that look like shellcode artifacts
+        shellcode_indicators = ['cmd', 'powershell', '/bin/sh', 'calc.exe', 'WinExec', 'CreateProcess']
+        for ds in self.decoded_strings:
+            for indicator in shellcode_indicators:
+                if indicator.lower() in ds.decoded_value.lower():
+                    suspicious.append(f"Suspicious string decoded: '{ds.decoded_value[:50]}'")
+                    break
+        
+        return suspicious[:20]
+    
+    def emulate_function(self, func_address: int, 
+                         args: List[int] = None) -> EmulationTrace:
+        """
+        Emulate a specific function with arguments.
+        
+        Args:
+            func_address: Start address of function
+            args: Function arguments (placed in appropriate registers/stack)
+        
+        Returns:
+            EmulationTrace with results
+        """
+        if not self.uc:
+            return EmulationTrace(
+                start_address=func_address, end_address=0, instructions_executed=0,
+                states=[], memory_accesses=[], syscalls=[], api_calls=[],
+                decoded_strings=[], loops_detected=[], suspicious_behaviors=[],
+                error="Emulator not available"
+            )
+        
+        args = args or []
+        
+        # Set up arguments based on calling convention
+        if self.is_64bit:
+            # System V AMD64 ABI
+            arg_regs = [UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X86_REG_RDX, 
+                       UC_X86_REG_RCX, UC_X86_REG_R8, UC_X86_REG_R9]
+            for i, arg in enumerate(args[:6]):
+                self.uc.reg_write(arg_regs[i], arg)
+        else:
+            # cdecl - push args on stack (reverse order)
+            esp = self.uc.reg_read(UC_X86_REG_ESP)
+            for arg in reversed(args):
+                esp -= 4
+                self.uc.mem_write(esp, arg.to_bytes(4, 'little'))
+            self.uc.reg_write(UC_X86_REG_ESP, esp)
+        
+        return self.emulate(func_address, timeout_ms=3000)
+
+
+def emulate_binary(file_path: Path, metadata: BinaryMetadata,
+                   target_addresses: List[int] = None) -> EmulationResult:
+    """
+    Perform emulation analysis of a binary.
+    
+    Args:
+        file_path: Path to binary file
+        metadata: Binary metadata
+        target_addresses: Specific addresses to emulate (default: entry point)
+    
+    Returns:
+        EmulationResult with all traces and findings
+    """
+    if not UNICORN_AVAILABLE:
+        return EmulationResult(
+            traces=[],
+            decoded_strings=[],
+            api_calls=[],
+            syscalls=[],
+            self_modifying_code=[],
+            anti_analysis_detected=["Unicorn not available"]
+        )
+    
+    try:
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        
+        architecture = metadata.architecture
+        
+        # Determine base address
+        base_address = metadata.entry_point or 0x400000
+        if base_address > 0x10000:
+            base_address = (base_address // 0x1000) * 0x1000  # Page align
+        else:
+            base_address = 0x400000
+        
+        # Create emulator
+        emulator = BinaryEmulator(architecture, data, base_address)
+        
+        if not emulator.uc:
+            return EmulationResult(
+                traces=[],
+                decoded_strings=[],
+                api_calls=[],
+                syscalls=[],
+                self_modifying_code=[],
+                anti_analysis_detected=[f"Emulation not supported for {architecture}"]
+            )
+        
+        traces = []
+        all_strings = []
+        all_suspicious = []
+        
+        # Determine addresses to emulate
+        addresses = target_addresses or []
+        if not addresses and metadata.entry_point:
+            addresses.append(metadata.entry_point)
+        
+        # Also try to emulate suspicious functions if we have them
+        if not addresses:
+            # Just emulate from start of data
+            addresses.append(base_address)
+        
+        for addr in addresses[:5]:  # Limit to 5 traces
+            trace = emulator.emulate(addr, timeout_ms=5000)
+            traces.append(trace)
+            all_strings.extend(trace.decoded_strings)
+            all_suspicious.extend(trace.suspicious_behaviors)
+        
+        # Detect self-modifying code across all traces
+        smc = []
+        for trace in traces:
+            for access in trace.memory_accesses:
+                if access.access_type == "write":
+                    if base_address <= access.address < base_address + len(data):
+                        smc.append({
+                            "address": access.address,
+                            "size": access.size,
+                            "trace_start": trace.start_address
+                        })
+        
+        total_instructions = sum(t.instructions_executed for t in traces)
+        
+        return EmulationResult(
+            traces=traces,
+            decoded_strings=all_strings,
+            api_calls=[],
+            syscalls=[],
+            self_modifying_code=smc[:50],
+            shellcode_detected=len(all_strings) > 0 and any('cmd' in s.decoded_value.lower() or 'shell' in s.decoded_value.lower() for s in all_strings),
+            anti_analysis_detected=list(set(all_suspicious)),
+            total_instructions_emulated=total_instructions,
+            emulation_coverage=min(100.0, total_instructions / 100)
+        )
+        
+    except Exception as e:
+        logger.error(f"Emulation failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return EmulationResult(
+            traces=[],
+            decoded_strings=[],
+            api_calls=[],
+            syscalls=[],
+            self_modifying_code=[],
+            anti_analysis_detected=[f"Emulation error: {str(e)}"]
+        )
+
+
+# ============================================================================
+# Symbolic Execution (angr-based)
+# ============================================================================
+
+def perform_symbolic_execution(file_path: Path, 
+                               target_addresses: List[int] = None,
+                               max_time_seconds: int = 120,
+                               max_paths: int = 1000) -> SymbolicExecutionResult:
+    """
+    Perform symbolic execution to discover inputs that trigger vulnerabilities.
+    
+    Uses angr for path exploration and constraint solving to:
+    - Find inputs that reach dangerous functions
+    - Discover crash-inducing inputs
+    - Identify buffer overflow conditions
+    
+    Args:
+        file_path: Path to the binary
+        target_addresses: Specific addresses to try to reach
+        max_time_seconds: Maximum execution time
+        max_paths: Maximum number of paths to explore
+    
+    Returns:
+        SymbolicExecutionResult with discovered paths and vulnerabilities
+    """
+    if not ANGR_AVAILABLE:
+        return SymbolicExecutionResult(
+            paths_explored=0, paths_deadended=0, paths_errored=0,
+            max_depth_reached=0, symbolic_inputs=[], crash_inputs=[],
+            target_reaches=[], interesting_paths=[], vulnerabilities_found=[],
+            execution_time_seconds=0, memory_used_mb=0,
+            error="angr not installed"
+        )
+    
+    import time
+    import psutil
+    start_time = time.time()
+    start_memory = psutil.Process().memory_info().rss / (1024 * 1024)
+    
+    try:
+        # Load the binary
+        proj = angr.Project(str(file_path), auto_load_libs=False)
+        
+        # Create initial state with symbolic stdin
+        state = proj.factory.entry_state(
+            stdin=angr.SimFile('/dev/stdin', content=claripy.BVS('stdin', 256 * 8)),
+            add_options={
+                angr.options.ZERO_FILL_UNCONSTRAINED_MEMORY,
+                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS,
+            }
+        )
+        
+        # Create simulation manager
+        simgr = proj.factory.simulation_manager(state)
+        
+        # Define dangerous functions to target
+        dangerous_functions = [
+            'system', 'execve', 'execl', 'popen', 'strcpy', 'strcat', 
+            'sprintf', 'gets', 'scanf', 'memcpy', 'memmove'
+        ]
+        
+        # Find addresses of dangerous functions
+        target_addrs = target_addresses or []
+        dangerous_addrs = {}
+        
+        for func_name in dangerous_functions:
+            try:
+                sym = proj.loader.find_symbol(func_name)
+                if sym:
+                    target_addrs.append(sym.rebased_addr)
+                    dangerous_addrs[sym.rebased_addr] = func_name
+            except:
+                pass
+        
+        # Explore with timeout
+        crash_inputs = []
+        target_reaches = []
+        interesting_paths = []
+        vulnerabilities = []
+        
+        # Custom exploration technique with limits
+        paths_explored = 0
+        max_depth = 0
+        
+        while simgr.active and paths_explored < max_paths:
+            if time.time() - start_time > max_time_seconds:
+                break
+            
+            simgr.step()
+            paths_explored += 1
+            
+            # Track depth
+            for state in simgr.active:
+                depth = len(state.history.bbl_addrs.hardcopy)
+                max_depth = max(max_depth, depth)
+            
+            # Check if we reached any targets
+            for state in list(simgr.active):
+                current_addr = state.addr
+                if current_addr in dangerous_addrs:
+                    func_name = dangerous_addrs[current_addr]
+                    
+                    # Try to solve for concrete input
+                    try:
+                        stdin_content = state.posix.stdin.content[0][0]
+                        concrete = state.solver.eval(stdin_content, cast_to=bytes)
+                        
+                        target_reaches.append(TargetReach(
+                            target_address=current_addr,
+                            target_name=func_name,
+                            reached=True,
+                            input_to_reach=concrete[:256],
+                            path_length=len(state.history.bbl_addrs.hardcopy),
+                            constraints_solved=len(state.solver.constraints)
+                        ))
+                        
+                        # Check for potential vulnerabilities
+                        if func_name in ('strcpy', 'strcat', 'gets', 'sprintf'):
+                            vulnerabilities.append({
+                                "type": "buffer_overflow",
+                                "function": func_name,
+                                "address": current_addr,
+                                "cwe": "CWE-120",
+                                "input_sample": concrete[:64].hex(),
+                                "description": f"Input reaches {func_name} which can cause buffer overflow"
+                            })
+                        elif func_name in ('system', 'execve', 'popen'):
+                            vulnerabilities.append({
+                                "type": "command_injection", 
+                                "function": func_name,
+                                "address": current_addr,
+                                "cwe": "CWE-78",
+                                "input_sample": concrete[:64].hex(),
+                                "description": f"Input reaches {func_name} - potential command injection"
+                            })
+                    except Exception as e:
+                        logger.debug(f"Could not solve for input at {func_name}: {e}")
+            
+            # Check for crashed/errored states
+            if hasattr(simgr, 'errored'):
+                for errored in simgr.errored:
+                    state = errored.state
+                    try:
+                        stdin_content = state.posix.stdin.content[0][0]
+                        concrete = state.solver.eval(stdin_content, cast_to=bytes)
+                        
+                        crash_inputs.append(CrashInput(
+                            input_type='stdin',
+                            input_value=concrete[:256],
+                            crash_address=state.addr,
+                            crash_type=str(errored.error)[:50],
+                            vulnerability_type='crash',
+                            exploitability='unknown'
+                        ))
+                    except:
+                        pass
+        
+        # Build interesting paths from deadended states
+        for state in simgr.deadended[:20]:
+            path_addrs = list(state.history.bbl_addrs.hardcopy)[:100]
+            branches = [(addr, True) for addr in path_addrs[:20]]  # Simplified
+            
+            interesting_paths.append(SymbolicPath(
+                path_id=len(interesting_paths),
+                depth=len(path_addrs),
+                constraints_count=len(state.solver.constraints),
+                is_feasible=True,
+                termination_reason='deadended',
+                addresses_visited=path_addrs,
+                branches_taken=branches
+            ))
+        
+        # Build symbolic inputs summary
+        symbolic_inputs = [
+            SymbolicInput(
+                name='stdin',
+                type='stdin',
+                size_bits=256 * 8,
+                constraints=[str(c)[:100] for c in state.solver.constraints[:5]] if simgr.deadended else [],
+                concrete_examples=[tr.input_to_reach.hex()[:64] for tr in target_reaches[:3] if tr.input_to_reach]
+            )
+        ]
+        
+        end_time = time.time()
+        end_memory = psutil.Process().memory_info().rss / (1024 * 1024)
+        
+        return SymbolicExecutionResult(
+            paths_explored=paths_explored,
+            paths_deadended=len(simgr.deadended) if hasattr(simgr, 'deadended') else 0,
+            paths_errored=len(simgr.errored) if hasattr(simgr, 'errored') else 0,
+            max_depth_reached=max_depth,
+            symbolic_inputs=symbolic_inputs,
+            crash_inputs=crash_inputs[:20],
+            target_reaches=target_reaches[:20],
+            interesting_paths=interesting_paths[:20],
+            vulnerabilities_found=vulnerabilities,
+            execution_time_seconds=round(end_time - start_time, 2),
+            memory_used_mb=round(end_memory - start_memory, 2),
+            timeout_reached=time.time() - start_time >= max_time_seconds
+        )
+        
+    except Exception as e:
+        logger.error(f"Symbolic execution failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return SymbolicExecutionResult(
+            paths_explored=0, paths_deadended=0, paths_errored=0,
+            max_depth_reached=0, symbolic_inputs=[], crash_inputs=[],
+            target_reaches=[], interesting_paths=[], vulnerabilities_found=[],
+            execution_time_seconds=time.time() - start_time, memory_used_mb=0,
+            error=str(e)
+        )
+
+
+# ============================================================================
+# Binary Diffing
+# ============================================================================
+
+def diff_binaries(file_path_a: Path, file_path_b: Path,
+                  detailed: bool = True) -> BinaryDiffResult:
+    """
+    Compare two binaries to identify changes (patches, modifications).
+    
+    Useful for:
+    - Patch analysis (what changed in a security update?)
+    - Malware variant comparison
+    - Backdoor detection
+    
+    Args:
+        file_path_a: Path to first binary (original/older)
+        file_path_b: Path to second binary (patched/newer)
+        detailed: Include detailed block-level diffs
+    
+    Returns:
+        BinaryDiffResult with all differences
+    """
+    try:
+        with open(file_path_a, 'rb') as f:
+            data_a = f.read()
+        with open(file_path_b, 'rb') as f:
+            data_b = f.read()
+        
+        # Quick check: are they identical?
+        if data_a == data_b:
+            return BinaryDiffResult(
+                file_a=str(file_path_a),
+                file_b=str(file_path_b),
+                architecture_a="unknown",
+                architecture_b="unknown",
+                functions_identical=0,
+                functions_modified=0,
+                functions_added=0,
+                functions_removed=0,
+                overall_similarity=1.0,
+                function_diffs=[],
+                block_diffs=[],
+                string_diffs=[],
+                import_diffs=[],
+                security_relevant_changes=[],
+                patch_analysis="Files are identical",
+                is_same_binary=True
+            )
+        
+        # Parse both binaries
+        metadata_a = _parse_binary_metadata(data_a, file_path_a)
+        metadata_b = _parse_binary_metadata(data_b, file_path_b)
+        
+        arch_a = metadata_a.architecture if metadata_a else "unknown"
+        arch_b = metadata_b.architecture if metadata_b else "unknown"
+        
+        # Extract and compare functions using Capstone
+        functions_a = _extract_functions_for_diff(data_a, metadata_a)
+        functions_b = _extract_functions_for_diff(data_b, metadata_b)
+        
+        # Build name-based matching
+        funcs_by_name_a = {f['name']: f for f in functions_a}
+        funcs_by_name_b = {f['name']: f for f in functions_b}
+        
+        function_diffs = []
+        block_diffs = []
+        
+        identical = 0
+        modified = 0
+        added = 0
+        removed = 0
+        security_changes = []
+        
+        # Security-relevant function patterns
+        security_funcs = {'check', 'verify', 'auth', 'login', 'password', 'crypt', 
+                          'valid', 'secure', 'sign', 'hash', 'key', 'token', 'cert'}
+        
+        # Compare functions that exist in both
+        all_names = set(funcs_by_name_a.keys()) | set(funcs_by_name_b.keys())
+        
+        for name in all_names:
+            func_a = funcs_by_name_a.get(name)
+            func_b = funcs_by_name_b.get(name)
+            
+            is_security_relevant = any(s in name.lower() for s in security_funcs)
+            
+            if func_a and func_b:
+                # Function exists in both - compare
+                similarity = _compute_function_similarity(func_a, func_b)
+                
+                if similarity >= 0.99:
+                    identical += 1
+                    match_type = 'identical'
+                else:
+                    modified += 1
+                    match_type = 'modified'
+                    
+                    if is_security_relevant:
+                        security_changes.append({
+                            "type": "security_function_modified",
+                            "function": name,
+                            "similarity": similarity,
+                            "description": f"Security-related function '{name}' was modified"
+                        })
+                
+                function_diffs.append(FunctionDiff(
+                    address_a=func_a['address'],
+                    address_b=func_b['address'],
+                    name=name,
+                    match_type=match_type,
+                    similarity_score=similarity,
+                    size_a=func_a['size'],
+                    size_b=func_b['size'],
+                    instructions_changed=abs(func_a['instruction_count'] - func_b['instruction_count']),
+                    blocks_changed=0,
+                    calls_added=[],
+                    calls_removed=[],
+                    is_security_relevant=is_security_relevant
+                ))
+                
+            elif func_a and not func_b:
+                # Function removed
+                removed += 1
+                function_diffs.append(FunctionDiff(
+                    address_a=func_a['address'],
+                    address_b=None,
+                    name=name,
+                    match_type='removed',
+                    similarity_score=0.0,
+                    size_a=func_a['size'],
+                    size_b=None,
+                    instructions_changed=func_a['instruction_count'],
+                    blocks_changed=0,
+                    calls_added=[],
+                    calls_removed=[],
+                    is_security_relevant=is_security_relevant
+                ))
+                
+                if is_security_relevant:
+                    security_changes.append({
+                        "type": "security_function_removed",
+                        "function": name,
+                        "description": f"Security function '{name}' was removed - potential backdoor?"
+                    })
+                    
+            else:
+                # Function added
+                added += 1
+                function_diffs.append(FunctionDiff(
+                    address_a=0,
+                    address_b=func_b['address'],
+                    name=name,
+                    match_type='added',
+                    similarity_score=0.0,
+                    size_a=0,
+                    size_b=func_b['size'],
+                    instructions_changed=func_b['instruction_count'],
+                    blocks_changed=0,
+                    calls_added=[],
+                    calls_removed=[],
+                    is_security_relevant=is_security_relevant
+                ))
+                
+                if is_security_relevant:
+                    security_changes.append({
+                        "type": "security_function_added",
+                        "function": name,
+                        "description": f"New security function '{name}' added"
+                    })
+        
+        # Compare strings
+        strings_a = set(s.value for s in extract_strings(data_a, min_length=6, max_strings=5000))
+        strings_b = set(s.value for s in extract_strings(data_b, min_length=6, max_strings=5000))
+        
+        string_diffs = []
+        security_string_patterns = ['http', 'password', 'key', 'token', 'secret', 'admin', 
+                                    'root', 'shell', '/bin/', 'cmd.exe', 'powershell']
+        
+        for s in strings_a - strings_b:
+            is_security = any(p in s.lower() for p in security_string_patterns)
+            string_diffs.append(StringDiff(
+                value=s[:200],
+                status='removed',
+                address_a=0,
+                address_b=None,
+                is_security_relevant=is_security
+            ))
+            if is_security:
+                security_changes.append({
+                    "type": "security_string_removed",
+                    "value": s[:100],
+                    "description": "Security-relevant string was removed"
+                })
+        
+        for s in strings_b - strings_a:
+            is_security = any(p in s.lower() for p in security_string_patterns)
+            string_diffs.append(StringDiff(
+                value=s[:200],
+                status='added',
+                address_a=None,
+                address_b=0,
+                is_security_relevant=is_security
+            ))
+            if is_security:
+                security_changes.append({
+                    "type": "security_string_added",
+                    "value": s[:100],
+                    "description": "New security-relevant string added"
+                })
+        
+        # Compare imports
+        imports_a = {imp.name for imp in analyze_imports(data_a, metadata_a)}
+        imports_b = {imp.name for imp in analyze_imports(data_b, metadata_b)}
+        
+        import_diffs = []
+        dangerous_imports = {'system', 'execve', 'popen', 'eval', 'LoadLibrary', 
+                            'GetProcAddress', 'VirtualAlloc', 'CreateRemoteThread'}
+        
+        for imp in imports_a - imports_b:
+            is_security = imp.lower() in dangerous_imports
+            import_diffs.append(ImportDiff(name=imp, library='', status='removed', 
+                                           is_security_relevant=is_security))
+        
+        for imp in imports_b - imports_a:
+            is_security = imp.lower() in dangerous_imports
+            import_diffs.append(ImportDiff(name=imp, library='', status='added',
+                                           is_security_relevant=is_security))
+            if is_security:
+                security_changes.append({
+                    "type": "dangerous_import_added",
+                    "import": imp,
+                    "description": f"Potentially dangerous import '{imp}' was added"
+                })
+        
+        # Calculate overall similarity
+        total_funcs = max(len(functions_a), len(functions_b), 1)
+        overall_sim = identical / total_funcs if total_funcs > 0 else 0.0
+        
+        # Generate patch analysis summary
+        patch_summary = _generate_patch_summary(
+            identical, modified, added, removed,
+            string_diffs, import_diffs, security_changes
+        )
+        
+        return BinaryDiffResult(
+            file_a=str(file_path_a),
+            file_b=str(file_path_b),
+            architecture_a=arch_a,
+            architecture_b=arch_b,
+            functions_identical=identical,
+            functions_modified=modified,
+            functions_added=added,
+            functions_removed=removed,
+            overall_similarity=round(overall_sim, 4),
+            function_diffs=function_diffs[:100],
+            block_diffs=block_diffs[:50],
+            string_diffs=string_diffs[:100],
+            import_diffs=import_diffs[:50],
+            security_relevant_changes=security_changes[:30],
+            patch_analysis=patch_summary,
+            is_same_binary=False
+        )
+        
+    except Exception as e:
+        logger.error(f"Binary diffing failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return BinaryDiffResult(
+            file_a=str(file_path_a),
+            file_b=str(file_path_b),
+            architecture_a="unknown",
+            architecture_b="unknown",
+            functions_identical=0,
+            functions_modified=0,
+            functions_added=0,
+            functions_removed=0,
+            overall_similarity=0.0,
+            function_diffs=[],
+            block_diffs=[],
+            string_diffs=[],
+            import_diffs=[],
+            security_relevant_changes=[],
+            patch_analysis=None,
+            is_same_binary=False,
+            error=str(e)
+        )
+
+
+def _parse_binary_metadata(data: bytes, file_path: Path) -> Optional[BinaryMetadata]:
+    """Helper to parse binary metadata for diffing."""
+    if data[:2] == b'MZ':
+        return parse_pe_header(data)
+    elif data[:4] == b'\x7fELF':
+        return parse_elf_header(data)
+    return None
+
+
+def _extract_functions_for_diff(data: bytes, metadata: Optional[BinaryMetadata]) -> List[Dict]:
+    """Extract function info for diffing."""
+    functions = []
+    
+    if not CAPSTONE_AVAILABLE or not metadata:
+        return functions
+    
+    try:
+        architecture = metadata.architecture or 'x86_64'
+        
+        # Set up Capstone
+        if 'x86_64' in architecture or 'AMD64' in architecture:
+            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        elif 'x86' in architecture or 'i386' in architecture:
+            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+        else:
+            return functions
+        
+        md.detail = True
+        
+        # Simple function detection: look for function prologues
+        func_prologues = [
+            b'\x55\x48\x89\xe5',  # push rbp; mov rbp, rsp (x64)
+            b'\x55\x89\xe5',      # push ebp; mov ebp, esp (x86)
+        ]
+        
+        for prologue in func_prologues:
+            offset = 0
+            while True:
+                idx = data.find(prologue, offset)
+                if idx == -1:
+                    break
+                
+                # Disassemble to find function end
+                func_code = data[idx:idx+500]
+                instructions = list(md.disasm(func_code, idx))
+                
+                if instructions:
+                    # Find ret instruction
+                    size = 0
+                    instr_count = 0
+                    for instr in instructions:
+                        size += instr.size
+                        instr_count += 1
+                        if instr.mnemonic in ('ret', 'retn'):
+                            break
+                    
+                    functions.append({
+                        'name': f'sub_{idx:x}',
+                        'address': idx,
+                        'size': size,
+                        'instruction_count': instr_count,
+                        'bytes': data[idx:idx+size].hex()[:100]
+                    })
+                
+                offset = idx + 1
+                
+                if len(functions) >= 200:
+                    break
+            
+            if len(functions) >= 200:
+                break
+        
+    except Exception as e:
+        logger.debug(f"Function extraction failed: {e}")
+    
+    return functions
+
+
+def _compute_function_similarity(func_a: Dict, func_b: Dict) -> float:
+    """Compute similarity between two functions."""
+    # Simple similarity based on size and instruction count
+    size_sim = 1.0 - abs(func_a['size'] - func_b['size']) / max(func_a['size'], func_b['size'], 1)
+    instr_sim = 1.0 - abs(func_a['instruction_count'] - func_b['instruction_count']) / max(func_a['instruction_count'], func_b['instruction_count'], 1)
+    
+    # If we have byte sequences, compare them
+    bytes_sim = 0.5
+    if func_a.get('bytes') and func_b.get('bytes'):
+        # Simple LCS-style comparison
+        common = sum(1 for a, b in zip(func_a['bytes'], func_b['bytes']) if a == b)
+        bytes_sim = common / max(len(func_a['bytes']), len(func_b['bytes']), 1)
+    
+    return (size_sim + instr_sim + bytes_sim) / 3.0
+
+
+def _generate_patch_summary(identical: int, modified: int, added: int, removed: int,
+                           string_diffs: List, import_diffs: List, 
+                           security_changes: List) -> str:
+    """Generate a human-readable patch summary."""
+    lines = []
+    
+    total = identical + modified + added + removed
+    if total == 0:
+        return "Unable to analyze functions"
+    
+    lines.append(f"Function Changes: {modified} modified, {added} added, {removed} removed (of {total} total)")
+    
+    if string_diffs:
+        added_strings = len([s for s in string_diffs if s.status == 'added'])
+        removed_strings = len([s for s in string_diffs if s.status == 'removed'])
+        lines.append(f"String Changes: {added_strings} added, {removed_strings} removed")
+    
+    if import_diffs:
+        added_imports = len([i for i in import_diffs if i.status == 'added'])
+        removed_imports = len([i for i in import_diffs if i.status == 'removed'])
+        lines.append(f"Import Changes: {added_imports} added, {removed_imports} removed")
+    
+    if security_changes:
+        lines.append(f"⚠️ Security-Relevant Changes: {len(security_changes)}")
+        for change in security_changes[:5]:
+            lines.append(f"  - {change['type']}: {change.get('description', '')[:80]}")
+    
+    return "\n".join(lines)
+
+
+# ============================================================================
+# ROP Gadget Finder
+# ============================================================================
+
+def find_rop_gadgets(file_path: Path, 
+                     max_gadgets: int = 500,
+                     max_gadget_length: int = 6) -> ROPGadgetResult:
+    """
+    Find ROP gadgets in a binary for exploit development.
+    
+    ROP (Return-Oriented Programming) gadgets are small instruction sequences
+    ending in 'ret' that can be chained together to bypass NX protection.
+    
+    Args:
+        file_path: Path to the binary
+        max_gadgets: Maximum number of gadgets to return
+        max_gadget_length: Maximum instructions per gadget
+    
+    Returns:
+        ROPGadgetResult with all discovered gadgets
+    """
+    if ROPPER_AVAILABLE:
+        return _find_gadgets_with_ropper(file_path, max_gadgets, max_gadget_length)
+    else:
+        # Fall back to manual gadget finding with Capstone
+        return _find_gadgets_with_capstone(file_path, max_gadgets, max_gadget_length)
+
+
+def _find_gadgets_with_ropper(file_path: Path, max_gadgets: int, 
+                               max_gadget_length: int) -> ROPGadgetResult:
+    """Use ropper library for comprehensive gadget finding."""
+    try:
+        rs = RopperService()
+        rs.addFile(str(file_path))
+        rs.options.inst_count = max_gadget_length
+        
+        rs.loadGadgetsFor()
+        
+        gadgets = []
+        pop_gadgets = []
+        syscall_gadgets = []
+        write_gadgets = []
+        pivot_gadgets = []
+        gadgets_by_type = {}
+        
+        for gadget in rs.getFileFor(name=str(file_path)).gadgets:
+            if len(gadgets) >= max_gadgets:
+                break
+            
+            # Parse gadget
+            gadget_str = str(gadget)
+            instructions = gadget_str.split('; ')
+            address = gadget.address
+            
+            # Classify gadget
+            gadget_type = _classify_gadget(instructions)
+            gadgets_by_type[gadget_type] = gadgets_by_type.get(gadget_type, 0) + 1
+            
+            # Check which registers are controlled
+            regs_controlled = _get_controlled_registers(instructions)
+            
+            # Calculate quality score
+            quality = _calculate_gadget_quality(instructions)
+            
+            rop_gadget = ROPGadget(
+                address=address,
+                instructions=instructions,
+                gadget_string=gadget_str,
+                gadget_type=gadget_type,
+                size_bytes=len(instructions) * 3,  # Rough estimate
+                registers_controlled=regs_controlled,
+                is_useful=quality > 0.5,
+                quality_score=quality
+            )
+            
+            gadgets.append(rop_gadget)
+            
+            # Categorize
+            if gadget_type == 'pop':
+                pop_gadgets.append(rop_gadget)
+            elif gadget_type == 'syscall':
+                syscall_gadgets.append(rop_gadget)
+            elif gadget_type == 'write':
+                write_gadgets.append(rop_gadget)
+            elif gadget_type == 'pivot':
+                pivot_gadgets.append(rop_gadget)
+        
+        rs.removeFile(str(file_path))
+        
+        # Build chain templates
+        chain_templates = _build_chain_templates(
+            pop_gadgets, syscall_gadgets, write_gadgets, pivot_gadgets
+        )
+        
+        # Assess exploitability
+        has_syscall = len(syscall_gadgets) > 0
+        has_pop_rdi = any('rdi' in g.registers_controlled for g in pop_gadgets)
+        has_pop_rsi = any('rsi' in g.registers_controlled for g in pop_gadgets)
+        has_pop_rax = any('rax' in g.registers_controlled for g in pop_gadgets)
+        
+        execve_buildable = has_syscall and has_pop_rdi and has_pop_rsi and has_pop_rax
+        mprotect_buildable = has_syscall and has_pop_rdi and has_pop_rsi
+        
+        # Determine difficulty
+        if execve_buildable and len(gadgets) > 100:
+            difficulty = 'easy'
+        elif mprotect_buildable or len(gadgets) > 50:
+            difficulty = 'medium'
+        elif len(gadgets) > 20:
+            difficulty = 'hard'
+        else:
+            difficulty = 'very_hard'
+        
+        useful_gadgets = sorted([g for g in gadgets if g.is_useful], 
+                               key=lambda x: -x.quality_score)[:100]
+        
+        return ROPGadgetResult(
+            total_gadgets=len(gadgets),
+            unique_gadgets=len(set(g.gadget_string for g in gadgets)),
+            gadgets_by_type=gadgets_by_type,
+            gadgets=gadgets[:max_gadgets],
+            useful_gadgets=useful_gadgets,
+            pop_gadgets=pop_gadgets[:50],
+            syscall_gadgets=syscall_gadgets[:20],
+            write_gadgets=write_gadgets[:30],
+            pivot_gadgets=pivot_gadgets[:20],
+            chain_templates=chain_templates,
+            nx_bypass_possible=len(gadgets) > 10,
+            execve_chain_buildable=execve_buildable,
+            mprotect_chain_buildable=mprotect_buildable,
+            rop_difficulty=difficulty
+        )
+        
+    except Exception as e:
+        logger.error(f"Ropper gadget finding failed: {e}")
+        return _find_gadgets_with_capstone(file_path, max_gadgets, max_gadget_length)
+
+
+def _find_gadgets_with_capstone(file_path: Path, max_gadgets: int,
+                                max_gadget_length: int) -> ROPGadgetResult:
+    """Manual gadget finding using Capstone (fallback)."""
+    if not CAPSTONE_AVAILABLE:
+        return ROPGadgetResult(
+            total_gadgets=0, unique_gadgets=0, gadgets_by_type={},
+            gadgets=[], useful_gadgets=[], pop_gadgets=[], syscall_gadgets=[],
+            write_gadgets=[], pivot_gadgets=[], chain_templates=[],
+            nx_bypass_possible=False, execve_chain_buildable=False,
+            mprotect_chain_buildable=False, rop_difficulty='very_hard',
+            error="Neither ropper nor capstone available"
+        )
+    
+    try:
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        
+        # Determine architecture
+        if data[:4] == b'\x7fELF':
+            is_64bit = data[4] == 2
+        elif data[:2] == b'MZ':
+            # PE - check machine type at offset 0x3C + 4
+            pe_offset = int.from_bytes(data[0x3C:0x40], 'little')
+            machine = int.from_bytes(data[pe_offset+4:pe_offset+6], 'little')
+            is_64bit = machine == 0x8664
+        else:
+            is_64bit = True  # Default to 64-bit
+        
+        if is_64bit:
+            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        else:
+            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+        
+        md.detail = True
+        
+        gadgets = []
+        pop_gadgets = []
+        syscall_gadgets = []
+        write_gadgets = []
+        pivot_gadgets = []
+        gadgets_by_type = {}
+        
+        # Find all 'ret' instructions and search backwards
+        ret_opcodes = [b'\xc3', b'\xc2']  # ret, ret imm16
+        
+        found_addresses = set()
+        
+        for ret_opcode in ret_opcodes:
+            offset = 0
+            while len(gadgets) < max_gadgets:
+                idx = data.find(ret_opcode, offset)
+                if idx == -1:
+                    break
+                
+                # Search backwards for gadgets
+                for back in range(1, max_gadget_length * 15 + 1):
+                    if idx - back < 0:
+                        break
+                    
+                    gadget_bytes = data[idx - back:idx + len(ret_opcode)]
+                    
+                    try:
+                        instructions = list(md.disasm(gadget_bytes, idx - back))
+                        
+                        # Valid gadget if it ends with ret
+                        if instructions and instructions[-1].mnemonic in ('ret', 'retn'):
+                            # Check if all bytes were disassembled
+                            total_size = sum(i.size for i in instructions)
+                            if total_size == len(gadget_bytes) and len(instructions) <= max_gadget_length:
+                                addr = idx - back
+                                
+                                if addr in found_addresses:
+                                    continue
+                                found_addresses.add(addr)
+                                
+                                instr_strs = [f"{i.mnemonic} {i.op_str}".strip() for i in instructions]
+                                gadget_str = '; '.join(instr_strs)
+                                
+                                gadget_type = _classify_gadget(instr_strs)
+                                gadgets_by_type[gadget_type] = gadgets_by_type.get(gadget_type, 0) + 1
+                                
+                                regs = _get_controlled_registers(instr_strs)
+                                quality = _calculate_gadget_quality(instr_strs)
+                                
+                                rop_gadget = ROPGadget(
+                                    address=addr,
+                                    instructions=instr_strs,
+                                    gadget_string=gadget_str,
+                                    gadget_type=gadget_type,
+                                    size_bytes=total_size,
+                                    registers_controlled=regs,
+                                    is_useful=quality > 0.5,
+                                    quality_score=quality
+                                )
+                                
+                                gadgets.append(rop_gadget)
+                                
+                                if gadget_type == 'pop':
+                                    pop_gadgets.append(rop_gadget)
+                                elif gadget_type == 'syscall':
+                                    syscall_gadgets.append(rop_gadget)
+                                elif gadget_type == 'write':
+                                    write_gadgets.append(rop_gadget)
+                                elif gadget_type == 'pivot':
+                                    pivot_gadgets.append(rop_gadget)
+                    except:
+                        pass
+                
+                offset = idx + 1
+        
+        # Also find syscall/int 0x80 gadgets
+        syscall_patterns = [b'\x0f\x05', b'\xcd\x80']  # syscall, int 0x80
+        for pattern in syscall_patterns:
+            offset = 0
+            while True:
+                idx = data.find(pattern, offset)
+                if idx == -1:
+                    break
+                
+                if idx not in found_addresses:
+                    found_addresses.add(idx)
+                    gadget_str = 'syscall' if pattern == b'\x0f\x05' else 'int 0x80'
+                    rop_gadget = ROPGadget(
+                        address=idx,
+                        instructions=[gadget_str],
+                        gadget_string=gadget_str,
+                        gadget_type='syscall',
+                        size_bytes=len(pattern),
+                        registers_controlled=[],
+                        is_useful=True,
+                        quality_score=1.0
+                    )
+                    gadgets.append(rop_gadget)
+                    syscall_gadgets.append(rop_gadget)
+                
+                offset = idx + 1
+        
+        # Build chain templates
+        chain_templates = _build_chain_templates(
+            pop_gadgets, syscall_gadgets, write_gadgets, pivot_gadgets
+        )
+        
+        # Assess exploitability
+        has_syscall = len(syscall_gadgets) > 0
+        has_pop_rdi = any('rdi' in g.registers_controlled for g in pop_gadgets)
+        has_pop_rsi = any('rsi' in g.registers_controlled for g in pop_gadgets)
+        has_pop_rax = any('rax' in g.registers_controlled for g in pop_gadgets)
+        
+        execve_buildable = has_syscall and has_pop_rdi and has_pop_rsi and has_pop_rax
+        mprotect_buildable = has_syscall and has_pop_rdi and has_pop_rsi
+        
+        if execve_buildable and len(gadgets) > 100:
+            difficulty = 'easy'
+        elif mprotect_buildable or len(gadgets) > 50:
+            difficulty = 'medium'
+        elif len(gadgets) > 20:
+            difficulty = 'hard'
+        else:
+            difficulty = 'very_hard'
+        
+        useful_gadgets = sorted([g for g in gadgets if g.is_useful],
+                               key=lambda x: -x.quality_score)[:100]
+        
+        return ROPGadgetResult(
+            total_gadgets=len(gadgets),
+            unique_gadgets=len(set(g.gadget_string for g in gadgets)),
+            gadgets_by_type=gadgets_by_type,
+            gadgets=gadgets[:max_gadgets],
+            useful_gadgets=useful_gadgets,
+            pop_gadgets=pop_gadgets[:50],
+            syscall_gadgets=syscall_gadgets[:20],
+            write_gadgets=write_gadgets[:30],
+            pivot_gadgets=pivot_gadgets[:20],
+            chain_templates=chain_templates,
+            nx_bypass_possible=len(gadgets) > 10,
+            execve_chain_buildable=execve_buildable,
+            mprotect_chain_buildable=mprotect_buildable,
+            rop_difficulty=difficulty
+        )
+        
+    except Exception as e:
+        logger.error(f"Capstone gadget finding failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ROPGadgetResult(
+            total_gadgets=0, unique_gadgets=0, gadgets_by_type={},
+            gadgets=[], useful_gadgets=[], pop_gadgets=[], syscall_gadgets=[],
+            write_gadgets=[], pivot_gadgets=[], chain_templates=[],
+            nx_bypass_possible=False, execve_chain_buildable=False,
+            mprotect_chain_buildable=False, rop_difficulty='very_hard',
+            error=str(e)
+        )
+
+
+def _classify_gadget(instructions: List[str]) -> str:
+    """Classify a gadget by its primary operation."""
+    first_instr = instructions[0].lower() if instructions else ''
+    all_instrs = ' '.join(instructions).lower()
+    
+    if 'pop' in first_instr:
+        return 'pop'
+    elif 'syscall' in all_instrs or 'int 0x80' in all_instrs:
+        return 'syscall'
+    elif 'mov' in first_instr and '[' in first_instr:
+        return 'write'
+    elif 'xchg' in first_instr and 'sp' in first_instr:
+        return 'pivot'
+    elif 'leave' in all_instrs:
+        return 'pivot'
+    elif 'add' in first_instr or 'sub' in first_instr:
+        return 'arithmetic'
+    elif 'xor' in first_instr:
+        return 'xor'
+    elif 'mov' in first_instr:
+        return 'mov'
+    elif 'jmp' in first_instr:
+        return 'jmp'
+    elif 'call' in first_instr:
+        return 'call'
+    else:
+        return 'other'
+
+
+def _get_controlled_registers(instructions: List[str]) -> List[str]:
+    """Get list of registers that are controllable via this gadget."""
+    regs = []
+    x86_regs = ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp',
+                'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15',
+                'eax', 'ebx', 'ecx', 'edx', 'esi', 'edi', 'ebp', 'esp']
+    
+    for instr in instructions:
+        instr_lower = instr.lower()
+        if instr_lower.startswith('pop '):
+            for reg in x86_regs:
+                if reg in instr_lower:
+                    regs.append(reg)
+        elif instr_lower.startswith('mov ') and ',' in instr_lower:
+            # mov reg, ... - destination register is controlled
+            dest = instr_lower.split(',')[0].replace('mov ', '')
+            for reg in x86_regs:
+                if reg in dest and '[' not in dest:
+                    regs.append(reg)
+    
+    return list(set(regs))
+
+
+def _calculate_gadget_quality(instructions: List[str]) -> float:
+    """Calculate quality score for a gadget (0.0-1.0)."""
+    quality = 1.0
+    
+    # Penalty for side effects
+    side_effects = ['call', 'jmp', 'push']
+    for instr in instructions[:-1]:  # Exclude final ret
+        for se in side_effects:
+            if se in instr.lower():
+                quality -= 0.2
+    
+    # Bonus for clean gadgets
+    clean_patterns = ['pop', 'ret']
+    if all(any(p in i.lower() for p in clean_patterns) for i in instructions):
+        quality += 0.3
+    
+    # Penalty for too many instructions
+    if len(instructions) > 3:
+        quality -= 0.1 * (len(instructions) - 3)
+    
+    return max(0.0, min(1.0, quality))
+
+
+def _build_chain_templates(pop_gadgets: List[ROPGadget], 
+                           syscall_gadgets: List[ROPGadget],
+                           write_gadgets: List[ROPGadget],
+                           pivot_gadgets: List[ROPGadget]) -> List[ROPChainTemplate]:
+    """Build common ROP chain templates from available gadgets."""
+    templates = []
+    
+    # Check for execve chain (/bin/sh)
+    pop_rdi = next((g for g in pop_gadgets if 'rdi' in g.registers_controlled), None)
+    pop_rsi = next((g for g in pop_gadgets if 'rsi' in g.registers_controlled), None)
+    pop_rdx = next((g for g in pop_gadgets if 'rdx' in g.registers_controlled), None)
+    pop_rax = next((g for g in pop_gadgets if 'rax' in g.registers_controlled), None)
+    syscall = syscall_gadgets[0] if syscall_gadgets else None
+    
+    execve_available = [g for g in [pop_rdi, pop_rsi, pop_rdx, pop_rax, syscall] if g]
+    execve_buildable = all([pop_rdi, pop_rsi, pop_rax, syscall])
+    
+    templates.append(ROPChainTemplate(
+        name='execve_shell',
+        description='Execute /bin/sh via execve syscall',
+        required_gadgets=['pop rdi', 'pop rsi', 'pop rax', 'syscall'],
+        available_gadgets=execve_available,
+        is_buildable=execve_buildable,
+        chain_addresses=[g.address for g in execve_available if g],
+        payload_template='''
+# Execve /bin/sh chain
+rop = b""
+rop += p64(pop_rdi) + p64(binsh_addr)     # rdi = "/bin/sh"
+rop += p64(pop_rsi) + p64(0)               # rsi = NULL
+rop += p64(pop_rdx) + p64(0)               # rdx = NULL (if available)
+rop += p64(pop_rax) + p64(59)              # rax = 59 (execve)
+rop += p64(syscall)
+''' if execve_buildable else None
+    ))
+    
+    # mprotect chain (make memory executable)
+    mprotect_buildable = pop_rdi and pop_rsi and pop_rax and syscall
+    
+    templates.append(ROPChainTemplate(
+        name='mprotect_rwx',
+        description='Make memory region executable via mprotect',
+        required_gadgets=['pop rdi', 'pop rsi', 'pop rdx', 'pop rax', 'syscall'],
+        available_gadgets=[g for g in [pop_rdi, pop_rsi, pop_rdx, pop_rax, syscall] if g],
+        is_buildable=mprotect_buildable,
+        chain_addresses=[g.address for g in [pop_rdi, pop_rsi, pop_rdx, pop_rax, syscall] if g],
+        payload_template='''
+# mprotect RWX chain
+rop = b""
+rop += p64(pop_rdi) + p64(page_addr)       # rdi = page-aligned address
+rop += p64(pop_rsi) + p64(0x1000)          # rsi = length
+rop += p64(pop_rdx) + p64(7)               # rdx = PROT_READ|WRITE|EXEC
+rop += p64(pop_rax) + p64(10)              # rax = 10 (mprotect)
+rop += p64(syscall)
+rop += p64(shellcode_addr)                  # jump to shellcode
+''' if mprotect_buildable else None
+    ))
+    
+    # Stack pivot template
+    has_pivot = len(pivot_gadgets) > 0
+    templates.append(ROPChainTemplate(
+        name='stack_pivot',
+        description='Pivot stack to controlled buffer',
+        required_gadgets=['leave; ret', 'xchg rsp, X; ret'],
+        available_gadgets=pivot_gadgets[:5],
+        is_buildable=has_pivot,
+        chain_addresses=[g.address for g in pivot_gadgets[:3]],
+        payload_template='''
+# Stack pivot (adjust rbp, then leave;ret)
+# Prerequisite: control rbp to point to fake stack
+rop = p64(leave_ret)  # will do: mov rsp, rbp; pop rbp; ret
+''' if has_pivot else None
+    ))
+    
+    return templates
 
 
 def analyze_imports(data: bytes, metadata: BinaryMetadata) -> List[ImportedFunction]:
@@ -3296,6 +6651,9 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
         symbols = []
         dwarf_info = None
         disassembly = None
+        data_flow_result = None
+        type_recovery_result = None
+        emulation_result = None
         
         # Try pefile first for PE files (better analysis)
         if PEFILE_AVAILABLE and data[:2] == b'MZ':
@@ -3313,6 +6671,44 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                 # Perform disassembly if we have metadata
                 if metadata and CAPSTONE_AVAILABLE:
                     disassembly = disassemble_binary(file_path, metadata, symbols)
+                    
+                    # Perform advanced analysis if disassembly succeeded
+                    if disassembly and disassembly.functions:
+                        # Build instruction map from all functions
+                        all_instructions: Dict[int, DisassemblyInstruction] = {}
+                        for func in disassembly.functions:
+                            for instr in func.instructions:
+                                all_instructions[instr.address] = instr
+                        
+                        # Data flow analysis
+                        try:
+                            data_flow_result = analyze_data_flow(
+                                all_instructions, 
+                                disassembly.control_flow_graph,
+                                imports,
+                                disassembly.architecture
+                            )
+                        except Exception as e:
+                            logger.warning(f"Data flow analysis failed: {e}")
+                            data_flow_result = None
+                        
+                        # Type recovery
+                        try:
+                            type_recovery_result = recover_types(
+                                all_instructions,
+                                disassembly.control_flow_graph,
+                                disassembly.architecture
+                            )
+                        except Exception as e:
+                            logger.warning(f"Type recovery failed: {e}")
+                            type_recovery_result = None
+                        
+                        # Emulation analysis (if Unicorn available)
+                        try:
+                            emulation_result = emulate_binary(file_path, metadata)
+                        except Exception as e:
+                            logger.warning(f"Emulation analysis failed: {e}")
+                            emulation_result = None
             
             # Fall back to basic ELF parsing
             if not metadata:
@@ -3567,6 +6963,123 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                 "severity": "info",
                 "description": f"Recovered {len(deobfuscated_strings)} deobfuscated strings",
             })
+        
+        # Add data flow analysis findings
+        if data_flow_result:
+            if data_flow_result.vulnerable_paths:
+                for path in data_flow_result.vulnerable_paths[:5]:
+                    suspicious.append({
+                        "category": "🔴 Data Flow Vulnerability",
+                        "severity": "high",
+                        "description": f"Tainted data from {path.source.source_type} reaches {path.sink.function_name}",
+                        "details": {
+                            "source": f"{path.source.function_name} @ 0x{path.source.address:x}",
+                            "sink": f"{path.sink.function_name} @ 0x{path.sink.address:x}",
+                            "cwe": path.cwe_id,
+                            "vulnerability": path.vulnerability_type,
+                        },
+                    })
+        
+        # Add type recovery findings
+        if type_recovery_result:
+            if type_recovery_result.functions:
+                suspicious.append({
+                    "category": "📊 Type Recovery",
+                    "severity": "info",
+                    "description": f"Recovered {len(type_recovery_result.functions)} function signatures and {len(type_recovery_result.structs)} struct layouts",
+                    "details": {
+                        "functions": len(type_recovery_result.functions),
+                        "structs": len(type_recovery_result.structs),
+                        "total_types": type_recovery_result.total_types_recovered,
+                    },
+                })
+        
+        # Add emulation analysis findings
+        if emulation_result:
+            if emulation_result.decoded_strings:
+                suspicious.append({
+                    "category": "🔓 Emulation: Decoded Strings",
+                    "severity": "medium",
+                    "description": f"Emulation decoded {len(emulation_result.decoded_strings)} hidden strings",
+                    "details": [s.decoded_value[:100] for s in emulation_result.decoded_strings[:10]],
+                })
+            
+            if emulation_result.self_modifying_code:
+                suspicious.append({
+                    "category": "🔴 Self-Modifying Code",
+                    "severity": "high",
+                    "description": f"Detected {len(emulation_result.self_modifying_code)} instances of self-modifying code",
+                    "details": emulation_result.self_modifying_code[:5],
+                })
+            
+            if emulation_result.shellcode_detected:
+                suspicious.append({
+                    "category": "🔴 Shellcode Detected",
+                    "severity": "critical",
+                    "description": "Emulation detected shellcode patterns",
+                })
+            
+            if emulation_result.anti_analysis_detected:
+                suspicious.append({
+                    "category": "⚠️ Anti-Analysis Detected",
+                    "severity": "medium",
+                    "description": "Emulation detected anti-analysis behaviors",
+                    "details": emulation_result.anti_analysis_detected[:5],
+                })
+
+        # Perform ROP gadget analysis for vulnerability assessment
+        rop_result = None
+        symbolic_result = None
+        
+        # ROP analysis - quick, helps assess exploitability
+        try:
+            rop_result = find_rop_gadgets(file_path, max_gadgets=500, max_gadget_length=6)
+            
+            if rop_result and rop_result.total_gadgets > 0:
+                # Add ROP-related suspicious indicators
+                if rop_result.execve_chain_buildable:
+                    suspicious.append({
+                        "category": "🔴 Exploitable: execve Chain Available",
+                        "severity": "high",
+                        "description": "ROP analysis shows an execve chain can be built for shell execution",
+                        "details": {
+                            "difficulty": rop_result.rop_difficulty,
+                            "total_gadgets": rop_result.total_gadgets,
+                            "useful_gadgets": len(rop_result.useful_gadgets),
+                        },
+                    })
+                elif rop_result.mprotect_chain_buildable:
+                    suspicious.append({
+                        "category": "⚠️ Exploitable: mprotect Chain Available",
+                        "severity": "high",
+                        "description": "ROP analysis shows mprotect chain can be built to bypass NX",
+                        "details": {
+                            "difficulty": rop_result.rop_difficulty,
+                            "total_gadgets": rop_result.total_gadgets,
+                        },
+                    })
+                elif rop_result.nx_bypass_possible:
+                    suspicious.append({
+                        "category": "⚠️ NX Bypass Possible",
+                        "severity": "medium",
+                        "description": "Sufficient ROP gadgets exist to potentially bypass NX protection",
+                        "details": {
+                            "difficulty": rop_result.rop_difficulty,
+                            "syscall_gadgets": len(rop_result.syscall_gadgets),
+                        },
+                    })
+                else:
+                    suspicious.append({
+                        "category": "📊 ROP Gadget Analysis",
+                        "severity": "info",
+                        "description": f"Found {rop_result.total_gadgets} ROP gadgets",
+                        "details": {
+                            "difficulty": rop_result.rop_difficulty,
+                            "useful_gadgets": len(rop_result.useful_gadgets),
+                        },
+                    })
+        except Exception as e:
+            logger.debug(f"ROP gadget analysis skipped: {e}")
 
         return BinaryAnalysisResult(
             filename=filename,
@@ -3583,6 +7096,11 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
             symbols=symbols[:500],  # Limit for response size
             disassembly=disassembly,
             dwarf_info=dwarf_info,
+            data_flow_analysis=data_flow_result,
+            type_recovery=type_recovery_result,
+            emulation_analysis=emulation_result,
+            symbolic_execution=symbolic_result,
+            rop_gadgets=rop_result,
         )
         
     except Exception as e:
@@ -3602,6 +7120,11 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
             symbols=[],
             disassembly=None,
             dwarf_info=None,
+            data_flow_analysis=None,
+            type_recovery=None,
+            emulation_analysis=None,
+            symbolic_execution=None,
+            rop_gadgets=None,
             error=str(e),
         )
 
@@ -9488,6 +13011,8 @@ def analyze_intent_filters(apk) -> Dict[str, Any]:
 
 def analyze_network_security_config(apk, file_path: Path) -> Dict[str, Any]:
     """Parse and analyze network security configuration."""
+    from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
+    
     result = {
         "has_config": False,
         "cleartext_permitted": True,  # Default for older SDKs
@@ -11188,6 +14713,90 @@ def analyze_apk_security(manifest_data: Dict, strings: List[ExtractedString], ur
 # Docker Layer Analysis Functions
 # ============================================================================
 
+def _normalize_image_id(image_id: str) -> str:
+    """Normalize image ID by stripping known prefixes."""
+    if not image_id:
+        return ""
+    if image_id.startswith("sha256:"):
+        return image_id.split(":", 1)[1]
+    return image_id
+
+
+def _clean_base_image(value: Optional[str]) -> Optional[str]:
+    """Normalize base image references and filter empty placeholders."""
+    if not value:
+        return None
+    cleaned = value.strip()
+    if not cleaned or cleaned in {"<missing>", "scratch"}:
+        return None
+    return cleaned
+
+
+def _extract_base_from_history(layers: List[Dict[str, Any]]) -> Optional[str]:
+    """Try to parse a FROM reference out of history commands."""
+    base_image = None
+    for layer in layers:
+        command = layer.get("command", "")
+        match = re.search(r'\bFROM\s+([^\s]+)', command, re.IGNORECASE)
+        if match:
+            base_image = match.group(1).strip()
+    return base_image
+
+
+def _resolve_image_name_from_parent(parent_id: Optional[str]) -> Optional[str]:
+    """Resolve parent image ID to a repo tag, if available."""
+    if not parent_id:
+        return None
+    normalized_parent = _normalize_image_id(parent_id)
+    if not normalized_parent:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["docker", "images", "--no-trunc", "--format", "{{.Repository}}:{{.Tag}}|||{{.ID}}"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if result.returncode != 0:
+            return None
+
+        for line in result.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("|||")
+            if len(parts) != 2:
+                continue
+            repo_tag, image_id = parts[0].strip(), parts[1].strip()
+            if repo_tag.startswith("<none>"):
+                continue
+            if _normalize_image_id(image_id).startswith(normalized_parent):
+                return repo_tag
+    except Exception as e:
+        logger.debug(f"Failed to resolve parent image: {e}")
+
+    return None
+
+
+def _infer_base_image(image_info: Dict[str, Any], layers: List[Dict[str, Any]], image_name: str) -> Optional[str]:
+    """Infer the base image reference using inspect metadata and history heuristics."""
+    base_image = _clean_base_image(image_info.get("Config", {}).get("Image"))
+    if not base_image:
+        base_image = _clean_base_image(image_info.get("ContainerConfig", {}).get("Image"))
+    if not base_image:
+        base_image = _extract_base_from_history(layers)
+    if not base_image:
+        base_image = _resolve_image_name_from_parent(image_info.get("Parent"))
+    if not base_image:
+        for tag in image_info.get("RepoTags") or []:
+            base_image = _clean_base_image(tag)
+            if base_image:
+                break
+    if not base_image:
+        base_image = _clean_base_image(image_name)
+    return base_image
+
+
 def analyze_docker_image(image_name: str) -> DockerLayerAnalysisResult:
     """Analyze Docker image layers for secrets and security issues."""
     try:
@@ -11263,24 +14872,28 @@ def analyze_docker_image(image_name: str) -> DockerLayerAnalysisResult:
             layer_issues = check_layer_security(command)
             security_issues.extend(layer_issues)
         
-        # Get image ID
+        # Inspect image metadata for ID and base image inference
+        image_id = "unknown"
+        base_image = None
         inspect_result = subprocess.run(
-            ["docker", "inspect", "--format", "{{.Id}}", image_name],
+            ["docker", "inspect", image_name],
             capture_output=True,
             text=True,
             timeout=30,
         )
-        image_id = inspect_result.stdout.strip()[:12] if inspect_result.returncode == 0 else "unknown"
-        
-        # Try to identify base image
-        base_image = None
-        for layer in reversed(layers):
-            if 'FROM' in layer["command"]:
-                parts = layer["command"].split()
-                for i, p in enumerate(parts):
-                    if p == 'FROM' and i + 1 < len(parts):
-                        base_image = parts[i + 1]
-                        break
+        if inspect_result.returncode == 0:
+            try:
+                inspect_data = json.loads(inspect_result.stdout)
+                if inspect_data:
+                    image_info = inspect_data[0]
+                    raw_id = image_info.get("Id") or ""
+                    if raw_id:
+                        image_id = _normalize_image_id(raw_id)[:12]
+                    base_image = _infer_base_image(image_info, layers, image_name)
+            except Exception as e:
+                logger.warning(f"Failed to parse docker inspect output: {e}")
+        else:
+            logger.warning(f"Docker inspect failed: {inspect_result.stderr}")
         
         return DockerLayerAnalysisResult(
             image_name=image_name,
@@ -11394,7 +15007,7 @@ def check_layer_security(command: str) -> List[Dict[str, Any]]:
     issues = []
     
     # Running as root
-    if 'USER root' in command:
+    if re.search(r'\bUSER\s+root\b', command, re.IGNORECASE):
         issues.append({
             "category": "Running as Root",
             "severity": "medium",
@@ -11424,7 +15037,7 @@ def check_layer_security(command: str) -> List[Dict[str, Any]]:
         })
     
     # chmod 777
-    if 'chmod 777' in command or 'chmod -R 777' in command:
+    if re.search(r'\bchmod\b[^\n]*(?:0?777|a\+rwx|ugo\+rwx|u\+rwx[, ]*g\+rwx[, ]*o\+rwx)', command, re.IGNORECASE):
         issues.append({
             "category": "Insecure Permissions",
             "severity": "medium",
@@ -14173,7 +17786,12 @@ Generate a comprehensive attack surface diagram for THIS app based on the actual
         return None
 
 
-async def analyze_docker_with_ai(result: DockerLayerAnalysisResult) -> Optional[str]:
+async def analyze_docker_with_ai(
+    result: DockerLayerAnalysisResult,
+    base_image_intel: Optional[List[Dict[str, Any]]] = None,
+    layer_secrets: Optional[List[Dict[str, Any]]] = None,
+    layer_scan_metadata: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
     """Use Gemini to provide comprehensive security analysis of Docker image."""
     if not settings.gemini_api_key:
         return None
@@ -14183,6 +17801,10 @@ async def analyze_docker_with_ai(result: DockerLayerAnalysisResult) -> Optional[
         from google.genai import types
         
         client = genai.Client(api_key=settings.gemini_api_key)
+
+        base_image_intel = base_image_intel or []
+        layer_secrets = layer_secrets or []
+        layer_scan_metadata = layer_scan_metadata or {}
         
         # Group secrets by type
         secrets_by_type = {}
@@ -14199,9 +17821,30 @@ async def analyze_docker_with_ai(result: DockerLayerAnalysisResult) -> Optional[
         
         # Layer commands analysis
         layer_commands = "\n".join([
-            f"- Layer {i+1}: {layer.get('created_by', 'unknown')[:100]}"
-            for i, layer in enumerate(result.layers[:10]) if layer.get('created_by')
+            f"- Layer {i+1} ({layer.get('id', 'unknown')}): {layer.get('command', '')[:100]}"
+            for i, layer in enumerate(result.layers[:10]) if layer.get('command')
         ])
+
+        # Base image intelligence summary
+        base_intel_summary = "\n".join([
+            f"- [{i.get('severity', 'unknown').upper()}] {i.get('category', 'unknown')}: {i.get('message', '')}"
+            + (f" (rec: {i.get('recommendation')})" if i.get('recommendation') else "")
+            for i in base_image_intel[:10]
+        ])
+
+        # Layer deep scan summary
+        deleted_layer_secrets = [s for s in layer_secrets if s.get("is_deleted")]
+        layer_secrets_summary = "\n".join([
+            f"- Layer {s.get('layer_index', '?')}: {s.get('file_path', 'unknown')} ({s.get('file_type', 'unknown')}, {s.get('severity', 'unknown')})"
+            for s in layer_secrets[:10]
+        ])
+        layer_scan_stats = None
+        if layer_scan_metadata:
+            layer_scan_stats = (
+                f"Layers scanned: {layer_scan_metadata.get('layers_scanned', 'N/A')}, "
+                f"Files scanned: {layer_scan_metadata.get('files_scanned', 'N/A')}, "
+                f"Deleted secrets: {layer_scan_metadata.get('deleted_secrets_found', 0)}"
+            )
         
         prompt = f"""You are a container security analyst. Analyze this Docker image and provide a comprehensive security assessment.
 
@@ -14219,10 +17862,18 @@ async def analyze_docker_with_ai(result: DockerLayerAnalysisResult) -> Optional[
 {secrets_summary or "None detected"}
 
 **Detailed Secret Locations:**
-{chr(10).join(f'- {s.secret_type} in layer {s.layer_id}: {s.file_path or "unknown file"}' for s in result.secrets[:10]) or "None"}
+{chr(10).join(f'- {s.secret_type} in layer {s.layer_id}: {s.masked_value}' for s in result.secrets[:10]) or "None"}
 
 ## SECURITY ISSUES ({len(result.security_issues)})
 {chr(10).join(f'- [{i.get("severity", "INFO").upper()}] {i["category"]}: {i["description"]}' for i in result.security_issues[:15]) or "None"}
+
+## BASE IMAGE INTELLIGENCE ({len(base_image_intel)})
+{base_intel_summary or "None"}
+
+## LAYER DEEP SCAN ({len(layer_secrets)})
+- Deleted but recoverable: {len(deleted_layer_secrets)}
+- Scan stats: {layer_scan_stats or "N/A"}
+{layer_secrets_summary or "None"}
 
 ## ANALYSIS INSTRUCTIONS
 Provide your analysis in the following structured format:
@@ -18761,7 +22412,7 @@ Return ONLY valid Mermaid code starting with "flowchart TD". No explanations or 
                 model=settings.gemini_model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=4000,
                 )
             ),
@@ -20034,12 +23685,34 @@ Java.perform(function() {{
 
 
 # Keep original slow function for deep analysis if needed
-def analyze_apk_obfuscation_deep(apk_path: Path) -> ObfuscationAnalysisResult:
-    """Analyze class naming patterns to detect obfuscation."""
+def analyze_apk_obfuscation_deep(apk_path: Path, dx: Any = None) -> ObfuscationAnalysisResult:
+    """Analyze class naming patterns to detect obfuscation.
+    
+    Args:
+        apk_path: Path to the APK file
+        dx: Optional pre-analyzed androguard Analysis object
+    """
     single_letter = []
     short_name = []
     meaningful = []
     all_classes = []
+    
+    # If dx not provided, create minimal analysis
+    if dx is None:
+        try:
+            from androguard.misc import AnalyzeAPK
+            _, _, dx = AnalyzeAPK(str(apk_path))
+        except Exception:
+            # Return empty result if analysis fails
+            return ObfuscationAnalysisResult(
+                obfuscation_score=0.0,
+                class_name_entropy=0.0,
+                single_letter_classes=0,
+                short_name_classes=0,
+                meaningful_name_classes=0,
+                indicators=[],
+                recommendation="Unable to analyze - androguard not available"
+            )
     
     for cls in dx.get_classes():
         class_name = cls.name
@@ -24128,7 +27801,7 @@ def analyze_permissions(output_dir: Path) -> Dict[str, Any]:
     Returns:
         Dictionary with permission analysis results
     """
-    import xml.etree.ElementTree as ET
+    from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
     
     output_dir = Path(output_dir)
     manifest_path = output_dir / "resources" / "AndroidManifest.xml"
@@ -24954,7 +28627,7 @@ def generate_component_map(output_dir: Path) -> Dict[str, Any]:
         return {"error": "AndroidManifest.xml not found"}
     
     try:
-        import xml.etree.ElementTree as ET
+        from defusedxml import ElementTree as ET  # Use defusedxml to prevent XXE attacks
         tree = ET.parse(manifest_path)
         root = tree.getroot()
         
@@ -39340,9 +43013,9 @@ async def verify_emulation_findings_with_ai(
         return result
     
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        from google import genai
+        client = genai.Client(api_key=settings.gemini_api_key)
+        model_id = "gemini-3-flash-preview"
         
         # Build context from emulation results
         context_parts = []
@@ -39447,7 +43120,7 @@ async def verify_emulation_findings_with_ai(
 
 Respond ONLY with the JSON, no markdown formatting."""
 
-        response = await model.generate_content_async(prompt)
+        response = await client.aio.models.generate_content(model=model_id, contents=prompt)
         response_text = response.text.strip()
         
         # Parse JSON response

@@ -139,6 +139,11 @@ async def kanban_websocket(
         await websocket.close(code=4001, reason="Invalid token")
         return
 
+    # Verify this is an access token, not a refresh token
+    if payload.get("type") != "access":
+        await websocket.close(code=4001, reason="Invalid token type")
+        return
+
     user_id = payload.get("sub")
     if not user_id:
         await websocket.close(code=4001, reason="Invalid token")

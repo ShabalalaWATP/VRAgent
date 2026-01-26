@@ -2234,6 +2234,38 @@ export default function FirmwareReverseEngineeringPage() {
             when a device powers on. Understanding firmware architecture is essential for any hardware security researcher.
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🎯 Beginner's Analogy: The Restaurant Kitchen</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Think of a device like a restaurant. The <strong>hardware</strong> is the physical kitchen—the ovens, 
+              refrigerators, counters, and utensils. The <strong>firmware</strong> is like the restaurant's permanent 
+              operating procedures: when to turn on the ovens, how the equipment should work together, the basic 
+              recipes that never change. Regular <strong>software</strong> is like the daily specials—things that 
+              can be easily added, changed, or removed. When you're reverse engineering firmware, you're essentially 
+              trying to read and understand those operating procedures to see how the kitchen works—and whether 
+              someone could sneak poison into the food!
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            When you press the power button on your router, TV, or smart thermostat, firmware is the very first 
+            code that runs. It's stored on special memory chips (usually flash memory) that retain data even when 
+            power is off. This code initializes the hardware components, loads any operating system or application 
+            code, and handles the lowest-level device operations throughout its lifetime.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Why should you care about this distinction?</strong> Because firmware has special properties 
+            that make security research both challenging and rewarding:
+          </Typography>
+
+          <Box component="ul" sx={{ mb: 3, pl: 3 }}>
+            <li><Typography variant="body1" sx={{ mb: 1, lineHeight: 1.8 }}><strong>It runs with the highest privileges</strong> - Firmware operates below the operating system, with complete control over the hardware. A vulnerability here is game over.</Typography></li>
+            <li><Typography variant="body1" sx={{ mb: 1, lineHeight: 1.8 }}><strong>It's rarely updated</strong> - Unlike your phone apps that update weekly, many devices run the same firmware for years (or forever), so vulnerabilities persist indefinitely.</Typography></li>
+            <li><Typography variant="body1" sx={{ mb: 1, lineHeight: 1.8 }}><strong>It's often overlooked in security audits</strong> - Organizations focus on web apps and networks, but ignore the firmware in their IoT devices, creating blind spots.</Typography></li>
+            <li><Typography variant="body1" sx={{ mb: 1, lineHeight: 1.8 }}><strong>It controls physical systems</strong> - Unlike a compromised website, compromised firmware can unlock doors, disable safety systems, or cause physical damage.</Typography></li>
+          </Box>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
             Firmware vs Software vs Hardware
           </Typography>
@@ -2283,6 +2315,30 @@ export default function FirmwareReverseEngineeringPage() {
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
             Common Processor Architectures
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            Unlike your desktop computer that almost certainly uses an Intel or AMD processor (x86/x64 architecture), 
+            embedded devices use a variety of processor architectures. Each architecture has its own "language" of 
+            machine instructions, and knowing which architecture you're dealing with is crucial for analysis.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🧠 Think of It Like Human Languages</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Just as French and Chinese are both languages but use completely different words and grammar, 
+              ARM and MIPS are both processor architectures but use different instructions. When you disassemble 
+              firmware compiled for ARM, you'll see ARM assembly language. The concepts (add numbers, compare values, 
+              jump to locations) are similar across architectures, but the syntax is different. Once you learn one 
+              architecture well, learning others becomes much easier—like how learning Spanish helps you learn Italian.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Why does architecture matter?</strong> When you extract a binary from firmware and open it in 
+            Ghidra, you need to tell the tool what architecture it was compiled for. If you choose wrong, the 
+            disassembly will be gibberish. Most tools can auto-detect, but understanding architectures helps you 
+            verify the detection is correct and understand the code you're reading.
           </Typography>
 
           <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2354,6 +2410,26 @@ export default function FirmwareReverseEngineeringPage() {
             Firmware reverse engineering applies to virtually any electronic device with embedded software. 
             Each category of device presents unique challenges and opportunities for security research. 
             Here are the most common targets you'll encounter.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🎯 Why Target Selection Matters</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Not all devices are equal for learning. Some have well-documented chipsets with active communities 
+              (like routers running OpenWrt), while others use obscure hardware with zero public information. 
+              As a beginner, start with devices that have: (1) freely downloadable firmware from the vendor's 
+              website, (2) common processors like ARM or MIPS, (3) Linux-based operating systems, and (4) 
+              existing security research or teardowns you can reference. Save the proprietary industrial PLCs 
+              and medical devices for when you're more experienced!
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>The best learning targets share common traits:</strong> they're cheap (you can buy multiple 
+            without worrying about breaking them), they use standard components (so tools like Binwalk work well), 
+            and they have known vulnerabilities (so you can validate your findings against published CVEs). 
+            Old routers from thrift stores for $5-10 are perfect—vendors have published security advisories, 
+            security researchers have blogged about them, and nobody cares if you brick one!
           </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
@@ -2511,8 +2587,33 @@ Where to Get Devices:
             hardware extraction only when necessary.
           </Typography>
 
+          <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🎉 Good News for Beginners!</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              You might think you need expensive hardware and soldering skills to start firmware hacking—but that's 
+              not true! The vast majority of consumer device firmware can be downloaded directly from manufacturer 
+              websites. Companies like Netgear, TP-Link, D-Link, and ASUS publish firmware updates publicly. 
+              Start your journey by simply downloading a firmware file and running Binwalk on it. You'll learn an 
+              enormous amount before ever touching hardware. Save the flash chip extraction for later!
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>The hierarchy of acquisition methods:</strong> Always try the easiest method first. If you 
+            can download firmware from a website, don't bother setting up network interception. If you can capture 
+            it during an update, don't desolder flash chips. Each escalation requires more time, tools, and risk 
+            of damaging the device. A methodical approach saves hours of unnecessary work.
+          </Typography>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
             Method 1: Direct Download (Easiest)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            This should always be your first attempt. Many manufacturers provide firmware downloads on their 
+            support websites. Even companies that don't officially publish firmware often have it accessible 
+            through predictable URLs or FTP servers. The firmware file might be a single binary, a ZIP archive, 
+            or an installer application that contains the actual firmware inside.
           </Typography>
 
           <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "background.default" }}>
@@ -2669,8 +2770,41 @@ $ grep -r "update" ./smali/`}
             system for debugging, firmware extraction, and interactive analysis.
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🔧 Why Do Devices Have Debug Interfaces?</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              During development, engineers need ways to test and debug their devices. They add interfaces like 
+              UART (serial console) and JTAG (full debugging) to load code, read logs, and fix problems. Ideally, 
+              these would be removed or disabled before shipping to consumers—but many manufacturers skip this step 
+              to save money or keep the option for future troubleshooting. As a security researcher, this is your 
+              lucky break! A UART console on a router might give you a root shell with zero authentication.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Finding debug interfaces requires detective work.</strong> Open up the device (you'll need 
+            screwdrivers, possibly including security bits like Torx or tri-wing). Look for groups of exposed metal 
+            pads or unpopulated header pins—these are often debug ports. Four pads in a row might be UART 
+            (VCC, GND, TX, RX). A larger group of 10-20 pads is likely JTAG. Sometimes they're labeled, but 
+            usually you'll need to identify them using a multimeter and logic analyzer.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Don't be intimidated by hardware!</strong> The most commonly used interface—UART—requires 
+            only a $5 USB-to-serial adapter and basic software. You don't need to know electronics or solder 
+            anything for your first experiments. Many devices have headers where you can simply plug in jumper 
+            wires. As you get more advanced, you might learn to solder for better connections, but it's optional.
+          </Typography>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f97316" }}>
             UART (Universal Asynchronous Receiver-Transmitter)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
+            UART is the most beginner-friendly debug interface. It provides a text-based serial console—imagine 
+            a command-line terminal directly into the device. When you connect via UART and power on the device, 
+            you'll see boot messages scroll by (just like watching a computer start up). If you're lucky, you'll 
+            get a login prompt or even direct root shell access!
           </Typography>
 
           <Paper sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: "background.default" }}>
@@ -2872,6 +3006,33 @@ $ openocd -f interface/jlink.cfg -f target/stm32f4x.cfg
             Flash memory chips store firmware persistently. When software-based acquisition methods fail, 
             reading the flash chip directly is often the most reliable way to obtain a complete firmware image. 
             Understanding flash memory types and how to read them is a crucial skill.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>💾 Flash Memory: The Device's Hard Drive</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Flash memory in embedded devices serves the same purpose as your computer's SSD—it stores data 
+              that persists when power is off. The key difference is size and form factor: while your laptop 
+              might have 512GB of storage, a router typically has just 4-32MB. The firmware—bootloader, operating 
+              system, and application code—all fit in this tiny chip. When you "flash" a device with new firmware, 
+              you're literally writing to this flash memory chip. As a security researcher, you can read this chip 
+              directly using cheap hardware tools, bypassing any software protections the device might have.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>When do you need hardware extraction?</strong> Most of the time, you don't! Direct download 
+            or network capture covers 80%+ of cases. Hardware extraction becomes necessary when: (1) firmware 
+            isn't publicly available and the device blocks update capture, (2) you need the exact current state 
+            of the device including configuration data, (3) you want to analyze a device that's been compromised 
+            in the field, or (4) you're doing forensics and need a complete memory dump.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>The good news about SPI flash:</strong> The most common flash memory type in IoT devices is 
+            SPI (Serial Peripheral Interface) flash, usually in an 8-pin SOIC package. These chips are standardized—a 
+            $5 CH341A programmer can read virtually any SPI flash chip. You don't even need to desolder the chip; 
+            SOIC clips let you connect directly to the chip while it's still on the board (called "in-circuit reading").
           </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
@@ -3078,6 +3239,34 @@ In-Circuit Reading Tips:
             identify and extract these components is fundamental to firmware analysis.
           </Typography>
 
+          <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🎁 This is Where the Magic Happens!</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Filesystem extraction is often the most rewarding part of firmware analysis. That opaque firmware.bin 
+              file suddenly transforms into familiar directories: /etc with configuration files, /bin with executables, 
+              /www with web interface code. It's like opening a treasure chest! You can browse around just like you 
+              would on a Linux system, grep for passwords, read config files, and understand how the device works. 
+              Most vulnerabilities are found simply by exploring these extracted files.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>How firmware images are structured:</strong> Think of a firmware image like a ZIP file that 
+            contains other ZIP files. The outer layer might be a vendor-specific header (containing checksums, 
+            version info), followed by a bootloader, then a compressed Linux kernel, and finally the main 
+            filesystem (often SquashFS). Binwalk automatically recognizes these layers and can extract them 
+            recursively with the <code>-eM</code> flag.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Why different filesystem types?</strong> Embedded devices have limited storage (often just 
+            4-32MB of flash memory), so filesystems are designed for maximum compression. SquashFS can compress 
+            a filesystem to 30-50% of its original size. JFFS2 and UBIFS are designed specifically for flash 
+            memory that wears out after many write cycles. You don't need to memorize all these—Binwalk handles 
+            detection and extraction automatically—but understanding why they exist helps you troubleshoot 
+            extraction problems.
+          </Typography>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
             Binwalk: The Essential Extraction Tool
           </Typography>
@@ -3235,6 +3424,33 @@ $ strings *.db | head -100`}
             understanding program behavior without source code.
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🔍 What is Binary Analysis, Really?</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Imagine you have a cake and want to figure out the recipe. <strong>Source code</strong> would be 
+              the original recipe written in plain English. <strong>Compiled binary</strong> is like having only 
+              the finished cake—you need to taste it, look at its layers, analyze the texture, and work backwards 
+              to deduce the ingredients and steps. <strong>Disassembly</strong> is like breaking the cake into its 
+              basic components (flour particles, sugar crystals). <strong>Decompilation</strong> goes further and 
+              tries to reconstruct the original recipe—it won't be perfect, but it's close enough to understand 
+              what's happening. Tools like Ghidra do this automatically!
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Why is binary analysis necessary?</strong> When you extract firmware, you get compiled programs— 
+            the human-readable source code is long gone. The web server, network daemon, and authentication logic 
+            are all compiled into binary files containing machine instructions. To find vulnerabilities, you need 
+            to understand what these programs do, and that means reverse engineering them back into understandable code.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>The good news:</strong> You don't need to read raw assembly language. Modern tools like Ghidra 
+            provide a "decompiler" that shows you C-like pseudocode. While it's not the original source, it's 
+            remarkably readable. You can see function calls, if/else logic, loops, and variable usage. Start with 
+            the decompiler view and only dive into assembly when you need more precision.
+          </Typography>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#ec4899" }}>
             Disassembly Tools Comparison
           </Typography>
@@ -3374,6 +3590,36 @@ $ strings *.db | head -100`}
             Emulation lets you run firmware without physical hardware. This enables dynamic analysis, debugging, 
             fuzzing, and testing exploits safely. While full system emulation can be challenging due to custom 
             hardware peripherals, partial emulation of specific components is often achievable.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🖥️ Why Emulate Instead of Using Real Hardware?</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Emulation offers huge advantages over physical devices: <strong>(1) No hardware needed</strong>—analyze 
+              firmware for devices you don't own. <strong>(2) Safe experimentation</strong>—crash, exploit, and break 
+              things without bricking a real device. <strong>(3) Debugging superpowers</strong>—set breakpoints, 
+              inspect memory, and trace execution in ways hardware doesn't allow. <strong>(4) Scalability</strong>—run 
+              hundreds of firmware instances for fuzzing or testing. <strong>(5) Reproducibility</strong>—reset to 
+              a clean state instantly. The tradeoff is that emulation isn't perfect—some functionality that depends 
+              on specific hardware won't work.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Full system vs. user-mode emulation:</strong> There are two main approaches. <em>Full system 
+            emulation</em> boots an entire virtual machine—bootloader, kernel, and all services—just like a real 
+            device. This is powerful but often fails because firmware expects specific hardware that QEMU can't 
+            simulate. <em>User-mode emulation</em> runs individual programs from the firmware on your host system. 
+            It's much more reliable and perfect for testing specific binaries like web servers or authentication 
+            modules.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Start with user-mode emulation.</strong> If you've extracted a firmware filesystem, you can 
+            often run binaries directly with <code>qemu-arm-static</code> (for ARM) or <code>qemu-mips-static</code> 
+            (for MIPS). Point QEMU at the extracted filesystem as the library root, and many programs "just work." 
+            This lets you test web interfaces, API endpoints, and authentication logic without setting up complex 
+            full-system emulation.
           </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#14b8a6" }}>
@@ -3528,6 +3774,35 @@ $ ./scratch/1/run.sh
             Firmware is notorious for security vulnerabilities due to legacy code, resource constraints, 
             and rushed development cycles. Understanding common vulnerability patterns helps you systematically 
             find security issues in any firmware you analyze.
+          </Typography>
+
+          <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🔥 Why is Firmware So Vulnerable?</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Embedded device firmware tends to be far less secure than desktop software, and there are systemic 
+              reasons why: <strong>(1) Cost pressure</strong>—IoT devices are sold cheaply, so security testing 
+              budgets are minimal. <strong>(2) Legacy code</strong>—many devices use decade-old code that was 
+              written before modern security practices. <strong>(3) Limited resources</strong>—with only a few MB 
+              of storage and minimal RAM, developers skip security features that "waste" resources. 
+              <strong>(4) No updates</strong>—even when vulnerabilities are found, many users never apply patches 
+              (or patches don't exist). <strong>(5) Obscurity mindset</strong>—developers assume "nobody will look 
+              at our embedded code," so they cut corners. This is great for security researchers—there's no shortage 
+              of bugs to find!
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Vulnerability hunting is systematic, not random.</strong> Rather than randomly poking at a 
+            device hoping something breaks, successful researchers follow a methodical approach: identify the 
+            attack surface (what can users control?), map the code paths from input to dangerous operations, 
+            and test for known vulnerability patterns. This section teaches you what to look for and where.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Start with low-hanging fruit.</strong> Before diving into complex binary analysis, search 
+            for obvious issues: grep for "password" in config files, look for web pages that don't check 
+            authentication, find hardcoded credentials in strings. You'll be amazed how often these simple 
+            searches find critical vulnerabilities in production devices.
           </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
@@ -3686,6 +3961,34 @@ uid=0(root) gid=0(root)
             unlock powerful capabilities for firmware extraction and modification.
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🚀 The Bootloader: Your Device's "BIOS"</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              If you've ever pressed a key during computer startup to enter BIOS/UEFI setup, you understand 
+              bootloaders. Embedded devices have the same concept: a small program that runs first, initializes 
+              basic hardware (RAM, serial ports), and then loads the main operating system. The difference is 
+              that embedded bootloaders often give you <em>much</em> more power—including direct memory access, 
+              network booting, and flash programming. If you can access the bootloader via UART console, you 
+              can often dump or modify firmware even when the main OS is locked down or corrupted.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>U-Boot dominates the embedded world.</strong> Just like most desktop computers run Windows 
+            or macOS, most embedded Linux devices run U-Boot (Universal Boot Loader). Learning U-Boot commands 
+            is incredibly valuable—once you know them, you can interact with thousands of different devices. 
+            U-Boot provides an interactive shell over UART where you can examine memory, configure network 
+            booting, and dump the entire flash contents to a TFTP server.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Accessing the bootloader:</strong> Connect your USB-UART adapter to the device's UART pins, 
+            open a serial terminal (115200 baud is most common), and power on the device. Watch carefully—most 
+            bootloaders show a message like "Hit any key to stop autoboot" for just 1-3 seconds. Press a key 
+            quickly (sometimes Enter, sometimes Space, sometimes any key) and you'll drop into the bootloader 
+            prompt. From there, you have complete control over the device.
+          </Typography>
+
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#6366f1" }}>
             Common Bootloaders
           </Typography>
@@ -3827,6 +4130,35 @@ U-Boot> saveenv`}
             communications. Understanding cryptographic implementations—and their weaknesses—is essential for 
             thorough firmware analysis. Common issues include weak algorithms, hardcoded keys, and improper 
             implementations.
+          </Typography>
+
+          <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>🔐 Crypto in Firmware: Often Broken by Design</AlertTitle>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Here's a dirty secret of embedded security: many devices use encryption that looks secure but is 
+              fundamentally broken. The firmware might be "encrypted" with AES-256 (military-grade!), but the 
+              key is hardcoded in the bootloader that runs before decryption. Or passwords are "hashed" with MD5 
+              without a salt, making rainbow table attacks trivial. Or the "encryption" is just XOR with a short 
+              repeating key. Don't be intimidated when you see encrypted firmware—the key is almost always 
+              recoverable if you know where to look.
+            </Typography>
+          </Alert>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Why is crypto often implemented poorly?</strong> Several factors combine: (1) developers 
+            aren't cryptography experts and make implementation mistakes, (2) "encrypt" and "secure" are used 
+            interchangeably in marketing when they mean very different things, (3) key management is hard, and 
+            embedded devices have no good place to store secrets, (4) backwards compatibility requirements 
+            prevent upgrading from legacy weak algorithms, and (5) "security through obscurity" mindset—they 
+            assume no one will analyze the firmware.
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
+            <strong>Your approach to encrypted firmware:</strong> First, identify what algorithm is used (look 
+            for crypto constants in binaries, library imports, or just try common algorithms). Second, hunt for 
+            the key—check bootloader code, NVRAM partitions, and hardcoded strings. Third, trace the decryption 
+            path—keys are often derived from device-specific values like MAC addresses or serial numbers, making 
+            them predictable. Most "encrypted" firmware can be decrypted with patience and systematic analysis.
           </Typography>
 
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>

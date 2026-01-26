@@ -18,9 +18,14 @@ import {
   ListItemText,
   Alert,
   Button,
+  LinearProgress,
+  Fab,
+  Drawer,
+  useMediaQuery,
+  Tooltip,
 } from "@mui/material";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -35,6 +40,12 @@ import FlagIcon from "@mui/icons-material/Flag";
 import ShieldIcon from "@mui/icons-material/Shield";
 import WarningIcon from "@mui/icons-material/Warning";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import BookIcon from "@mui/icons-material/Book";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 
 interface KillChainPhase {
   id: number;
@@ -389,6 +400,7 @@ const killChainPhases: KillChainPhase[] = [
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#f59e0b";
+const ACCENT_COLOR = "#f59e0b";
 const quizQuestions: QuizQuestion[] = [
   {
     id: 1,
@@ -995,16 +1007,307 @@ const quizQuestions: QuizQuestion[] = [
 export default function KillChainPage() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
+  const accent = ACCENT_COLOR;
   const [expandedPhase, setExpandedPhase] = useState<number | false>(false);
+
+  // Navigation State
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
 
   const pageContext = `Cyber Kill Chain educational page. This page teaches the Lockheed Martin Cyber Kill Chain framework including all 7 phases: Reconnaissance, Weaponization, Delivery, Exploitation, Installation, Command & Control, and Actions on Objectives. It covers attack techniques and defensive measures for each phase.`;
 
+  // Section Navigation Items
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "phase-1", label: "1. Reconnaissance", icon: <GpsFixedIcon /> },
+    { id: "phase-2", label: "2. Weaponization", icon: <BuildIcon /> },
+    { id: "phase-3", label: "3. Delivery", icon: <LocalShippingIcon /> },
+    { id: "phase-4", label: "4. Exploitation", icon: <BugReportIcon /> },
+    { id: "phase-5", label: "5. Installation", icon: <InstallDesktopIcon /> },
+    { id: "phase-6", label: "6. Command & Control", icon: <SettingsRemoteIcon /> },
+    { id: "phase-7", label: "7. Actions on Objectives", icon: <FlagIcon /> },
+    { id: "key-takeaways", label: "Key Takeaways", icon: <ChecklistIcon /> },
+    { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Sidebar Navigation Component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(accent, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(accent, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Cyber Kill Chain" pageContext={pageContext}>
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#d97706" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 },
+              }}
+            />
+          </Box>
+
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": { bgcolor: alpha(accent, 0.1) },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(accent, 0.2), color: accent }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz-section")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
       {/* Back Button */}
       <Chip
-        component={Link}
+        component={RouterLink}
         to="/learn"
         icon={<ArrowBackIcon />}
         label="Back to Learning Hub"
@@ -1014,7 +1317,7 @@ export default function KillChainPage() {
       />
 
       {/* Header */}
-      <Box sx={{ mb: 5 }}>
+      <Box id="intro" sx={{ mb: 5 }}>
         <Typography
           variant="h3"
           sx={{
@@ -1211,6 +1514,7 @@ export default function KillChainPage() {
       </Typography>
       {killChainPhases.map((phase) => (
         <Accordion
+          id={`phase-${phase.id}`}
           key={phase.id}
           expanded={expandedPhase === phase.id}
           onChange={(_, expanded) => setExpandedPhase(expanded ? phase.id : false)}
@@ -1380,7 +1684,7 @@ export default function KillChainPage() {
       </Paper>
 
       {/* Footer */}
-      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+      <Paper id="key-takeaways" sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(theme.palette.info.main, 0.05), border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
           🎓 Key Takeaways
         </Typography>
@@ -1423,6 +1727,44 @@ export default function KillChainPage() {
         />
       </Paper>
 
+      {/* Related Learning Topics */}
+      <Paper sx={{ p: 4, mt: 4, borderRadius: 3, bgcolor: alpha(accent, 0.03), border: `1px solid ${alpha(accent, 0.15)}` }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <BookIcon sx={{ color: accent }} />
+          Related Learning Topics
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            { title: "MITRE ATT&CK Framework", path: "/learn/mitre-attack", desc: "Detailed adversary tactics and techniques" },
+            { title: "Threat Hunting", path: "/learn/threat-hunting", desc: "Proactively search for hidden threats" },
+            { title: "Incident Response", path: "/learn/incident-response", desc: "Handle and recover from security incidents" },
+            { title: "Malware Analysis", path: "/learn/malware-analysis", desc: "Analyze malicious software behavior" },
+          ].map((topic) => (
+            <Grid item xs={12} sm={6} key={topic.path}>
+              <Paper
+                component={RouterLink}
+                to={topic.path}
+                sx={{
+                  p: 2,
+                  textDecoration: "none",
+                  display: "block",
+                  bgcolor: "background.paper",
+                  transition: "all 0.2s",
+                  "&:hover": { bgcolor: alpha(accent, 0.08), transform: "translateY(-2px)" },
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: accent }}>
+                  {topic.title}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {topic.desc}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Paper>
+
       {/* Bottom Navigation */}
       <Box sx={{ mt: 4, textAlign: "center" }}>
         <Button
@@ -1434,7 +1776,8 @@ export default function KillChainPage() {
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+        </Box>
+      </Box>
     </LearnPageLayout>
   );
 }

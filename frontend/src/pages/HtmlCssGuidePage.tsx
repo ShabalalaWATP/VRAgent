@@ -833,6 +833,2218 @@ const HtmlCssGuidePage: React.FC = () => {
           </Grid>
         </Paper>
 
+        {/* ==================== DEEP DIVE: SEMANTIC HTML ==================== */}
+        <Paper
+          id="semantic-html"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.08)} 0%, ${alpha("#06b6d4", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#8b5cf6", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#8b5cf6", 0.2), color: "#8b5cf6", fontWeight: 700 }} />
+            <Chip label="Best Practices" size="small" sx={{ bgcolor: alpha("#06b6d4", 0.2), color: "#06b6d4", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#8b5cf6" }}>
+            📐 Semantic HTML: Writing Meaningful Code
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            <strong>Semantic HTML</strong> is the practice of using HTML elements that convey meaning about the content they 
+            contain, rather than just describing how that content should look. When you use semantic HTML, you create documents 
+            that are understandable by machines (search engines, screen readers, web crawlers) and humans alike. This is one of 
+            the most fundamental skills separating amateur developers from professionals.
+          </Typography>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            Why Semantic HTML Matters
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9 }}>
+            Consider the difference between a {"<div>"} with a class of "header" and the actual {"<header>"} element. 
+            To a browser's styling engine, they might look identical—you can apply the same CSS to both. But to screen readers, 
+            search engines, and assistive technologies, the {"<header>"} element immediately communicates "this is the introduction 
+            to the page or section." This communication without CSS is what semantic HTML provides.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>The Semantic Test:</strong> If you removed all CSS from your page, would the document structure still make sense? 
+              Would a screen reader be able to navigate logically? If yes, you've written semantic HTML.
+            </Typography>
+          </Alert>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            Structural Semantic Elements
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            HTML5 introduced a suite of structural elements that replace the generic {"<div>"} soup of earlier web development. 
+            Each element has a specific purpose and helps browsers and assistive technologies understand your page layout:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ❌ Non-semantic (div soup) -->
+<div class="header">
+  <div class="nav">
+    <div class="nav-item">Home</div>
+    <div class="nav-item">About</div>
+  </div>
+</div>
+<div class="main-content">
+  <div class="article">
+    <div class="article-header">My Blog Post</div>
+    <div class="article-content">Content here...</div>
+  </div>
+  <div class="sidebar">Related posts...</div>
+</div>
+<div class="footer">Copyright 2024</div>
+
+<!-- ✅ Semantic (meaningful elements) -->
+<header>
+  <nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/about">About</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <article>
+    <header>
+      <h1>My Blog Post</h1>
+      <time datetime="2024-01-15">January 15, 2024</time>
+    </header>
+    <p>Content here...</p>
+  </article>
+  <aside>Related posts...</aside>
+</main>
+<footer>
+  <p>&copy; 2024 My Website</p>
+</footer>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            Key Semantic Elements Explained
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { tag: "<header>", desc: "Introductory content for its nearest sectioning ancestor. Can be used multiple times per page (page header, article header, section header)." },
+              { tag: "<nav>", desc: "Section containing navigation links. Should be used for major navigation blocks, not every group of links." },
+              { tag: "<main>", desc: "The dominant content of the document. Only one <main> per page. Should not be nested inside other semantic elements." },
+              { tag: "<article>", desc: "Self-contained, independently distributable content. Ask: 'Would this make sense in an RSS feed?' If yes, use <article>." },
+              { tag: "<section>", desc: "Generic section of a document. Should almost always have a heading. Use when content groups logically." },
+              { tag: "<aside>", desc: "Content tangentially related to surrounding content. Sidebars, pull quotes, advertising—things that could be removed without affecting main content." },
+              { tag: "<footer>", desc: "Footer for its nearest sectioning ancestor. Contains metadata, copyright, contact info, related links." },
+              { tag: "<figure>/<figcaption>", desc: "Self-contained content with optional caption. Perfect for images, diagrams, code snippets with explanations." },
+            ].map((item, idx) => (
+              <Grid item xs={12} md={6} key={idx}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#8b5cf6", 0.05), border: `1px solid ${alpha("#8b5cf6", 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, fontFamily: "monospace", color: "#8b5cf6", mb: 1 }}>
+                    {item.tag}
+                  </Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item.desc}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            Text-Level Semantics
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Beyond structural elements, HTML provides many text-level semantic elements. These are often misused or 
+            confused with presentational choices:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- Text-level semantics -->
+<p>
+  The term <strong>semantic HTML</strong> refers to meaningful markup.
+  <!-- strong = strong importance, usually bold visually -->
+  
+  <em>Emphasis</em> changes the meaning of a sentence.
+  <!-- em = stress emphasis, usually italic. Compare:
+       "I <em>love</em> pizza" vs "I love <em>pizza</em>" -->
+  
+  The <mark>highlighted text</mark> is relevant to the user's search.
+  <!-- mark = highlighted for reference purposes -->
+  
+  The event starts at <time datetime="2024-03-15T14:30">2:30 PM on March 15th</time>.
+  <!-- time = machine-readable date/time -->
+  
+  Water's chemical formula is H<sub>2</sub>O.
+  E = mc<sup>2</sup>
+  <!-- sub/sup = subscript/superscript -->
+  
+  The <abbr title="World Wide Web Consortium">W3C</abbr> sets web standards.
+  <!-- abbr = abbreviation with expansion -->
+  
+  Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.
+  <!-- kbd = keyboard input -->
+  
+  The function returns <code>undefined</code> if no value is found.
+  <!-- code = inline code -->
+  
+  <del>$99.99</del> <ins>$79.99</ins> - Sale Price!
+  <!-- del/ins = deleted/inserted content -->
+</p>`}
+              
+            />
+          </Box>
+
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Common Mistake:</strong> Don't use {"<b>"} and {"<i>"} for bold and italic styling—they have no semantic meaning. 
+              Use CSS for visual styling (font-weight: bold) and semantic elements ({"<strong>"}, {"<em>"}) for meaning.
+            </Typography>
+          </Alert>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+            A Complete Semantic Page Structure
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Learn semantic HTML with practical examples">
+  <title>Understanding Semantic HTML | Web Dev Guide</title>
+</head>
+<body>
+  <header>
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="/" aria-current="page">Home</a></li>
+        <li><a href="/tutorials">Tutorials</a></li>
+        <li><a href="/about">About</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <article>
+      <header>
+        <h1>Understanding Semantic HTML</h1>
+        <p>
+          By <a href="/author/jane" rel="author">Jane Developer</a>
+          <time datetime="2024-01-15" pubdate>Published January 15, 2024</time>
+        </p>
+      </header>
+
+      <section>
+        <h2>Introduction</h2>
+        <p>Semantic HTML provides meaning to your content...</p>
+      </section>
+
+      <section>
+        <h2>Key Elements</h2>
+        <p>The most important semantic elements include...</p>
+        
+        <figure>
+          <img src="semantic-diagram.png" alt="Diagram showing semantic HTML structure">
+          <figcaption>Figure 1: Semantic HTML document structure</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2>Conclusion</h2>
+        <p>By using semantic HTML, you improve accessibility...</p>
+      </section>
+
+      <footer>
+        <p>Tags: <a href="/tag/html" rel="tag">HTML</a>, <a href="/tag/semantics" rel="tag">Semantics</a></p>
+      </footer>
+    </article>
+
+    <aside>
+      <section>
+        <h2>Related Articles</h2>
+        <ul>
+          <li><a href="/css-basics">CSS Basics</a></li>
+          <li><a href="/accessibility">Web Accessibility</a></li>
+        </ul>
+      </section>
+      
+      <section>
+        <h2>About the Author</h2>
+        <p>Jane has been teaching web development for 10 years...</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    <nav aria-label="Footer navigation">
+      <ul>
+        <li><a href="/privacy">Privacy Policy</a></li>
+        <li><a href="/terms">Terms of Service</a></li>
+      </ul>
+    </nav>
+    <p><small>&copy; 2024 Web Dev Guide. All rights reserved.</small></p>
+  </footer>
+</body>
+</html>`}
+              
+            />
+          </Box>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: ACCESSIBILITY (A11Y) ==================== */}
+        <Paper
+          id="accessibility"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#22c55e", 0.08)} 0%, ${alpha("#14b8a6", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#22c55e", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#22c55e", 0.2), color: "#22c55e", fontWeight: 700 }} />
+            <Chip label="Essential" size="small" sx={{ bgcolor: alpha("#14b8a6", 0.2), color: "#14b8a6", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#22c55e" }}>
+            ♿ Web Accessibility (A11y) Best Practices
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            Web accessibility means designing and developing websites that everyone can use, including people with disabilities. 
+            This includes users who are blind or have low vision, deaf or hard of hearing, have motor impairments, cognitive 
+            disabilities, or temporary impairments (like a broken arm). Approximately <strong>15-20% of the world's population</strong> has 
+            some form of disability—ignoring accessibility means ignoring a massive portion of your potential audience.
+          </Typography>
+
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Business Case:</strong> Accessible websites also benefit everyone—they're easier to navigate, work better 
+              on mobile devices, have better SEO, and are often legally required for government and enterprise clients.
+            </Typography>
+          </Alert>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            The POUR Principles (WCAG Foundation)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            The Web Content Accessibility Guidelines (WCAG) are organized around four principles, known by the acronym POUR:
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { 
+                letter: "P", 
+                title: "Perceivable", 
+                desc: "Information must be presentable in ways users can perceive. This means providing text alternatives for images, captions for videos, and not relying solely on color to convey meaning.", 
+                color: "#ef4444" 
+              },
+              { 
+                letter: "O", 
+                title: "Operable", 
+                desc: "User interface components must be operable. All functionality must be available from a keyboard, users must have enough time to read content, and content shouldn't cause seizures.", 
+                color: "#f59e0b" 
+              },
+              { 
+                letter: "U", 
+                title: "Understandable", 
+                desc: "Information and UI operation must be understandable. Text must be readable, web pages must operate in predictable ways, and users need help avoiding and correcting mistakes.", 
+                color: "#22c55e" 
+              },
+              { 
+                letter: "R", 
+                title: "Robust", 
+                desc: "Content must be robust enough to be interpreted by a wide variety of user agents, including assistive technologies. This means using valid, semantic HTML.", 
+                color: "#3b82f6" 
+              },
+            ].map((item, idx) => (
+              <Grid item xs={12} sm={6} key={idx}>
+                <Box sx={{ 
+                  p: 3, 
+                  borderRadius: 2, 
+                  bgcolor: alpha(item.color, 0.1), 
+                  border: `1px solid ${alpha(item.color, 0.3)}`,
+                  height: "100%",
+                  display: "flex",
+                  gap: 2
+                }}>
+                  <Box sx={{ 
+                    width: 48, 
+                    height: 48, 
+                    borderRadius: "50%", 
+                    bgcolor: item.color, 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }}>
+                    <Typography sx={{ color: "white", fontWeight: 800, fontSize: "1.5rem" }}>{item.letter}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: item.color, mb: 1 }}>{item.title}</Typography>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item.desc}</Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            Essential Accessibility Practices
+          </Typography>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 3, color: "#22c55e" }}>
+            1. Alternative Text for Images
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Every meaningful image needs descriptive alt text. Screen readers read this text aloud, and it displays when 
+            images fail to load. The art of writing good alt text is describing the content AND function of an image:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ❌ Bad alt text -->
+<img src="dog.jpg" alt="dog">
+<img src="dog.jpg" alt="image">
+<img src="dog.jpg" alt="photo of dog">
+<img src="chart.png" alt="chart">
+
+<!-- ✅ Good alt text - describes content and meaning -->
+<img src="dog.jpg" alt="Golden retriever puppy playing fetch in a sunny park">
+
+<!-- ✅ For functional images, describe the function -->
+<img src="search-icon.png" alt="Search">
+<a href="/">
+  <img src="logo.png" alt="Company Name - Return to homepage">
+</a>
+
+<!-- ✅ For complex images like charts, provide detailed descriptions -->
+<figure>
+  <img src="sales-chart.png" 
+       alt="Bar chart showing quarterly sales: Q1 $100K, Q2 $150K, Q3 $125K, Q4 $200K">
+  <figcaption>2024 Quarterly Sales Performance</figcaption>
+</figure>
+
+<!-- ✅ Decorative images should have empty alt -->
+<img src="decorative-swirl.png" alt="">
+<!-- Or use CSS background images for decorative content -->
+
+<!-- ✅ For complex images, use aria-describedby for long descriptions -->
+<img src="complex-diagram.png" 
+     alt="System architecture diagram"
+     aria-describedby="diagram-description">
+<div id="diagram-description" class="sr-only">
+  The diagram shows three main components: the frontend React application 
+  connects to a Node.js API server, which in turn connects to a PostgreSQL 
+  database. All components are deployed on AWS with load balancing.
+</div>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            2. Keyboard Navigation
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Many users can't use a mouse—they navigate entirely with keyboards. All interactive elements must be 
+            focusable and operable with keyboard alone:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ❌ Bad: Non-focusable interactive elements -->
+<div onclick="handleClick()">Click me</div>
+<span class="link" onclick="navigate()">Go to page</span>
+
+<!-- ✅ Good: Use proper interactive elements -->
+<button onclick="handleClick()">Click me</button>
+<a href="/page">Go to page</a>
+
+<!-- If you MUST use a div, add keyboard support -->
+<div role="button" 
+     tabindex="0" 
+     onclick="handleClick()"
+     onkeydown="if(event.key === 'Enter' || event.key === ' ') handleClick()">
+  Click me
+</div>
+
+<!-- ✅ Visible focus indicators (NEVER remove these without replacement) -->
+<style>
+  /* ❌ Don't do this */
+  *:focus { outline: none; }
+  
+  /* ✅ Do this instead - custom but visible focus */
+  *:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+  }
+  
+  /* ✅ Even better - use :focus-visible for keyboard-only focus */
+  *:focus { outline: none; }
+  *:focus-visible {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+  }
+</style>
+
+<!-- ✅ Skip links for keyboard users -->
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header><!-- Long navigation here --></header>
+  <main id="main-content">
+    <!-- Main content -->
+  </main>
+</body>
+
+<style>
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1em;
+  background: #000;
+  color: #fff;
+}
+.skip-link:focus {
+  left: 0;
+}
+</style>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            3. Color Contrast
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Text must have sufficient contrast against its background. WCAG requires a minimum contrast ratio of 
+            4.5:1 for normal text and 3:1 for large text (18px+ bold or 24px+ regular):
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* ❌ Poor contrast - hard to read */
+.bad-example {
+  color: #999999;        /* Light gray */
+  background: #ffffff;   /* White background */
+  /* Contrast ratio: ~2.8:1 - FAILS */
+}
+
+/* ✅ Good contrast - easy to read */
+.good-example {
+  color: #374151;        /* Dark gray */
+  background: #ffffff;   /* White background */
+  /* Contrast ratio: ~10:1 - PASSES */
+}
+
+/* ✅ Tools to check contrast:
+   - Chrome DevTools (Inspect > color picker shows contrast)
+   - webaim.org/resources/contrastchecker
+   - Firefox Accessibility Inspector
+*/
+
+/* ❌ Don't rely on color alone */
+.error-bad {
+  color: red;  /* Only color indicates error */
+}
+
+/* ✅ Use multiple indicators */
+.error-good {
+  color: #dc2626;
+  font-weight: bold;
+  /* Plus an icon or text prefix */
+}
+
+<span class="error-good">
+  ⚠️ Error: Please enter a valid email address
+</span>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            4. Accessible Forms
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ❌ Inaccessible form -->
+<input type="text" placeholder="Enter your name">
+<input type="email" placeholder="Email">
+<select>
+  <option>Select country</option>
+</select>
+
+<!-- ✅ Accessible form -->
+<form>
+  <div class="form-group">
+    <label for="name">Full Name <span aria-hidden="true">*</span></label>
+    <input type="text" 
+           id="name" 
+           name="name" 
+           required 
+           aria-required="true"
+           autocomplete="name">
+  </div>
+
+  <div class="form-group">
+    <label for="email">Email Address <span aria-hidden="true">*</span></label>
+    <input type="email" 
+           id="email" 
+           name="email" 
+           required
+           aria-required="true"
+           aria-describedby="email-hint"
+           autocomplete="email">
+    <span id="email-hint" class="hint">We'll never share your email</span>
+  </div>
+
+  <fieldset>
+    <legend>Preferred Contact Method</legend>
+    <div>
+      <input type="radio" id="contact-email" name="contact" value="email">
+      <label for="contact-email">Email</label>
+    </div>
+    <div>
+      <input type="radio" id="contact-phone" name="contact" value="phone">
+      <label for="contact-phone">Phone</label>
+    </div>
+  </fieldset>
+
+  <div class="form-group">
+    <label for="country">Country</label>
+    <select id="country" name="country" autocomplete="country">
+      <option value="">Select your country</option>
+      <option value="us">United States</option>
+      <option value="uk">United Kingdom</option>
+    </select>
+  </div>
+
+  <!-- Error messages -->
+  <div class="form-group" aria-live="polite">
+    <label for="password">Password</label>
+    <input type="password" 
+           id="password"
+           name="password"
+           aria-invalid="true"
+           aria-describedby="password-error">
+    <span id="password-error" class="error" role="alert">
+      Password must be at least 8 characters
+    </span>
+  </div>
+
+  <button type="submit">Create Account</button>
+</form>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+            5. ARIA (Accessible Rich Internet Applications)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            ARIA attributes provide extra accessibility information when native HTML isn't sufficient. The first rule 
+            of ARIA: <strong>don't use ARIA if you can use native HTML</strong>. ARIA is a last resort.
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ARIA Roles - tell assistive tech what an element is -->
+<div role="navigation">...</div>  <!-- Better: just use <nav> -->
+<div role="button">...</div>      <!-- Better: just use <button> -->
+<div role="dialog">...</div>      <!-- For modal dialogs -->
+<div role="alert">...</div>       <!-- For important messages -->
+<div role="tablist">...</div>     <!-- For tab interfaces -->
+
+<!-- ARIA States - tell assistive tech the current state -->
+<button aria-expanded="false">Menu</button>
+<button aria-pressed="true">Bold</button>
+<input aria-invalid="true">
+<div aria-hidden="true">Decorative content</div>
+<div aria-busy="true">Loading...</div>
+
+<!-- ARIA Properties - additional info about elements -->
+<input aria-label="Search">
+<input aria-labelledby="search-label">
+<input aria-describedby="search-hint">
+<div aria-live="polite">Dynamic content area</div>
+
+<!-- ✅ Practical Example: Custom Dropdown -->
+<div class="dropdown">
+  <button id="menu-button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="menu-list">
+    Options ▼
+  </button>
+  <ul id="menu-list"
+      role="menu"
+      aria-labelledby="menu-button"
+      hidden>
+    <li role="menuitem"><a href="/edit">Edit</a></li>
+    <li role="menuitem"><a href="/delete">Delete</a></li>
+    <li role="menuitem"><a href="/share">Share</a></li>
+  </ul>
+</div>
+
+<!-- ✅ Live Regions - announce dynamic changes -->
+<div aria-live="polite">
+  <!-- Content changes here are announced to screen readers -->
+  <p>3 items in your cart</p>
+</div>
+
+<div aria-live="assertive" role="alert">
+  <!-- Urgent messages interrupt whatever screen reader is doing -->
+  <p>Error: Your session has expired</p>
+</div>`}
+              
+            />
+          </Box>
+
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Testing Tip:</strong> Test your site with a screen reader! Try NVDA (free, Windows), VoiceOver (built into Mac/iOS), 
+              or TalkBack (Android). Navigate using only your keyboard. You'll quickly find accessibility issues.
+            </Typography>
+          </Alert>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: CSS CUSTOM PROPERTIES ==================== */}
+        <Paper
+          id="css-variables"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.08)} 0%, ${alpha("#ef4444", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#f59e0b", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#f59e0b", 0.2), color: "#f59e0b", fontWeight: 700 }} />
+            <Chip label="Modern CSS" size="small" sx={{ bgcolor: alpha("#ef4444", 0.2), color: "#ef4444", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#f59e0b" }}>
+            🎨 CSS Custom Properties (Variables)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            CSS Custom Properties, commonly called CSS Variables, revolutionized how we write maintainable stylesheets. 
+            Unlike preprocessor variables (Sass, Less), CSS variables are <strong>live and dynamic</strong>—they exist in the browser, 
+            can be changed with JavaScript, respond to media queries, and cascade through the DOM. They're essential for 
+            building design systems, theme switching, and component-based architectures.
+          </Typography>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+            Basic Syntax and Usage
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* Defining CSS Custom Properties */
+:root {
+  /* The :root selector = <html>, but with higher specificity */
+  /* Convention: prefix with -- (required) */
+  
+  /* Colors */
+  --color-primary: #3b82f6;
+  --color-primary-dark: #1d4ed8;
+  --color-secondary: #8b5cf6;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  
+  /* Typography */
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-mono: 'Fira Code', monospace;
+  --font-size-base: 16px;
+  --font-size-sm: 0.875rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --line-height-base: 1.6;
+  
+  /* Spacing (using 4px grid) */
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  
+  /* Border radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 300ms ease;
+  --transition-slow: 500ms ease;
+}
+
+/* Using CSS Custom Properties with var() */
+.button {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  transition: background-color var(--transition-fast);
+}
+
+.button:hover {
+  background-color: var(--color-primary-dark);
+}
+
+/* Fallback values */
+.element {
+  /* If --undefined-var doesn't exist, use #333 */
+  color: var(--undefined-var, #333);
+  
+  /* Nested fallbacks */
+  background: var(--theme-bg, var(--color-primary, blue));
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+            Implementing Dark Mode with CSS Variables
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            CSS variables make dark mode implementation elegant. Define your theme colors as variables and swap them 
+            based on a class or attribute:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* Light theme (default) */
+:root {
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f9fafb;
+  --color-text: #111827;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-link: #3b82f6;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme - applied when .dark class is on html/body */
+.dark {
+  --color-bg: #111827;
+  --color-bg-secondary: #1f2937;
+  --color-text: #f9fafb;
+  --color-text-secondary: #9ca3af;
+  --color-border: #374151;
+  --color-link: #60a5fa;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Or use data attribute */
+[data-theme="dark"] {
+  --color-bg: #111827;
+  /* ... */
+}
+
+/* Or respect system preference */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #111827;
+    --color-text: #f9fafb;
+    /* ... */
+  }
+}
+
+/* Components use variables - theme changes automatically */
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+.card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 6px var(--shadow-color);
+}
+
+a {
+  color: var(--color-link);
+}
+
+/* Theme toggle with JavaScript */
+<script>
+const toggle = document.getElementById('theme-toggle');
+const html = document.documentElement;
+
+toggle.addEventListener('click', () => {
+  html.classList.toggle('dark');
+  // Save preference
+  localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+});
+
+// Load saved preference
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  html.classList.add('dark');
+}
+</script>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+            Scoped Variables in Components
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Unlike preprocessor variables which are compiled away, CSS custom properties cascade. This means you can 
+            redefine them at any level and create component-scoped design tokens:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* Button component with scoped variables */
+.btn {
+  /* Component-level defaults */
+  --btn-padding-x: var(--spacing-4);
+  --btn-padding-y: var(--spacing-2);
+  --btn-font-size: var(--font-size-base);
+  --btn-radius: var(--radius-md);
+  --btn-bg: var(--color-primary);
+  --btn-color: white;
+  --btn-border: transparent;
+  
+  /* Use scoped variables */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-size: var(--btn-font-size);
+  border-radius: var(--btn-radius);
+  background-color: var(--btn-bg);
+  color: var(--btn-color);
+  border: 2px solid var(--btn-border);
+}
+
+/* Variants just override the scoped variables */
+.btn--secondary {
+  --btn-bg: transparent;
+  --btn-color: var(--color-primary);
+  --btn-border: var(--color-primary);
+}
+
+.btn--danger {
+  --btn-bg: var(--color-error);
+}
+
+.btn--sm {
+  --btn-padding-x: var(--spacing-3);
+  --btn-padding-y: var(--spacing-1);
+  --btn-font-size: var(--font-size-sm);
+}
+
+.btn--lg {
+  --btn-padding-x: var(--spacing-6);
+  --btn-padding-y: var(--spacing-3);
+  --btn-font-size: var(--font-size-lg);
+}
+
+/* Hover state */
+.btn:hover {
+  --btn-bg: var(--color-primary-dark);
+}
+
+.btn--secondary:hover {
+  --btn-bg: var(--color-primary);
+  --btn-color: white;
+}
+
+/* Usage in HTML */
+<button class="btn">Default Button</button>
+<button class="btn btn--secondary">Secondary</button>
+<button class="btn btn--danger btn--lg">Delete</button>`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b" }}>
+            Manipulating CSS Variables with JavaScript
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`// Read a CSS variable
+const root = document.documentElement;
+const primaryColor = getComputedStyle(root).getPropertyValue('--color-primary');
+console.log(primaryColor); // "#3b82f6"
+
+// Set a CSS variable
+root.style.setProperty('--color-primary', '#8b5cf6');
+
+// Set on a specific element
+const card = document.querySelector('.card');
+card.style.setProperty('--card-bg', 'linear-gradient(135deg, #667eea, #764ba2)');
+
+// Dynamic theming based on user input
+const colorPicker = document.getElementById('color-picker');
+colorPicker.addEventListener('input', (e) => {
+  root.style.setProperty('--color-primary', e.target.value);
+});
+
+// Responsive variables with ResizeObserver
+const observer = new ResizeObserver(entries => {
+  for (let entry of entries) {
+    const width = entry.contentRect.width;
+    entry.target.style.setProperty('--container-width', width + 'px');
+  }
+});
+observer.observe(document.querySelector('.container'));
+
+// Animate with CSS variables
+const box = document.querySelector('.animated-box');
+box.style.setProperty('--rotation', '0deg');
+box.style.setProperty('--scale', '1');
+
+box.addEventListener('mouseenter', () => {
+  box.style.setProperty('--rotation', '10deg');
+  box.style.setProperty('--scale', '1.1');
+});
+
+/* In CSS */
+.animated-box {
+  transform: rotate(var(--rotation)) scale(var(--scale));
+  transition: transform 0.3s ease;
+}`}
+              
+            />
+          </Box>
+
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Pro Tip:</strong> CSS variables are incredibly powerful for creating accessible, themeable design systems. 
+              Combined with prefers-color-scheme, prefers-reduced-motion, and other media queries, you can create interfaces 
+              that adapt to user preferences automatically.
+            </Typography>
+          </Alert>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: BEM METHODOLOGY ==================== */}
+        <Paper
+          id="bem-methodology"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#ec4899", 0.08)} 0%, ${alpha("#8b5cf6", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#ec4899", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#ec4899", 0.2), color: "#ec4899", fontWeight: 700 }} />
+            <Chip label="Architecture" size="small" sx={{ bgcolor: alpha("#8b5cf6", 0.2), color: "#8b5cf6", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#ec4899" }}>
+            🏗️ BEM Methodology: Scalable CSS Architecture
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            <strong>BEM (Block Element Modifier)</strong> is a naming convention for CSS classes that makes your code more 
+            readable, maintainable, and scalable. Developed by Yandex, BEM solves the classic CSS problems: specificity 
+            wars, naming collisions, and unclear relationships between styles. While it might look verbose at first, 
+            BEM saves countless hours of debugging in larger projects.
+          </Typography>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#ec4899" }}>
+            The BEM Convention
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.1), border: `1px solid ${alpha("#3b82f6", 0.3)}`, height: "100%" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Block</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1 }}>.block</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                  A standalone component that is meaningful on its own. Examples: header, menu, card, form.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.3)}`, height: "100%" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>Element</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1 }}>.block__element</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                  A part of a block that has no standalone meaning. Examples: menu__item, card__title, form__input.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}`, height: "100%" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Modifier</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1 }}>.block--modifier</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                  A flag that changes appearance or behavior. Examples: button--large, card--featured, input--disabled.
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* BEM Naming Examples */
+
+/* BLOCK: A standalone component */
+.card { }
+.navbar { }
+.search-form { }  /* Blocks can have multi-word names with single hyphen */
+
+/* ELEMENT: Part of a block (double underscore) */
+.card__header { }
+.card__image { }
+.card__title { }
+.card__body { }
+.card__footer { }
+.navbar__logo { }
+.navbar__menu { }
+.search-form__input { }
+.search-form__button { }
+
+/* MODIFIER: Variation of block or element (double hyphen) */
+.card--featured { }           /* Block modifier */
+.card--horizontal { }
+.card__title--large { }       /* Element modifier */
+.navbar--sticky { }
+.navbar__menu--expanded { }
+.search-form--compact { }
+.search-form__button--loading { }
+
+/* ❌ Avoid: element of element (too deeply nested) */
+.card__header__title { }      /* Wrong! */
+
+/* ✅ Keep it flat */
+.card__title { }              /* Title can be anywhere in card */`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#ec4899" }}>
+            Complete BEM Example: Card Component
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- HTML with BEM classes -->
+<article class="card card--featured">
+  <div class="card__image-container">
+    <img class="card__image" src="photo.jpg" alt="Article photo">
+    <span class="card__badge">Featured</span>
+  </div>
+  <div class="card__content">
+    <header class="card__header">
+      <span class="card__category">Technology</span>
+      <h2 class="card__title card__title--large">Understanding BEM Methodology</h2>
+    </header>
+    <p class="card__excerpt">
+      BEM is a naming convention that makes CSS more maintainable...
+    </p>
+    <footer class="card__footer">
+      <div class="card__author">
+        <img class="card__author-avatar" src="avatar.jpg" alt="">
+        <span class="card__author-name">Jane Developer</span>
+      </div>
+      <a href="/article" class="card__link">Read More →</a>
+    </footer>
+  </div>
+</article>`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* CSS with BEM */
+.card {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Block modifier */
+.card--featured {
+  border: 2px solid #3b82f6;
+}
+
+.card--horizontal {
+  flex-direction: row;
+}
+
+/* Elements */
+.card__image-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.card__image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.card--horizontal .card__image {
+  height: 100%;
+  width: 200px;
+}
+
+.card__badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 12px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.card__content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.card__header {
+  margin-bottom: 12px;
+}
+
+.card__category {
+  display: inline-block;
+  color: #6b7280;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.card__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+}
+
+/* Element modifier */
+.card__title--large {
+  font-size: 22px;
+}
+
+.card__excerpt {
+  color: #6b7280;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.card__author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card__author-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.card__author-name {
+  font-size: 14px;
+  color: #374151;
+}
+
+.card__link {
+  color: #3b82f6;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.card__link:hover {
+  text-decoration: underline;
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#ec4899" }}>
+            BEM Best Practices
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { title: "Flat structure", desc: "Never nest selectors based on BEM hierarchy. .card__title should work anywhere inside .card, not just under .card__header." },
+              { title: "No tag selectors", desc: "Use .card__title, not .card h2. This prevents specificity issues and allows flexibility in HTML structure." },
+              { title: "Modifiers add to base", desc: "Always use .card.card--featured (both classes). Modifiers extend, not replace, the base block styles." },
+              { title: "No ID selectors", desc: "IDs are for JavaScript hooks and anchor links. Keep all styling in classes to maintain low specificity." },
+            ].map((item, idx) => (
+              <Grid item xs={12} sm={6} key={idx}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ec4899", 0.05), border: `1px solid ${alpha("#ec4899", 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 1 }}>{item.title}</Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item.desc}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: BROWSER DEVTOOLS ==================== */}
+        <Paper
+          id="devtools"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.08)} 0%, ${alpha("#3b82f6", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#06b6d4", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#06b6d4", 0.2), color: "#06b6d4", fontWeight: 700 }} />
+            <Chip label="Essential Tools" size="small" sx={{ bgcolor: alpha("#3b82f6", 0.2), color: "#3b82f6", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#06b6d4" }}>
+            🔧 Mastering Browser Developer Tools
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            Browser DevTools are indispensable for web development. Whether you're debugging layout issues, optimizing 
+            performance, or experimenting with styles, mastering these tools will make you 10x more productive. 
+            Every modern browser has DevTools—we'll focus on Chrome DevTools, but Firefox, Safari, and Edge have 
+            similar features.
+          </Typography>
+
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Open DevTools:</strong> Press <kbd>F12</kbd>, <kbd>Ctrl+Shift+I</kbd> (Windows/Linux), or <kbd>Cmd+Option+I</kbd> (Mac). 
+              Or right-click any element and select "Inspect".
+            </Typography>
+          </Alert>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            The Elements Panel
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            The Elements panel shows the live DOM tree and lets you inspect and modify HTML and CSS in real-time. 
+            Changes you make are temporary (refresh to reset) but invaluable for experimentation.
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { 
+                title: "Inspect Element", 
+                shortcut: "Ctrl+Shift+C", 
+                desc: "Click the inspect icon (cursor in box) then hover over elements to see their box model highlighted. Click to select and view styles." 
+              },
+              { 
+                title: "Edit HTML", 
+                shortcut: "Double-click or F2", 
+                desc: "Double-click any element in the DOM tree to edit its content or attributes. Right-click for more options: delete, duplicate, copy." 
+              },
+              { 
+                title: "Search DOM", 
+                shortcut: "Ctrl+F in Elements", 
+                desc: "Search by text content, tag name, CSS selector, or XPath. Great for finding specific elements in large pages." 
+              },
+              { 
+                title: "Force State", 
+                shortcut: ":hov button", 
+                desc: "Force :hover, :active, :focus, :visited states on elements to debug pseudo-class styles without actually triggering them." 
+              },
+            ].map((item, idx) => (
+              <Grid item xs={12} sm={6} key={idx}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#06b6d4", 0.05), border: `1px solid ${alpha("#06b6d4", 0.2)}`, height: "100%" }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#06b6d4" }}>{item.title}</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: "monospace", bgcolor: alpha("#06b6d4", 0.1), px: 1, borderRadius: 1 }}>{item.shortcut}</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item.desc}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            The Styles Pane
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Located to the right of the DOM tree, the Styles pane shows all CSS applied to the selected element, 
+            including inherited styles, user agent styles, and the cascade order:
+          </Typography>
+
+          <Box sx={{ mb: 3, p: 3, bgcolor: alpha("#06b6d4", 0.05), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+            <Typography variant="body2" component="div" sx={{ lineHeight: 2 }}>
+              <strong>Key Features:</strong>
+              <ul style={{ margin: "8px 0", paddingLeft: 24 }}>
+                <li><strong>Add properties:</strong> Click inside any rule to add new CSS properties with autocomplete</li>
+                <li><strong>Toggle properties:</strong> Click the checkbox next to any property to disable it temporarily</li>
+                <li><strong>Edit values:</strong> Click on any value to edit. Use ↑/↓ to increment numbers, Shift+↑/↓ for ×10</li>
+                <li><strong>Color picker:</strong> Click the color square next to any color value for a visual picker</li>
+                <li><strong>View computed:</strong> "Computed" tab shows final values after cascade resolution</li>
+                <li><strong>Source links:</strong> Click filename:line to jump directly to that CSS file</li>
+              </ul>
+            </Typography>
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            The Box Model Diagram
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            At the bottom of the Styles pane is an interactive box model diagram showing the selected element's 
+            dimensions, padding, border, and margin. You can click on any value to edit it directly:
+          </Typography>
+
+          <Box sx={{ fontFamily: "monospace", fontSize: "0.85rem", p: 3, bgcolor: "#111827", borderRadius: 2, color: "#f9fafb", mb: 3, whiteSpace: "pre" }}>
+{`┌─────────────────────── margin (orange) ───────────────────────┐
+│                              20                               │
+│   ┌─────────────────── border (yellow) ─────────────────┐    │
+│   │                        2px                           │    │
+│ 20│   ┌─────────────── padding (green) ────────────┐   │ 20│
+│   │ 2px│                  16                        │2px│    │
+│   │   │   ┌─────────── content (blue) ──────────┐  │   │    │
+│   │ 16│   │                                     │16│   │    │
+│   │   │   │        320 × 200                    │  │   │    │
+│   │   │   │                                     │  │   │    │
+│   │   │   └─────────────────────────────────────┘  │   │    │
+│   │   │                  16                        │   │    │
+│   │   └────────────────────────────────────────────┘   │    │
+│   │                        2px                           │    │
+│   └─────────────────────────────────────────────────────┘    │
+│                              20                               │
+└───────────────────────────────────────────────────────────────┘`}
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            Device Mode (Responsive Testing)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Click the device toggle icon (📱💻) or press <kbd>Ctrl+Shift+M</kbd> to enter device mode. This lets you 
+            test responsive designs without actual devices:
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { title: "Device presets", desc: "Choose from popular devices (iPhone, iPad, Pixel) with accurate dimensions and pixel ratios." },
+              { title: "Responsive mode", desc: "Drag the viewport edges to test at any arbitrary size. Width×height shown in corner." },
+              { title: "Throttle network", desc: "Simulate slow connections (3G, offline) to test loading states and performance." },
+              { title: "Orientation", desc: "Toggle between portrait and landscape to test orientation-responsive designs." },
+            ].map((item, idx) => (
+              <Grid item xs={12} sm={6} key={idx}>
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#06b6d4", 0.05), border: `1px solid ${alpha("#06b6d4", 0.2)}`, height: "100%" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#06b6d4", mb: 0.5 }}>{item.title}</Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{item.desc}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#06b6d4" }}>
+            Debugging Flexbox and Grid
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Chrome and Firefox have amazing tools for visualizing Flexbox and Grid layouts:
+          </Typography>
+
+          <Box sx={{ mb: 3, p: 3, bgcolor: alpha("#06b6d4", 0.05), borderRadius: 2, border: `1px solid ${alpha("#06b6d4", 0.2)}` }}>
+            <Typography variant="body2" component="div" sx={{ lineHeight: 2 }}>
+              <strong>Flexbox Tools:</strong>
+              <ul style={{ margin: "8px 0", paddingLeft: 24 }}>
+                <li>Look for the "flex" badge next to flex containers in the Elements panel</li>
+                <li>Click the badge to toggle a visual overlay showing axes and spacing</li>
+                <li>In the Styles pane, flex properties show icon buttons for value options</li>
+              </ul>
+              <strong>Grid Tools:</strong>
+              <ul style={{ margin: "8px 0", paddingLeft: 24 }}>
+                <li>Look for the "grid" badge next to grid containers</li>
+                <li>Click to overlay grid lines, track sizes, and area names</li>
+                <li>Multiple grids can be visualized simultaneously in different colors</li>
+                <li>The Layout panel (sidebar tab) lists all grids on the page</li>
+              </ul>
+            </Typography>
+          </Box>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: COMMON MISTAKES ==================== */}
+        <Paper
+          id="common-mistakes"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#ef4444", 0.08)} 0%, ${alpha("#f59e0b", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#ef4444", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#ef4444", 0.2), color: "#ef4444", fontWeight: 700 }} />
+            <Chip label="Avoid These!" size="small" sx={{ bgcolor: alpha("#f59e0b", 0.2), color: "#f59e0b", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#ef4444" }}>
+            ⚠️ Common HTML & CSS Mistakes (and How to Fix Them)
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            Even experienced developers make these mistakes. Learning to recognize and avoid them will save you hours 
+            of debugging and result in cleaner, more maintainable code. Let's examine the most common pitfalls:
+          </Typography>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#ef4444" }}>
+            HTML Mistakes
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              1. Missing or Wrong DOCTYPE
+            </Typography>
+            <CodeBlock
+              code={`<!-- ❌ Missing DOCTYPE - browser enters quirks mode -->
+<html>
+<head>...</head>
+</html>
+
+<!-- ❌ Old XHTML DOCTYPE - verbose and unnecessary -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" 
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<!-- ✅ HTML5 DOCTYPE - simple and correct -->
+<!DOCTYPE html>
+<html lang="en">
+<head>...</head>
+</html>`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              2. Improper Heading Hierarchy
+            </Typography>
+            <CodeBlock
+              code={`<!-- ❌ Bad: Skipped heading levels, multiple h1s, style-based selection -->
+<h1>My Website</h1>
+<h1>Welcome!</h1>           <!-- Two h1s on one page -->
+<h4>About Us</h4>           <!-- Skipped h2, h3 -->
+<h2>Big text I want</h2>    <!-- Used h2 for styling, not structure -->
+
+<!-- ✅ Good: Logical hierarchy, one h1, no skips -->
+<h1>My Website</h1>         <!-- One h1 per page -->
+<main>
+  <h2>Welcome</h2>
+  <section>
+    <h3>About Us</h3>
+    <h4>Our History</h4>
+    <h4>Our Team</h4>
+  </section>
+  <section>
+    <h3>Services</h3>      <!-- h3 can restart in new section -->
+  </section>
+</main>
+
+/* For visual sizing, use CSS, not heading levels */
+.large-text { font-size: 2rem; font-weight: bold; }`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              3. Inline Styles and Deprecated Attributes
+            </Typography>
+            <CodeBlock
+              code={`<!-- ❌ Bad: Inline styles, deprecated attributes -->
+<p style="color: red; font-size: 14px;">Text</p>
+<table border="1" cellpadding="10">
+<font color="blue">Old school</font>
+<center>Centered text</center>
+<body bgcolor="#fff">
+
+<!-- ✅ Good: Separate CSS -->
+<p class="error-text">Text</p>
+<table class="data-table">
+
+/* In CSS file */
+.error-text {
+  color: #dc2626;
+  font-size: 0.875rem;
+}
+.data-table {
+  border-collapse: collapse;
+}
+.data-table td {
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+}`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              4. Missing Form Labels
+            </Typography>
+            <CodeBlock
+              code={`<!-- ❌ Bad: No labels, placeholder as label -->
+<input type="text" placeholder="Enter your name">
+<input type="email" placeholder="Email">
+
+<!-- ✅ Good: Proper labels (required for accessibility) -->
+<div class="form-field">
+  <label for="name">Full Name</label>
+  <input type="text" id="name" name="name" placeholder="John Doe">
+</div>
+
+<!-- If you MUST hide the label visually, use screen-reader-only class -->
+<label for="search" class="sr-only">Search</label>
+<input type="search" id="search" placeholder="Search...">
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, mt: 4, color: "#ef4444" }}>
+            CSS Mistakes
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              1. Over-Specific Selectors
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Bad: Over-specific, hard to override, brittle */
+body div.container main article.post div.content p.intro span {
+  color: blue;
+}
+#header #nav ul li a.active {  /* IDs make this almost impossible to override */
+  color: red;
+}
+
+/* ✅ Good: Low specificity, easy to maintain */
+.post-intro {
+  color: blue;
+}
+.nav-link--active {
+  color: red;
+}
+
+/* Rule of thumb: aim for specificity of 0-1-0 (one class)
+   ID selectors (1-0-0) should be avoided in CSS */`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              2. Using !important
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Bad: !important wars */
+.button {
+  background: blue !important;
+}
+.button-red {
+  background: red !important; /* Need to override the above */
+}
+.button-red-dark {
+  background: darkred !important !important; /* Doesn't work this way! */
+}
+
+/* ✅ Good: Proper specificity management */
+.button {
+  background: blue;
+}
+.button.button--danger {  /* Slightly higher specificity */
+  background: red;
+}
+
+/* Only acceptable uses of !important:
+   1. Utility classes that MUST override (like .hidden { display: none !important; })
+   2. Overriding third-party CSS you can't modify
+   3. Accessibility overrides (forced high contrast)
+*/`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              3. Forgetting box-sizing
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Default box-sizing: content-box causes layout issues */
+.sidebar {
+  width: 300px;
+  padding: 20px;        /* Total width is now 340px! (300 + 20 + 20) */
+  border: 1px solid;    /* Actually 342px */
+}
+
+/* ✅ Fix: Set border-box globally */
+*, *::before, *::after {
+  box-sizing: border-box;  /* Padding & border included in width */
+}
+
+.sidebar {
+  width: 300px;
+  padding: 20px;        /* Width stays 300px, padding is inside */
+  border: 1px solid;    /* Still 300px total */
+}`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              4. Collapsing Margins Confusion
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Common surprise: margins collapse */
+<style>
+.parent { background: lightblue; }
+.child { margin-top: 50px; }
+</style>
+<div class="parent">
+  <div class="child">Why does parent have no top padding?!</div>
+</div>
+/* The child's margin collapses through the parent! */
+
+/* ✅ Fix options: */
+
+/* 1. Add padding or border to parent */
+.parent {
+  padding-top: 1px;  /* or border-top: 1px solid transparent */
+}
+
+/* 2. Create a Block Formatting Context */
+.parent {
+  overflow: hidden;  /* or auto */
+}
+
+/* 3. Use Flexbox or Grid (doesn't collapse) */
+.parent {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 4. Modern: Use gap instead of margins */
+.parent {
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+}`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              5. Fixed Heights on Content
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Bad: Fixed height clips content */
+.card {
+  height: 200px;  /* What if content is longer? */
+}
+
+.hero {
+  height: 500px;  /* Breaks on mobile or with more content */
+}
+
+/* ✅ Good: Use min-height and flexible sizing */
+.card {
+  min-height: 200px;  /* At least 200px, but can grow */
+}
+
+.hero {
+  min-height: 500px;  /* Minimum height */
+  /* Or responsive: */
+  min-height: 70vh;   /* 70% of viewport */
+}
+
+/* If you need fixed height with overflow: */
+.scrollable-list {
+  height: 300px;      /* Fixed */
+  overflow-y: auto;   /* Scrollable */
+}`}
+              
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+              6. Not Using Relative Units
+            </Typography>
+            <CodeBlock
+              code={`/* ❌ Bad: Fixed pixel values don't scale */
+body {
+  font-size: 16px;
+}
+h1 {
+  font-size: 32px;
+  margin-bottom: 20px;
+}
+.container {
+  width: 1200px;
+  padding: 30px;
+}
+
+/* ✅ Good: Relative units adapt */
+:root {
+  font-size: 16px;  /* Base size (can use 62.5% trick for 10px base) */
+}
+body {
+  font-size: 1rem;  /* 16px, scales with user preference */
+}
+h1 {
+  font-size: 2rem;       /* 32px relative to root */
+  margin-bottom: 1.25em; /* Relative to element's font-size */
+}
+.container {
+  max-width: 75rem;      /* 1200px but responsive */
+  width: 100%;
+  padding: 1.875rem;
+}
+
+/* When to use which unit:
+   - font-size: rem (scales with user preference)
+   - margin/padding: rem or em
+   - width: %, vw, or rem with max-width
+   - height: vh, %, auto, or min-height in rem
+   - borders/shadows: px is fine (they don't need to scale)
+*/`}
+              
+            />
+          </Box>
+        </Paper>
+
+        {/* ==================== DEEP DIVE: CSS PERFORMANCE ==================== */}
+        <Paper
+          id="css-performance"
+          sx={{
+            p: 4,
+            mb: 4,
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha("#10b981", 0.08)} 0%, ${alpha("#22c55e", 0.08)} 100%)`,
+            border: `1px solid ${alpha("#10b981", 0.3)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Chip label="Deep Dive" sx={{ bgcolor: alpha("#10b981", 0.2), color: "#10b981", fontWeight: 700 }} />
+            <Chip label="Performance" size="small" sx={{ bgcolor: alpha("#22c55e", 0.2), color: "#22c55e", fontWeight: 600 }} />
+          </Box>
+
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, color: "#10b981" }}>
+            ⚡ CSS Performance Best Practices
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.9, fontSize: "1.1rem" }}>
+            CSS performance might seem negligible, but on large sites with complex stylesheets, poor CSS practices can 
+            significantly impact rendering speed and user experience. Understanding how browsers process CSS helps you 
+            write more efficient styles and avoid common performance pitfalls.
+          </Typography>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            How Browsers Process CSS
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            When a browser renders a page, it builds two trees: the DOM (from HTML) and the CSSOM (from CSS). 
+            These combine into a render tree. Understanding this process reveals why certain CSS patterns are slower:
+          </Typography>
+
+          <Box sx={{ fontFamily: "monospace", fontSize: "0.85rem", p: 3, bgcolor: "#111827", borderRadius: 2, color: "#f9fafb", mb: 3, whiteSpace: "pre" }}>
+{`HTML Document             CSS Stylesheets
+      │                          │
+      ▼                          ▼
+┌──────────┐              ┌──────────┐
+│   DOM    │              │  CSSOM   │
+│   Tree   │              │   Tree   │
+└────┬─────┘              └────┬─────┘
+     │                          │
+     └──────────┬───────────────┘
+                │
+                ▼
+        ┌───────────────┐
+        │  Render Tree  │
+        │ (visible only)│
+        └───────┬───────┘
+                │
+        ┌───────┴───────┐
+        │    Layout     │ ← Calculate positions & sizes
+        └───────┬───────┘
+                │
+        ┌───────┴───────┐
+        │    Paint      │ ← Fill in pixels
+        └───────┬───────┘
+                │
+        ┌───────┴───────┐
+        │  Composite    │ ← Layer composition
+        └───────────────┘`}
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            Efficient Selectors
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Browsers match selectors from <strong>right to left</strong>. This means the rightmost part (the "key selector") 
+            is evaluated first. A selector like "div.container p span" first finds ALL spans, then filters.
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* ❌ Slow: Browser must check every element */
+* { 
+  box-sizing: border-box; 
+}
+/* Slightly better but still touches everything */
+*, *::before, *::after { 
+  box-sizing: border-box; 
+}
+/* In practice, this is acceptable for box-sizing reset */
+
+/* ❌ Slow: Universal key selector */
+.header * { color: white; }
+[data-active] * { opacity: 1; }
+
+/* ❌ Slow: Very general key selector */
+div { }           /* Matches EVERY div */
+a { }             /* Matches EVERY anchor */
+.container div { }  /* Still matches every div, then checks parent */
+
+/* ✅ Fast: Specific class selectors */
+.header-text { color: white; }
+.nav-link { }
+.card { }
+
+/* ❌ Slow: Deep descendant selectors */
+.page .main .article .content .text p span { }
+/* Browser: find spans → check parent is p → check parent is .text → ... */
+
+/* ✅ Fast: Direct class */
+.article-highlight { }
+
+/* ❌ Avoid: Overly qualified selectors */
+div.card { }        /* The div adds nothing */
+a.nav-link { }      /* a is redundant */
+
+/* ✅ Just the class */
+.card { }
+.nav-link { }`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            Avoid Layout Thrashing
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            <strong>Layout thrashing</strong> (or forced synchronous layout) occurs when you read layout properties 
+            and then write styles in a loop, forcing the browser to recalculate layout repeatedly:
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`// ❌ Bad: Reading and writing in a loop causes layout thrashing
+const boxes = document.querySelectorAll('.box');
+boxes.forEach(box => {
+  const height = box.offsetHeight;  // READ - forces layout
+  box.style.height = height + 10 + 'px';  // WRITE - invalidates layout
+  // Next iteration: browser must recalculate layout again!
+});
+
+// ✅ Good: Batch reads, then batch writes
+const boxes = document.querySelectorAll('.box');
+const heights = [];
+
+// Phase 1: Read all values
+boxes.forEach(box => {
+  heights.push(box.offsetHeight);  // All reads together
+});
+
+// Phase 2: Write all values
+boxes.forEach((box, i) => {
+  box.style.height = heights[i] + 10 + 'px';  // All writes together
+});
+// Only one layout recalculation!
+
+// ✅ Even better: Use CSS transforms for animations
+// Transforms don't trigger layout
+.animate {
+  transition: transform 0.3s;
+}
+.animate:hover {
+  transform: scale(1.1);  /* GPU-accelerated, no layout */
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            Efficient Animations
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.9 }}>
+            Not all CSS properties are equal for animation performance. Properties that trigger layout or paint 
+            are expensive; those that only trigger compositing are cheap:
+          </Typography>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#ef4444", 0.1), border: `1px solid ${alpha("#ef4444", 0.3)}`, height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>❌ Trigger Layout</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", lineHeight: 2 }}>
+                  width, height<br/>
+                  padding, margin<br/>
+                  top, left, right, bottom<br/>
+                  font-size<br/>
+                  border-width
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}`, height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>⚠️ Trigger Paint</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", lineHeight: 2 }}>
+                  color<br/>
+                  background-color<br/>
+                  border-color<br/>
+                  box-shadow<br/>
+                  visibility
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.3)}`, height: "100%" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#22c55e", mb: 1 }}>✅ Composite Only</Typography>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", lineHeight: 2 }}>
+                  transform<br/>
+                  opacity<br/>
+                  filter<br/>
+                  <br/>
+                  <em>(GPU accelerated)</em>
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* ❌ Expensive: Animating layout properties */
+.slide-in {
+  transition: left 0.3s, width 0.3s;
+}
+.slide-in.active {
+  left: 0;
+  width: 100%;
+}
+
+/* ✅ Cheap: Use transforms instead */
+.slide-in {
+  transform: translateX(-100%);
+  transition: transform 0.3s;
+  will-change: transform;  /* Hint to browser to optimize */
+}
+.slide-in.active {
+  transform: translateX(0);
+}
+
+/* ❌ Expensive: Animating background-color */
+.button {
+  transition: background-color 0.3s;
+}
+
+/* Alternative: Use pseudo-element with opacity */
+.button {
+  position: relative;
+  z-index: 1;
+}
+.button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--hover-color);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: -1;
+}
+.button:hover::before {
+  opacity: 1;
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            Reduce File Size
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`/* ❌ Verbose: Longhand properties */
+.element {
+  margin-top: 10px;
+  margin-right: 20px;
+  margin-bottom: 10px;
+  margin-left: 20px;
+  padding-top: 5px;
+  padding-right: 10px;
+  padding-bottom: 5px;
+  padding-left: 10px;
+  background-image: url('bg.jpg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+/* ✅ Concise: Shorthand properties */
+.element {
+  margin: 10px 20px;
+  padding: 5px 10px;
+  background: url('bg.jpg') no-repeat center / cover;
+}
+
+/* Additional tips:
+   - Minify CSS in production (build tools do this)
+   - Remove unused CSS (PurgeCSS, UnCSS)
+   - Use CSS Grid/Flexbox instead of frameworks when possible
+   - Avoid @import (use <link> or bundlers)
+   - Critical CSS: inline above-fold styles, defer the rest
+*/
+
+/* Modern CSS reduces need for preprocessors */
+/* Instead of: */
+$blue: #3b82f6;
+.btn { background: darken($blue, 10%); }
+
+/* Use: */
+.btn {
+  --btn-color: #3b82f6;
+  background: color-mix(in oklch, var(--btn-color), black 10%);
+}`}
+              
+            />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#10b981" }}>
+            Font Loading Performance
+          </Typography>
+
+          <Box sx={{ mb: 3 }}>
+            <CodeBlock
+              code={`<!-- ❌ Slow: Blocking font load -->
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ✅ Faster: Preconnect to font origin -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ✅ Even better: Self-host fonts for full control -->
+<style>
+@font-face {
+  font-family: 'Roboto';
+  src: url('/fonts/roboto-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;  /* Show fallback immediately, swap when loaded */
+}
+</style>
+
+/* font-display values:
+   - auto: Browser default (usually block)
+   - block: Brief invisible text, then custom font
+   - swap: Fallback immediately, swap when ready (recommended)
+   - fallback: Very brief block, then fallback if slow
+   - optional: Use if available, otherwise fallback forever
+*/
+
+/* Subset fonts to only needed characters */
+/* Use tools like glyphhanger or transfonter.org */`}
+              
+            />
+          </Box>
+
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Performance Testing:</strong> Use Chrome DevTools Performance panel, Lighthouse, and WebPageTest 
+              to measure CSS performance. Look for "Recalculate Style" in the flame chart—if it's taking too long, 
+              investigate your selectors and layout patterns.
+            </Typography>
+          </Alert>
+        </Paper>
+
         {/* ==================== MODULE 1: YOUR FIRST WEB PAGE ==================== */}
         <Paper
           id="module-1"
@@ -5591,6 +7803,1587 @@ input:invalid {
   </p>
 </div>`}
           />
+
+          {/* ==================== PROPER INSTALLATION WITH NPM/VITE ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🔧 Proper Installation with npm & Vite
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            While the CDN is great for learning, real projects need a proper build setup. Here's how to set up 
+            Tailwind with Vite, the modern build tool that's incredibly fast. This setup removes unused CSS, 
+            resulting in tiny production files (often under 10KB).
+          </Typography>
+          <CodeBlock
+            title="Step 1: Create a Vite Project"
+            code={`# Create a new Vite project (choose vanilla or react)
+npm create vite@latest my-tailwind-project
+cd my-tailwind-project
+
+# Or with React
+npm create vite@latest my-react-app -- --template react
+
+# Install dependencies
+npm install`}
+          />
+          <CodeBlock
+            title="Step 2: Install Tailwind CSS"
+            code={`# Install Tailwind and its dependencies
+npm install -D tailwindcss postcss autoprefixer
+
+# Generate config files
+npx tailwindcss init -p
+
+# This creates:
+# - tailwind.config.js (Tailwind configuration)
+# - postcss.config.js (PostCSS configuration)`}
+          />
+          <CodeBlock
+            title="Step 3: Configure Template Paths"
+            code={`// tailwind.config.js
+/** @type {import('tailwindcss').Config} */
+export default {
+  // Tell Tailwind which files to scan for classes
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",  // All JS/TS files in src
+  ],
+  theme: {
+    extend: {},  // We'll customize this later
+  },
+  plugins: [],
+}`}
+          />
+          <CodeBlock
+            title="Step 4: Add Tailwind Directives to CSS"
+            code={`/* src/index.css (or src/style.css) */
+
+/* These directives inject Tailwind's styles */
+@tailwind base;       /* Preflight reset + base styles */
+@tailwind components; /* Component classes */
+@tailwind utilities;  /* Utility classes */
+
+/* Your custom CSS can go below */`}
+          />
+          <CodeBlock
+            title="Step 5: Import CSS and Start Dev Server"
+            code={`// main.js or main.jsx
+import './index.css'  // Import your CSS file
+
+// For React:
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+// Then run:
+// npm run dev`}
+          />
+
+          <Alert severity="success" sx={{ my: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Why This Setup Matters</AlertTitle>
+            <Typography variant="body2">
+              <strong>Tree-shaking:</strong> Tailwind scans your files and only includes the CSS classes you actually use. 
+              A CDN includes ALL classes (megabytes of CSS). A proper build might only include 5-20KB of CSS.
+              <br /><br />
+              <strong>IntelliSense:</strong> VS Code's Tailwind CSS IntelliSense extension provides autocomplete, 
+              syntax highlighting, and linting for Tailwind classes.
+            </Typography>
+          </Alert>
+
+          {/* ==================== TAILWIND CONFIG DEEP DIVE ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            ⚙️ Tailwind Configuration Deep Dive
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            The <code>tailwind.config.js</code> file is where the magic happens. You can customize colors, 
+            fonts, spacing, breakpoints, and add your own utilities. Think of it as your design system in code.
+          </Typography>
+          <CodeBlock
+            title="Custom Colors & Design Tokens"
+            code={`// tailwind.config.js
+export default {
+  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  theme: {
+    extend: {
+      // Add custom colors (these ADD to defaults)
+      colors: {
+        // Single color
+        brand: '#3b82f6',
+        
+        // Color palette with shades
+        primary: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',  // Main shade
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+          950: '#172554',
+        },
+        
+        // Use CSS variables for theming
+        accent: 'var(--accent-color)',
+        surface: 'rgb(var(--surface-rgb) / <alpha-value>)',
+      },
+      
+      // Custom fonts
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Poppins', 'sans-serif'],
+        mono: ['Fira Code', 'monospace'],
+      },
+      
+      // Custom spacing (adds to default 0-96 scale)
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '128': '32rem',
+      },
+      
+      // Custom breakpoints
+      screens: {
+        'xs': '475px',      // Extra small
+        '3xl': '1920px',    // Ultra wide
+      },
+      
+      // Custom border radius
+      borderRadius: {
+        '4xl': '2rem',
+        '5xl': '3rem',
+      },
+      
+      // Custom shadows
+      boxShadow: {
+        'glow': '0 0 20px rgba(59, 130, 246, 0.5)',
+        'inner-lg': 'inset 0 4px 6px rgba(0, 0, 0, 0.1)',
+      },
+      
+      // Custom animations
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out',
+        'bounce-slow': 'bounce 3s infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+      },
+    },
+  },
+  plugins: [],
+}`}
+          />
+          <CodeBlock
+            title="Using Custom Config Values"
+            code={`<!-- Now you can use your custom values! -->
+
+<!-- Custom colors -->
+<div class="bg-primary-500 text-white">Primary button</div>
+<div class="bg-brand hover:bg-primary-600">Brand color</div>
+
+<!-- Custom fonts -->
+<h1 class="font-display text-4xl">Display heading</h1>
+<p class="font-sans">Body text with Inter</p>
+<code class="font-mono">Code with Fira</code>
+
+<!-- Custom spacing -->
+<div class="p-18 mb-88">Extra spacing values</div>
+
+<!-- Custom breakpoints -->
+<div class="hidden xs:block 3xl:text-2xl">
+  Shows on extra small, bigger text on ultra-wide
+</div>
+
+<!-- Custom shadows -->
+<button class="shadow-glow hover:shadow-lg">Glowing button</button>
+
+<!-- Custom animations -->
+<div class="animate-fade-in">Fades in on load</div>
+<div class="animate-slide-up">Slides up on load</div>`}
+          />
+
+          {/* ==================== CUSTOM UTILITIES WITH @APPLY ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🎨 Custom Utilities with @apply
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            When you find yourself repeating the same combination of utilities, you can extract them into 
+            custom CSS classes using <code>@apply</code>. This is perfect for buttons, cards, and other 
+            reusable components.
+          </Typography>
+          <CodeBlock
+            title="Creating Reusable Component Classes"
+            code={`/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes using @apply */
+@layer components {
+  /* Button variants */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-semibold transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply btn bg-blue-600 text-white;
+    @apply hover:bg-blue-700 active:bg-blue-800;
+    @apply focus:ring-blue-500;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-800;
+    @apply hover:bg-gray-300 active:bg-gray-400;
+    @apply focus:ring-gray-500;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-600 text-white;
+    @apply hover:bg-red-700 active:bg-red-800;
+    @apply focus:ring-red-500;
+  }
+  
+  .btn-outline {
+    @apply btn border-2 border-blue-600 text-blue-600 bg-transparent;
+    @apply hover:bg-blue-600 hover:text-white;
+    @apply focus:ring-blue-500;
+  }
+  
+  /* Card component */
+  .card {
+    @apply bg-white dark:bg-slate-800 rounded-xl shadow-md;
+    @apply border border-gray-200 dark:border-slate-700;
+    @apply overflow-hidden;
+  }
+  
+  .card-body {
+    @apply p-6;
+  }
+  
+  .card-title {
+    @apply text-xl font-bold text-gray-900 dark:text-white mb-2;
+  }
+  
+  /* Input styling */
+  .input {
+    @apply w-full px-4 py-2 rounded-lg border border-gray-300;
+    @apply focus:border-blue-500 focus:ring-2 focus:ring-blue-200;
+    @apply dark:bg-slate-800 dark:border-slate-600 dark:text-white;
+    @apply transition-colors duration-200;
+  }
+  
+  .input-error {
+    @apply input border-red-500 focus:border-red-500 focus:ring-red-200;
+  }
+  
+  /* Badge variants */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-error {
+    @apply badge bg-red-100 text-red-800;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  /* Text gradient utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600;
+  }
+  
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}`}
+          />
+          <CodeBlock
+            title="Using Custom Component Classes"
+            code={`<!-- Now your HTML is much cleaner! -->
+
+<!-- Buttons -->
+<button class="btn-primary">Save Changes</button>
+<button class="btn-secondary">Cancel</button>
+<button class="btn-danger">Delete</button>
+<button class="btn-outline">Learn More</button>
+
+<!-- Cards -->
+<div class="card">
+  <img src="image.jpg" class="w-full h-48 object-cover" />
+  <div class="card-body">
+    <h3 class="card-title">Card Title</h3>
+    <p class="text-gray-600 dark:text-gray-300">Card content...</p>
+  </div>
+</div>
+
+<!-- Forms -->
+<input type="email" class="input" placeholder="Enter email" />
+<input type="text" class="input-error" placeholder="Invalid input" />
+
+<!-- Badges -->
+<span class="badge-success">Active</span>
+<span class="badge-warning">Pending</span>
+<span class="badge-error">Failed</span>
+
+<!-- Custom utilities -->
+<h1 class="text-4xl font-bold text-gradient">
+  Gradient Text!
+</h1>`}
+          />
+
+          <Alert severity="info" sx={{ my: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>When to Use @apply vs Utilities</AlertTitle>
+            <Typography variant="body2">
+              <strong>Use @apply when:</strong> You have truly reusable components (buttons, cards) that appear 
+              many times with the exact same styling.
+              <br /><br />
+              <strong>Use utilities directly when:</strong> The styling varies (different padding, colors) or 
+              the element is unique. The Tailwind team recommends using utilities directly most of the time.
+            </Typography>
+          </Alert>
+
+          {/* ==================== GRADIENT & DECORATION UTILITIES ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🌈 Gradients & Visual Effects
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Tailwind has powerful utilities for gradients, shadows, filters, and other visual effects that 
+            can make your designs pop without writing any custom CSS.
+          </Typography>
+          <CodeBlock
+            title="Gradient Utilities"
+            code={`<!-- Linear gradients: bg-gradient-to-{direction} -->
+<!-- Directions: t(top), b(bottom), l(left), r(right), tl, tr, bl, br -->
+
+<!-- Simple two-color gradient -->
+<div class="bg-gradient-to-r from-blue-500 to-purple-500">
+  Left to right: blue → purple
+</div>
+
+<!-- Three-color gradient with 'via' -->
+<div class="bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500">
+  Pink → Red → Yellow
+</div>
+
+<!-- Diagonal gradient -->
+<div class="bg-gradient-to-br from-green-400 to-blue-600">
+  Top-left to bottom-right
+</div>
+
+<!-- Gradient text (combine with text-transparent and bg-clip-text) -->
+<h1 class="text-5xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 
+           bg-clip-text text-transparent">
+  Gradient Text Effect
+</h1>
+
+<!-- Gradient button -->
+<button class="bg-gradient-to-r from-purple-500 to-pink-500 
+               hover:from-purple-600 hover:to-pink-600 
+               text-white px-6 py-3 rounded-lg font-semibold
+               transition-all duration-300">
+  Gradient Button
+</button>
+
+<!-- Gradient border (using a wrapper) -->
+<div class="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 p-0.5 rounded-lg">
+  <div class="bg-white dark:bg-gray-900 rounded-lg p-4">
+    Content with gradient border
+  </div>
+</div>
+
+<!-- Gradient overlay on image -->
+<div class="relative">
+  <img src="hero.jpg" class="w-full h-96 object-cover" />
+  <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+  <h2 class="absolute bottom-4 left-4 text-white text-3xl font-bold">
+    Text over gradient overlay
+  </h2>
+</div>`}
+          />
+          <CodeBlock
+            title="Shadows & Effects"
+            code={`<!-- Box shadows: shadow-{size} -->
+<div class="shadow-sm">Small shadow</div>
+<div class="shadow">Default shadow</div>
+<div class="shadow-md">Medium shadow</div>
+<div class="shadow-lg">Large shadow</div>
+<div class="shadow-xl">Extra large shadow</div>
+<div class="shadow-2xl">2XL shadow</div>
+<div class="shadow-inner">Inner shadow</div>
+<div class="shadow-none">No shadow</div>
+
+<!-- Colored shadows -->
+<div class="shadow-lg shadow-blue-500/50">Blue shadow (50% opacity)</div>
+<div class="shadow-xl shadow-red-500/30">Red shadow (30% opacity)</div>
+
+<!-- Ring (like an outline, but better) -->
+<button class="ring-2 ring-blue-500">Ring utility</button>
+<button class="ring-4 ring-offset-2 ring-purple-500">Ring with offset</button>
+
+<!-- Backdrop blur (for glassmorphism) -->
+<div class="bg-white/30 backdrop-blur-lg rounded-xl p-6">
+  <h3 class="text-lg font-semibold">Glassmorphism Card</h3>
+  <p>Content with frosted glass effect</p>
+</div>
+
+<!-- Blur filter -->
+<img class="blur-sm hover:blur-none transition-all" src="..." />
+
+<!-- Brightness, contrast, saturation -->
+<img class="brightness-110 contrast-125 saturate-150" src="..." />
+
+<!-- Grayscale and sepia -->
+<img class="grayscale hover:grayscale-0 transition-all" src="..." />
+<img class="sepia" src="..." />
+
+<!-- Drop shadow (for images with transparency) -->
+<img class="drop-shadow-lg" src="logo.png" />
+<img class="drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]" src="..." />`}
+          />
+
+          {/* ==================== ANIMATION UTILITIES ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            ✨ Animation & Transitions
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Tailwind includes built-in animations and comprehensive transition utilities for smooth, 
+            polished interactions without writing @keyframes.
+          </Typography>
+          <CodeBlock
+            title="Built-in Animations"
+            code={`<!-- Pre-built animations -->
+<div class="animate-spin">🔄</div>     <!-- Continuous rotation -->
+<div class="animate-ping">📡</div>     <!-- Ping effect (like notification) -->
+<div class="animate-pulse">💓</div>    <!-- Pulse/fade effect -->
+<div class="animate-bounce">⬆️</div>   <!-- Bouncing up and down -->
+
+<!-- Practical uses -->
+
+<!-- Loading spinner -->
+<svg class="animate-spin h-5 w-5 text-blue-500" viewBox="0 0 24 24">
+  <circle class="opacity-25" cx="12" cy="12" r="10" 
+          stroke="currentColor" stroke-width="4" fill="none"/>
+  <path class="opacity-75" fill="currentColor" 
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+</svg>
+
+<!-- Notification badge ping -->
+<span class="relative flex h-3 w-3">
+  <span class="animate-ping absolute inline-flex h-full w-full 
+               rounded-full bg-red-400 opacity-75"></span>
+  <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+</span>
+
+<!-- Skeleton loading -->
+<div class="animate-pulse space-y-4">
+  <div class="h-4 bg-gray-300 rounded w-3/4"></div>
+  <div class="h-4 bg-gray-300 rounded"></div>
+  <div class="h-4 bg-gray-300 rounded w-5/6"></div>
+</div>`}
+          />
+          <CodeBlock
+            title="Transition Utilities"
+            code={`<!-- Transition property: transition-{property} -->
+<button class="transition-colors">Colors only</button>
+<button class="transition-opacity">Opacity only</button>
+<button class="transition-shadow">Shadow only</button>
+<button class="transition-transform">Transform only</button>
+<button class="transition-all">All properties (careful: can be heavy)</button>
+
+<!-- Duration: duration-{ms} -->
+<button class="transition-colors duration-75">75ms (very fast)</button>
+<button class="transition-colors duration-150">150ms (fast)</button>
+<button class="transition-colors duration-300">300ms (default)</button>
+<button class="transition-colors duration-500">500ms (slow)</button>
+<button class="transition-colors duration-1000">1000ms (very slow)</button>
+
+<!-- Timing function: ease-{type} -->
+<div class="transition-all ease-linear">Linear</div>
+<div class="transition-all ease-in">Ease in (slow start)</div>
+<div class="transition-all ease-out">Ease out (slow end)</div>
+<div class="transition-all ease-in-out">Ease in-out</div>
+
+<!-- Delay: delay-{ms} -->
+<div class="transition-all delay-150">Waits 150ms before animating</div>
+
+<!-- Complete hover animation -->
+<button class="bg-blue-500 text-white px-6 py-3 rounded-lg
+               transition-all duration-300 ease-out
+               hover:bg-blue-600 hover:scale-105 hover:shadow-lg
+               active:scale-95">
+  Animated Button
+</button>
+
+<!-- Card hover effect -->
+<div class="bg-white rounded-xl shadow-md p-6
+            transition-all duration-300
+            hover:shadow-xl hover:-translate-y-1">
+  <h3 class="text-lg font-semibold">Hover Card</h3>
+  <p class="text-gray-600">Lifts up on hover</p>
+</div>`}
+          />
+          <CodeBlock
+            title="Transform Utilities"
+            code={`<!-- Scale -->
+<div class="scale-50">50% size</div>
+<div class="scale-100">Normal size</div>
+<div class="scale-150">150% size</div>
+<div class="hover:scale-110 transition-transform">Grows on hover</div>
+
+<!-- Rotate -->
+<div class="rotate-45">Rotated 45°</div>
+<div class="rotate-90">Rotated 90°</div>
+<div class="-rotate-12">Rotated -12°</div>
+<div class="hover:rotate-180 transition-transform duration-500">Spins on hover</div>
+
+<!-- Translate (move) -->
+<div class="translate-x-4">Move right 1rem</div>
+<div class="-translate-y-2">Move up 0.5rem</div>
+<div class="hover:-translate-y-1 transition-transform">Lifts on hover</div>
+
+<!-- Skew -->
+<div class="skew-x-12">Skewed horizontally</div>
+<div class="skew-y-6">Skewed vertically</div>
+
+<!-- Transform origin -->
+<div class="origin-top-left rotate-45">Rotates from top-left corner</div>
+<div class="origin-center scale-150">Scales from center</div>
+
+<!-- Combining transforms -->
+<button class="hover:scale-105 hover:-translate-y-1 hover:rotate-1 
+               transition-all duration-300">
+  Multiple transforms on hover
+</button>`}
+          />
+
+          {/* ==================== TAILWIND PLUGINS ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🔌 Official Tailwind Plugins
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Tailwind has official plugins that add commonly needed utilities. Install them via npm and 
+            add to your config.
+          </Typography>
+          <CodeBlock
+            title="Installing & Configuring Plugins"
+            code={`# Install official plugins
+npm install -D @tailwindcss/typography
+npm install -D @tailwindcss/forms
+npm install -D @tailwindcss/aspect-ratio
+npm install -D @tailwindcss/container-queries
+
+// tailwind.config.js
+export default {
+  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  theme: { extend: {} },
+  plugins: [
+    require('@tailwindcss/typography'),
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/aspect-ratio'),
+    require('@tailwindcss/container-queries'),
+  ],
+}`}
+          />
+          <CodeBlock
+            title="@tailwindcss/typography - Beautiful Prose"
+            code={`<!-- The Typography plugin styles markdown/rich text content -->
+<!-- Just add the 'prose' class to a container -->
+
+<article class="prose lg:prose-xl dark:prose-invert mx-auto">
+  <h1>My Blog Post Title</h1>
+  <p>This paragraph will have beautiful typography with proper 
+     line-height, spacing, and font sizes automatically applied.</p>
+  
+  <h2>A Subheading</h2>
+  <p>All headings, paragraphs, lists, code blocks, and more are 
+     styled consistently.</p>
+  
+  <ul>
+    <li>Lists look great too</li>
+    <li>No custom CSS needed</li>
+    <li>Responsive by default</li>
+  </ul>
+  
+  <blockquote>
+    Blockquotes are styled beautifully with a left border.
+  </blockquote>
+  
+  <pre><code>Code blocks are properly styled</code></pre>
+</article>
+
+<!-- Prose modifiers -->
+<article class="prose prose-sm">Small size</article>
+<article class="prose prose-lg">Large size</article>
+<article class="prose prose-xl">Extra large</article>
+
+<!-- Color themes -->
+<article class="prose prose-slate">Slate gray text</article>
+<article class="prose prose-blue">Blue accents</article>
+<article class="prose dark:prose-invert">Dark mode support</article>`}
+          />
+          <CodeBlock
+            title="@tailwindcss/forms - Better Form Styling"
+            code={`<!-- The Forms plugin resets form elements to be easily styled -->
+<!-- No special classes needed - just use normal form elements -->
+
+<form class="space-y-4 max-w-md mx-auto">
+  <!-- Text input - already looks good! -->
+  <input type="text" placeholder="Your name" 
+         class="w-full rounded-lg border-gray-300 
+                focus:border-blue-500 focus:ring-blue-500" />
+  
+  <!-- Email input -->
+  <input type="email" placeholder="Email address"
+         class="w-full rounded-lg border-gray-300
+                focus:border-blue-500 focus:ring-blue-500" />
+  
+  <!-- Select dropdown -->
+  <select class="w-full rounded-lg border-gray-300
+                 focus:border-blue-500 focus:ring-blue-500">
+    <option>Option 1</option>
+    <option>Option 2</option>
+    <option>Option 3</option>
+  </select>
+  
+  <!-- Textarea -->
+  <textarea rows="4" placeholder="Your message"
+            class="w-full rounded-lg border-gray-300
+                   focus:border-blue-500 focus:ring-blue-500">
+  </textarea>
+  
+  <!-- Checkbox -->
+  <label class="flex items-center gap-2">
+    <input type="checkbox" 
+           class="rounded border-gray-300 text-blue-600 
+                  focus:ring-blue-500" />
+    <span>I agree to the terms</span>
+  </label>
+  
+  <!-- Radio buttons -->
+  <div class="space-y-2">
+    <label class="flex items-center gap-2">
+      <input type="radio" name="plan" value="free"
+             class="border-gray-300 text-blue-600 focus:ring-blue-500" />
+      <span>Free Plan</span>
+    </label>
+    <label class="flex items-center gap-2">
+      <input type="radio" name="plan" value="pro"
+             class="border-gray-300 text-blue-600 focus:ring-blue-500" />
+      <span>Pro Plan</span>
+    </label>
+  </div>
+  
+  <button type="submit" 
+          class="w-full bg-blue-600 text-white py-2 rounded-lg
+                 hover:bg-blue-700 transition-colors">
+    Submit
+  </button>
+</form>`}
+          />
+          <CodeBlock
+            title="@tailwindcss/aspect-ratio - Responsive Embeds"
+            code={`<!-- Maintain aspect ratios for videos, images, embeds -->
+
+<!-- 16:9 aspect ratio (standard video) -->
+<div class="aspect-w-16 aspect-h-9">
+  <iframe src="https://youtube.com/embed/..." 
+          class="w-full h-full object-cover"></iframe>
+</div>
+
+<!-- 4:3 aspect ratio (classic) -->
+<div class="aspect-w-4 aspect-h-3">
+  <img src="photo.jpg" class="w-full h-full object-cover" />
+</div>
+
+<!-- Square aspect ratio -->
+<div class="aspect-w-1 aspect-h-1">
+  <img src="profile.jpg" class="w-full h-full object-cover rounded-full" />
+</div>
+
+<!-- NEW: Native aspect-ratio (Tailwind 3.0+, no plugin needed) -->
+<div class="aspect-video">16:9 aspect ratio</div>
+<div class="aspect-square">1:1 aspect ratio</div>
+<div class="aspect-[4/3]">Custom 4:3 ratio</div>
+<div class="aspect-[21/9]">Ultra-wide 21:9</div>`}
+          />
+
+          {/* ==================== FORMS DEEP DIVE ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            📝 Forms Deep Dive
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Forms are critical for any web application. Here's how to build beautiful, accessible forms 
+            with Tailwind, including validation states and custom styling.
+          </Typography>
+          <CodeBlock
+            title="Complete Form Example with Validation States"
+            code={`<form class="max-w-lg mx-auto p-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg">
+  <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
+    Contact Us
+  </h2>
+  
+  <!-- Name field -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      Full Name
+    </label>
+    <input type="text" 
+           class="w-full px-4 py-2 rounded-lg border border-gray-300 
+                  dark:border-slate-600 dark:bg-slate-700 dark:text-white
+                  focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+                  dark:focus:ring-blue-800 transition-colors"
+           placeholder="John Doe" />
+  </div>
+  
+  <!-- Email field with error state -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      Email Address
+    </label>
+    <input type="email" 
+           class="w-full px-4 py-2 rounded-lg border 
+                  border-red-500 bg-red-50 dark:bg-red-900/20
+                  focus:border-red-500 focus:ring-2 focus:ring-red-200 
+                  transition-colors"
+           value="invalid-email" />
+    <p class="mt-1 text-sm text-red-600 flex items-center gap-1">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      Please enter a valid email address
+    </p>
+  </div>
+  
+  <!-- Success state example -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      Username
+    </label>
+    <div class="relative">
+      <input type="text" 
+             class="w-full px-4 py-2 pr-10 rounded-lg border 
+                    border-green-500 bg-green-50 dark:bg-green-900/20
+                    focus:border-green-500 focus:ring-2 focus:ring-green-200 
+                    transition-colors"
+             value="johndoe123" />
+      <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" 
+           fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+    <p class="mt-1 text-sm text-green-600">Username is available!</p>
+  </div>
+  
+  <!-- Select with icon -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      Subject
+    </label>
+    <select class="w-full px-4 py-2 rounded-lg border border-gray-300 
+                   dark:border-slate-600 dark:bg-slate-700 dark:text-white
+                   focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+                   transition-colors">
+      <option value="">Select a subject...</option>
+      <option value="general">General Inquiry</option>
+      <option value="support">Technical Support</option>
+      <option value="sales">Sales Question</option>
+      <option value="feedback">Feedback</option>
+    </select>
+  </div>
+  
+  <!-- Textarea -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      Message
+    </label>
+    <textarea rows="4"
+              class="w-full px-4 py-2 rounded-lg border border-gray-300 
+                     dark:border-slate-600 dark:bg-slate-700 dark:text-white
+                     focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+                     transition-colors resize-none"
+              placeholder="How can we help you?"></textarea>
+    <p class="mt-1 text-sm text-gray-500">Max 500 characters</p>
+  </div>
+  
+  <!-- Checkbox group -->
+  <div class="mb-6">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      Interests
+    </label>
+    <div class="space-y-2">
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" 
+               class="w-5 h-5 rounded border-gray-300 text-blue-600 
+                      focus:ring-blue-500 cursor-pointer" />
+        <span class="text-gray-700 dark:text-gray-300">Web Development</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" 
+               class="w-5 h-5 rounded border-gray-300 text-blue-600 
+                      focus:ring-blue-500 cursor-pointer" checked />
+        <span class="text-gray-700 dark:text-gray-300">Mobile Apps</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" 
+               class="w-5 h-5 rounded border-gray-300 text-blue-600 
+                      focus:ring-blue-500 cursor-pointer" />
+        <span class="text-gray-700 dark:text-gray-300">UI/UX Design</span>
+      </label>
+    </div>
+  </div>
+  
+  <!-- Submit button -->
+  <button type="submit"
+          class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold
+                 hover:bg-blue-700 active:bg-blue-800 
+                 focus:ring-4 focus:ring-blue-200 dark:focus:ring-blue-800
+                 transition-all duration-200
+                 disabled:bg-gray-400 disabled:cursor-not-allowed">
+    Send Message
+  </button>
+</form>`}
+          />
+
+          {/* ==================== BUILDING REAL COMPONENTS ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🏗️ Building Real UI Components
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Let's build professional-quality UI components that you'll actually use in real projects. 
+            These are production-ready patterns.
+          </Typography>
+
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: 3, mb: 2, color: "#06b6d4" }}>
+            Responsive Navigation Bar
+          </Typography>
+          <CodeBlock
+            title="Modern Navbar with Mobile Menu"
+            code={`<nav class="bg-white dark:bg-slate-900 shadow-sm sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-16">
+      <!-- Logo -->
+      <div class="flex items-center">
+        <a href="/" class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 
+                      rounded-lg flex items-center justify-center">
+            <span class="text-white font-bold">A</span>
+          </div>
+          <span class="text-xl font-bold text-gray-900 dark:text-white">
+            AppName
+          </span>
+        </a>
+      </div>
+      
+      <!-- Desktop Navigation -->
+      <div class="hidden md:flex items-center gap-8">
+        <a href="#" class="text-gray-600 hover:text-blue-600 dark:text-gray-300 
+                          dark:hover:text-blue-400 font-medium transition-colors">
+          Features
+        </a>
+        <a href="#" class="text-gray-600 hover:text-blue-600 dark:text-gray-300 
+                          dark:hover:text-blue-400 font-medium transition-colors">
+          Pricing
+        </a>
+        <a href="#" class="text-gray-600 hover:text-blue-600 dark:text-gray-300 
+                          dark:hover:text-blue-400 font-medium transition-colors">
+          About
+        </a>
+        <a href="#" class="text-gray-600 hover:text-blue-600 dark:text-gray-300 
+                          dark:hover:text-blue-400 font-medium transition-colors">
+          Contact
+        </a>
+      </div>
+      
+      <!-- CTA Buttons -->
+      <div class="hidden md:flex items-center gap-4">
+        <a href="#" class="text-gray-600 hover:text-gray-900 dark:text-gray-300 
+                          font-medium transition-colors">
+          Sign In
+        </a>
+        <a href="#" class="bg-blue-600 text-white px-4 py-2 rounded-lg 
+                          font-semibold hover:bg-blue-700 transition-colors">
+          Get Started
+        </a>
+      </div>
+      
+      <!-- Mobile menu button -->
+      <div class="flex md:hidden items-center">
+        <button class="p-2 rounded-lg text-gray-600 hover:bg-gray-100 
+                       dark:text-gray-300 dark:hover:bg-slate-800">
+          <!-- Hamburger icon -->
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Mobile menu (toggle with JS) -->
+  <div class="md:hidden border-t border-gray-200 dark:border-slate-700">
+    <div class="px-4 py-4 space-y-3">
+      <a href="#" class="block text-gray-600 hover:text-blue-600 font-medium">Features</a>
+      <a href="#" class="block text-gray-600 hover:text-blue-600 font-medium">Pricing</a>
+      <a href="#" class="block text-gray-600 hover:text-blue-600 font-medium">About</a>
+      <a href="#" class="block text-gray-600 hover:text-blue-600 font-medium">Contact</a>
+      <hr class="border-gray-200 dark:border-slate-700" />
+      <a href="#" class="block text-gray-600 font-medium">Sign In</a>
+      <a href="#" class="block bg-blue-600 text-white text-center py-2 rounded-lg font-semibold">
+        Get Started
+      </a>
+    </div>
+  </div>
+</nav>`}
+          />
+
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: 4, mb: 2, color: "#06b6d4" }}>
+            Hero Section with CTA
+          </Typography>
+          <CodeBlock
+            title="Modern Hero Section"
+            code={`<section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+  <!-- Background decoration -->
+  <div class="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20"></div>
+  <div class="absolute top-20 left-10 w-72 h-72 bg-purple-500 rounded-full 
+              mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+  <div class="absolute bottom-20 right-10 w-72 h-72 bg-blue-500 rounded-full 
+              mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+  
+  <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
+    <div class="text-center">
+      <!-- Badge -->
+      <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full 
+                   bg-blue-500/10 text-blue-400 text-sm font-medium mb-6
+                   border border-blue-500/20">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full 
+                       rounded-full bg-blue-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+        </span>
+        Now in Public Beta
+      </span>
+      
+      <!-- Headline -->
+      <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6">
+        Build amazing products
+        <span class="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 
+                     bg-clip-text text-transparent">
+          faster than ever
+        </span>
+      </h1>
+      
+      <!-- Subheadline -->
+      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10">
+        The modern development platform that helps you ship products 10x faster. 
+        Stop wasting time on boilerplate and focus on what matters.
+      </p>
+      
+      <!-- CTA Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#" class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 
+                          rounded-xl font-semibold text-lg
+                          hover:bg-gray-100 transition-colors
+                          flex items-center justify-center gap-2">
+          Get Started Free
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+        </a>
+        <a href="#" class="w-full sm:w-auto px-8 py-4 bg-white/10 text-white 
+                          rounded-xl font-semibold text-lg border border-white/20
+                          hover:bg-white/20 transition-colors
+                          flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
+          </svg>
+          Watch Demo
+        </a>
+      </div>
+      
+      <!-- Trust badges -->
+      <div class="mt-12 flex flex-wrap items-center justify-center gap-8 opacity-60">
+        <span class="text-gray-400 text-sm">Trusted by teams at</span>
+        <img src="/logos/google.svg" alt="Google" class="h-6" />
+        <img src="/logos/meta.svg" alt="Meta" class="h-6" />
+        <img src="/logos/stripe.svg" alt="Stripe" class="h-6" />
+      </div>
+    </div>
+  </div>
+</section>`}
+          />
+
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: 4, mb: 2, color: "#06b6d4" }}>
+            Feature Cards Grid
+          </Typography>
+          <CodeBlock
+            title="Responsive Feature Cards"
+            code={`<section class="py-20 bg-gray-50 dark:bg-slate-900">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+        Everything you need to succeed
+      </h2>
+      <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        Our platform provides all the tools and features you need to build, 
+        deploy, and scale your applications.
+      </p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <!-- Feature Card 1 -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-sm
+                  hover:shadow-xl transition-shadow duration-300
+                  border border-gray-100 dark:border-slate-700">
+        <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl 
+                    flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          Lightning Fast
+        </h3>
+        <p class="text-gray-600 dark:text-gray-400">
+          Our platform is optimized for speed. Pages load in milliseconds, 
+          keeping your users engaged.
+        </p>
+      </div>
+      
+      <!-- Feature Card 2 -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-sm
+                  hover:shadow-xl transition-shadow duration-300
+                  border border-gray-100 dark:border-slate-700">
+        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl 
+                    flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          Enterprise Security
+        </h3>
+        <p class="text-gray-600 dark:text-gray-400">
+          Bank-level encryption and security protocols keep your data safe 
+          and compliant.
+        </p>
+      </div>
+      
+      <!-- Feature Card 3 -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-sm
+                  hover:shadow-xl transition-shadow duration-300
+                  border border-gray-100 dark:border-slate-700">
+        <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl 
+                    flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          99.9% Uptime
+        </h3>
+        <p class="text-gray-600 dark:text-gray-400">
+          Our infrastructure is built for reliability. Your applications 
+          stay online, always.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>`}
+          />
+
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: 4, mb: 2, color: "#06b6d4" }}>
+            Modal / Dialog
+          </Typography>
+          <CodeBlock
+            title="Accessible Modal Component"
+            code={`<!-- Modal backdrop -->
+<div class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+  <!-- Overlay -->
+  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"></div>
+  
+  <!-- Modal container -->
+  <div class="flex min-h-full items-center justify-center p-4">
+    <!-- Modal panel -->
+    <div class="relative w-full max-w-lg transform overflow-hidden rounded-2xl 
+                bg-white dark:bg-slate-800 shadow-2xl transition-all
+                animate-[fadeIn_0.2s_ease-out]">
+      
+      <!-- Close button -->
+      <button class="absolute top-4 right-4 p-1 rounded-lg text-gray-400 
+                     hover:text-gray-600 hover:bg-gray-100 
+                     dark:hover:text-gray-300 dark:hover:bg-slate-700 
+                     transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      
+      <!-- Modal content -->
+      <div class="p-6">
+        <!-- Icon -->
+        <div class="mx-auto w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 
+                    flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        
+        <!-- Title -->
+        <h3 class="text-xl font-semibold text-gray-900 dark:text-white text-center mb-2">
+          Confirm Action
+        </h3>
+        
+        <!-- Description -->
+        <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
+          Are you sure you want to perform this action? This cannot be undone.
+        </p>
+        
+        <!-- Actions -->
+        <div class="flex gap-3">
+          <button class="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 
+                         text-gray-700 dark:text-gray-300 rounded-lg font-medium
+                         hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+            Cancel
+          </button>
+          <button class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium
+                         hover:bg-blue-700 transition-colors">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation variant -->
+<div class="p-6">
+  <div class="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 
+              flex items-center justify-center mb-4">
+    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+  </div>
+  <h3 class="text-xl font-semibold text-gray-900 text-center mb-2">Delete Item?</h3>
+  <p class="text-gray-600 text-center mb-6">
+    This will permanently delete this item. This action cannot be undone.
+  </p>
+  <div class="flex gap-3">
+    <button class="flex-1 px-4 py-2.5 bg-gray-100 rounded-lg font-medium">Cancel</button>
+    <button class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium
+                   hover:bg-red-700">Delete</button>
+  </div>
+</div>`}
+          />
+
+          <Typography variant="h6" sx={{ fontWeight: 600, mt: 4, mb: 2, color: "#06b6d4" }}>
+            Footer
+          </Typography>
+          <CodeBlock
+            title="Professional Footer"
+            code={`<footer class="bg-slate-900 text-gray-300">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+      <!-- Company -->
+      <div>
+        <h4 class="text-white font-semibold mb-4">Company</h4>
+        <ul class="space-y-2">
+          <li><a href="#" class="hover:text-white transition-colors">About</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Careers</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Press</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Blog</a></li>
+        </ul>
+      </div>
+      
+      <!-- Product -->
+      <div>
+        <h4 class="text-white font-semibold mb-4">Product</h4>
+        <ul class="space-y-2">
+          <li><a href="#" class="hover:text-white transition-colors">Features</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Pricing</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Integrations</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Changelog</a></li>
+        </ul>
+      </div>
+      
+      <!-- Resources -->
+      <div>
+        <h4 class="text-white font-semibold mb-4">Resources</h4>
+        <ul class="space-y-2">
+          <li><a href="#" class="hover:text-white transition-colors">Documentation</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Guides</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">API Reference</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Community</a></li>
+        </ul>
+      </div>
+      
+      <!-- Legal -->
+      <div>
+        <h4 class="text-white font-semibold mb-4">Legal</h4>
+        <ul class="space-y-2">
+          <li><a href="#" class="hover:text-white transition-colors">Privacy</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Terms</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Cookies</a></li>
+          <li><a href="#" class="hover:text-white transition-colors">Licenses</a></li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- Divider -->
+    <div class="border-t border-slate-800 pt-8">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        <!-- Logo & copyright -->
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"></div>
+          <span class="text-sm">© 2024 AppName. All rights reserved.</span>
+        </div>
+        
+        <!-- Social links -->
+        <div class="flex items-center gap-4">
+          <a href="#" class="hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
+            </svg>
+          </a>
+          <a href="#" class="hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+          <a href="#" class="hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>`}
+          />
+
+          {/* ==================== TAILWIND WITH REACT ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            ⚛️ Tailwind with React
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Tailwind and React are a perfect match. Here's how to build reusable React components with 
+            Tailwind, including patterns for handling dynamic classes and component variants.
+          </Typography>
+          <CodeBlock
+            title="React Component Patterns with Tailwind"
+            code={`// Button.jsx - Reusable button component with variants
+import { clsx } from 'clsx';  // npm install clsx (helps combine classes)
+
+const Button = ({ 
+  children, 
+  variant = 'primary', 
+  size = 'md', 
+  disabled = false,
+  className,
+  ...props 
+}) => {
+  // Base styles that apply to all buttons
+  const baseStyles = \`
+    inline-flex items-center justify-center font-semibold rounded-lg
+    transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2
+    disabled:opacity-50 disabled:cursor-not-allowed
+  \`;
+  
+  // Variant styles
+  const variants = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500',
+    ghost: 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500',
+  };
+  
+  // Size styles
+  const sizes = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-base',
+    lg: 'px-6 py-3 text-lg',
+  };
+  
+  return (
+    <button
+      className={clsx(baseStyles, variants[variant], sizes[size], className)}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+// Usage
+<Button variant="primary" size="lg">Click Me</Button>
+<Button variant="outline">Learn More</Button>
+<Button variant="danger" size="sm">Delete</Button>`}
+          />
+          <CodeBlock
+            title="Card Component with Tailwind"
+            code={`// Card.jsx - Composable card component
+const Card = ({ children, className, ...props }) => (
+  <div 
+    className={clsx(
+      'bg-white dark:bg-slate-800 rounded-xl shadow-md',
+      'border border-gray-200 dark:border-slate-700',
+      'overflow-hidden',
+      className
+    )}
+    {...props}
+  >
+    {children}
+  </div>
+);
+
+Card.Header = ({ children, className }) => (
+  <div className={clsx('px-6 py-4 border-b border-gray-200 dark:border-slate-700', className)}>
+    {children}
+  </div>
+);
+
+Card.Body = ({ children, className }) => (
+  <div className={clsx('p-6', className)}>
+    {children}
+  </div>
+);
+
+Card.Footer = ({ children, className }) => (
+  <div className={clsx('px-6 py-4 bg-gray-50 dark:bg-slate-700/50', className)}>
+    {children}
+  </div>
+);
+
+// Usage
+<Card>
+  <Card.Header>
+    <h3 className="text-lg font-semibold">Card Title</h3>
+  </Card.Header>
+  <Card.Body>
+    <p className="text-gray-600 dark:text-gray-300">
+      Card content goes here...
+    </p>
+  </Card.Body>
+  <Card.Footer>
+    <Button variant="primary">Action</Button>
+  </Card.Footer>
+</Card>`}
+          />
+          <CodeBlock
+            title="Conditional Classes with clsx"
+            code={`// npm install clsx (or use classnames package)
+import { clsx } from 'clsx';
+
+// Simple conditional
+<div className={clsx(
+  'base-class',
+  isActive && 'active-class',
+  isDisabled && 'disabled-class'
+)}>
+
+// Object syntax
+<div className={clsx({
+  'bg-blue-500': isPrimary,
+  'bg-gray-500': !isPrimary,
+  'opacity-50': isDisabled,
+  'cursor-pointer': !isDisabled,
+})}>
+
+// Array syntax
+<div className={clsx([
+  'base',
+  condition1 && 'class1',
+  condition2 && 'class2',
+])}>
+
+// Real example: Status badge
+const StatusBadge = ({ status }) => {
+  const statusStyles = {
+    active: 'bg-green-100 text-green-800',
+    pending: 'bg-yellow-100 text-yellow-800',
+    inactive: 'bg-gray-100 text-gray-800',
+    error: 'bg-red-100 text-red-800',
+  };
+  
+  return (
+    <span className={clsx(
+      'px-2.5 py-0.5 rounded-full text-xs font-medium',
+      statusStyles[status]
+    )}>
+      {status}
+    </span>
+  );
+};`}
+          />
+
+          {/* ==================== TAILWIND VS BOOTSTRAP ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            🥊 Tailwind vs Bootstrap: When to Use Which
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.8 }}>
+            Both are excellent frameworks, but they have different philosophies and use cases. 
+            Understanding when to use each will make you a more effective developer.
+          </Typography>
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, bgcolor: alpha("#06b6d4", 0.05), border: `1px solid ${alpha("#06b6d4", 0.2)}`, height: "100%" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#06b6d4", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  🌊 Choose Tailwind When:
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You want complete design freedom and custom aesthetics" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="Building a unique brand identity is important" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You're working with a design system or Figma designs" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You want the smallest possible CSS bundle size" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You prefer keeping styles in your HTML/JSX" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You're building modern SPAs with React/Vue" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You want to avoid 'Bootstrap look'" /></ListItem>
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, bgcolor: alpha("#7952b3", 0.05), border: `1px solid ${alpha("#7952b3", 0.2)}`, height: "100%" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#7952b3", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  🅱️ Choose Bootstrap When:
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You need to prototype quickly with pre-built components" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="Working on admin dashboards or internal tools" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="Your team is already familiar with Bootstrap" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You need extensive JavaScript components (modals, dropdowns)" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="Design consistency is more important than uniqueness" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="You prefer separation of HTML and CSS" /></ListItem>
+                  <ListItem sx={{ py: 0.5 }}><ListItemText primary="Working with server-rendered apps (Django, Rails, PHP)" /></ListItem>
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+          <CodeBlock
+            title="Same Button: Tailwind vs Bootstrap"
+            code={`<!-- Tailwind: Explicit, customizable -->
+<button class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg 
+               hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+               transition-colors">
+  Click Me
+</button>
+
+<!-- Bootstrap: Pre-built, consistent -->
+<button class="btn btn-primary">
+  Click Me
+</button>
+
+<!-- The difference:
+- Tailwind: You control everything, but you write more
+- Bootstrap: Less code, but less control -->
+
+<!-- Tailwind excels when you need variations -->
+<button class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 
+               text-white font-bold rounded-full shadow-lg
+               hover:shadow-xl hover:scale-105 transition-all duration-300">
+  Custom Button
+</button>
+
+<!-- This would be much harder in Bootstrap -->`}
+          />
+
+          {/* ==================== BEST PRACTICES ==================== */}
+          <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>
+            ✅ Tailwind Best Practices
+          </Typography>
+          <List>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Use the Tailwind CSS IntelliSense extension"
+                secondary="Provides autocomplete, syntax highlighting, and linting in VS Code" 
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Order classes consistently"
+                secondary="Layout → Spacing → Sizing → Colors → Typography → Effects. Use Prettier plugin for auto-sorting" 
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Extract components, not classes"
+                secondary="Instead of @apply for everything, create React/Vue components that encapsulate Tailwind classes" 
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Use design tokens in your config"
+                secondary="Define colors, spacing, and fonts in tailwind.config.js for consistency" 
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Embrace the utility-first mindset"
+                secondary="Don't fight it - inline styles are OK in Tailwind. That's the whole point!" 
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon><CheckCircleIcon sx={{ color: "#06b6d4" }} /></ListItemIcon>
+              <ListItemText 
+                primary="Use arbitrary values sparingly"
+                secondary="[100px] or [#ff0000] should be exceptions, not the rule. Extend your config instead" 
+              />
+            </ListItem>
+          </List>
+
+          <Alert severity="info" sx={{ mt: 3, mb: 3 }}>
+            <AlertTitle sx={{ fontWeight: 700 }}>Tailwind v4.0 Preview (Coming Soon)</AlertTitle>
+            <Typography variant="body2">
+              Tailwind v4 will be even faster with a new engine written in Rust, native CSS cascade layers, 
+              and improved configuration. The utility classes you learn now will still work - it's mostly 
+              internal improvements. Stay tuned!
+            </Typography>
+          </Alert>
 
           {/* Building a Component */}
           <Typography variant="h5" sx={{ fontWeight: 700, mt: 4, mb: 2, color: "#06b6d4" }}>

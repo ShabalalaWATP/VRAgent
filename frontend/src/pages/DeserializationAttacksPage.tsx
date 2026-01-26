@@ -1,11 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
-  Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -26,6 +23,13 @@ import {
   Tooltip,
   Alert,
   AlertTitle,
+  alpha,
+  useTheme,
+  Fab,
+  Drawer,
+  Divider,
+  LinearProgress,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -43,24 +47,21 @@ import LockIcon from "@mui/icons-material/Lock";
 import StorageIcon from "@mui/icons-material/Storage";
 import TuneIcon from "@mui/icons-material/Tune";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import CategoryIcon from "@mui/icons-material/Category";
+import HistoryIcon from "@mui/icons-material/History";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import LanguageIcon from "@mui/icons-material/Language";
+import ReportProblemIcon from "@mui/icons-material/ReportProblem";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import ScienceIcon from "@mui/icons-material/Science";
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -112,6 +113,8 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#8b5cf6";
+const ACCENT_COLOR = "#8b5cf6";
+
 const quizQuestions: QuizQuestion[] = [
   {
     id: 1,
@@ -737,8 +740,66 @@ const quizQuestions: QuizQuestion[] = [
 
 const DeserializationAttacksPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
+  // Navigation State
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
+
+  // Section Navigation Items - All sections now visible
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
+    { id: "what-is-it", label: "What Is It?", icon: <MenuBookIcon /> },
+    { id: "why-it-matters", label: "Why It Matters", icon: <ReportProblemIcon /> },
+    { id: "key-concepts", label: "Key Concepts", icon: <CategoryIcon /> },
+    { id: "how-it-works", label: "How It Works", icon: <TuneIcon /> },
+    { id: "risky-formats", label: "Risky Formats", icon: <DataObjectIcon /> },
+    { id: "entry-points", label: "Entry Points", icon: <LanguageIcon /> },
+    { id: "abuse-patterns", label: "Abuse Patterns", icon: <AccountTreeIcon /> },
+    { id: "detection", label: "Detection", icon: <SearchIcon /> },
+    { id: "prevention", label: "Prevention", icon: <ShieldIcon /> },
+    { id: "code-examples", label: "Code Examples", icon: <CodeIcon /> },
+    { id: "safe-lab", label: "Safe Lab", icon: <ScienceIcon /> },
+    { id: "quiz-section", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      let currentSection = "";
+
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150) {
+            currentSection = sectionId;
+          }
+        }
+      }
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
+
+  // Data arrays
   const objectives = [
     "Explain deserialization in plain language.",
     "Show why untrusted data is dangerous to load as objects.",
@@ -746,6 +807,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "Recognize detection signals and triage steps.",
     "Apply prevention patterns and safe alternatives.",
   ];
+
   const beginnerPath = [
     "1) Read the beginner explanation and glossary.",
     "2) Learn how serialization and deserialization work.",
@@ -753,12 +815,14 @@ const DeserializationAttacksPage: React.FC = () => {
     "4) Study abuse patterns and detection signals.",
     "5) Apply the prevention checklist and safe code examples.",
   ];
+
   const keyIdeas = [
     "Deserialization turns data back into objects or code structures.",
     "If the data is untrusted, the object graph can be dangerous.",
     "The safest fix is to avoid native deserialization of untrusted data.",
     "If you must deserialize, validate, restrict, and verify integrity.",
   ];
+
   const glossary = [
     { term: "Serialization", desc: "Converting objects into bytes or text for storage or transport." },
     { term: "Deserialization", desc: "Rebuilding objects from serialized data." },
@@ -766,29 +830,43 @@ const DeserializationAttacksPage: React.FC = () => {
     { term: "Integrity", desc: "Proof that data has not been changed in transit." },
     { term: "Schema", desc: "A contract that defines allowed fields and types." },
     { term: "Gadget", desc: "A class or method that can be abused during deserialization." },
+    { term: "Gadget chain", desc: "A sequence of gadgets linked together to achieve code execution." },
+    { term: "Payload", desc: "The crafted data sent to trigger deserialization behavior." },
+    { term: "Allowlist", desc: "A list of explicitly permitted types that can be deserialized." },
+    { term: "Denylist", desc: "A list of blocked types (weaker than allowlist because new gadgets emerge)." },
   ];
+
   const misconceptions = [
     {
       myth: "Deserialization is safe if the payload is base64.",
-      reality: "Encoding does not make untrusted data safe.",
+      reality: "Encoding does not make untrusted data safe. Base64 is just a transport encoding.",
     },
     {
       myth: "Only Java apps have deserialization issues.",
-      reality: "Many languages and formats can be abused.",
+      reality: "Many languages and formats can be abused, including Python, PHP, .NET, Ruby, and more.",
     },
     {
       myth: "Signing tokens always prevents abuse.",
-      reality: "Signatures help integrity, but logic issues can remain.",
+      reality: "Signatures help integrity, but logic issues and gadgets can remain inside valid signed data.",
+    },
+    {
+      myth: "Encryption makes deserialization safe.",
+      reality: "If encrypted data is decrypted and then deserialized without validation, it can still be dangerous.",
+    },
+    {
+      myth: "Only external inputs are dangerous.",
+      reality: "Internal services, caches, and queues can also carry poisoned serialized objects.",
     },
   ];
 
   const howItWorks = [
-    "A system serializes an object into bytes or text.",
-    "The data is stored or transmitted (cookies, caches, APIs).",
-    "Later, the system deserializes it back into objects.",
-    "If the data is untrusted, it can create dangerous objects.",
-    "That object graph may trigger code paths the app never expected.",
+    "A system serializes an object into bytes or text (e.g., to store in a cookie or send over a network).",
+    "The serialized data is stored or transmitted to another location.",
+    "Later, the receiving system deserializes it back into live objects in memory.",
+    "If an attacker controls the serialized data, they can influence what objects get created.",
+    "That object graph may trigger code paths the application never expected, leading to security issues.",
   ];
+
   const trustBoundaries = [
     "User-controlled cookies or session tokens.",
     "API bodies that accept complex objects.",
@@ -796,6 +874,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "File uploads or imports containing serialized content.",
     "Internal services that trust upstream data without validation.",
   ];
+
   const entryPoints = [
     "Session state stored in cookies or headers.",
     "RPC or message queue payloads.",
@@ -803,6 +882,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "Export and import features (backups, configs).",
     "Webhooks or integration endpoints.",
   ];
+
   const featureHotspots = [
     "Single sign-on or session middleware.",
     "Background job systems that consume queued objects.",
@@ -827,20 +907,20 @@ const DeserializationAttacksPage: React.FC = () => {
     {
       format: "PHP serialize",
       languages: "PHP",
-      risk: "Unserialize can invoke magic methods.",
+      risk: "Unserialize can invoke magic methods (__wakeup, __destruct).",
       safer: "JSON with strict validation.",
     },
     {
       format: "Python pickle",
       languages: "Python",
-      risk: "Pickle can execute code during load.",
+      risk: "Pickle can execute code during load via __reduce__.",
       safer: "JSON with schema, msgpack with types.",
     },
     {
       format: "YAML load",
       languages: "Many",
       risk: "Unsafe loaders can instantiate objects.",
-      safer: "Safe loaders or JSON.",
+      safer: "Safe loaders (safe_load) or JSON.",
     },
     {
       format: "XML object mapping",
@@ -853,48 +933,50 @@ const DeserializationAttacksPage: React.FC = () => {
   const abusePatterns = [
     {
       title: "Dangerous object graphs",
-      description: "Untrusted data creates objects that trigger unexpected code paths.",
+      description: "Untrusted data creates objects that trigger unexpected code paths. When the application deserializes data, it reconstructs objects that may have constructors, finalizers, or methods that run automatically.",
       impact: "Remote code execution or privilege escalation in worst cases.",
       signals: "Unexpected class names or method calls in logs.",
-      defense: "Avoid native deserialization; allowlist types.",
+      defense: "Avoid native deserialization; use allowlists for types.",
     },
     {
       title: "Data tampering",
-      description: "Object fields are changed to bypass business rules.",
-      impact: "Authorization bypass, price changes, or role escalation.",
+      description: "Object fields are modified to bypass business rules. An attacker intercepts serialized data and changes values like prices, roles, or permissions.",
+      impact: "Authorization bypass, price manipulation, or role escalation.",
       signals: "Inconsistent state changes or invalid transitions.",
-      defense: "Validate fields and enforce server-side checks.",
+      defense: "Validate fields and enforce server-side checks; sign data.",
     },
     {
       title: "Type confusion",
-      description: "Input is treated as a different object type than expected.",
+      description: "Input is treated as a different object type than expected. The attacker crafts data that deserializes into a different class than the application expects.",
       impact: "Logic bypass or hidden code paths executed.",
       signals: "Type casting errors or unusual exceptions.",
       defense: "Use strict schemas and typed deserializers.",
     },
     {
       title: "Resource exhaustion",
-      description: "Deep or massive object graphs consume memory or CPU.",
+      description: "Deep or massive object graphs consume memory or CPU. Sometimes called 'deserialization bombs' - the payload is small but expands into huge structures.",
       impact: "Denial of service or degraded performance.",
       signals: "High memory use, long parse times, timeouts.",
-      defense: "Limit size, depth, and complexity.",
+      defense: "Limit size, depth, and object count.",
     },
     {
-      title: "Replay or downgrade",
-      description: "Old or stale objects are accepted as valid.",
+      title: "Replay or downgrade attacks",
+      description: "Old or stale serialized objects are replayed as if they were current. This can bypass newer security controls or revert state.",
       impact: "Bypass of newer validation or business rules.",
       signals: "Old version fields reappearing in requests.",
-      defense: "Version objects and enforce expiration.",
+      defense: "Version objects and enforce expiration timestamps.",
     },
   ];
 
   const detectionSignals = [
-    "Deserialization exceptions or stack traces.",
-    "Unexpected class or type names in logs.",
-    "Large or deeply nested payloads.",
+    "Deserialization exceptions or stack traces in logs.",
+    "Unexpected class or type names appearing in error messages.",
+    "Large or deeply nested payloads in requests.",
     "Spikes in parsing time or memory usage.",
     "Requests that bypass normal validation paths.",
+    "Outbound network connections from app servers after receiving data.",
   ];
+
   const telemetrySources = [
     "Application logs and exception traces.",
     "APM metrics for parsing time and memory.",
@@ -902,13 +984,15 @@ const DeserializationAttacksPage: React.FC = () => {
     "Audit logs for authorization changes.",
     "Dependency scanning reports for risky serializers.",
   ];
+
   const errorSignatures = [
-    { system: "Java", examples: "InvalidClassException, StreamCorruptedException" },
+    { system: "Java", examples: "InvalidClassException, StreamCorruptedException, ClassNotFoundException" },
     { system: ".NET", examples: "SerializationException, BinaryFormatter warnings" },
     { system: "PHP", examples: "unserialize() error, __wakeup() warnings" },
-    { system: "Python", examples: "pickle.UnpicklingError" },
+    { system: "Python", examples: "pickle.UnpicklingError, _pickle.UnpicklingError" },
     { system: "Generic", examples: "Unexpected type, cannot cast, schema violation" },
   ];
+
   const baselineMetrics = [
     {
       metric: "Deserialization error rate",
@@ -926,6 +1010,7 @@ const DeserializationAttacksPage: React.FC = () => {
       investigate: "Long parse times or timeouts.",
     },
   ];
+
   const triageSteps = [
     "Identify the endpoint and serializer involved.",
     "Check if the data is trusted or user-controlled.",
@@ -933,6 +1018,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "Inspect payload size and nesting depth.",
     "Validate whether integrity checks are enforced.",
   ];
+
   const responseSteps = [
     "Disable or restrict the vulnerable deserialization path.",
     "Switch to a safe format or strict schema validation.",
@@ -950,6 +1036,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "Keep serializers and dependencies updated.",
     "Run services with least privilege.",
   ];
+
   const defenseInDepth = [
     "Use separate services to handle untrusted inputs.",
     "Enable detailed logging for deserialization errors.",
@@ -957,6 +1044,7 @@ const DeserializationAttacksPage: React.FC = () => {
     "Apply WAF rules for excessive payload sizes.",
     "Perform code reviews for any serializer usage.",
   ];
+
   const safeAlternatives = [
     {
       format: "JSON + schema",
@@ -975,18 +1063,49 @@ const DeserializationAttacksPage: React.FC = () => {
     },
   ];
 
-  const unsafeExample = `// Insecure: native deserialization of untrusted input
-const data = request.body;
-const obj = deserializeBinary(data);`;
-  const safeExample = `// Safer: parse JSON and validate schema
+  const unsafeExample = `// UNSAFE: Native deserialization of untrusted input
+// Java example
+ObjectInputStream ois = new ObjectInputStream(request.getInputStream());
+Object obj = ois.readObject();  // Dangerous! Can execute arbitrary code
+
+// Python example
+import pickle
+data = pickle.loads(user_input)  // Dangerous! Can execute arbitrary code
+
+// PHP example
+$obj = unserialize($_COOKIE['session']);  // Dangerous! Object injection`;
+
+  const safeExample = `// SAFE: Parse JSON and validate against a schema
+// JavaScript/TypeScript example
 const data = JSON.parse(request.body);
-validateSchema(data, orderSchema);
-processOrder(data);`;
-  const integrityExample = `// Verify integrity before any parsing
-if (!verifySignature(payload, publicKey)) {
-  throw new Error("Invalid signature");
+const validated = schema.validate(data);  // Strict schema validation
+if (!validated.success) {
+  throw new Error("Invalid data format");
 }
-const data = JSON.parse(payload);`;
+processOrder(validated.data);
+
+// Python example
+import json
+from jsonschema import validate
+data = json.loads(user_input)  // Safe - JSON doesn't execute code
+validate(data, order_schema)   // Validate structure`;
+
+  const integrityExample = `// Verify integrity BEFORE any parsing
+// JavaScript example
+const signature = request.headers['x-signature'];
+if (!crypto.verify(payload, signature, publicKey)) {
+  throw new Error("Invalid signature - data may be tampered");
+}
+// Only now is it safe to parse
+const data = JSON.parse(payload);
+
+// Java example with HMAC
+Mac mac = Mac.getInstance("HmacSHA256");
+mac.init(secretKey);
+byte[] expectedSig = mac.doFinal(payload.getBytes());
+if (!MessageDigest.isEqual(expectedSig, receivedSignature)) {
+  throw new SecurityException("Signature verification failed");
+}`;
 
   const codeReviewChecklist = [
     "Find all deserialization libraries in the codebase.",
@@ -995,19 +1114,35 @@ const data = JSON.parse(payload);`;
     "Verify size and depth limits.",
     "Ensure integrity checks happen before parsing.",
   ];
-  const codeReviewCommands = `# Search for risky serializers
-rg -n "ObjectInputStream|BinaryFormatter|unserialize\\(|pickle\\.loads|yaml\\.load" src
+
+  const codeReviewCommands = `# Search for risky serializers in your codebase
+# Java
+rg -n "ObjectInputStream|readObject|XMLDecoder" src
+
+# .NET
+rg -n "BinaryFormatter|SoapFormatter|NetDataContractSerializer" src
+
+# PHP
+rg -n "unserialize\\(|__wakeup|__destruct" src
+
+# Python
+rg -n "pickle\\.loads|pickle\\.load|yaml\\.load|marshal\\.loads" src
+
+# Ruby
+rg -n "Marshal\\.load|YAML\\.load" src
 
 # Search for custom deserialization helpers
 rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
 
   const labSteps = [
     "Identify any deserialization usage in a demo app.",
-    "Classify which inputs are untrusted.",
-    "Add schema validation and allowlists.",
+    "Classify which inputs are untrusted (cookies, API bodies, files).",
+    "Add schema validation and type allowlists.",
     "Add size and depth limits to parsers.",
     "Record baseline parse time and error rates.",
+    "Test with malformed inputs and verify they are rejected.",
   ];
+
   const verificationChecklist = [
     "No native deserialization on untrusted inputs.",
     "Schemas are enforced and unknown fields rejected.",
@@ -1015,6 +1150,7 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
     "Payload size and depth limits are configured.",
     "Logging captures deserialization failures.",
   ];
+
   const safeBoundaries = [
     "Only test in a lab or with written authorization.",
     "Avoid using real user data in tests.",
@@ -1024,104 +1160,284 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
 
   const pageContext = `This page covers deserialization vulnerabilities and attacks across different programming languages including Java, PHP, Python, and .NET. Topics include insecure deserialization, gadget chains, remote code execution, exploitation techniques, and secure coding practices.`;
 
+  // Sidebar Navigation Component
+  const sidebarNav = (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 240,
+        flexShrink: 0,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-thumb": { bgcolor: alpha(ACCENT_COLOR, 0.3), borderRadius: 3 },
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: ACCENT_COLOR, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
+          Course Navigation
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Progress</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(ACCENT_COLOR, 0.1),
+              "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR, borderRadius: 3 },
+            }}
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
+              sx={{
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.08) },
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? ACCENT_COLOR : "text.secondary",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Paper>
+  );
+
   return (
     <LearnPageLayout pageTitle="Deserialization Attacks" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: ACCENT_COLOR,
+            "&:hover": { bgcolor: "#7c3aed" },
+            boxShadow: `0 4px 20px ${alpha(ACCENT_COLOR, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <AccountTreeIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #3b82f6 0%, #38bdf8 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Deserialization Attacks
-          </Typography>
+      {/* Scroll to Top Button - Mobile Only */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(ACCENT_COLOR, 0.15),
+            color: ACCENT_COLOR,
+            "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.25) },
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: ACCENT_COLOR }} />
+              Course Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(ACCENT_COLOR, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: ACCENT_COLOR }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(ACCENT_COLOR, 0.1),
+                "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR, borderRadius: 3 },
+              }}
+            />
+          </Box>
+
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+                  "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.1) },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? ACCENT_COLOR : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{ height: 20, fontSize: "0.65rem", bgcolor: alpha(ACCENT_COLOR, 0.2), color: ACCENT_COLOR }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz-section")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(ACCENT_COLOR, 0.3), color: ACCENT_COLOR }}
+            >
+              Quiz
+            </Button>
+          </Box>
         </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          A beginner-friendly deep dive into why unsafe deserialization is risky and how to defend against it.
-        </Typography>
+      </Drawer>
 
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <AlertTitle>Defensive Learning Only</AlertTitle>
-          This page focuses on prevention, detection, and safe engineering. Use it only for authorized testing.
-        </Alert>
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
 
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            Deserialization is the process of taking data and turning it back into objects. Many systems serialize
-            objects into text or bytes so they can be stored in a cache, sent over the network, or saved in a file.
-            When that data comes back, the system deserializes it to rebuild the original object graph.
-          </Typography>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            The danger is that deserialization can create objects that carry behavior, not just data. If an attacker
-            can control the serialized input, they can influence what objects get created and how they are built.
-            This can lead to surprising behavior, security bypasses, or even code execution in the worst cases.
-          </Typography>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            A beginner way to think about it: imagine sending a sealed box of instructions instead of a simple data
-            form. If your system opens the box and follows the instructions automatically, a malicious box could
-            trick it into doing unsafe things. Safe systems treat incoming data as plain data, not executable objects.
-          </Typography>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            The safest fix is to avoid native deserialization for untrusted inputs and use strict formats like JSON
-            with schema validation. If deserialization is required, you must restrict types, validate inputs, and
-            verify integrity before parsing.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            This guide explains the concept, where it appears in real systems, how to detect it, and how to prevent it
-            with practical checklists and safe examples.
-          </Typography>
-        </Paper>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* ==================== SECTION: Introduction ==================== */}
+          <Box id="intro" sx={{ mb: 4 }}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
 
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<AccountTreeIcon />} label="Object Graphs" size="small" />
-          <Chip icon={<StorageIcon />} label="Serialization" size="small" />
-          <Chip icon={<SearchIcon />} label="Detection" size="small" />
-          <Chip icon={<ShieldIcon />} label="Prevention" size="small" />
-          <Chip icon={<CodeIcon />} label="Safe Parsing" size="small" />
-        </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+              <AccountTreeIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
+              <Typography
+                variant="h3"
+                sx={{
+                  fontWeight: 700,
+                  background: "linear-gradient(135deg, #3b82f6 0%, #38bdf8 100%)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Deserialization Attacks
+              </Typography>
+            </Box>
+            <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+              A beginner-friendly deep dive into why unsafe deserialization is risky and how to defend against it.
+            </Typography>
 
-        <Paper sx={{ bgcolor: "#111826", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#3b82f6" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<TuneIcon />} label="How It Works" />
-            <Tab icon={<AccountTreeIcon />} label="Abuse Patterns" />
-            <Tab icon={<SearchIcon />} label="Detection" />
-            <Tab icon={<ShieldIcon />} label="Prevention" />
-            <Tab icon={<BuildIcon />} label="Safe Lab" />
-          </Tabs>
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              <AlertTitle>Defensive Learning Only</AlertTitle>
+              This page focuses on prevention, detection, and safe engineering. Use this knowledge only for authorized testing and building secure systems.
+            </Alert>
 
-          {/* Tab 0: Overview */}
-          <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
                     <SecurityIcon sx={{ mr: 1, verticalAlign: "middle", color: "#3b82f6" }} />
                     Learning Objectives
@@ -1137,10 +1453,10 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                 </Paper>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
                     <BugReportIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
-                    Beginner Path
+                    Recommended Learning Path
                   </Typography>
                   <List dense>
                     {beginnerPath.map((step, i) => (
@@ -1151,63 +1467,192 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   </List>
                 </Paper>
               </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Key Ideas
-                  </Typography>
-                  <List dense>
-                    {keyIdeas.map((idea, i) => (
-                      <ListItem key={i}>
-                        <ListItemIcon><LockIcon sx={{ color: "#3b82f6" }} /></ListItemIcon>
-                        <ListItemText primary={idea} sx={{ color: "grey.300" }} />
-                      </ListItem>
-                    ))}
-                  </List>
+            </Grid>
+          </Box>
+
+          {/* ==================== SECTION: What Is It? ==================== */}
+          <Paper id="what-is-it" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <MenuBookIcon sx={{ color: "#3b82f6" }} />
+              What Is Deserialization?
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+              <strong>Serialization</strong> is the process of converting an object in your program's memory into a format that can be stored or transmitted. Think of it like packing a suitcase - you take your belongings (the object) and organize them into a compact form (bytes or text) that can be moved somewhere else.
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+              <strong>Deserialization</strong> is the reverse process - taking that stored or transmitted data and rebuilding it back into a live object in memory. It's like unpacking that suitcase and putting everything back where it belongs.
+            </Typography>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <AlertTitle>Simple Analogy</AlertTitle>
+              Imagine sending a flat-pack furniture kit through the mail. Serialization is disassembling the furniture and packing it flat. Deserialization is the recipient unpacking and reassembling it. The danger is if someone swaps in malicious parts - when assembled, the furniture might not be what you expected.
+            </Alert>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+              <strong>Why do applications use serialization?</strong>
+            </Typography>
+            <List dense>
+              <ListItem>
+                <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e" }} /></ListItemIcon>
+                <ListItemText primary="Storing session data in cookies or databases" sx={{ color: "grey.300" }} />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e" }} /></ListItemIcon>
+                <ListItemText primary="Sending objects between services over a network" sx={{ color: "grey.300" }} />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e" }} /></ListItemIcon>
+                <ListItemText primary="Caching complex data structures for faster retrieval" sx={{ color: "grey.300" }} />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon><CheckCircleIcon sx={{ color: "#22c55e" }} /></ListItemIcon>
+                <ListItemText primary="Creating backups or export files" sx={{ color: "grey.300" }} />
+              </ListItem>
+            </List>
+          </Paper>
+
+          {/* ==================== SECTION: Why It Matters ==================== */}
+          <Paper id="why-it-matters" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <ReportProblemIcon sx={{ color: "#ef4444" }} />
+              Why Is Insecure Deserialization Dangerous?
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+              The danger comes from a fundamental issue: <strong>serialized data can contain more than just simple values</strong>. In many programming languages, serialized data can include information about what <em>type</em> of object to create, and when that object is created, it can trigger code execution.
+            </Typography>
+
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <AlertTitle>The Core Problem</AlertTitle>
+              When you deserialize untrusted data, you're essentially letting an attacker tell your application what objects to create and how to construct them. If the attacker can control this, they can potentially execute arbitrary code on your server.
+            </Alert>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+              <strong>Real-world impact:</strong> Insecure deserialization has been used in some of the most devastating security breaches. It's listed as a critical vulnerability in the OWASP Top 10 because it can lead to:
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderLeft: "4px solid #ef4444" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#ef4444", fontWeight: 600 }}>Remote Code Execution</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>Attackers can run arbitrary commands on your server</Typography>
                 </Paper>
               </Grid>
-              <Grid item xs={12}>
-                <Accordion sx={{ bgcolor: "#151c2c" }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
-                    <Typography sx={{ color: "#fff", fontWeight: 600 }}>Glossary</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <TableContainer>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Term</TableCell>
-                            <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Definition</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {glossary.map((g, i) => (
-                            <TableRow key={i}>
-                              <TableCell sx={{ color: "#3b82f6", fontWeight: 600 }}>{g.term}</TableCell>
-                              <TableCell sx={{ color: "grey.300" }}>{g.desc}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </AccordionDetails>
-                </Accordion>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderLeft: "4px solid #f59e0b" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 600 }}>Privilege Escalation</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>Attackers can elevate their access level</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderLeft: "4px solid #8b5cf6" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#8b5cf6", fontWeight: 600 }}>Data Tampering</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>Attackers can modify application data</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, bgcolor: "#1a1a2e", borderLeft: "4px solid #3b82f6" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#3b82f6", fontWeight: 600 }}>Denial of Service</Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>Attackers can crash or slow down your system</Typography>
+                </Paper>
               </Grid>
             </Grid>
-          </TabPanel>
 
-          {/* Tab 1: How It Works */}
-          <TabPanel value={tabValue} index={1}>
+            <Accordion sx={{ bgcolor: "#151c2c" }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+                <Typography sx={{ color: "#fff", fontWeight: 600 }}>Common Misconceptions</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Myth</TableCell>
+                        <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Reality</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {misconceptions.map((m, i) => (
+                        <TableRow key={i}>
+                          <TableCell sx={{ color: "#ef4444" }}>{m.myth}</TableCell>
+                          <TableCell sx={{ color: "#22c55e" }}>{m.reality}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionDetails>
+            </Accordion>
+          </Paper>
+
+          {/* ==================== SECTION: Key Concepts ==================== */}
+          <Paper id="key-concepts" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <CategoryIcon sx={{ color: "#8b5cf6" }} />
+              Key Concepts & Terminology
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Before diving deeper, let's understand the key terms you'll encounter when learning about deserialization attacks.
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {keyIdeas.map((idea, i) => (
+                <Grid item xs={12} md={6} key={i}>
+                  <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
+                    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                      <LockIcon sx={{ color: "#3b82f6", mt: 0.5 }} />
+                      <Typography variant="body2" sx={{ color: "grey.300" }}>{idea}</Typography>
+                    </Box>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>Glossary</Typography>
+            <TableContainer component={Paper} sx={{ bgcolor: "#151c2c" }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600, width: "25%" }}>Term</TableCell>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Definition</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {glossary.map((g, i) => (
+                    <TableRow key={i}>
+                      <TableCell sx={{ color: "#3b82f6", fontWeight: 600 }}>{g.term}</TableCell>
+                      <TableCell sx={{ color: "grey.300" }}>{g.desc}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          {/* ==================== SECTION: How It Works ==================== */}
+          <Paper id="how-it-works" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <TuneIcon sx={{ color: "#22c55e" }} />
+              How Deserialization Attacks Work
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Understanding the attack flow helps you identify where your applications might be vulnerable.
+            </Typography>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Serialization Flow
+                    The Serialization Flow
                   </Typography>
                   <List dense>
                     {howItWorks.map((step, i) => (
                       <ListItem key={i}>
-                        <ListItemIcon><Chip label={i + 1} size="small" /></ListItemIcon>
+                        <ListItemIcon><Chip label={i + 1} size="small" sx={{ bgcolor: "#3b82f6" }} /></ListItemIcon>
                         <ListItemText primary={step} sx={{ color: "grey.300" }} />
                       </ListItem>
                     ))}
@@ -1215,9 +1660,13 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                 </Paper>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Trust Boundaries
+                    <WarningIcon sx={{ mr: 1, verticalAlign: "middle", color: "#f59e0b" }} />
+                    Trust Boundaries at Risk
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    These are places where untrusted data enters your application:
                   </Typography>
                   <List dense>
                     {trustBoundaries.map((b, i) => (
@@ -1229,40 +1678,108 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   </List>
                 </Paper>
               </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+            </Grid>
+
+            <Alert severity="info" sx={{ mt: 3 }}>
+              <AlertTitle>What Are Gadget Chains?</AlertTitle>
+              A "gadget" is a piece of code that already exists in your application or its libraries. A "gadget chain" is when an attacker links multiple gadgets together - the output of one becomes the input of another - to achieve code execution. Attackers don't need to inject new code; they just need to arrange existing code to run in a malicious sequence.
+            </Alert>
+          </Paper>
+
+          {/* ==================== SECTION: Risky Formats ==================== */}
+          <Paper id="risky-formats" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <DataObjectIcon sx={{ color: "#ef4444" }} />
+              Risky Serialization Formats by Language
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Different programming languages have their own serialization mechanisms. Here's what to watch out for and what safer alternatives exist.
+            </Typography>
+
+            <TableContainer component={Paper} sx={{ bgcolor: "#151c2c" }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Format</TableCell>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Languages</TableCell>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Why It's Risky</TableCell>
+                    <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Safer Alternative</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {riskyFormats.map((f, i) => (
+                    <TableRow key={i}>
+                      <TableCell sx={{ color: "#ef4444", fontWeight: 600 }}>{f.format}</TableCell>
+                      <TableCell sx={{ color: "grey.300" }}>{f.languages}</TableCell>
+                      <TableCell sx={{ color: "grey.300" }}>{f.risk}</TableCell>
+                      <TableCell sx={{ color: "#22c55e" }}>{f.safer}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          {/* ==================== SECTION: Entry Points ==================== */}
+          <Paper id="entry-points" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <LanguageIcon sx={{ color: "#f59e0b" }} />
+              Common Entry Points & Hotspots
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Knowing where deserialization typically occurs helps you audit your applications for vulnerabilities.
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Risky Formats
+                    Common Entry Points
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Format</TableCell>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Languages</TableCell>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Risk</TableCell>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Safer Alternative</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {riskyFormats.map((f, i) => (
-                          <TableRow key={i}>
-                            <TableCell sx={{ color: "#ef4444", fontWeight: 600 }}>{f.format}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{f.languages}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{f.risk}</TableCell>
-                            <TableCell sx={{ color: "#22c55e" }}>{f.safer}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <List dense>
+                    {entryPoints.map((e, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon><WarningIcon sx={{ color: "#f59e0b" }} /></ListItemIcon>
+                        <ListItemText primary={e} sx={{ color: "grey.300" }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                    Feature Hotspots
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    These application features commonly use deserialization:
+                  </Typography>
+                  <List dense>
+                    {featureHotspots.map((f, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon><BugReportIcon sx={{ color: "#8b5cf6" }} /></ListItemIcon>
+                        <ListItemText primary={f} sx={{ color: "grey.300" }} />
+                      </ListItem>
+                    ))}
+                  </List>
                 </Paper>
               </Grid>
             </Grid>
-          </TabPanel>
+          </Paper>
 
-          {/* Tab 2: Abuse Patterns */}
-          <TabPanel value={tabValue} index={2}>
+          {/* ==================== SECTION: Abuse Patterns ==================== */}
+          <Paper id="abuse-patterns" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <AccountTreeIcon sx={{ color: "#ef4444" }} />
+              Attack Patterns & Techniques
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Understanding how attackers exploit deserialization helps you build better defenses.
+            </Typography>
+
             <Grid container spacing={2}>
               {abusePatterns.map((pattern, i) => (
                 <Grid item xs={12} md={6} key={i}>
@@ -1270,18 +1787,29 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                     <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 1 }}>
                       {pattern.title}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>{pattern.description}</Typography>
-                    <Typography variant="body2" sx={{ color: "#ef4444", mb: 1 }}><strong>Impact:</strong> {pattern.impact}</Typography>
-                    <Typography variant="body2" sx={{ color: "#f59e0b", mb: 1 }}><strong>Signals:</strong> {pattern.signals}</Typography>
-                    <Typography variant="body2" sx={{ color: "#22c55e" }}><strong>Defense:</strong> {pattern.defense}</Typography>
+                    <Typography variant="body2" sx={{ color: "grey.300", mb: 2 }}>{pattern.description}</Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Typography variant="body2" sx={{ color: "#ef4444" }}><strong>Impact:</strong> {pattern.impact}</Typography>
+                      <Typography variant="body2" sx={{ color: "#f59e0b" }}><strong>Signals:</strong> {pattern.signals}</Typography>
+                      <Typography variant="body2" sx={{ color: "#22c55e" }}><strong>Defense:</strong> {pattern.defense}</Typography>
+                    </Box>
                   </Paper>
                 </Grid>
               ))}
             </Grid>
-          </TabPanel>
+          </Paper>
 
-          {/* Tab 3: Detection */}
-          <TabPanel value={tabValue} index={3}>
+          {/* ==================== SECTION: Detection ==================== */}
+          <Paper id="detection" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <SearchIcon sx={{ color: "#3b82f6" }} />
+              Detection & Monitoring
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Learn to recognize the signs of deserialization attacks and respond appropriately.
+            </Typography>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
@@ -1303,6 +1831,9 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
                     Triage Steps
                   </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    When you suspect a deserialization issue:
+                  </Typography>
                   <List dense>
                     {triageSteps.map((s, i) => (
                       <ListItem key={i}>
@@ -1313,41 +1844,69 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   </List>
                 </Paper>
               </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Error Signatures by System
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>System</TableCell>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Example Errors</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {errorSignatures.map((e, i) => (
-                          <TableRow key={i}>
-                            <TableCell sx={{ color: "#3b82f6", fontWeight: 600 }}>{e.system}</TableCell>
-                            <TableCell sx={{ color: "grey.300", fontFamily: "monospace" }}>{e.examples}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Grid>
             </Grid>
-          </TabPanel>
 
-          {/* Tab 4: Prevention */}
-          <TabPanel value={tabValue} index={4}>
+            <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                Error Signatures by Language
+              </Typography>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                These error messages in your logs may indicate deserialization issues:
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>System</TableCell>
+                      <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Example Errors</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {errorSignatures.map((e, i) => (
+                      <TableRow key={i}>
+                        <TableCell sx={{ color: "#3b82f6", fontWeight: 600 }}>{e.system}</TableCell>
+                        <TableCell sx={{ color: "grey.300", fontFamily: "monospace" }}>{e.examples}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+
+            <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                Response Steps
+              </Typography>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                If you confirm a deserialization vulnerability:
+              </Typography>
+              <List dense>
+                {responseSteps.map((s, i) => (
+                  <ListItem key={i}>
+                    <ListItemIcon><Chip label={i + 1} size="small" sx={{ bgcolor: "#ef4444" }} /></ListItemIcon>
+                    <ListItemText primary={s} sx={{ color: "grey.300" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Paper>
+
+          {/* ==================== SECTION: Prevention ==================== */}
+          <Paper id="prevention" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <ShieldIcon sx={{ color: "#22c55e" }} />
+              Prevention & Best Practices
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              The most important rule: <strong>never deserialize untrusted data using native serialization mechanisms</strong>. Here's a comprehensive prevention strategy.
+            </Typography>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    <ShieldIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
+                    <VerifiedUserIcon sx={{ mr: 1, verticalAlign: "middle", color: "#22c55e" }} />
                     Prevention Checklist
                   </Typography>
                   <List dense>
@@ -1361,50 +1920,105 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                 </Paper>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
+                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, height: "100%" }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Safe Alternatives
+                    Defense in Depth
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Format</TableCell>
-                          <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Benefit</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {safeAlternatives.map((a, i) => (
-                          <TableRow key={i}>
-                            <TableCell sx={{ color: "#22c55e", fontWeight: 600 }}>{a.format}</TableCell>
-                            <TableCell sx={{ color: "grey.300" }}>{a.benefit}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>Code Examples</Typography>
-                  <Typography variant="subtitle2" sx={{ color: "#ef4444", mb: 1 }}>❌ Unsafe</Typography>
-                  <CodeBlock code={unsafeExample} language="javascript" />
-                  <Typography variant="subtitle2" sx={{ color: "#22c55e", mb: 1, mt: 2 }}>✅ Safe</Typography>
-                  <CodeBlock code={safeExample} language="javascript" />
-                  <Typography variant="subtitle2" sx={{ color: "#3b82f6", mb: 1, mt: 2 }}>✅ With Integrity Check</Typography>
-                  <CodeBlock code={integrityExample} language="javascript" />
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    Layer multiple controls for better protection:
+                  </Typography>
+                  <List dense>
+                    {defenseInDepth.map((item, i) => (
+                      <ListItem key={i}>
+                        <ListItemIcon><ShieldIcon sx={{ color: "#3b82f6" }} /></ListItemIcon>
+                        <ListItemText primary={item} sx={{ color: "grey.300" }} />
+                      </ListItem>
+                    ))}
+                  </List>
                 </Paper>
               </Grid>
             </Grid>
-          </TabPanel>
 
-          {/* Tab 5: Safe Lab */}
-          <TabPanel value={tabValue} index={5}>
+            <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                Safe Alternatives to Native Serialization
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Format</TableCell>
+                      <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Benefit</TableCell>
+                      <TableCell sx={{ color: "grey.400", fontWeight: 600 }}>Note</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {safeAlternatives.map((a, i) => (
+                      <TableRow key={i}>
+                        <TableCell sx={{ color: "#22c55e", fontWeight: 600 }}>{a.format}</TableCell>
+                        <TableCell sx={{ color: "grey.300" }}>{a.benefit}</TableCell>
+                        <TableCell sx={{ color: "grey.400" }}>{a.note}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Paper>
+
+          {/* ==================== SECTION: Code Examples ==================== */}
+          <Paper id="code-examples" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <CodeIcon sx={{ color: "#8b5cf6" }} />
+              Code Examples
+            </Typography>
+
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+              Compare unsafe and safe approaches to handling serialized data.
+            </Typography>
+
+            <Typography variant="subtitle1" sx={{ color: "#ef4444", mb: 1, fontWeight: 600 }}>
+              Unsafe - Native Deserialization of Untrusted Input
+            </Typography>
+            <CodeBlock code={unsafeExample} language="multi-language" />
+
+            <Typography variant="subtitle1" sx={{ color: "#22c55e", mb: 1, mt: 3, fontWeight: 600 }}>
+              Safe - JSON Parsing with Schema Validation
+            </Typography>
+            <CodeBlock code={safeExample} language="javascript" />
+
+            <Typography variant="subtitle1" sx={{ color: "#3b82f6", mb: 1, mt: 3, fontWeight: 600 }}>
+              Safe - Integrity Verification Before Parsing
+            </Typography>
+            <CodeBlock code={integrityExample} language="javascript" />
+
+            <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                Code Review Checklist
+              </Typography>
+              <List dense>
+                {codeReviewChecklist.map((item, i) => (
+                  <ListItem key={i}>
+                    <ListItemIcon><CheckCircleIcon sx={{ color: "#8b5cf6" }} /></ListItemIcon>
+                    <ListItemText primary={item} sx={{ color: "grey.300" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Paper>
+
+          {/* ==================== SECTION: Safe Lab ==================== */}
+          <Paper id="safe-lab" sx={{ p: 3, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <ScienceIcon sx={{ color: "#f59e0b" }} />
+              Safe Practice Lab
+            </Typography>
+
             <Alert severity="info" sx={{ mb: 3 }}>
-              <AlertTitle>Safe Practice</AlertTitle>
-              Follow these steps only in authorized lab environments. Focus on detection and prevention.
+              <AlertTitle>Safe Practice Guidelines</AlertTitle>
+              Follow these steps only in authorized lab environments. Focus on detection and prevention skills, not exploitation.
             </Alert>
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
@@ -1426,6 +2040,9 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
                     Verification Checklist
                   </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    After implementing fixes, verify:
+                  </Typography>
                   <List dense>
                     {verificationChecklist.map((item, i) => (
                       <ListItem key={i}>
@@ -1436,69 +2053,69 @@ rg -n "deserialize|unmarshal|fromBytes|fromString" src`;
                   </List>
                 </Paper>
               </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
-                    Code Review Commands
-                  </Typography>
-                  <CodeBlock code={codeReviewCommands} language="bash" />
-                </Paper>
-              </Grid>
-              <Grid item xs={12}>
-                <Paper sx={{ p: 2, bgcolor: "#1a1a2e", border: "1px solid #ef4444", borderRadius: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: "#ef4444", mb: 2 }}>
-                    <WarningIcon sx={{ mr: 1, verticalAlign: "middle" }} />
-                    Safe Boundaries
-                  </Typography>
-                  <List dense>
-                    {safeBoundaries.map((b, i) => (
-                      <ListItem key={i}>
-                        <ListItemIcon><WarningIcon sx={{ color: "#ef4444" }} /></ListItemIcon>
-                        <ListItemText primary={b} sx={{ color: "grey.300" }} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              </Grid>
             </Grid>
-          </TabPanel>
-        </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${QUIZ_ACCENT_COLOR}33`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Deserialization Attacks Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+            <Paper sx={{ p: 2, bgcolor: "#151c2c", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#fff", mb: 2 }}>
+                Code Review Commands
+              </Typography>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                Use these commands to find potential deserialization issues in your codebase:
+              </Typography>
+              <CodeBlock code={codeReviewCommands} language="bash" />
+            </Paper>
 
-        {/* Bottom Navigation */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            <Paper sx={{ p: 2, bgcolor: "#1a1a2e", border: "1px solid #ef4444", borderRadius: 2, mt: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: "#ef4444", mb: 2 }}>
+                <WarningIcon sx={{ mr: 1, verticalAlign: "middle" }} />
+                Important Boundaries
+              </Typography>
+              <List dense>
+                {safeBoundaries.map((b, i) => (
+                  <ListItem key={i}>
+                    <ListItemIcon><WarningIcon sx={{ color: "#ef4444" }} /></ListItemIcon>
+                    <ListItemText primary={b} sx={{ color: "grey.300" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Paper>
+
+          {/* ==================== SECTION: Quiz ==================== */}
+          <Paper
+            id="quiz-section"
+            sx={{
+              p: 4,
+              borderRadius: 3,
+              border: `1px solid ${QUIZ_ACCENT_COLOR}33`,
+            }}
           >
-            Back to Learning Hub
-          </Button>
+            <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
+              <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+              Knowledge Check
+            </Typography>
+            <QuizSection
+              questions={quizQuestions}
+              accentColor={QUIZ_ACCENT_COLOR}
+              title="Deserialization Attacks Knowledge Check"
+              description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+              questionsPerQuiz={QUIZ_QUESTION_COUNT}
+            />
+          </Paper>
+
+          {/* Bottom Navigation */}
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate("/learn")}
+              sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
+            >
+              Back to Learning Hub
+            </Button>
+          </Box>
         </Box>
-      </Container>
-    </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

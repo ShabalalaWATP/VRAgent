@@ -1574,10 +1574,36 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
                   What is Android Reverse Engineering?
                 </Typography>
                 <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
-                  Android reverse engineering is the process of analyzing Android applications to understand how they work,
-                  find security vulnerabilities, or extract information without access to the original source code. Unlike
-                  compiled native binaries, Android apps are relatively easier to reverse engineer because they compile to
-                  Dalvik bytecode (DEX) which can be decompiled back to readable Java/Kotlin code.
+                  Android reverse engineering is the systematic process of deconstructing Android applications (APKs) to understand their internal workings, identify security vulnerabilities, extract hidden functionality, or analyze malicious behavior - all without access to the original source code. This discipline sits at the intersection of software engineering, security research, and digital forensics.
+                </Typography>
+
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  <strong style={{ color: "#22c55e" }}>Why is Android Easier to Reverse Than Native Apps?</strong> Unlike traditional compiled binaries (C/C++ executables), Android apps follow a different compilation path. Java and Kotlin source code compiles to <strong>Dalvik bytecode (DEX format)</strong>, not machine code. This bytecode is a high-level intermediate representation that retains much of the original program structure - class hierarchies, method names (unless obfuscated), and control flow logic.
+                </Typography>
+
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
+                  Modern decompilers like JADX can convert DEX bytecode back to highly readable Java code, often close to the original source. Variable names might be lost (replaced with a, b, c), and some syntax differs, but the logic remains intact. This is fundamentally different from reversing a stripped x86/ARM binary where you're working with pure assembly instructions.
+                </Typography>
+
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, mb: 2, border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#3b82f6", fontWeight: 700, mb: 1 }}>
+                    Compilation Pipeline: Source → APK → Reverse
+                  </Typography>
+                  <Box component="pre" sx={{ fontFamily: "monospace", fontSize: "0.85rem", color: "grey.300", m: 0, overflowX: "auto" }}>
+{`Forward (Build):
+Java/Kotlin → javac/kotlinc → .class files → dx/d8 → classes.dex
+                                                         ↓
+                                              APK (ZIP with DEX + resources)
+
+Reverse (Analysis):
+APK → unzip/apktool → classes.dex → JADX/Jadx-gui → Java source (decompiled)
+                        ↓
+            Binary XML (AXML) → apktool decode → Readable XML`}
+                  </Box>
+                </Paper>
+
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+                  <strong style={{ color: "#22c55e" }}>Real-World Impact:</strong> Android reverse engineering isn't just academic - it's a critical skill for security professionals. Major vulnerabilities in popular apps (banking, social media, enterprise) are regularly discovered through RE. For example, researchers have found hardcoded API keys worth millions, authentication bypasses allowing account takeovers, and data exfiltration to unauthorized servers. The 2021 discovery of multiple zero-days in TikTok, the 2020 ExpressVPN credential leak, and countless banking app flaws all stemmed from reverse engineering efforts.
                 </Typography>
                 <Grid container spacing={2} sx={{ mt: 2 }}>
                   {[
@@ -1603,11 +1629,21 @@ const AndroidReverseEngineeringGuidePage: React.FC = () => {
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>
-                  APK File Structure
+                  APK File Structure: Anatomy of an Android App
                 </Typography>
                 <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
-                  An APK (Android Package) is essentially a ZIP file containing everything needed to run an Android app.
-                  You can unzip any APK to explore its contents:
+                  An APK (Android Package) is fundamentally a <strong>ZIP archive</strong> with a specific directory structure. This isn't just a technicality - it means you can literally rename any <code>.apk</code> file to <code>.zip</code> and extract it with standard tools like 7-Zip or unzip. However, while you can see the raw files this way, many are in binary formats (compiled XML, DEX bytecode) that require specialized tools to read.
+                </Typography>
+
+                <Alert severity="info" sx={{ bgcolor: "rgba(59, 130, 246, 0.05)", mb: 2 }}>
+                  <AlertTitle sx={{ color: "#3b82f6", fontWeight: 700 }}>Quick Start: Extract an APK Right Now</AlertTitle>
+                  <Typography variant="body2" sx={{ color: "grey.300" }}>
+                    Download any APK from APKPure or APKMirror, rename it to .zip, and extract. You'll immediately see the structure below. This is the fastest way to demystify Android apps - they're just ZIP files!
+                  </Typography>
+                </Alert>
+
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Understanding the APK structure is your first step in reverse engineering. Each directory and file has a specific purpose, and knowing where to look dramatically speeds up analysis. For example, if you're hunting for API keys, start with <code>assets/</code> and <code>AndroidManifest.xml</code>. Looking for cryptographic functions? Check native libraries in <code>lib/</code>. Want to understand app flow? Decompile <code>classes.dex</code>.
                 </Typography>
                 <CodeBlock
                   title="Extract APK Contents"
@@ -1643,7 +1679,10 @@ apktool d app.apk -o decoded/`}
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>
-                  DEX vs Native Code
+                  DEX vs Native Code: Two Worlds of Reverse Engineering
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  Android apps can contain two fundamentally different types of code, each requiring different tools and techniques to reverse engineer. Understanding when and why developers use each is crucial for effective analysis.
                 </Typography>
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
@@ -1685,6 +1724,39 @@ apktool d app.apk -o decoded/`}
                     </Box>
                   </Grid>
                 </Grid>
+
+                <Paper sx={{ p: 2, mt: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 1 }}>
+                    Why Do Developers Use Native Code?
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontWeight: 600, mb: 0.5 }}>⚡ Performance</Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Games, image processing, cryptography, and audio/video codecs run 5-10x faster in native C/C++ than Java/Kotlin. If you see libunity.so, libcocos2d.so, or libgame.so, it's likely performance-critical game logic.
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontWeight: 600, mb: 0.5 }}>🔒 Security (Obfuscation)</Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Developers move sensitive code (license checks, encryption keys, DRM) to native libraries thinking it's "harder to reverse." While true, tools like Ghidra make this a speed bump, not a wall. Native code can also use string encryption and anti-debugging.
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontWeight: 600, mb: 0.5 }}>♻️ Code Reuse</Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Existing C/C++ libraries (OpenSSL, SQLite, FFmpeg) can be directly compiled for Android via NDK instead of rewriting in Java. If you see libssl.so, libcrypto.so, libsqlite.so - it's cross-platform code.
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                <Alert severity="warning" sx={{ mt: 2, bgcolor: "rgba(245, 158, 11, 0.05)" }}>
+                  <AlertTitle sx={{ color: "#f59e0b", fontWeight: 700 }}>Multi-DEX Apps</AlertTitle>
+                  <Typography variant="body2" sx={{ color: "grey.300" }}>
+                    Android has a 64k method limit per DEX file. Large apps exceed this and split into <code>classes.dex</code>, <code>classes2.dex</code>, <code>classes3.dex</code>, etc. (called MultiDex). When reversing, you must decompile <strong>all</strong> DEX files, not just classes.dex. JADX automatically handles this, but manual tools (like dex2jar) require you to process each file.
+                  </Typography>
+                </Alert>
               </Paper>
             </Grid>
           </Grid>
@@ -1694,9 +1766,21 @@ apktool d app.apk -o decoded/`}
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
             Android Architecture
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            A layered view of Android internals and the core app components.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            Understanding Android's layered architecture is essential for effective reverse engineering. Each layer provides different attack surfaces and requires different analysis approaches.
           </Typography>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: "#111118", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#22c55e", fontWeight: 700, mb: 2 }}>
+              The Android Stack: From Linux to Apps
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+              Android is built on top of the Linux kernel, but adds multiple layers of abstraction between hardware and applications. As a reverse engineer, you'll primarily work at the Application and Framework layers, but understanding the full stack helps you identify where vulnerabilities might exist.
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+              <strong style={{ color: "#22c55e" }}>Why This Matters for RE:</strong> Different layers require different tools. Framework vulnerabilities (like Android ID spoofing) require runtime hooking with Frida. Native library bugs need Ghidra or IDA. App logic flaws can be found with static analysis in JADX. Kernel exploits (rooting) use completely different techniques. Knowing which layer you're attacking guides your tool selection.
+            </Typography>
+          </Paper>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1729,11 +1813,17 @@ apktool d app.apk -o decoded/`}
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#22c55e", mb: 2, fontWeight: 700 }}>
-                  Android App Components
+                  Android App Components: The Four Pillars
                 </Typography>
                 <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
-                  Android apps are built from four main component types. Each can be an entry point for attacks:
+                  Every Android app is built from four fundamental component types. These aren't just architectural concepts - they're <strong>attack surfaces</strong>. Each component declared in <code>AndroidManifest.xml</code> can be exported (accessible to other apps) or private. Exported components without proper permission checks are common vulnerability sources.
                 </Typography>
+                <Alert severity="info" sx={{ bgcolor: "rgba(59, 130, 246, 0.05)", mb: 2 }}>
+                  <AlertTitle sx={{ color: "#3b82f6", fontWeight: 700 }}>First Step in Any Android RE</AlertTitle>
+                  <Typography variant="body2" sx={{ color: "grey.300" }}>
+                    Open <code>AndroidManifest.xml</code> in JADX and search for <code>android:exported="true"</code>. These are your entry points - components other apps (including your malicious test app) can interact with. Also look for components with <code>intent-filter</code> tags, as these are implicitly exported on Android &lt; 12.
+                  </Typography>
+                </Alert>
                 <Grid container spacing={2}>
                   {androidComponents.map((comp) => (
                     <Grid item xs={12} sm={6} key={comp.component}>
@@ -1831,9 +1921,50 @@ java -jar abe.jar unpack backup.ab backup.tar`}
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
             Tools & Setup
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            The core toolkit for Android RE, from decompilers to dynamic instrumentation.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.9 }}>
+            **Android reverse engineering requires a carefully curated toolkit** - but the good news is that most of these tools are free, open-source, and maintained by active communities. The learning curve is surprisingly moderate for a domain that sounds intimidating. You'll be productive with JADX and apktool within hours, comfortable with Frida within days, and confidently bypassing protections within weeks. **The ecosystem divides neatly into two phases: static analysis (examining the APK offline) and dynamic analysis (running and manipulating the app in real-time)**. Static analysis is your reconnaissance phase - you decompile the APK, map its structure, identify interesting functions, spot hardcoded secrets, and understand the attack surface. Dynamic analysis is your exploitation phase - you execute the app on a rooted device, hook functions with Frida, intercept network traffic with Burp Suite, and manipulate runtime behavior to bypass protections or trigger hidden functionality. **Most security researchers maintain a standardized toolkit they refine over time**: JADX-GUI for decompilation (clean interface, fast search, bookmark features), apktool for resource decoding and repackaging, Frida for runtime hooking (the Swiss Army knife of dynamic analysis), Burp Suite or mitmproxy for HTTPS interception, Ghidra or IDA Pro for native code analysis, and Android Studio for debugging and profiling. You don't need all of these on day one - start with JADX-GUI and apktool, add Frida once comfortable with static analysis, then expand your toolkit based on specific needs. **The key skill isn't memorizing tool syntax - it's understanding which tool to use when**, and how to chain tools together. You discover an interesting crypto function in JADX → hook it with Frida to dump encryption keys → use those keys to decrypt data captured in Burp → discover new API endpoints → analyze those endpoints in JADX. It's an iterative process of discovery, hypothesis, and testing.
           </Typography>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: "#111118", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#22c55e", fontWeight: 700, mb: 2 }}>
+              The Two-Phase Toolkit
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#3b82f6", fontWeight: 700, mb: 1 }}>
+                    📄 Static Analysis (Offline)
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
+                    Analyze the APK without running it. This is your starting point - fast, safe, and doesn't require a device. You'll decompile DEX to Java, decode XML resources, and examine the app's structure.
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "grey.400" }}>
+                    <strong>Key Tools:</strong> JADX (decompile), apktool (decode resources), Ghidra (native libs), strings/grep (search)
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: "1px solid rgba(34, 197, 94, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 1 }}>
+                    🔄 Dynamic Analysis (Runtime)
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
+                    Run the app and modify its behavior in real-time. Hook functions, intercept network traffic, bypass SSL pinning, and manipulate memory. Requires a rooted device or emulator.
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "grey.400" }}>
+                    <strong>Key Tools:</strong> Frida (hooking), Objection (Frida wrapper), Burp Suite (proxy), Wireshark (traffic), logcat (logs)
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+
+            <Alert severity="success" sx={{ mt: 2, bgcolor: "rgba(34, 197, 94, 0.05)" }}>
+              <AlertTitle sx={{ color: "#22c55e", fontWeight: 700 }}>Beginner's Path</AlertTitle>
+              <Typography variant="body2" sx={{ color: "grey.300" }}>
+                Start with static analysis only: Download JADX-GUI, open an APK, and explore. Read <code>AndroidManifest.xml</code>, search for keywords like "api", "key", "password", "admin". Once comfortable, add Frida for dynamic hooking. Most bug bounty finds come from static analysis + manual testing.
+              </Typography>
+            </Alert>
+          </Paper>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -2001,9 +2132,54 @@ adb reverse tcp:8080 tcp:8080`}
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
             Static Analysis
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Decompile and inspect APKs without executing them.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.9 }}>
+            **Static analysis is the art of understanding an app by reading its code, without ever running it**. Think of it like reading a book versus watching a movie - you get to see every page, every paragraph, and every word at your own pace. This is where 80% of vulnerabilities are found: hardcoded secrets, logic flaws, insecure crypto, and exposed components. **The beauty of static analysis is its completeness** - unlike dynamic analysis where you only observe what actually executes (which depends on user interactions, network conditions, and timing), static analysis reveals the entire codebase. You can see dead code paths that never run, commented-out admin features, hardcoded API keys in unused classes, and backup authentication mechanisms. **For beginners, static analysis is the perfect starting point** because it's safe (you never execute potentially malicious code), fast (no device setup required), and accessible (just download JADX and open an APK). You'll spend most of your time in the decompiled Java code searching for patterns, tracing data flows, and understanding how sensitive operations like authentication, encryption, and network communication are implemented. **Modern decompilers like JADX produce remarkably readable code** - often close enough to the original that you can understand the developer's intent. Variable names might be generic (a, b, c), but class structures, method logic, and string literals remain intact. This is fundamentally different from reverse engineering native binaries where you're staring at assembly instructions.
           </Typography>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: "#111118", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#22c55e", fontWeight: 700, mb: 2 }}>
+              Why Static Analysis is Powerful
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 0.5 }}>
+                    🔍 See Everything
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    Unlike dynamic analysis where you only see what executes, static analysis reveals the entire codebase - all branches, all functions, all secrets. Dead code, commented-out API keys, admin backdoors - it's all there.
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 0.5 }}>
+                    ⚡ Fast & Safe
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    No need to setup devices, root phones, or bypass protections. Download an APK, decompile in JADX, and start reading. No risk of triggering malware, no device compromise, no network traffic to worry about.
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 0.5 }}>
+                    🎯 Scalable
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>
+                    Automate searches across hundreds of APKs. Grep for "hardcoded", "API_KEY", "password", or regex patterns. Build tools to extract endpoints, find SQL injections, or detect insecure crypto.
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+
+            <Alert severity="warning" sx={{ mt: 2, bgcolor: "rgba(245, 158, 11, 0.05)" }}>
+              <AlertTitle sx={{ color: "#f59e0b", fontWeight: 700 }}>Limitations of Static-Only Analysis</AlertTitle>
+              <Typography variant="body2" sx={{ color: "grey.300" }}>
+                Static analysis can't tell you what happens at runtime - network behavior, dynamic code loading, encrypted payloads, or server-side logic. That's why you combine it with dynamic analysis. Start static to map the app, then go dynamic to test actual behavior.
+              </Typography>
+            </Alert>
+          </Paper>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -2191,9 +2367,75 @@ strings lib/arm64-v8a/libnative.so | grep -i "password\\|key\\|secret\\|http"`}
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
             Dynamic Analysis
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Hook, trace, and intercept behavior while the app runs.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.9 }}>
+            **Dynamic analysis reveals what the app actually does at runtime** - not what the code suggests it might do, but what it genuinely does when executed. This is where theory meets reality. You can see network calls as they happen, watch encryption keys materialize in memory, observe how the app reacts to different inputs, and trace the exact execution path through complex code. **The power of dynamic analysis lies in its ability to manipulate reality in real-time**. An app checking if your device is rooted? Hook that function at runtime and force it to return false. SSL pinning preventing you from intercepting HTTPS traffic? Disable the certificate validation while the app is running. A premium feature locked behind a paywall? Modify the <code>isPremiumUser()</code> function to always return true. **Frida is the undisputed king of Android dynamic instrumentation**. It's a lightweight JavaScript engine that injects into the app's process space, giving you direct access to every Java method, every native function, and every memory location. You write simple JavaScript code that hooks into the app's functions, and Frida executes it in real-time as the app runs - no recompilation, no APK modification, just pure runtime magic. **Dynamic analysis is the perfect complement to static analysis**: Static shows you what CAN happen (all possible code paths in the source), dynamic shows you what DOES happen (actual execution with real data). You discover a suspicious authentication bypass during static analysis? Hook it during dynamic analysis to see exactly what parameters it receives, what checks it performs, and what it returns. You find encrypted network traffic in Wireshark? Hook the encryption functions to dump the plaintext before encryption. Together, static and dynamic analysis give you omniscient understanding of the app.
           </Typography>
+
+          <Paper sx={{ p: 3, mb: 3, bgcolor: "#111118", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#22c55e", fontWeight: 700, mb: 2 }}>
+              The Power of Runtime Instrumentation
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+              <strong style={{ color: "#22c55e" }}>Frida</strong> is the king of dynamic analysis for Android. It's a dynamic instrumentation toolkit that lets you inject JavaScript into running processes, hook functions, read/write memory, and modify behavior in real-time. No recompilation, no app modification - just pure runtime magic.
+            </Typography>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2, border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#3b82f6", fontWeight: 700, mb: 1 }}>
+                    🎯 What You Can Do
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 2, m: 0, color: "grey.400", fontSize: "0.85rem", "& li": { mb: 0.5 } }}>
+                    <li>Hook any Java/native function</li>
+                    <li>Read/modify function arguments</li>
+                    <li>Change return values</li>
+                    <li>Trace execution flow</li>
+                    <li>Dump decrypted data from memory</li>
+                    <li>Bypass SSL pinning, root detection</li>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, border: "1px solid rgba(34, 197, 94, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 1 }}>
+                    🔧 Common Use Cases
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 2, m: 0, color: "grey.400", fontSize: "0.85rem", "& li": { mb: 0.5 } }}>
+                    <li>Bypass authentication checks</li>
+                    <li>Extract encryption keys at runtime</li>
+                    <li>Monitor network API calls</li>
+                    <li>Defeat anti-debugging/emulator detection</li>
+                    <li>Test different code paths</li>
+                    <li>Analyze obfuscated/packed apps</li>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, border: "1px solid rgba(245, 158, 11, 0.2)" }}>
+                  <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 700, mb: 1 }}>
+                    ⚠️ Requirements
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 2, m: 0, color: "grey.400", fontSize: "0.85rem", "& li": { mb: 0.5 } }}>
+                    <li>Rooted device or emulator</li>
+                    <li>frida-server running on device</li>
+                    <li>Python + frida-tools on host</li>
+                    <li>App must be running/spawned</li>
+                    <li>Anti-frida detection can interfere</li>
+                    <li>Some skill with JavaScript</li>
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Alert severity="info" sx={{ mt: 2, bgcolor: "rgba(59, 130, 246, 0.05)" }}>
+              <AlertTitle sx={{ color: "#3b82f6", fontWeight: 700 }}>Dynamic vs Static: When to Use What?</AlertTitle>
+              <Typography variant="body2" sx={{ color: "grey.300" }}>
+                <strong>Static first:</strong> Map the app structure, find interesting functions, identify crypto/network code.
+                <strong> Then dynamic:</strong> Hook those functions, watch what they do with real data, bypass protections you discovered.
+                They complement each other - static shows you where to look, dynamic shows you what actually happens.
+              </Typography>
+            </Alert>
+          </Paper>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -2391,8 +2633,8 @@ frida -U -f com.target.app -l ssl_bypass.js --no-pause
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, color: "white" }}>
             Vulnerabilities
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Common Android security issues and the patterns to search for.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.9 }}>
+            **Common Android security issues fall into predictable patterns** - and once you learn these patterns, you'll start spotting vulnerabilities everywhere. Android's security model is powerful but complex, giving developers plenty of rope to hang themselves with. The OWASP Mobile Top 10 catalogues the most critical and prevalent mobile security risks, from insecure data storage (the #1 cause of data breaches in mobile apps) to improper platform usage (exported components, weak permissions, insecure IPC). **Understanding these vulnerability categories transforms you from a code reader into a security auditor**. When you decompile an APK, you're not just exploring randomly - you're hunting for specific anti-patterns. Does the app store passwords in SharedPreferences without encryption? That's M2: Insecure Data Storage. Does it accept any SSL certificate to avoid HTTPS errors? That's M3: Insecure Communication. Does it have <code>android:exported="true"</code> on sensitive components without permission checks? That's M1: Improper Platform Usage. **Most vulnerabilities stem from developers prioritizing functionality over security** - they hardcode API keys because environment variables are annoying, disable SSL pinning because corporate proxies complicate testing, or store tokens in plaintext because encryption seems complex. Your job is to find these shortcuts. **The patterns to search for are well-documented**: grep through decompiled code for "password", "api_key", "secret", "token" and see if they're hardcoded or improperly stored. Search for <code>MODE_WORLD_READABLE</code> (deprecated but still present in legacy code). Look for <code>addJavascriptInterface</code> without proper safeguards (enables JavaScript to execute Java code). Check if <code>android:debuggable="true"</code> is set in production builds. These are low-hanging fruit that appear in major apps more often than you'd expect.
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12}>

@@ -2498,6 +2498,99 @@ export default function SystemsAdministrationPage() {
             for Linux. Each has different features for journaling, snapshots, compression, and maximum file/volume sizes. 
             Choosing the right file system for the workload can significantly impact performance and reliability.
           </Typography>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mt: 3 }}>
+            Storage is often the hidden bottleneck. Databases and virtualization platforms are sensitive to latency,
+            queue depth, and IOPS limits. A fast CPU cannot compensate for a slow disk subsystem. Monitoring storage
+            health, planning growth, and testing restore paths are all part of day-to-day sysadmin work.
+          </Typography>
+        </Paper>
+
+        {/* Storage Planning and Tiering */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Storage Planning and Tiering</Typography>
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Storage decisions impact performance, cost, and reliability. Good planning means right-sizing capacity,
+            picking the correct media, and separating workloads so fast disks are reserved for latency-sensitive systems.
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {[
+              { tier: "Hot", desc: "High-performance SSD/NVMe for databases, VMs, and transactional apps.", color: "#3b82f6" },
+              { tier: "Warm", desc: "Balanced storage for general file shares and application data.", color: "#22c55e" },
+              { tier: "Cold", desc: "Cheaper, slower disks for archives and backups.", color: "#f59e0b" },
+              { tier: "Archive", desc: "Lowest cost storage (object/tape) for long-term retention.", color: "#8b5cf6" },
+            ].map((item) => (
+              <Grid item xs={12} md={3} key={item.tier}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.tier}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <List dense>
+            {[
+              "Plan capacity with headroom (keep 20-30% free for growth and performance).",
+              "Account for overhead: RAID parity, snapshots, replication, and metadata.",
+              "Separate random I/O workloads (databases) from sequential workloads (backups).",
+              "Track growth trends monthly to avoid emergency expansions.",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+
+        {/* RAID and Redundancy */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}>
+            <StorageIcon /> RAID and Redundancy Quick Guide
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { name: "RAID 0", desc: "Striping only. Fast, but no redundancy. Not for critical data." },
+              { name: "RAID 1", desc: "Mirroring. Good redundancy, 50% usable capacity." },
+              { name: "RAID 5", desc: "Striping + parity. One disk fault tolerant. Write penalty." },
+              { name: "RAID 6", desc: "Dual parity. Two disk fault tolerant. Slower writes." },
+              { name: "RAID 10", desc: "Stripe of mirrors. High performance and redundancy." },
+            ].map((raid) => (
+              <Grid item xs={12} sm={6} md={4} key={raid.name}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{raid.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{raid.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+            RAID is not a backup. It protects against disk failure, not deletion, corruption, or ransomware.
+          </Typography>
+        </Paper>
+
+        {/* Storage Protocols and Object Storage */}
+        <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+            <StorageIcon /> Storage Protocols and Object Storage
+          </Typography>
+          <List dense>
+            {[
+              "SMB/CIFS: Windows file sharing with ACLs and user permissions.",
+              "NFS: Unix/Linux file sharing, lightweight and common in data centers.",
+              "iSCSI: Block storage over IP, often used for VM datastores.",
+              "Fibre Channel: High-performance SAN fabric with dedicated HBAs and switches.",
+              "Object storage: S3-compatible APIs, great for backups, logs, and archives.",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
         </Paper>
 
         {/* Storage Types */}
@@ -3353,7 +3446,30 @@ export default function SystemsAdministrationPage() {
             workloads, containers for cloud-native applications. Understanding both is essential for today's 
             sysadmin.
           </Typography>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mt: 3 }}>
+            Virtualization is more than spinning up VMs. You must understand virtual networking (vSwitches, VLANs),
+            virtual storage (datastores, thin provisioning), and cluster features like HA, DRS, and live migration.
+            These features keep services available during maintenance and failures.
+          </Typography>
         </Paper>
+
+        {/* Hypervisor Types */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Hypervisor Types and Concepts</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {[
+            { name: "Type 1 (Bare Metal)", desc: "Runs directly on hardware. Best performance and stability.", examples: "VMware ESXi, Hyper-V Server, Xen, KVM", color: "#3b82f6" },
+            { name: "Type 2 (Hosted)", desc: "Runs on top of a host OS. Great for labs and desktops.", examples: "VirtualBox, VMware Workstation, Parallels", color: "#22c55e" },
+            { name: "Key Concepts", desc: "vCPU, vRAM, vNICs, datastores, snapshots, and templates.", examples: "Overcommit, HA, live migration, DRS", color: "#f59e0b" },
+          ].map((item) => (
+            <Grid item xs={12} md={4} key={item.name}>
+              <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha(item.color, 0.2)}` }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: item.color }}>{item.name}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>{item.desc}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Examples: {item.examples}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
 
         {/* VMs vs Containers */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -3406,6 +3522,51 @@ export default function SystemsAdministrationPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* VM Sizing and Resource Planning */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6", display: "flex", alignItems: "center", gap: 1 }}>
+            <MonitorHeartIcon /> VM Sizing and Resource Planning
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Capacity Basics</Typography>
+              <List dense>
+                {[
+                  "Start small, scale up based on metrics (CPU ready time, memory ballooning).",
+                  "Avoid severe CPU oversubscription for latency-sensitive apps.",
+                  "Reserve resources for critical VMs where needed.",
+                  "Track datastore IOPS and latency, not just capacity.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Common Pitfalls</Typography>
+              <List dense>
+                {[
+                  "Too many vCPUs for a lightly used VM increases scheduling delay.",
+                  "Thin provisioning without monitoring can cause sudden outages.",
+                  "Leaving old snapshots grows storage and slows performance.",
+                  "Ignoring NUMA boundaries can hurt performance on large VMs.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <WarningIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* Container Commands */}
         <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
@@ -3461,6 +3622,53 @@ export default function SystemsAdministrationPage() {
                   <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
                     <ListItemIcon sx={{ minWidth: 24 }}>
                       <CheckCircleIcon sx={{ fontSize: 14, color: "#8b5cf6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Container Operations and Security */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#0ea5e9", 0.03), border: `1px solid ${alpha("#0ea5e9", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#0ea5e9", display: "flex", alignItems: "center", gap: 1 }}>
+            <SecurityIcon /> Container Operations and Security
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Operational Essentials</Typography>
+              <List dense>
+                {[
+                  "Use registries (Docker Hub, ECR, ACR, GCR) with versioned images.",
+                  "Scan images for vulnerabilities before deployment.",
+                  "Keep images small by using multi-stage builds.",
+                  "Persist data with volumes, not container filesystem.",
+                  "Use health checks and restart policies.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#0ea5e9" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Security Guardrails</Typography>
+              <List dense>
+                {[
+                  "Run as non-root whenever possible.",
+                  "Limit capabilities and use read-only filesystems.",
+                  "Store secrets in a secret manager, not environment variables.",
+                  "Restrict network access with policies.",
+                  "Patch base images regularly.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#0ea5e9" }} />
                     </ListItemIcon>
                     <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
                   </ListItem>
@@ -3669,7 +3877,32 @@ export default function SystemsAdministrationPage() {
             stores (MongoDB), key-value stores (Redis), column stores (Cassandra), and graph databases (Neo4j) 
             each optimize for different use cases. Modern applications often use multiple database types.
           </Typography>
+          <Typography variant="body1" sx={{ lineHeight: 1.9, fontSize: "1.05rem", mt: 3 }}>
+            From an operations perspective, databases are sensitive to disk space, memory pressure, and network
+            latency. Many outages boil down to full disks, exhausted connections, or runaway queries. Sysadmins
+            need to know where to look first, how to gather evidence, and how to restore service safely.
+          </Typography>
         </Paper>
+
+        {/* Database Building Blocks */}
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Database Building Blocks</Typography>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          {[
+            { name: "Data Files", desc: "Where tables and indexes live on disk." },
+            { name: "Write-Ahead Log (WAL/Redo)", desc: "Sequential log used for crash recovery and replication." },
+            { name: "Buffer Cache", desc: "In-memory cache for hot data and indexes." },
+            { name: "Temp Space", desc: "Used for large sorts, joins, and intermediate results." },
+            { name: "Indexes", desc: "Speed up queries at the cost of extra storage and write overhead." },
+            { name: "Transactions", desc: "Guarantee consistency using locks or MVCC mechanisms." },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} md={4} key={item.name}>
+              <Paper sx={{ p: 2, borderRadius: 2, border: `1px solid ${alpha("#3b82f6", 0.15)}`, height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6" }}>{item.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
 
         {/* SQL vs NoSQL */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -3731,6 +3964,73 @@ export default function SystemsAdministrationPage() {
           </Grid>
         </Grid>
 
+        {/* Backup and Recovery for Databases */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#f59e0b", 0.03), border: `1px solid ${alpha("#f59e0b", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#f59e0b", display: "flex", alignItems: "center", gap: 1 }}>
+            <BackupIcon /> Database Backup and Recovery
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Backup Types</Typography>
+              <List dense>
+                {[
+                  "Logical backups (mysqldump/pg_dump): portable but slower at scale.",
+                  "Physical backups: faster, capture data files directly.",
+                  "Point-in-time recovery (PITR): combine full backup + WAL/redo logs.",
+                  "Snapshots: quick rollback for maintenance, not a full backup.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Recovery Checklist</Typography>
+              <List dense>
+                {[
+                  "Test restores on a schedule, not just in emergencies.",
+                  "Validate backups by checking data integrity and row counts.",
+                  "Store backups in a separate account or offsite location.",
+                  "Document the restore steps in a runbook.",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#f59e0b" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Replication and HA Patterns */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#8b5cf6", 0.03), border: `1px solid ${alpha("#8b5cf6", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}>
+            <CloudIcon /> Replication and High Availability
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { name: "Primary + Replica", desc: "Writes to primary, read-only replicas for scale and failover." },
+              { name: "Multi-AZ / Cluster", desc: "Synchronous replication for fast failover and data safety." },
+              { name: "Read Scaling", desc: "Add replicas for heavy reporting or analytics workloads." },
+              { name: "Sharding", desc: "Split data across nodes when a single server is too large." },
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.name}>
+                <Paper sx={{ p: 2, height: "100%", borderRadius: 2, border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.desc}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
         {/* Basic DBA Tasks */}
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Essential DBA Tasks for Sysadmins</Typography>
         <Grid container spacing={2} sx={{ mb: 5 }}>
@@ -3750,6 +4050,29 @@ export default function SystemsAdministrationPage() {
             </Grid>
           ))}
         </Grid>
+
+        {/* Performance Fundamentals */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#22c55e", 0.03), border: `1px solid ${alpha("#22c55e", 0.15)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}>
+            <MonitorHeartIcon /> Database Performance Fundamentals
+          </Typography>
+          <List dense>
+            {[
+              "Indexes speed reads but slow writes and consume storage.",
+              "Use connection pooling to reduce overhead and stabilize load.",
+              "Review slow query logs and query plans before adding hardware.",
+              "Keep statistics updated (ANALYZE) so the optimizer makes good choices.",
+              "Separate data and logs to avoid contention and improve durability.",
+            ].map((item) => (
+              <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
+                </ListItemIcon>
+                <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
 
         {/* Database Maintenance Essentials */}
         <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}` }}>
@@ -3792,6 +4115,48 @@ export default function SystemsAdministrationPage() {
                   </ListItem>
                 ))}
               </List>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Common Database Tools */}
+        <Paper sx={{ p: 3, mb: 5, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.02), border: `1px solid ${alpha("#3b82f6", 0.1)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6", display: "flex", alignItems: "center", gap: 1 }}>
+            <TerminalIcon /> Common Database Tools and Commands
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>CLI Tools</Typography>
+              <List dense>
+                {[
+                  "psql (PostgreSQL), mysql (MySQL/MariaDB), sqlcmd (SQL Server)",
+                  "mongosh for MongoDB shell access",
+                  "redis-cli for Redis troubleshooting",
+                  "pg_dump/pg_restore, mysqldump for backups",
+                ].map((item) => (
+                  <ListItem key={item} sx={{ py: 0.2, px: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <CheckCircleIcon sx={{ fontSize: 14, color: "#3b82f6" }} />
+                    </ListItemIcon>
+                    <ListItemText primary={item} primaryTypographyProps={{ variant: "body2" }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Go-To Queries</Typography>
+              <Paper sx={{ p: 1.5, bgcolor: "#1e1e1e", borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#9cdcfe" }}>
+                  -- PostgreSQL active sessions<br/>
+                  SELECT * FROM pg_stat_activity;<br/>
+                  -- Show slow query plan<br/>
+                  EXPLAIN ANALYZE SELECT ...;<br/>
+                  -- MySQL active threads<br/>
+                  SHOW PROCESSLIST;<br/>
+                  -- MongoDB current operations<br/>
+                  db.currentOp()
+                </Typography>
+              </Paper>
             </Grid>
           </Grid>
         </Paper>

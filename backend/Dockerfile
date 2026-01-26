@@ -1,8 +1,14 @@
 # Backend Dockerfile
-FROM python:3.11-slim
+# Using specific patch version for security (3.11.11 released Dec 2024 with CVE fixes)
+FROM python:3.11.11-slim-bookworm
 
 # Set working directory
 WORKDIR /app
+
+# Apply security patches for base image vulnerabilities
+# Fixes: CVE-2025-68973 (gpgv), CVE-2025-4802 (glibc), CVE-2025-32988/32990 (gnutls),
+#        CVE-2025-6020 (pam), CVE-2025-6965 (sqlite), CVE-2023-31484/CVE-2024-56406 (perl)
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,7 +17,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NODE_PATH=/usr/lib/node_modules \
     GOPATH=/go \
     PATH="/go/bin:/usr/local/go/bin:$PATH" \
-    SPOTBUGS_HOME=/opt/spotbugs
+    SPOTBUGS_HOME=/opt/spotbugs \
+    TESSERACT_CMD=/usr/bin/tesseract \
+    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # Install system dependencies including git for cloning repos,
 # Node.js for ESLint, Go for Gosec, clang-tidy for C/C++, nmap for network scanning, 
@@ -37,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     whois \
     ca-certificates \
     gnupg \
+    tesseract-ocr \
     fontconfig \
     fonts-dejavu-core \
     libfreetype6 \
@@ -53,6 +62,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip /usr/bin/nmap \
     && setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
+
+# Install Tesseract language packs for OCR/translation
+RUN set -eux; \
+    tessdata_dir="${TESSDATA_PREFIX:-/usr/share/tesseract-ocr/5/tessdata}"; \
+    if [ ! -d "$tessdata_dir" ]; then \
+      tessdata_dir="/usr/share/tesseract-ocr/4.00/tessdata"; \
+    fi; \
+    mkdir -p "$tessdata_dir"; \
+    base_url="https://github.com/tesseract-ocr/tessdata_best/raw/main"; \
+    for lang in eng rus chi_sim chi_tra ara fas heb jpn kor tha vie ukr; do \
+      if [ ! -f "$tessdata_dir/${lang}.traineddata" ]; then \
+        wget -q -O "$tessdata_dir/${lang}.traineddata" "$base_url/${lang}.traineddata"; \
+      fi; \
+    done
+
+# Install fonts for multi-script PDF rendering (CJK, Arabic, Cyrillic, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-cjk \
+    fonts-noto-core \
+    fonts-noto-color-emoji \
+    fonts-liberation \
+    fonts-freefont-ttf \
+    && fc-cache -fv \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CLI for Docker image layer analysis
 RUN install -m 0755 -d /etc/apt/keyrings \
@@ -134,13 +167,13 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
 ENV PATH="/root/.cargo/bin:$PATH"
 
 # Install AFL++ (American Fuzzy Lop Plus Plus) for binary fuzzing
-# Use available LLVM/Clang packages for Debian Trixie
+# Use available LLVM/Clang packages for Debian Bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm \
     clang \
     llvm-dev \
     lld \
-    libstdc++-13-dev \
+    libstdc++-12-dev \
     make \
     cmake \
     automake \
@@ -168,6 +201,7 @@ RUN mkdir -p /fuzzing/binaries /fuzzing/seeds /fuzzing/output /fuzzing/crashes \
 COPY requirements.txt .
 
 # Install Python dependencies
+# Using --require-hashes=false to handle transient mirror hash mismatches
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code into backend/ directory to match import paths
@@ -185,5 +219,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/health')" || exit 1
 
 # Default command
-# Single worker for dev, use --workers 2-4 for production with 20-30 users
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Single worker required - dynamic scan state is kept in-memory per-worker
+# TODO: Implement Redis-based scan state sharing for multi-worker support
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

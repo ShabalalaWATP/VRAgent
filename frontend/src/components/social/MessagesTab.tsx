@@ -31,7 +31,6 @@ import {
   ListItemButton,
   ListItemSecondaryAction,
   AvatarGroup,
-  Autocomplete,
   Snackbar,
 } from '@mui/material';
 import {
@@ -39,7 +38,6 @@ import {
   ArrowBack as BackIcon,
   Chat as ChatIcon,
   Group as GroupIcon,
-  Add as AddIcon,
   Settings as SettingsIcon,
   AttachFile as AttachIcon,
   EmojiEmotions as EmojiIcon,
@@ -47,15 +45,12 @@ import {
   Close as CloseIcon,
   InsertDriveFile as FileIcon,
   Image as ImageIcon,
-  CloudUpload as UploadIcon,
   Circle as CircleIcon,
   PushPin as PinIcon,
   PushPinOutlined as PinOutlinedIcon,
   Forward as ForwardIcon,
   DoneAll as ReadIcon,
   Done as SentIcon,
-  ExpandMore as ExpandIcon,
-  ExpandLess as CollapseIcon,
   MoreVert as MoreIcon,
   Search as SearchIcon,
   Poll as PollIcon,
@@ -115,6 +110,8 @@ import { EditHistoryDialog } from './EditHistoryDialog';
 import { ImageGallery } from './ImageGallery';
 import { OfflineQueueIndicator } from './OfflineQueueIndicator';
 import { ThreadViewDialog } from './ThreadViewDialog';
+import { RichTextToolbar } from './RichTextToolbar';
+import { GlobalSearchDialog } from './GlobalSearchDialog';
 import { useMessageDraft, getAllDraftConversations, formatDraftPreview } from '../../hooks/useMessageDraft';
 
 interface MessagesTabProps {
@@ -267,6 +264,19 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
   const [threadParentMessage, setThreadParentMessage] = useState<SocialMessage | null>(null);
   // Draft conversations for indicators
   const [draftConversationIds, setDraftConversationIds] = useState<number[]>([]);
+  // Rich text toolbar state
+  const [showRichTextToolbar, setShowRichTextToolbar] = useState(true);
+  // Global search dialog
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  // Pinned conversations (stored locally)
+  const [pinnedConversationIds, setPinnedConversationIds] = useState<number[]>(() => {
+    try {
+      const stored = localStorage.getItem('vragent_pinned_conversations');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -828,6 +838,128 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     }, 2000);
   };
 
+  // Handle paste for clipboard images
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items || !selectedConversation) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        // Upload the pasted image directly
+        await uploadFile(file);
+        return;
+      }
+    }
+  };
+
+  // Handle markdown insertion from toolbar
+  const handleInsertMarkdown = (before: string, after: string, placeholder?: string) => {
+    if (!inputRef.current) return;
+
+    const start = inputRef.current.selectionStart || 0;
+    const end = inputRef.current.selectionEnd || 0;
+    const selectedText = newMessage.substring(start, end);
+    const insertText = selectedText || placeholder || '';
+
+    const newValue = newMessage.substring(0, start) + before + insertText + after + newMessage.substring(end);
+    setNewMessage(newValue);
+
+    // Set cursor position after operation
+    setTimeout(() => {
+      if (inputRef.current) {
+        const newPosition = start + before.length + insertText.length;
+        inputRef.current.selectionStart = selectedText ? newPosition + after.length : start + before.length;
+        inputRef.current.selectionEnd = selectedText ? newPosition + after.length : start + before.length + insertText.length;
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
+  // Handle code block insertion
+  const handleInsertCodeBlock = (language: string) => {
+    if (!inputRef.current) return;
+
+    const start = inputRef.current.selectionStart || 0;
+    const end = inputRef.current.selectionEnd || 0;
+    const selectedText = newMessage.substring(start, end);
+    const codeContent = selectedText || '// Your code here';
+
+    const before = `\`\`\`${language}\n`;
+    const after = `\n\`\`\``;
+    const newValue = newMessage.substring(0, start) + before + codeContent + after + newMessage.substring(end);
+    setNewMessage(newValue);
+
+    // Position cursor inside the code block
+    setTimeout(() => {
+      if (inputRef.current) {
+        const cursorPos = start + before.length;
+        inputRef.current.selectionStart = cursorPos;
+        inputRef.current.selectionEnd = cursorPos + codeContent.length;
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
+  // Handle keyboard shortcuts for formatting
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Ctrl/Cmd + key shortcuts
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key.toLowerCase()) {
+        case 'b': // Bold
+          e.preventDefault();
+          handleInsertMarkdown('**', '**', 'bold text');
+          break;
+        case 'i': // Italic
+          e.preventDefault();
+          handleInsertMarkdown('*', '*', 'italic text');
+          break;
+        case 'k': // Link
+          e.preventDefault();
+          handleInsertMarkdown('[', '](url)', 'link text');
+          break;
+        case 'e': // Inline code
+          e.preventDefault();
+          handleInsertMarkdown('`', '`', 'code');
+          break;
+      }
+    }
+  };
+
+  // Toggle pinned conversation
+  const togglePinConversation = (conversationId: number) => {
+    setPinnedConversationIds(prev => {
+      const newPinned = prev.includes(conversationId)
+        ? prev.filter(id => id !== conversationId)
+        : [...prev, conversationId];
+      localStorage.setItem('vragent_pinned_conversations', JSON.stringify(newPinned));
+      return newPinned;
+    });
+  };
+
+  // Handle navigation from global search
+  const handleGlobalSearchResultClick = async (conversationId: number, messageId: number) => {
+    if (conversationId !== selectedConversation?.id) {
+      await openConversation(conversationId);
+    }
+    // Scroll to the specific message after a brief delay to allow rendering
+    setTimeout(() => {
+      const messageElement = messageRefs.current[messageId];
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the message briefly
+        messageElement.style.transition = 'background-color 0.3s';
+        messageElement.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
+        setTimeout(() => {
+          messageElement.style.backgroundColor = '';
+        }, 2000);
+      }
+    }, 300);
+  };
+
   const openConversation = async (conversationId: number) => {
     setLoadingMessages(true);
     setError('');
@@ -855,7 +987,7 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if (!newMessage.trim() || !selectedConversation || sending || !user) return;
 
     setSending(true);
     const messageText = newMessage.trim();
@@ -867,6 +999,38 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     // Stop typing indicator
     setIsTyping(false);
     sendTypingIndicator(selectedConversation.id, false);
+
+    // Create optimistic message for immediate UI feedback
+    const optimisticId = `optimistic_${Date.now()}`;
+    const optimisticMessage: SocialMessage & { _optimisticId?: string } = {
+      id: -1, // Temporary ID, will be replaced
+      conversation_id: selectedConversation.id,
+      sender_id: user.id,
+      sender_username: user.username,
+      content: messageText,
+      message_type: 'text',
+      is_edited: false,
+      is_deleted: false,
+      is_own_message: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reactions: {}, // ReactionSummary is an object, not array
+      reply_to: replyToMsg ? {
+        id: replyToMsg.id,
+        sender_username: replyToMsg.sender_username,
+        content_preview: replyToMsg.content.substring(0, 100),
+        is_deleted: false,
+      } : undefined,
+      // Mark as pending for UI styling
+      _optimisticId: optimisticId,
+    };
+
+    // Optimistically add message to UI immediately
+    setSelectedConversation({
+      ...selectedConversation,
+      messages: [...selectedConversation.messages, optimisticMessage],
+      total_messages: selectedConversation.total_messages + 1,
+    });
 
     try {
       let sentMessage: SocialMessage;
@@ -881,14 +1045,32 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
         sentMessage = await socialApi.sendMessage(selectedConversation.id, messageText);
       }
       
-      setSelectedConversation({
-        ...selectedConversation,
-        messages: [...selectedConversation.messages, sentMessage],
-        total_messages: selectedConversation.total_messages + 1,
+      // Replace optimistic message with real message from server
+      setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: prev.messages.map(msg => 
+            (msg as SocialMessage & { _optimisticId?: string })._optimisticId === optimisticId 
+              ? sentMessage 
+              : msg
+          ),
+        };
       });
       // Update conversation list
       loadConversations();
     } catch (err) {
+      // Remove optimistic message on error
+      setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: prev.messages.filter(msg => 
+            (msg as SocialMessage & { _optimisticId?: string })._optimisticId !== optimisticId
+          ),
+          total_messages: prev.total_messages - 1,
+        };
+      });
       setError(err instanceof Error ? err.message : 'Failed to send message');
       setNewMessage(messageText); // Restore message on error
       setReplyingTo(replyToMsg);
@@ -897,14 +1079,9 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedConversation) return;
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  // Direct file upload function (used by both paste and file input)
+  const uploadFile = async (file: File) => {
+    if (!selectedConversation) return;
 
     // File size validation (1GB max)
     const MAX_SIZE = 1024 * 1024 * 1024;
@@ -916,12 +1093,12 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     // Get file info for display
     const fileInfo = getFileTypeInfo(file.name, file.type);
     setUploadProgress(0);
-    
+
     try {
       // Upload file
       const uploadResult = await socialApi.uploadFile(file);
       setUploadProgress(100);
-      
+
       // Send message with file attachment
       const attachmentData: AttachmentData = {
         file_name: uploadResult.filename,
@@ -930,7 +1107,7 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
         file_url: uploadResult.file_url,
         thumbnail_url: uploadResult.thumbnail_url,
       };
-      
+
       // Create appropriate message based on file type
       let messageContent = `Shared a file: ${uploadResult.filename}`;
       if (fileInfo.label === 'Code') {
@@ -946,24 +1123,23 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
       } else if (fileInfo.label === 'Binary') {
         messageContent = `Shared binary: ${uploadResult.filename}`;
       }
-      
+
       const sentMessage = await socialApi.sendMessage(
         selectedConversation.id,
         messageContent,
         'file',
         attachmentData
       );
-      
+
       setSelectedConversation({
         ...selectedConversation,
         messages: [...selectedConversation.messages, sentMessage],
         total_messages: selectedConversation.total_messages + 1,
       });
-      
+
       loadConversations();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to upload file';
-      // Provide more helpful error messages
       if (errorMsg.includes('not allowed')) {
         setError(`File type not supported. Try zipping the file first, or contact support if you need this file type added.`);
       } else if (errorMsg.includes('credentials')) {
@@ -974,6 +1150,18 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
     } finally {
       setUploadProgress(null);
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedConversation) return;
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    await uploadFile(file);
   };
 
   const handleReaction = async (messageId: number, emoji: string, hasReacted: boolean) => {
@@ -1048,19 +1236,33 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
 
   // Conversation List View
   if (!selectedConversation) {
-    // Separate conversations into DMs and Groups
-    const directMessages = conversations.filter(c => !c.is_group);
-    const groupChats = conversations.filter(c => c.is_group);
+    // Separate conversations into DMs and Groups, sort pinned first
+    const sortByPinned = (a: ConversationSummary, b: ConversationSummary) => {
+      const aPinned = pinnedConversationIds.includes(a.id);
+      const bPinned = pinnedConversationIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    };
+    const directMessages = conversations.filter(c => !c.is_group).sort(sortByPinned);
+    const groupChats = conversations.filter(c => c.is_group).sort(sortByPinned);
     
     return (
       <Box sx={{ px: 3 }}>
         {/* Action Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Tooltip title="View Bookmarks">
-            <IconButton onClick={() => setShowBookmarksDialog(true)} color="primary">
-              <BookmarkIcon />
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title="View Bookmarks">
+              <IconButton onClick={() => setShowBookmarksDialog(true)} color="primary">
+                <BookmarkIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Search All Messages">
+              <IconButton onClick={() => setShowGlobalSearch(true)} color="primary">
+                <SearchIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               variant="contained"
@@ -1161,6 +1363,9 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
                           primary={
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {pinnedConversationIds.includes(conv.id) && (
+                                  <PinIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                                )}
                                 <Typography variant="subtitle1" fontWeight={unread > 0 ? 600 : 400}>
                                   {other?.username || 'Unknown'}
                                 </Typography>
@@ -1170,10 +1375,10 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
                                   </Typography>
                                 )}
                                 {otherOnline && (
-                                  <Chip 
-                                    label="Online" 
-                                    size="small" 
-                                    color="success" 
+                                  <Chip
+                                    label="Online"
+                                    size="small"
+                                    color="success"
                                     variant="outlined"
                                     sx={{ height: 18, fontSize: '0.65rem' }}
                                   />
@@ -1284,12 +1489,15 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
                           primary={
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {pinnedConversationIds.includes(conv.id) && (
+                                  <PinIcon sx={{ fontSize: 14, color: 'secondary.main' }} />
+                                )}
                                 <Typography variant="subtitle1" fontWeight={unread > 0 ? 600 : 400}>
                                   {conv.name || 'Group Chat'}
                                 </Typography>
-                                <Chip 
-                                  label={`${conv.participant_count} members`} 
-                                  size="small" 
+                                <Chip
+                                  label={`${conv.participant_count} members`}
+                                  size="small"
                                   variant="outlined"
                                   sx={{ height: 20, fontSize: '0.7rem' }}
                                 />
@@ -1347,7 +1555,28 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           open={Boolean(conversationMenuAnchor)}
           onClose={handleCloseConversationMenu}
         >
-          <MenuItem 
+          <MenuItem
+            onClick={() => {
+              if (conversationMenuTarget) {
+                togglePinConversation(conversationMenuTarget.id);
+                handleCloseConversationMenu();
+              }
+            }}
+          >
+            {conversationMenuTarget && pinnedConversationIds.includes(conversationMenuTarget.id) ? (
+              <>
+                <PinOutlinedIcon sx={{ mr: 1 }} fontSize="small" />
+                Unpin Conversation
+              </>
+            ) : (
+              <>
+                <PinIcon sx={{ mr: 1 }} fontSize="small" />
+                Pin Conversation
+              </>
+            )}
+          </MenuItem>
+          <Divider />
+          <MenuItem
             onClick={() => conversationMenuTarget && handleDeleteClick(conversationMenuTarget)}
             sx={{ color: 'error.main' }}
           >
@@ -1411,6 +1640,13 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           open={showBookmarksDialog}
           onClose={() => setShowBookmarksDialog(false)}
           onNavigateToMessage={handleNavigateToBookmark}
+        />
+
+        {/* Global Search Dialog */}
+        <GlobalSearchDialog
+          open={showGlobalSearch}
+          onClose={() => setShowGlobalSearch(false)}
+          onResultClick={handleGlobalSearchResultClick}
         />
 
         {/* New Chat Dialog */}
@@ -1907,6 +2143,19 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
 
       {/* Message Input */}
       <Box component="form" onSubmit={handleSendMessage} sx={{ pt: 2, position: 'relative' }}>
+        {/* Rich Text Toolbar */}
+        {showRichTextToolbar && (
+          <Box sx={{ mb: 1 }}>
+            <RichTextToolbar
+              onInsert={handleInsertMarkdown}
+              onInsertCodeBlock={handleInsertCodeBlock}
+              onImagePaste={() => fileInputRef.current?.click()}
+              disabled={sending || uploadProgress !== null}
+              compact
+            />
+          </Box>
+        )}
+
         {/* Mention Suggestions */}
         {showMentionSuggestions && mentionSuggestions.length > 0 && (
           <Paper
@@ -1945,9 +2194,11 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
         <TextField
           fullWidth
           inputRef={inputRef}
-          placeholder={replyingTo ? 'Type your reply... (use @ to mention)' : 'Type a message... (use @ to mention)'}
+          placeholder={replyingTo ? 'Type your reply... (use @ to mention, Ctrl+B bold, Ctrl+I italic)' : 'Type a message... (use @ to mention, Ctrl+B bold, Ctrl+I italic)'}
           value={newMessage}
           onChange={handleInputChange}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
           disabled={sending || uploadProgress !== null}
           InputProps={{
             startAdornment: (
@@ -2185,102 +2436,6 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
           currentUserId={user?.id}
         />
       )}
-
-      {/* New Chat Dialog */}
-      <Dialog
-        open={showNewChatDialog}
-        onClose={() => setShowNewChatDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ChatIcon color="primary" />
-            Start New Conversation
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select a contact to start a direct message conversation.
-          </Typography>
-          {loadingFriends ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : friends.length === 0 ? (
-            <Alert severity="info">
-              No contacts yet. Add contacts from the Contacts tab to start chatting!
-            </Alert>
-          ) : (
-            <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-              {friends.map((friend) => {
-                // Check if already have a conversation with this friend
-                const existingConv = conversations.find(
-                  c => !c.is_group && c.participants.some(p => p.user_id === friend.user_id)
-                );
-                
-                return (
-                  <ListItem
-                    key={friend.user_id}
-                    sx={{
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      mb: 1,
-                      cursor: 'pointer',
-                      '&:hover': { bgcolor: 'action.hover' },
-                    }}
-                    onClick={() => {
-                      if (existingConv) {
-                        setShowNewChatDialog(false);
-                        openConversation(existingConv.id);
-                      } else {
-                        handleStartNewChat(friend);
-                      }
-                    }}
-                    disabled={creatingConversation}
-                  >
-                    <ListItemAvatar>
-                      <Avatar src={friend.avatar_url} sx={{ bgcolor: 'primary.main' }}>
-                        {friend.username.charAt(0).toUpperCase()}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={500}>
-                            {friend.username}
-                          </Typography>
-                          {friend.first_name && (
-                            <Typography variant="body2" color="text.secondary">
-                              ({friend.first_name} {friend.last_name})
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                      secondary={existingConv ? 'Continue existing conversation' : 'Start new conversation'}
-                    />
-                    {existingConv && (
-                      <Chip 
-                        label="Existing" 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined"
-                        sx={{ ml: 1 }}
-                      />
-                    )}
-                  </ListItem>
-                );
-              })}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowNewChatDialog(false)} disabled={creatingConversation}>
-            Cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

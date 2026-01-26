@@ -33,6 +33,8 @@ import {
   Tooltip,
   LinearProgress,
   useMediaQuery,
+  Card,
+  CardContent,
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -74,3705 +76,1385 @@ import LockIcon from "@mui/icons-material/Lock";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import UpdateIcon from "@mui/icons-material/Update";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import RestoreIcon from "@mui/icons-material/Restore";
+import CloudIcon from "@mui/icons-material/Cloud";
+import ScheduleIcon from "@mui/icons-material/Schedule";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 
-// Core Windows concepts
+// ============================================================================
+// CORE WINDOWS CONCEPTS - With Detailed Beginner-Friendly Explanations
+// ============================================================================
+
 const windowsConcepts = [
   {
     title: "File System (NTFS)",
     icon: <FolderIcon />,
     color: "#f59e0b",
-    description: "Windows uses NTFS (New Technology File System) as its primary file system for modern Windows versions.",
+    shortDescription: "How Windows organizes and stores your files on disk",
+
+    // DETAILED BEGINNER EXPLANATION
+    beginnerExplanation: `Think of NTFS (New Technology File System) like a massive, incredibly organized filing cabinet. When you save a document, photo, or program on your computer, NTFS decides exactly where on your hard drive to put it, keeps track of its location, and makes sure you can find it again later.
+
+But NTFS does much more than just store files. Imagine each file in your filing cabinet has a security guard who checks IDs before letting anyone open it - that's what NTFS permissions do. They control who can read, write, or even see each file.
+
+NTFS also keeps a detailed journal (like a ship's captain's log) of every change made to files. If your computer crashes mid-save, this journal helps Windows figure out what happened and recover your data. This is called "journaling" and it's why modern Windows systems rarely lose data during power outages.`,
+
+    technicalDescription: `NTFS is the primary file system for modern Windows installations, replacing the older FAT32 system. It uses a Master File Table (MFT) - essentially a database that stores metadata about every file and folder on the volume. Each file has an MFT entry containing its name, timestamps, security descriptor (permissions), and pointers to its actual data on disk.
+
+For small files (typically under 900 bytes), the file data itself is stored directly in the MFT entry, making access extremely fast. Larger files have their data stored in "extents" (contiguous blocks) elsewhere on disk, with the MFT entry containing pointers to these locations.
+
+NTFS implements Access Control Lists (ACLs) that define granular permissions for each object. Unlike simple Unix permissions (owner/group/other), Windows ACLs can specify permissions for any number of users or groups, with inheritance rules that flow down through folder hierarchies.`,
+
     keyPoints: [
-      "Drive letters (C:, D:) vs Unix mount points",
-      "Backslash (\\) as path separator",
-      "Case-insensitive but case-preserving file names",
-      "File permissions via Access Control Lists (ACLs)",
-      "Alternate Data Streams (ADS) - hidden data storage",
-      "File attributes: Hidden, System, Read-only, Archive",
-      "Master File Table (MFT) stores file metadata",
-      "Supports journaling for crash recovery",
+      "Drive letters (C:, D:, E:) identify different storage volumes - unlike Linux which mounts everything under one root",
+      "Backslash (\\) separates folder names in paths: C:\\Users\\John\\Documents",
+      "File names are case-insensitive (FILE.txt = file.TXT) but Windows preserves the case you type",
+      "Access Control Lists (ACLs) provide granular permission control for each file and folder",
+      "Alternate Data Streams (ADS) allow hidden data to be attached to files - used legitimately but also by malware",
+      "File attributes (Hidden, System, Read-only, Archive) provide additional metadata",
+      "Master File Table (MFT) stores all file metadata in a database-like structure",
+      "Journaling ensures filesystem consistency even after crashes or power failures",
+      "Supports native file compression, encryption (EFS), and disk quotas",
     ],
-    securityNote: "NTFS permissions and ACLs are critical for securing Windows systems. ADS can hide malware.",
-    details: [
-      "Maximum file size: 16 EB (theoretical), 256 TB (practical)",
-      "Maximum volume size: 256 TB",
-      "Supports compression, encryption (EFS), and quotas",
-      "File names can be up to 255 characters",
+
+    securityNote: "NTFS permissions and ACLs are the first line of defense for file security. Misconfigured permissions are a common vulnerability. Alternate Data Streams can hide malware payloads - a technique called 'ADS hiding'. Always check for ADS when investigating suspicious files using 'dir /r' or PowerShell's Get-Item -Stream.",
+
+    realWorldExample: `When you right-click a file and go to Properties > Security, you're viewing and editing the NTFS ACL. Try this: create a folder, right-click it, go to Security tab, and click "Advanced". You'll see entries like "Users - Read & Execute" or "Administrators - Full Control". Each line is an Access Control Entry (ACE), and together they form the Access Control List (ACL).`,
+
+    commonMistakes: [
+      "Assuming 'Everyone' group doesn't include anonymous users (it does on older systems)",
+      "Forgetting that Deny permissions override Allow permissions",
+      "Not understanding permission inheritance from parent folders",
+      "Ignoring Alternate Data Streams during security investigations",
     ],
   },
   {
     title: "Windows Registry",
     icon: <StorageIcon />,
     color: "#8b5cf6",
-    description: "The Registry is a hierarchical database storing system configuration, application settings, and user preferences.",
+    shortDescription: "The central database storing all Windows and application settings",
+
+    beginnerExplanation: `The Windows Registry is like the brain of your computer - it remembers everything. Every setting you change, every program you install, every preference you configure gets recorded here. When Windows starts up, it reads the Registry to figure out what programs should run, what your desktop should look like, and how everything should behave.
+
+Imagine a massive spreadsheet with millions of rows. Each row has a name (like "Wallpaper") and a value (like "C:\\Pictures\\beach.jpg"). Programs read and write to this spreadsheet constantly. When you change your desktop background, Windows writes the new path to the Registry. When you restart your computer, Windows reads that path from the Registry and displays your wallpaper.
+
+The Registry is organized into five main sections called "hives" - think of them as different filing cabinets for different purposes:
+- HKEY_LOCAL_MACHINE (HKLM): Computer-wide settings that apply to everyone
+- HKEY_CURRENT_USER (HKCU): Your personal settings and preferences
+- HKEY_USERS (HKU): Settings for all user accounts on the computer
+- HKEY_CLASSES_ROOT (HKCR): File associations (what program opens .docx files?)
+- HKEY_CURRENT_CONFIG (HKCC): Current hardware profile information`,
+
+    technicalDescription: `The Registry is a hierarchical database implemented as a collection of binary files called "hives". Each hive is a tree structure containing keys (similar to folders) and values (name-data pairs). Values can be several data types: REG_SZ (string), REG_DWORD (32-bit number), REG_QWORD (64-bit number), REG_BINARY (raw binary data), REG_MULTI_SZ (array of strings), and REG_EXPAND_SZ (string with environment variable references).
+
+The Registry is memory-mapped for performance - frequently accessed portions are kept in RAM. Changes are written to disk either immediately or when the system flushes its cache. Critical hives (SYSTEM, SAM, SECURITY, SOFTWARE) are stored in C:\\Windows\\System32\\config, while user hives (NTUSER.DAT) reside in each user's profile folder.
+
+Registry virtualization was introduced in Windows Vista for backwards compatibility. When legacy 32-bit applications try to write to protected areas like HKLM\\SOFTWARE, Windows silently redirects them to a virtualized location under the user's profile, preventing system-wide changes while maintaining application functionality.`,
+
     keyPoints: [
-      "HKEY_LOCAL_MACHINE (HKLM) - System-wide settings",
-      "HKEY_CURRENT_USER (HKCU) - User-specific settings",
-      "HKEY_CLASSES_ROOT (HKCR) - File associations",
-      "HKEY_USERS (HKU) - All user profiles",
-      "HKEY_CURRENT_CONFIG (HKCC) - Hardware profile",
-      "Registry keys (folders), values (name-data pairs)",
-      "Data types: REG_SZ, REG_DWORD, REG_BINARY, REG_MULTI_SZ",
-      "regedit.exe and reg.exe for viewing/editing",
+      "HKEY_LOCAL_MACHINE (HKLM) - System-wide settings affecting all users",
+      "HKEY_CURRENT_USER (HKCU) - Settings for the currently logged-in user only",
+      "HKEY_CLASSES_ROOT (HKCR) - File type associations and COM class registrations",
+      "HKEY_USERS (HKU) - Contains HKCU for each user profile on the system",
+      "HKEY_CURRENT_CONFIG (HKCC) - Current hardware configuration profile",
+      "Keys are like folders; Values are the actual settings (name + data pairs)",
+      "Data types: REG_SZ (string), REG_DWORD (32-bit integer), REG_BINARY (raw bytes)",
+      "regedit.exe provides a GUI; reg.exe provides command-line access",
+      "Changes take effect immediately for most settings; some require restart",
     ],
-    securityNote: "Malware persistence mechanisms frequently abuse registry autorun keys like Run and RunOnce.",
-    details: [
-      "Physical files: SYSTEM, SOFTWARE, SAM, SECURITY, NTUSER.DAT",
-      "Located in C:\\Windows\\System32\\config",
-      "User hives in C:\\Users\\<user>\\NTUSER.DAT",
-      "Registry virtualization for legacy app compatibility",
+
+    securityNote: "The Registry is ground zero for malware persistence. Attackers add entries to Run/RunOnce keys to survive reboots, modify shell handlers to hijack program execution, or alter service configurations to run malicious code as SYSTEM. The SAM hive contains password hashes - extracting and cracking these is a primary privilege escalation technique.",
+
+    realWorldExample: `Open Registry Editor (Win+R, type 'regedit') and navigate to HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run. Any entries here are programs that automatically start when YOU log in. Each value name is a description, and the data is the path to the program. Malware often adds itself here. Compare this to HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run which affects ALL users.`,
+
+    commonMistakes: [
+      "Editing the Registry without backing it up first (use File > Export)",
+      "Deleting keys without understanding their purpose",
+      "Confusing HKLM (all users) with HKCU (current user only)",
+      "Forgetting that some changes require a restart or re-login",
+      "Not checking both 32-bit and 64-bit Registry locations on 64-bit Windows",
     ],
   },
   {
     title: "Windows Services",
     icon: <SettingsIcon />,
     color: "#10b981",
-    description: "Services are long-running background processes that provide core OS functionality and application features.",
+    shortDescription: "Background programs that run automatically to provide system functionality",
+
+    beginnerExplanation: `Windows Services are like the staff that keep a hotel running smoothly - they work in the background, often invisibly, handling essential tasks so everything functions properly. You don't see them, but without them, nothing would work.
+
+When you turn on your computer, dozens of services spring into action before you even see the login screen. The "Windows Update" service checks for patches. The "Print Spooler" service waits to handle print jobs. The "DHCP Client" service gets your network address. The "Windows Defender" service scans for malware. All running silently in the background.
+
+Each service has a "startup type" that determines when it runs:
+- Automatic: Starts when Windows boots (essential services)
+- Automatic (Delayed): Starts after boot completes (less critical services)
+- Manual: Only starts when another program or user requests it
+- Disabled: Never runs unless you change this setting
+
+Services run under special accounts with different privilege levels:
+- LocalSystem: The most powerful account - full access to everything
+- LocalService: Limited privileges, designed for services that don't need network access
+- NetworkService: Limited privileges with ability to authenticate to network resources`,
+
+    technicalDescription: `Services are managed by the Service Control Manager (SCM), a core Windows component that starts during boot. Each service is defined by a registry entry under HKLM\\SYSTEM\\CurrentControlSet\\Services containing its binary path, startup type, dependencies, and the account it runs under.
+
+Services run in Session 0, isolated from user sessions (Session 1+) for security. This "Session 0 Isolation" prevents services from interacting directly with user desktops, mitigating certain attack vectors. Interactive services are deprecated and should not be used.
+
+The SCM handles service dependencies - if Service A depends on Service B, the SCM ensures B starts first. Services can be grouped for parallel startup to improve boot times. Failed services can be configured with recovery actions: restart the service, run a program, or reboot the computer.
+
+Service accounts have specific access tokens. LocalSystem has full local administrator privileges plus network computer account credentials. NetworkService has limited local privileges but can authenticate to network resources using the computer's identity. LocalService has the same limited local privileges but no network credentials.`,
+
     keyPoints: [
-      "services.msc - Service management console",
-      "Service accounts: LocalSystem, LocalService, NetworkService",
-      "Startup types: Automatic, Automatic (Delayed), Manual, Disabled",
-      "sc.exe command for service control from CLI",
-      "Service dependencies and load ordering",
-      "Recovery options: Restart, Run Program, Reboot",
-      "Service isolation and privileges",
-      "Can be managed via PowerShell Get-Service/Set-Service",
+      "services.msc - The graphical Service Management Console",
+      "sc.exe - Command-line tool for service control (query, start, stop, config)",
+      "Service accounts: LocalSystem (highest privilege), LocalService, NetworkService",
+      "Startup types: Automatic, Automatic (Delayed Start), Manual, Disabled",
+      "Services run in Session 0, isolated from user interactive sessions",
+      "Service dependencies ensure proper startup order",
+      "Recovery options can restart failed services automatically",
+      "Get-Service and Set-Service PowerShell cmdlets for scripted management",
+      "Each service has a unique name (e.g., 'wuauserv' for Windows Update)",
     ],
-    securityNote: "Misconfigured service permissions can lead to privilege escalation. Services running as SYSTEM are high-value targets.",
-    details: [
-      "Services run in Session 0, isolated from user sessions",
-      "Interactive services are deprecated (security risk)",
-      "Each service has an associated registry entry",
-      "Service Control Manager (SCM) manages service lifecycle",
+
+    securityNote: "Services running as LocalSystem are high-value targets for attackers. Misconfigured service permissions can lead to privilege escalation - if a low-privileged user can modify a service binary or its configuration, they can gain SYSTEM access. Always audit services with 'sc qc <servicename>' to check configuration. Unquoted service paths are a classic vulnerability.",
+
+    realWorldExample: `Press Win+R, type 'services.msc' and press Enter. Find "Windows Update" (wuauserv). Right-click it and select Properties. You'll see its Display Name, Description, startup type, and the account it runs under (look at "Log On" tab). Now open an admin Command Prompt and run 'sc qc wuauserv' to see the same information from the command line.`,
+
+    commonMistakes: [
+      "Disabling services without understanding dependencies",
+      "Running custom services as LocalSystem when lower privileges would suffice",
+      "Not specifying a service account for third-party services",
+      "Forgetting that service changes may require a system restart",
+      "Using unquoted paths for service binaries (creates hijacking vulnerability)",
     ],
   },
   {
     title: "Users & Permissions",
     icon: <PersonIcon />,
     color: "#3b82f6",
-    description: "Windows implements a robust user account and security permission system based on SIDs and ACLs.",
+    shortDescription: "How Windows controls who can do what on the system",
+
+    beginnerExplanation: `Windows uses a sophisticated system to control who can access what. Think of it like a building with key cards - different people have access to different rooms, and some people can do more things in those rooms than others.
+
+Every person (or program) that does something on Windows has an identity. This identity carries a list of permissions and group memberships, kind of like a badge that says "Hi, I'm John, and I'm allowed in rooms A, B, and C, and I'm a member of the IT Department."
+
+There are several built-in accounts you should know about:
+- Administrator: The all-powerful account that can do anything
+- SYSTEM: Even more powerful than Administrator - it's the account Windows itself uses
+- Guest: A very limited account for temporary access (usually disabled)
+- Your personal account: Created when you set up the computer
+
+Groups make permission management easier. Instead of saying "John can access this folder, and Jane can access this folder, and Bob can access this folder," you can say "Everyone in the Accounting group can access this folder" and just add people to the Accounting group.
+
+User Account Control (UAC) is the system that asks "Do you want to allow this program to make changes?" It's Windows protecting you from accidentally (or maliciously) running something that could harm your system. Even if you're an administrator, you run with standard user privileges until you explicitly approve elevated access.`,
+
+    technicalDescription: `Windows security is built on Security Identifiers (SIDs) - unique identifiers for security principals (users, groups, computers). A SID looks like S-1-5-21-3623811015-3361044348-30300820-1013, where the final number (RID) is unique per domain. Well-known SIDs like S-1-5-18 (SYSTEM) and S-1-5-32-544 (Administrators group) are consistent across all Windows installations.
+
+When a user logs in, Windows creates an access token containing their SID, group SIDs, privileges, and integrity level. Every process inherits its creator's token (with possible modifications). When accessing an object, the Security Reference Monitor compares the token's SIDs against the object's security descriptor (ACL) to determine access rights.
+
+Privileges are separate from permissions - they grant system-wide capabilities like SeDebugPrivilege (debug any process), SeBackupPrivilege (bypass ACLs for backup), or SeImpersonatePrivilege (impersonate another user's token). These are powerful and should be carefully controlled.
+
+UAC implements a split-token model for administrative users. At login, two tokens are created: a filtered token with admin privileges removed (used normally) and a full admin token (used after elevation). The Secure Desktop (dimmed background during UAC prompts) prevents other applications from tampering with the consent dialog.`,
+
     keyPoints: [
-      "Built-in accounts: Administrator, SYSTEM, Guest, DefaultAccount",
-      "User groups: Administrators, Users, Power Users, Backup Operators",
-      "User Account Control (UAC) - elevation prompts",
-      "Security Identifiers (SIDs) uniquely identify principals",
-      "Access tokens contain user's security context",
-      "Privileges: SeDebugPrivilege, SeBackupPrivilege, etc.",
-      "Local vs Domain (Active Directory) accounts",
-      "Managed Service Accounts (MSA) and gMSA",
+      "Built-in accounts: Administrator, SYSTEM (most powerful), Guest, DefaultAccount",
+      "Built-in groups: Administrators, Users, Backup Operators, Remote Desktop Users",
+      "Security Identifiers (SIDs) uniquely identify every user and group",
+      "Access tokens carry the user's security context to every process they run",
+      "User Account Control (UAC) prompts for consent before elevated operations",
+      "Privileges grant system-wide capabilities (SeDebugPrivilege, SeBackupPrivilege)",
+      "Local accounts exist only on one machine; Domain accounts work across the network",
+      "SAM database (C:\\Windows\\System32\\config\\SAM) stores local account information",
+      "Password hashes use NTLM format - MD4-based, no salt, vulnerable to attacks",
     ],
-    securityNote: "Principle of least privilege should guide user permission assignments. Avoid using admin accounts for daily tasks.",
-    details: [
-      "SAM database stores local account info",
-      "Password hashes: NTLM (MD4-based)",
-      "Credential Guard protects hashes on modern systems",
-      "LAPS for local admin password management",
+
+    securityNote: "Principle of least privilege is paramount - users and services should have only the permissions they need. The SYSTEM account should be avoided for services that don't require it. Credential Guard on modern Windows uses virtualization to protect NTLM hashes from theft. LAPS (Local Administrator Password Solution) provides unique local admin passwords per machine. Beware of 'token impersonation' attacks where services can assume user identities.",
+
+    realWorldExample: `Open an elevated Command Prompt (right-click, Run as administrator). Run 'whoami /all' to see your complete security context: your SID, all group memberships, and all privileges with their current state (enabled/disabled). Compare this to running the same command in a non-elevated prompt - notice how many fewer privileges you have.`,
+
+    commonMistakes: [
+      "Using the built-in Administrator account for daily tasks",
+      "Granting more permissions than necessary 'just to make it work'",
+      "Adding users directly to the Administrators group instead of delegating specific rights",
+      "Disabling UAC (it's annoying but provides real security)",
+      "Assuming 'Admin rights' means unlimited access (SYSTEM is more powerful)",
     ],
   },
   {
     title: "Command Line Interfaces",
     icon: <TerminalIcon />,
     color: "#ef4444",
-    description: "Windows provides multiple command-line environments: CMD, PowerShell, and Windows Terminal.",
+    shortDescription: "Text-based tools for controlling Windows: CMD and PowerShell",
+
+    beginnerExplanation: `Before Windows had pretty buttons and icons, people controlled computers by typing commands. These command-line interfaces are still incredibly powerful - in fact, most professional IT work and all serious security work requires command-line proficiency.
+
+Windows has two main command-line environments:
+
+**CMD (Command Prompt)**: The old-school command line, descended from MS-DOS. It's simple, fast, and works the same way it has for 30+ years. When you need to do something quick like ping a server or check your IP address, CMD is often the fastest option. Commands are simple: 'dir' lists files, 'cd' changes directory, 'copy' copies files.
+
+**PowerShell**: The modern, powerful command line. Instead of just running commands, PowerShell works with objects. When you run 'Get-Process', you don't just get text - you get actual process objects that you can filter, sort, and manipulate. It's like the difference between getting a list of names on paper versus getting a spreadsheet where you can sort, filter, and calculate.
+
+**Windows Terminal**: A new app that provides a modern interface for both CMD and PowerShell (and Linux shells if you have WSL). It supports tabs, split panes, and lots of customization.
+
+Environment variables are like shortcuts that hold important information. Instead of typing 'C:\\Users\\John' every time, you can use '%USERPROFILE%'. Windows and programs use these constantly - the %PATH% variable tells Windows where to look for programs when you type a command.`,
+
+    technicalDescription: `CMD.exe is a command interpreter that processes batch files and built-in commands. It has limited capabilities - no native object handling, limited string manipulation, and relies on parsing text output. However, it has near-universal compatibility and minimal overhead.
+
+PowerShell is built on .NET and processes objects through a pipeline. When you run 'Get-Process | Where-Object CPU -gt 100 | Stop-Process', actual Process objects flow through the pipeline - not text. This enables powerful filtering and manipulation without parsing. PowerShell also supports .NET methods, COM objects, WMI, and CIM for deep system access.
+
+Execution policies control PowerShell script execution: Restricted (no scripts), AllSigned (only signed scripts), RemoteSigned (downloaded scripts must be signed), Unrestricted (all scripts run). These aren't security boundaries - they prevent accidental execution, not determined attackers.
+
+PowerShell logging capabilities include Script Block Logging (logs all code execution), Module Logging (logs pipeline execution), and Transcription (logs all I/O). These are critical for security monitoring and forensics. AMSI (Antimalware Scan Interface) allows security software to scan PowerShell commands before execution.`,
+
     keyPoints: [
-      "CMD.exe - Traditional command prompt (DOS heritage)",
-      "PowerShell - Modern object-oriented shell",
-      "Windows Terminal - New unified terminal app",
-      "Environment variables: %PATH%, %USERPROFILE%, %TEMP%",
-      "Running as Administrator for elevated operations",
-      "Batch scripts (.bat, .cmd) for CMD automation",
-      "PowerShell scripts (.ps1) with execution policies",
-      "WSL (Windows Subsystem for Linux) for Linux tools",
+      "CMD.exe - Traditional command prompt, simple but limited, runs .bat/.cmd scripts",
+      "PowerShell - Modern object-oriented shell, runs .ps1 scripts, built on .NET",
+      "Windows Terminal - New unified terminal supporting CMD, PowerShell, WSL, and more",
+      "Environment variables: %PATH%, %USERPROFILE%, %TEMP%, %SYSTEMROOT%",
+      "Running as Administrator grants elevated privileges to command-line sessions",
+      "Execution policies control PowerShell script execution (not a security boundary)",
+      "PowerShell remoting enables remote management via WinRM on port 5985/5986",
+      "WSL (Windows Subsystem for Linux) provides Linux command-line tools on Windows",
     ],
-    securityNote: "PowerShell is powerful for both administration and attacks. Constrained Language Mode and AMSI provide defense.",
-    details: [
-      "PowerShell execution policies: Restricted, RemoteSigned, Unrestricted",
-      "PowerShell logging: Script Block, Module, Transcription",
-      "cmd.exe location: C:\\Windows\\System32\\cmd.exe",
-      "PowerShell location: C:\\Windows\\System32\\WindowsPowerShell\\v1.0",
+
+    securityNote: "PowerShell is extremely powerful for both defenders and attackers - it's a 'living off the land' binary (LOLBIN) present on every Windows system. Enable PowerShell logging (Script Block, Module, Transcription) and monitor for suspicious commands. Constrained Language Mode limits PowerShell capabilities for untrusted code. AMSI integration allows antimalware to scan PowerShell commands.",
+
+    realWorldExample: `Open PowerShell and try: 'Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Name, CPU, Id'. This gets all processes, sorts by CPU usage descending, and shows the top 5. Compare to CMD where you'd run 'tasklist' and manually find the information. Now try 'Get-Process chrome | Stop-Process' to kill all Chrome processes - the object pipeline makes this trivial.`,
+
+    commonMistakes: [
+      "Running commands in a non-elevated prompt when admin rights are needed",
+      "Forgetting that PowerShell execution policy isn't a security feature",
+      "Not using quotes around paths with spaces: cd \"C:\\Program Files\"",
+      "Confusing CMD syntax (dir, copy) with PowerShell (Get-ChildItem, Copy-Item)",
+      "Not understanding that PowerShell commands are case-insensitive",
     ],
   },
   {
     title: "Processes & Memory",
     icon: <MemoryIcon />,
     color: "#06b6d4",
-    description: "Understanding Windows process architecture is fundamental for troubleshooting and security analysis.",
+    shortDescription: "How Windows runs programs and manages system memory",
+
+    beginnerExplanation: `When you double-click an application, Windows creates a "process" - a running instance of that program. Each process is like a worker in a factory: it has its own workspace (memory), its own instructions (the program code), and its own thread of work.
+
+A process can have multiple "threads" - think of these as multiple workers doing different tasks for the same project. Your web browser, for example, might have one thread handling what you see, another downloading images, and another running JavaScript.
+
+Windows gives each process its own "virtual memory" - an illusion that the process has the entire computer's memory to itself. In reality, Windows is a master juggler, constantly moving data between physical RAM and the hard drive (the "page file") to make this illusion work. This is why adding RAM makes your computer faster - less juggling required.
+
+Process IDs (PIDs) are unique numbers that identify each running process. When something goes wrong and you need to kill a hung program, you find it by name or PID in Task Manager and end it. The Parent Process ID (PPID) tells you which process started another - useful for understanding how processes relate and for spotting suspicious activity.
+
+The most important processes running on your computer are:
+- System (PID 4): The Windows kernel itself
+- smss.exe: Session Manager - sets up the Windows environment
+- csrss.exe: Client Server Runtime - handles Windows subsystem
+- lsass.exe: Local Security Authority - handles logins and credentials
+- services.exe: Starts and manages all Windows services
+- explorer.exe: Your desktop and Start menu`,
+
+    technicalDescription: `Windows processes exist in a tree hierarchy. The System process (PID 4) is the kernel's user-mode representation. smss.exe (Session Manager) is started by the kernel during boot and spawns csrss.exe and wininit.exe for Session 0, then csrss.exe and winlogon.exe for Session 1 (first interactive session).
+
+Each process has a virtual address space - typically 2GB for 32-bit processes (4GB with LAA) or 8TB for 64-bit processes. The Memory Manager handles virtual-to-physical translation using page tables. Pages can be in physical RAM, paged to disk, or marked invalid (access causes an exception).
+
+Security is enforced at the process level through access tokens. Each process runs under a security context determined by its token. Threads within a process can impersonate different identities for specific operations but inherit the process's base security context.
+
+Memory protection mechanisms include DEP (Data Execution Prevention) preventing code execution in data regions, ASLR (Address Space Layout Randomization) randomizing memory addresses, and CFG (Control Flow Guard) validating indirect calls. Process isolation prevents one process from reading another's memory without special privileges (SeDebugPrivilege).`,
+
     keyPoints: [
-      "Processes contain one or more threads of execution",
-      "Virtual memory: Each process has its own address space",
-      "Kernel mode (Ring 0) vs User mode (Ring 3)",
-      "Process ID (PID) and Parent Process ID (PPID)",
-      "Task Manager (taskmgr.exe) for process viewing",
-      "Process Monitor (procmon) for deep analysis",
-      "Handle and DLL information per process",
-      "Session ID associates processes with user sessions",
+      "Process = running instance of a program with its own memory and security context",
+      "Thread = unit of execution within a process; processes can have multiple threads",
+      "Virtual memory gives each process an isolated address space",
+      "Process ID (PID) uniquely identifies running processes; Parent PID (PPID) shows creator",
+      "Kernel mode (Ring 0) vs User mode (Ring 3) - different privilege levels",
+      "Task Manager shows processes; Process Explorer provides advanced details",
+      "Critical processes: System, smss.exe, csrss.exe, lsass.exe, services.exe, svchost.exe",
+      "Memory protections: DEP (no-execute data), ASLR (random addresses), CFG (flow integrity)",
     ],
-    securityNote: "Process injection and hollowing are common attack techniques. Monitor for suspicious parent-child relationships.",
-    details: [
-      "Critical processes: csrss.exe, lsass.exe, smss.exe, services.exe",
-      "Session 0 isolation for services",
-      "ASLR (Address Space Layout Randomization) for security",
-      "DEP (Data Execution Prevention) prevents code execution in data regions",
+
+    securityNote: "Process injection (inserting code into another process) and process hollowing (replacing a legitimate process's code) are common attack techniques. Monitor parent-child process relationships for anomalies - lsass.exe should only be spawned by wininit.exe, for example. SeDebugPrivilege allows reading any process's memory - attackers use this for credential theft. Watch for processes with unusual parents, strange network connections, or high CPU without user activity.",
+
+    realWorldExample: `Open Task Manager, go to Details tab, and add the columns "PID" and "Parent PID". Find explorer.exe - its parent should be userinit.exe (or sometimes itself after explorer restarts). Now find lsass.exe - its parent should be wininit.exe. If you ever see lsass.exe with a different parent, that's a red flag for process hollowing. Download Process Explorer from Sysinternals for even more detail.`,
+
+    commonMistakes: [
+      "Assuming high memory usage is always bad (modern apps use RAM for caching)",
+      "Killing system processes without understanding consequences",
+      "Not recognizing that multiple svchost.exe instances are normal",
+      "Thinking a single high-CPU process is malware (could be legitimate)",
+      "Ignoring parent-child relationships when investigating suspicious processes",
     ],
   },
 ];
 
-// Windows architecture components
+// ============================================================================
+// WINDOWS ARCHITECTURE - Kernel and User Mode Components
+// ============================================================================
+
 const windowsArchitecture = [
   {
-    layer: "User Mode",
-    color: "#3b82f6",
-    components: [
-      { name: "Applications", description: "User-facing programs (notepad, browsers, etc.)" },
-      { name: "Subsystem DLLs", description: "kernel32.dll, user32.dll, advapi32.dll" },
-      { name: "NTDLL.DLL", description: "Interface to kernel, system call stubs" },
-    ],
+    layer: "User Mode Applications",
+    description: "Regular programs you run - browsers, Office, games",
+    components: ["Win32 Applications", "UWP Apps", ".NET Applications", "Console Applications"],
+    beginnerNote: "This is where YOUR programs run. They can't directly touch hardware - they have to ask Windows nicely.",
+    securityRelevance: "Malware runs here too. Limited damage potential due to privilege separation.",
+    ring: "Ring 3",
   },
   {
-    layer: "Kernel Mode",
-    color: "#ef4444",
-    components: [
-      { name: "Executive", description: "Memory manager, I/O manager, Security Reference Monitor" },
-      { name: "Kernel", description: "Thread scheduling, interrupt handling, synchronization" },
-      { name: "HAL", description: "Hardware Abstraction Layer - bridges kernel and hardware" },
-      { name: "Drivers", description: "Device drivers for hardware interaction" },
-    ],
+    layer: "Subsystem DLLs",
+    description: "Windows API libraries that applications call",
+    components: ["kernel32.dll", "user32.dll", "gdi32.dll", "advapi32.dll", "ws2_32.dll"],
+    beginnerNote: "These are like translators. Your program says 'open file' and kernel32.dll translates that into something Windows understands.",
+    securityRelevance: "DLL hijacking attacks target these. If malware can replace a DLL, it runs when legitimate programs load it.",
+    ring: "Ring 3",
+  },
+  {
+    layer: "NTDLL.DLL",
+    description: "The gateway between user mode and kernel mode",
+    components: ["Native API functions", "System call stubs", "Runtime library"],
+    beginnerNote: "NTDLL is the last stop before entering the kernel. Every Windows API call eventually passes through here.",
+    securityRelevance: "Security products hook NTDLL to monitor API calls. Malware tries to bypass these hooks by calling the kernel directly.",
+    ring: "Ring 3 (but interfaces with Ring 0)",
+  },
+  {
+    layer: "Executive Services",
+    description: "Core Windows kernel services",
+    components: ["I/O Manager", "Object Manager", "Process Manager", "Memory Manager", "Security Reference Monitor", "Cache Manager"],
+    beginnerNote: "These are the managers that actually run Windows. They handle files, memory, security, and everything else.",
+    securityRelevance: "Vulnerabilities here (kernel exploits) give attackers complete system control.",
+    ring: "Ring 0",
+  },
+  {
+    layer: "Kernel & HAL",
+    description: "Windows kernel and Hardware Abstraction Layer",
+    components: ["ntoskrnl.exe (Windows Kernel)", "hal.dll (Hardware Abstraction Layer)", "Device Drivers"],
+    beginnerNote: "The kernel is the heart of Windows. HAL is like a universal translator between Windows and different hardware.",
+    securityRelevance: "Kernel rootkits operate here, virtually undetectable by normal means. Drivers are common attack targets.",
+    ring: "Ring 0",
   },
 ];
 
-// Important directories
+// ============================================================================
+// IMPORTANT WINDOWS DIRECTORIES
+// ============================================================================
+
 const importantDirectories = [
-  { path: "C:\\Windows", description: "Core Windows OS files and system utilities", purpose: "System", notes: "Protected by Windows Resource Protection" },
-  { path: "C:\\Windows\\System32", description: "64-bit system executables, DLLs, and drivers", purpose: "System", notes: "Contains cmd.exe, notepad.exe, etc." },
-  { path: "C:\\Windows\\SysWOW64", description: "32-bit system files (WoW64 subsystem)", purpose: "System", notes: "For 32-bit app compatibility on 64-bit Windows" },
-  { path: "C:\\Windows\\Temp", description: "System-wide temporary files", purpose: "Temporary", notes: "Cleanup scripts often target this location" },
-  { path: "C:\\Windows\\Prefetch", description: "Application prefetch data for faster loading", purpose: "System", notes: "Useful for forensics - shows what ran" },
-  { path: "C:\\Windows\\System32\\config", description: "Registry hive files (SAM, SYSTEM, SOFTWARE)", purpose: "System", notes: "Critical for forensics and attacks" },
-  { path: "C:\\Windows\\System32\\drivers\\etc", description: "hosts file, services, protocol definitions", purpose: "System", notes: "hosts file can redirect domains" },
-  { path: "C:\\Program Files", description: "64-bit application installations", purpose: "Applications", notes: "Requires admin to modify" },
-  { path: "C:\\Program Files (x86)", description: "32-bit application installations", purpose: "Applications", notes: "WoW64 redirect for 32-bit apps" },
-  { path: "C:\\ProgramData", description: "Machine-wide application data (shared)", purpose: "Applications", notes: "Hidden by default, apps store configs here" },
-  { path: "C:\\Users", description: "User profile root folder", purpose: "User Data", notes: "Contains all user home directories" },
-  { path: "C:\\Users\\<user>\\Desktop", description: "User's desktop files and shortcuts", purpose: "User Data", notes: "Common malware drop location" },
-  { path: "C:\\Users\\<user>\\Documents", description: "User's documents folder", purpose: "User Data", notes: "Often targeted by ransomware" },
-  { path: "C:\\Users\\<user>\\Downloads", description: "Default download location", purpose: "User Data", notes: "Primary malware entry point" },
-  { path: "C:\\Users\\<user>\\AppData\\Local", description: "Local application data (not roamed)", purpose: "User Data", notes: "App caches and local settings" },
-  { path: "C:\\Users\\<user>\\AppData\\Roaming", description: "Roaming application data (syncs with domain)", purpose: "User Data", notes: "Follows user in domain environments" },
-  { path: "C:\\Users\\<user>\\AppData\\Local\\Temp", description: "User's temporary files", purpose: "Temporary", notes: "Common malware staging area" },
-  { path: "C:\\Users\\Public", description: "Shared files accessible to all users", purpose: "User Data", notes: "Useful for data sharing between users" },
+  {
+    path: "C:\\",
+    description: "Root of the system drive",
+    purpose: "System",
+    beginnerNote: "The top level of your main hard drive. Everything on Windows starts here.",
+    securityRelevance: "Check for suspicious files at root level - legitimate software rarely puts files directly here.",
+  },
+  {
+    path: "C:\\Windows",
+    description: "Core Windows operating system files",
+    purpose: "System",
+    beginnerNote: "The Windows folder contains everything Windows needs to run. Don't delete things here!",
+    securityRelevance: "Malware often hides here to blend in. Check for misspelled system files (svchost vs svch0st).",
+  },
+  {
+    path: "C:\\Windows\\System32",
+    description: "64-bit system executables and DLLs (despite the name)",
+    purpose: "System",
+    beginnerNote: "Despite being called 'System32', on 64-bit Windows this contains 64-bit programs. Historical naming.",
+    securityRelevance: "Most critical system files live here. Malware loves to impersonate files in this directory.",
+  },
+  {
+    path: "C:\\Windows\\SysWOW64",
+    description: "32-bit system files on 64-bit Windows",
+    purpose: "System",
+    beginnerNote: "WOW64 = Windows 32-bit on Windows 64-bit. This folder runs old 32-bit programs on modern Windows.",
+    securityRelevance: "Some malware targets 32-bit subsystem specifically for compatibility with older exploits.",
+  },
+  {
+    path: "C:\\Windows\\Temp",
+    description: "System temporary files",
+    purpose: "Temporary",
+    beginnerNote: "Windows and programs drop temporary files here. Safe to clean periodically.",
+    securityRelevance: "Common malware staging location. Check for executables here - they shouldn't normally exist.",
+  },
+  {
+    path: "C:\\Windows\\Prefetch",
+    description: "Application launch optimization data",
+    purpose: "Performance",
+    beginnerNote: "Windows remembers which programs you run and pre-loads them for faster startup.",
+    securityRelevance: "Forensic goldmine! Shows what programs ran and when. Attackers sometimes clear this.",
+  },
+  {
+    path: "C:\\Users",
+    description: "User profile directories",
+    purpose: "User Data",
+    beginnerNote: "Each person who uses this computer has a folder here with their documents, desktop, and settings.",
+    securityRelevance: "Check for unexpected user profiles. Attackers may create hidden admin accounts.",
+  },
+  {
+    path: "C:\\Users\\<username>\\AppData",
+    description: "Per-user application data (often hidden)",
+    purpose: "User Data",
+    beginnerNote: "Programs store your personal settings and data here. It's hidden by default.",
+    securityRelevance: "Malware persistence hotspot. Contains Local, LocalLow, and Roaming subdirectories.",
+  },
+  {
+    path: "C:\\Users\\<username>\\AppData\\Local\\Temp",
+    description: "User temporary files",
+    purpose: "Temporary",
+    beginnerNote: "Your personal temp folder. Downloads and program temp files go here.",
+    securityRelevance: "Very common malware execution location. Many attacks drop payloads here first.",
+  },
+  {
+    path: "C:\\Users\\<username>\\AppData\\Roaming",
+    description: "User data that follows you across computers (in domain environments)",
+    purpose: "User Data",
+    beginnerNote: "In corporate environments, this folder can follow you when you log into different computers.",
+    securityRelevance: "Startup folder and many persistence locations are here. Check for suspicious entries.",
+  },
+  {
+    path: "C:\\Program Files",
+    description: "64-bit installed applications",
+    purpose: "Applications",
+    beginnerNote: "When you install a 64-bit program, it usually goes here.",
+    securityRelevance: "Should only contain legitimate software. Requires admin rights to modify.",
+  },
+  {
+    path: "C:\\Program Files (x86)",
+    description: "32-bit installed applications on 64-bit Windows",
+    purpose: "Applications",
+    beginnerNote: "Older 32-bit programs install here on 64-bit Windows.",
+    securityRelevance: "Same as Program Files - check for unexpected software.",
+  },
+  {
+    path: "C:\\ProgramData",
+    description: "Shared application data for all users (hidden)",
+    purpose: "Application Data",
+    beginnerNote: "Programs store data here that needs to be shared between all users on the computer.",
+    securityRelevance: "Hidden folder - malware uses it for persistence. Many legitimate programs store data here too.",
+  },
+  {
+    path: "C:\\Windows\\System32\\config",
+    description: "Registry hive files",
+    purpose: "System",
+    beginnerNote: "The actual files that make up the Windows Registry live here.",
+    securityRelevance: "Contains SAM (passwords), SECURITY, SYSTEM, SOFTWARE hives. High-value forensic target.",
+  },
+  {
+    path: "C:\\Windows\\System32\\winevt\\Logs",
+    description: "Windows Event Log files",
+    purpose: "Logs",
+    beginnerNote: "All Windows event logs are stored here as .evtx files.",
+    securityRelevance: "Critical for incident response. Attackers often try to clear these logs.",
+  },
 ];
 
-// Registry keys important for security
+// ============================================================================
+// SECURITY-CRITICAL REGISTRY KEYS
+// ============================================================================
+
 const registryKeys = [
   {
-    hive: "HKLM",
-    key: "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-    description: "Programs that run at startup (all users)",
-    securityRelevance: "HIGH",
-    notes: "Common malware persistence location",
+    key: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+    description: "Programs that run at startup for ALL users",
+    beginnerNote: "Anything listed here runs automatically when Windows starts, for every user. Great for legitimate software, loved by malware.",
+    securityRelevance: "Primary malware persistence location. Check this first when hunting for persistence.",
+    dataType: "REG_SZ (string paths to executables)",
   },
   {
-    hive: "HKCU",
-    key: "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-    description: "Programs that run at startup (current user)",
-    securityRelevance: "HIGH",
-    notes: "User-specific autorun, no admin needed",
+    key: "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+    description: "Programs that run at startup for the CURRENT user only",
+    beginnerNote: "Same as HKLM\\...\\Run, but only for your user account. Easier to modify (no admin needed).",
+    securityRelevance: "User-level persistence. Malware often uses this when it lacks admin rights.",
+    dataType: "REG_SZ",
   },
   {
-    hive: "HKLM",
-    key: "SYSTEM\\CurrentControlSet\\Services",
+    key: "HKLM\\SYSTEM\\CurrentControlSet\\Services",
     description: "Windows services configuration",
-    securityRelevance: "HIGH",
-    notes: "Attackers create services for persistence",
+    beginnerNote: "Every Windows service is defined here - its name, executable path, startup type, and account.",
+    securityRelevance: "Malicious services provide stealthy persistence. Check for services with suspicious paths or descriptions.",
+    dataType: "Multiple subkeys and values",
   },
   {
-    hive: "HKLM",
-    key: "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
-    description: "Winlogon settings and shell configuration",
-    securityRelevance: "HIGH",
-    notes: "Shell and Userinit values can be hijacked",
+    key: "HKLM\\SAM\\SAM",
+    description: "Security Account Manager - local user accounts and password hashes",
+    beginnerNote: "This is where Windows stores local account information. Heavily protected - even admins can't read it normally.",
+    securityRelevance: "Contains NTLM password hashes. Attackers dump this for offline cracking. Protected by SYSTEM permissions.",
+    dataType: "Binary (encrypted)",
   },
   {
-    hive: "HKLM",
-    key: "SOFTWARE\\Classes\\*\\shell",
-    description: "Context menu handlers for all file types",
-    securityRelevance: "MEDIUM",
-    notes: "Can add malicious right-click options",
+    key: "HKLM\\SECURITY",
+    description: "Security policy database",
+    beginnerNote: "Stores local security policies, LSA secrets, and cached domain credentials.",
+    securityRelevance: "LSA secrets can contain service account passwords in plaintext. High-value target.",
+    dataType: "Binary",
   },
   {
-    hive: "HKCU",
-    key: "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU",
+    key: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
+    description: "Windows logon configuration",
+    beginnerNote: "Controls what happens when you log in - like the shell (explorer.exe) and logon scripts.",
+    securityRelevance: "Shell and Userinit values are persistence locations. Should point to explorer.exe and userinit.exe.",
+    dataType: "REG_SZ",
+  },
+  {
+    key: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies",
+    description: "Group Policy settings stored in Registry",
+    beginnerNote: "Many Group Policy settings ultimately get written here. Controls what users can and can't do.",
+    securityRelevance: "Attackers may modify policies to disable security features or enable remote access.",
+    dataType: "Various",
+  },
+  {
+    key: "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU",
     description: "Recent Run dialog commands",
-    securityRelevance: "LOW",
-    notes: "Forensics: shows what user ran",
+    beginnerNote: "When you press Win+R and type a command, it's remembered here.",
+    securityRelevance: "Forensic artifact - shows what commands a user has run. Useful for investigation.",
+    dataType: "REG_SZ",
   },
   {
-    hive: "HKLM",
-    key: "SAM\\SAM\\Domains\\Account\\Users",
-    description: "Local user account information",
-    securityRelevance: "CRITICAL",
-    notes: "Contains password hashes (protected)",
+    key: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths",
+    description: "Application paths for execution without full path",
+    beginnerNote: "This is why you can type 'notepad' instead of 'C:\\Windows\\System32\\notepad.exe'.",
+    securityRelevance: "Can be abused for DLL search order hijacking or to redirect legitimate commands to malware.",
+    dataType: "REG_SZ",
   },
   {
-    hive: "HKLM",
-    key: "SECURITY\\Policy\\Secrets",
-    description: "LSA secrets (cached credentials, service passwords)",
-    securityRelevance: "CRITICAL",
-    notes: "Target for credential dumping",
+    key: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\KnownDLLs",
+    description: "DLLs that Windows loads from System32 only",
+    beginnerNote: "These DLLs are 'known' to Windows and always loaded from a secure location to prevent hijacking.",
+    securityRelevance: "Adding DLLs here protects against DLL hijacking. Check for suspicious additions.",
+    dataType: "REG_SZ",
   },
 ];
 
-// Essential commands - expanded
+// ============================================================================
+// ESSENTIAL CMD COMMANDS
+// ============================================================================
+
 const essentialCommands = [
-  { command: "dir", description: "List directory contents", example: "dir /a /s", category: "Navigation", flags: "/a (all), /s (recursive), /b (bare), /o (order)" },
-  { command: "cd", description: "Change directory", example: "cd C:\\Users", category: "Navigation", flags: "/d (change drive too)" },
-  { command: "type", description: "Display file contents", example: "type file.txt", category: "Files", flags: "Use with | more for paging" },
-  { command: "copy / xcopy", description: "Copy files and directories", example: "xcopy /s /e source dest", category: "Files", flags: "/s (subdirs), /e (empty too), /h (hidden)" },
-  { command: "move", description: "Move files or rename", example: "move file.txt newdir\\", category: "Files", flags: "/y (suppress prompt)" },
-  { command: "del / erase", description: "Delete files", example: "del /f /q file.txt", category: "Files", flags: "/f (force), /q (quiet), /s (subdirs)" },
-  { command: "mkdir / md", description: "Create directory", example: "mkdir newFolder", category: "Files", flags: "Creates parent dirs automatically" },
-  { command: "rmdir / rd", description: "Remove directory", example: "rmdir /s /q folder", category: "Files", flags: "/s (recursive), /q (quiet)" },
-  { command: "attrib", description: "View/change file attributes", example: "attrib +h file.txt", category: "Files", flags: "+/- r (read), h (hidden), s (system)" },
-  { command: "icacls", description: "Display/modify ACLs", example: "icacls file.txt /grant Users:R", category: "Security", flags: "/grant, /deny, /remove, /reset" },
-  { command: "tasklist", description: "List running processes", example: "tasklist /v /fi \"STATUS eq running\"", category: "Processes", flags: "/v (verbose), /fi (filter), /svc (services)" },
-  { command: "taskkill", description: "Terminate processes", example: "taskkill /PID 1234 /F", category: "Processes", flags: "/PID (by ID), /IM (by name), /F (force)" },
-  { command: "sc", description: "Service control", example: "sc query state= all", category: "Services", flags: "query, start, stop, config, create, delete" },
-  { command: "net user", description: "Manage user accounts", example: "net user username /domain", category: "Users", flags: "/add, /delete, /domain" },
-  { command: "net localgroup", description: "Manage local groups", example: "net localgroup Administrators", category: "Users", flags: "/add, /delete" },
-  { command: "net share", description: "View/manage network shares", example: "net share", category: "Network", flags: "/delete, /grant" },
-  { command: "netstat", description: "Network connections", example: "netstat -ano", category: "Network", flags: "-a (all), -n (numeric), -o (PID), -b (process)" },
-  { command: "ipconfig", description: "Network configuration", example: "ipconfig /all", category: "Network", flags: "/all, /release, /renew, /flushdns" },
-  { command: "ping", description: "Test connectivity", example: "ping -t google.com", category: "Network", flags: "-t (continuous), -n (count), -l (size)" },
-  { command: "tracert", description: "Trace route to host", example: "tracert google.com", category: "Network", flags: "-d (no DNS), -h (max hops)" },
-  { command: "nslookup", description: "DNS query tool", example: "nslookup domain.com 8.8.8.8", category: "Network", flags: "Interactive mode with 'server' and 'set type'" },
-  { command: "arp", description: "View/modify ARP cache", example: "arp -a", category: "Network", flags: "-a (display), -d (delete), -s (static)" },
-  { command: "route", description: "View/modify routing table", example: "route print", category: "Network", flags: "print, add, delete, change" },
-  { command: "systeminfo", description: "Detailed system information", example: "systeminfo", category: "System", flags: "/s (remote), /u (user), /p (password)" },
-  { command: "hostname", description: "Display computer name", example: "hostname", category: "System", flags: "No flags" },
-  { command: "whoami", description: "Current user and privileges", example: "whoami /priv", category: "Security", flags: "/priv, /groups, /all" },
-  { command: "gpresult", description: "Group policy results", example: "gpresult /r", category: "Security", flags: "/r (summary), /v (verbose), /z (super verbose)" },
-  { command: "wmic", description: "WMI command line", example: "wmic process list brief", category: "System", flags: "process, service, os, useraccount, etc." },
-  { command: "schtasks", description: "Scheduled tasks", example: "schtasks /query /fo LIST", category: "System", flags: "/create, /delete, /query, /run" },
-  { command: "reg", description: "Registry CLI tool", example: "reg query HKLM\\SOFTWARE", category: "System", flags: "query, add, delete, export, import" },
+  // File System Commands
+  { command: "dir", category: "File System", description: "List directory contents", example: "dir /a /s C:\\Users", flags: "/a (all files), /s (subdirs), /b (bare), /o (order)", beginnerNote: "Like 'ls' in Linux. Shows files and folders." },
+  { command: "cd", category: "File System", description: "Change directory", example: "cd C:\\Users\\Public", flags: "/d (change drive too)", beginnerNote: "Navigate between folders. Use 'cd ..' to go up one level." },
+  { command: "copy", category: "File System", description: "Copy files", example: "copy file.txt D:\\Backup\\", flags: "/y (overwrite), /v (verify)", beginnerNote: "Copies files. For folders, use xcopy or robocopy." },
+  { command: "move", category: "File System", description: "Move files or rename", example: "move old.txt new.txt", flags: "/y (overwrite)", beginnerNote: "Moves or renames files and folders." },
+  { command: "del", category: "File System", description: "Delete files", example: "del /f /q temp.txt", flags: "/f (force), /q (quiet), /s (subdirs)", beginnerNote: "Deletes files permanently - no Recycle Bin!" },
+  { command: "mkdir", category: "File System", description: "Create directory", example: "mkdir C:\\NewFolder", flags: "None", beginnerNote: "Creates a new folder. Can create nested folders in one command." },
+  { command: "rmdir", category: "File System", description: "Remove directory", example: "rmdir /s /q C:\\OldFolder", flags: "/s (recursive), /q (quiet)", beginnerNote: "Deletes folders. /s removes contents too." },
+  { command: "xcopy", category: "File System", description: "Extended copy with more options", example: "xcopy C:\\Source D:\\Dest /e /h", flags: "/e (empty dirs), /h (hidden), /s (subdirs)", beginnerNote: "More powerful than copy. Good for backup scripts." },
+  { command: "robocopy", category: "File System", description: "Robust file copy (best for large transfers)", example: "robocopy C:\\Source D:\\Dest /mir", flags: "/mir (mirror), /mt (multithread), /z (restartable)", beginnerNote: "The best file copy tool. Handles network issues and large files." },
+  { command: "attrib", category: "File System", description: "View or change file attributes", example: "attrib +h +s secret.txt", flags: "+/- r (readonly), h (hidden), s (system), a (archive)", beginnerNote: "Make files hidden or read-only. Malware often hides files this way." },
+
+  // System Information
+  { command: "systeminfo", category: "System Info", description: "Detailed system information", example: "systeminfo | findstr /i \"OS\"", flags: "/s (remote), /u (user), /p (password)", beginnerNote: "Shows everything about your system - OS version, RAM, network, hotfixes." },
+  { command: "hostname", category: "System Info", description: "Display computer name", example: "hostname", flags: "None", beginnerNote: "Shows this computer's network name." },
+  { command: "whoami", category: "System Info", description: "Current user and privileges", example: "whoami /all", flags: "/priv (privileges), /groups, /all", beginnerNote: "Shows who you're logged in as. /all shows your complete security context." },
+  { command: "ver", category: "System Info", description: "Windows version", example: "ver", flags: "None", beginnerNote: "Quick way to see Windows version number." },
+  { command: "set", category: "System Info", description: "Display environment variables", example: "set PATH", flags: "None (displays), = (sets)", beginnerNote: "Shows all environment variables or specific ones." },
+
+  // Network Commands
+  { command: "ipconfig", category: "Network", description: "IP configuration", example: "ipconfig /all", flags: "/all (detailed), /release, /renew, /flushdns", beginnerNote: "Shows your IP address, subnet, gateway. /flushdns clears DNS cache." },
+  { command: "ping", category: "Network", description: "Test network connectivity", example: "ping -t google.com", flags: "-t (continuous), -n (count), -l (size)", beginnerNote: "Tests if you can reach another computer. -t pings forever." },
+  { command: "tracert", category: "Network", description: "Trace route to destination", example: "tracert google.com", flags: "-d (no DNS), -h (max hops)", beginnerNote: "Shows every router between you and the destination." },
+  { command: "netstat", category: "Network", description: "Network statistics and connections", example: "netstat -ano", flags: "-a (all), -n (numeric), -o (PID), -b (process name)", beginnerNote: "Shows open ports and connections. -ano is the most useful combo." },
+  { command: "nslookup", category: "Network", description: "DNS lookup", example: "nslookup google.com 8.8.8.8", flags: "Interactive mode available", beginnerNote: "Looks up IP addresses for domain names using DNS." },
+  { command: "arp", category: "Network", description: "ARP cache (IP to MAC mappings)", example: "arp -a", flags: "-a (display), -d (delete)", beginnerNote: "Shows which MAC addresses are associated with IP addresses." },
+  { command: "netsh", category: "Network", description: "Network configuration utility", example: "netsh wlan show profiles", flags: "Many subcommands", beginnerNote: "Powerful network config tool. Can show saved WiFi passwords!" },
+  { command: "route", category: "Network", description: "View/modify routing table", example: "route print", flags: "print, add, delete, change", beginnerNote: "Shows how network traffic is routed. Used for VPN troubleshooting." },
+
+  // Process & Task Management
+  { command: "tasklist", category: "Process", description: "List running processes", example: "tasklist /v", flags: "/v (verbose), /svc (services), /m (modules)", beginnerNote: "Like Task Manager in command form. Shows all running programs." },
+  { command: "taskkill", category: "Process", description: "Terminate processes", example: "taskkill /f /im notepad.exe", flags: "/f (force), /im (by name), /pid (by ID)", beginnerNote: "Forcefully closes programs. /f is needed for stubborn processes." },
+  { command: "sc", category: "Process", description: "Service control", example: "sc query wuauserv", flags: "query, start, stop, config, create, delete", beginnerNote: "Manages Windows services. More powerful than the Services GUI." },
+  { command: "wmic", category: "Process", description: "WMI command-line (deprecated but useful)", example: "wmic process list brief", flags: "Many classes: process, service, os, etc.", beginnerNote: "Query Windows Management Instrumentation. Being replaced by PowerShell." },
+
+  // User & Security
+  { command: "net user", category: "User", description: "User account management", example: "net user administrator", flags: "/add, /delete, /active:yes|no", beginnerNote: "View and manage local user accounts." },
+  { command: "net localgroup", category: "User", description: "Local group management", example: "net localgroup administrators", flags: "/add, /delete", beginnerNote: "View and manage local groups like Administrators." },
+  { command: "gpresult", category: "Security", description: "Group Policy results", example: "gpresult /r", flags: "/r (summary), /v (verbose), /h (HTML)", beginnerNote: "Shows which Group Policies apply to you or the computer." },
 ];
 
-// PowerShell equivalents - expanded
+// ============================================================================
+// POWERSHELL EQUIVALENTS
+// ============================================================================
+
 const powershellCommands = [
-  { cmd: "dir", ps: "Get-ChildItem", alias: "gci, ls, dir", usage: "Get-ChildItem -Path C:\\ -Recurse -Force" },
-  { cmd: "type", ps: "Get-Content", alias: "gc, cat, type", usage: "Get-Content file.txt -Tail 10" },
-  { cmd: "copy", ps: "Copy-Item", alias: "cp, copy", usage: "Copy-Item -Path source -Destination dest -Recurse" },
-  { cmd: "move", ps: "Move-Item", alias: "mv, move", usage: "Move-Item -Path file.txt -Destination newdir\\" },
-  { cmd: "del", ps: "Remove-Item", alias: "rm, del", usage: "Remove-Item -Path file.txt -Force" },
-  { cmd: "mkdir", ps: "New-Item -ItemType Directory", alias: "md, mkdir", usage: "New-Item -Path newdir -ItemType Directory" },
-  { cmd: "tasklist", ps: "Get-Process", alias: "gps, ps", usage: "Get-Process | Where-Object {$_.CPU -gt 10}" },
-  { cmd: "taskkill", ps: "Stop-Process", alias: "kill, spps", usage: "Stop-Process -Id 1234 -Force" },
-  { cmd: "net user", ps: "Get-LocalUser", alias: "-", usage: "Get-LocalUser | Select-Object Name, Enabled" },
-  { cmd: "net localgroup", ps: "Get-LocalGroupMember", alias: "-", usage: "Get-LocalGroupMember -Group 'Administrators'" },
-  { cmd: "sc query", ps: "Get-Service", alias: "gsv", usage: "Get-Service | Where-Object {$_.Status -eq 'Running'}" },
-  { cmd: "ipconfig", ps: "Get-NetIPConfiguration", alias: "-", usage: "Get-NetIPConfiguration | Select InterfaceAlias, IPv4Address" },
-  { cmd: "netstat", ps: "Get-NetTCPConnection", alias: "-", usage: "Get-NetTCPConnection -State Established" },
-  { cmd: "systeminfo", ps: "Get-ComputerInfo", alias: "-", usage: "Get-ComputerInfo | Select OsName, OsVersion" },
-  { cmd: "reg query", ps: "Get-ItemProperty", alias: "-", usage: "Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft'" },
-  { cmd: "schtasks", ps: "Get-ScheduledTask", alias: "-", usage: "Get-ScheduledTask | Where-Object {$_.State -eq 'Ready'}" },
+  { cmdCommand: "dir", psCommand: "Get-ChildItem", alias: "ls, dir, gci", description: "List files and directories", example: "Get-ChildItem -Recurse -Force" },
+  { cmdCommand: "cd", psCommand: "Set-Location", alias: "cd, sl, chdir", description: "Change directory", example: "Set-Location C:\\Users" },
+  { cmdCommand: "copy", psCommand: "Copy-Item", alias: "cp, copy, cpi", description: "Copy files", example: "Copy-Item file.txt -Destination D:\\Backup" },
+  { cmdCommand: "move", psCommand: "Move-Item", alias: "mv, move, mi", description: "Move files", example: "Move-Item old.txt new.txt" },
+  { cmdCommand: "del", psCommand: "Remove-Item", alias: "rm, del, ri", description: "Delete files", example: "Remove-Item -Recurse -Force C:\\Temp\\*" },
+  { cmdCommand: "mkdir", psCommand: "New-Item -ItemType Directory", alias: "mkdir, md", description: "Create directory", example: "New-Item -ItemType Directory -Path C:\\NewFolder" },
+  { cmdCommand: "type", psCommand: "Get-Content", alias: "cat, type, gc", description: "Display file contents", example: "Get-Content log.txt -Tail 50" },
+  { cmdCommand: "tasklist", psCommand: "Get-Process", alias: "ps, gps", description: "List processes", example: "Get-Process | Sort-Object CPU -Descending | Select -First 10" },
+  { cmdCommand: "taskkill", psCommand: "Stop-Process", alias: "kill, spps", description: "Kill process", example: "Stop-Process -Name notepad -Force" },
+  { cmdCommand: "sc query", psCommand: "Get-Service", alias: "gsv", description: "List services", example: "Get-Service | Where-Object Status -eq Running" },
+  { cmdCommand: "ipconfig", psCommand: "Get-NetIPConfiguration", alias: "gip", description: "IP configuration", example: "Get-NetIPConfiguration | Select InterfaceAlias, IPv4Address" },
+  { cmdCommand: "netstat", psCommand: "Get-NetTCPConnection", alias: "None", description: "Network connections", example: "Get-NetTCPConnection -State Established" },
+  { cmdCommand: "net user", psCommand: "Get-LocalUser", alias: "None", description: "List users", example: "Get-LocalUser | Select Name, Enabled, LastLogon" },
+  { cmdCommand: "net localgroup", psCommand: "Get-LocalGroup", alias: "None", description: "List groups", example: "Get-LocalGroupMember -Group Administrators" },
+  { cmdCommand: "systeminfo", psCommand: "Get-ComputerInfo", alias: "None", description: "System information", example: "Get-ComputerInfo | Select OsName, OsVersion, CsName" },
 ];
 
-// Important Windows processes
+// ============================================================================
+// IMPORTANT WINDOWS PROCESSES
+// ============================================================================
+
 const importantProcesses = [
-  { process: "System", pid: "4", parent: "None", description: "Kernel and driver threads", notes: "Always PID 4, if not - suspicious" },
-  { process: "smss.exe", pid: "Variable", parent: "System", description: "Session Manager", notes: "Should only be 1-2 instances" },
-  { process: "csrss.exe", pid: "Variable", parent: "smss.exe", description: "Client Server Runtime", notes: "One per session (0 and 1+)" },
-  { process: "wininit.exe", pid: "Variable", parent: "smss.exe", description: "Windows Initialization", notes: "Session 0 only" },
-  { process: "winlogon.exe", pid: "Variable", parent: "smss.exe", description: "Logon handler", notes: "One per interactive session" },
-  { process: "services.exe", pid: "Variable", parent: "wininit.exe", description: "Service Control Manager", notes: "Parent of all services" },
-  { process: "lsass.exe", pid: "Variable", parent: "wininit.exe", description: "Local Security Authority", notes: "Handles authentication, credential storage" },
-  { process: "svchost.exe", pid: "Variable", parent: "services.exe", description: "Service host process", notes: "Multiple instances, check -k parameter" },
-  { process: "explorer.exe", pid: "Variable", parent: "userinit.exe", description: "Windows Shell/Desktop", notes: "Parent of user-launched programs" },
-  { process: "RuntimeBroker.exe", pid: "Variable", parent: "svchost.exe", description: "UWP app permissions", notes: "Multiple instances OK" },
+  {
+    name: "System (PID 4)",
+    parent: "None (kernel)",
+    description: "The Windows kernel's user-mode representation",
+    path: "N/A - kernel process",
+    securityNote: "Always PID 4. If you see another 'System' process, it's suspicious.",
+    normalBehavior: "Runs from boot, never terminates, no visible window",
+  },
+  {
+    name: "smss.exe",
+    parent: "System",
+    description: "Session Manager Subsystem - first user-mode process",
+    path: "C:\\Windows\\System32\\smss.exe",
+    securityNote: "Should only run from System32. Creates csrss.exe and wininit.exe.",
+    normalBehavior: "Starts early in boot, minimal resource usage",
+  },
+  {
+    name: "csrss.exe",
+    parent: "smss.exe",
+    description: "Client/Server Runtime Subsystem - essential Windows subsystem",
+    path: "C:\\Windows\\System32\\csrss.exe",
+    securityNote: "Multiple instances normal (one per session). MUST be in System32. High-value impersonation target.",
+    normalBehavior: "Runs for each user session, handles console windows and threads",
+  },
+  {
+    name: "wininit.exe",
+    parent: "smss.exe",
+    description: "Windows Initialization - starts critical system processes",
+    path: "C:\\Windows\\System32\\wininit.exe",
+    securityNote: "Only one instance, only in Session 0. Spawns services.exe and lsass.exe.",
+    normalBehavior: "Runs once at boot in Session 0",
+  },
+  {
+    name: "services.exe",
+    parent: "wininit.exe",
+    description: "Service Control Manager - manages all Windows services",
+    path: "C:\\Windows\\System32\\services.exe",
+    securityNote: "Only one instance. Parent of all svchost.exe processes. Should never terminate.",
+    normalBehavior: "Runs at boot, manages service lifecycle",
+  },
+  {
+    name: "lsass.exe",
+    parent: "wininit.exe",
+    description: "Local Security Authority Subsystem - handles authentication",
+    path: "C:\\Windows\\System32\\lsass.exe",
+    securityNote: "CRITICAL - contains credentials in memory. Target of Mimikatz. Only one instance from wininit.exe.",
+    normalBehavior: "High memory usage, handles all login events",
+  },
+  {
+    name: "svchost.exe",
+    parent: "services.exe",
+    description: "Service Host - hosts multiple Windows services",
+    path: "C:\\Windows\\System32\\svchost.exe",
+    securityNote: "Multiple instances NORMAL. Always from System32, always parent is services.exe. Run with -k flag.",
+    normalBehavior: "Many instances with -k groupname. Use tasklist /svc to see hosted services.",
+  },
+  {
+    name: "explorer.exe",
+    parent: "userinit.exe",
+    description: "Windows Shell - desktop, taskbar, Start menu",
+    path: "C:\\Windows\\explorer.exe",
+    securityNote: "One per user session. Runs in user context. Common injection target.",
+    normalBehavior: "Starts at login, runs continuously, shows desktop",
+  },
+  {
+    name: "winlogon.exe",
+    parent: "smss.exe",
+    description: "Windows Logon - handles secure attention sequence (Ctrl+Alt+Del)",
+    path: "C:\\Windows\\System32\\winlogon.exe",
+    securityNote: "One per session. Handles secure logon. Spawns LogonUI.exe.",
+    normalBehavior: "Runs per interactive session",
+  },
+  {
+    name: "dwm.exe",
+    parent: "svchost.exe",
+    description: "Desktop Window Manager - desktop composition and rendering",
+    path: "C:\\Windows\\System32\\dwm.exe",
+    securityNote: "One instance per session. Runs as DWM user account, not SYSTEM.",
+    normalBehavior: "Handles all window rendering and effects",
+  },
 ];
 
-// Common Windows event IDs for security
+// ============================================================================
+// WINDOWS SECURITY EVENT IDs
+// ============================================================================
+
 const securityEventIds = [
-  { eventId: "4624", description: "Successful logon", category: "Authentication", notes: "Check logon type (2=interactive, 3=network, 10=remote)" },
-  { eventId: "4625", description: "Failed logon", category: "Authentication", notes: "Watch for brute force patterns" },
-  { eventId: "4648", description: "Explicit credential logon", category: "Authentication", notes: "runas or network auth with different creds" },
-  { eventId: "4672", description: "Special privileges assigned", category: "Privileges", notes: "Admin/sensitive logon detected" },
-  { eventId: "4688", description: "Process creation", category: "Process", notes: "Requires audit policy, shows command line" },
-  { eventId: "4689", description: "Process termination", category: "Process", notes: "Correlate with 4688" },
-  { eventId: "4698", description: "Scheduled task created", category: "Persistence", notes: "Common persistence mechanism" },
-  { eventId: "4720", description: "User account created", category: "Account", notes: "Attackers may create accounts" },
-  { eventId: "4732", description: "User added to local group", category: "Account", notes: "Watch for Administrators group" },
-  { eventId: "7045", description: "Service installed", category: "Persistence", notes: "New service = potential persistence" },
-  { eventId: "1102", description: "Audit log cleared", category: "Defense Evasion", notes: "Very suspicious if unexpected" },
+  { eventId: "4624", category: "Logon", description: "Successful account logon", severity: "Info", investigation: "Normal, but check for unusual times, logon types, or source IPs." },
+  { eventId: "4625", category: "Logon", description: "Failed account logon", severity: "Warning", investigation: "Multiple failures may indicate brute force. Check source IP and target account." },
+  { eventId: "4634", category: "Logon", description: "Account logoff", severity: "Info", investigation: "Normal event. Correlate with 4624 for session duration analysis." },
+  { eventId: "4648", category: "Logon", description: "Logon with explicit credentials", severity: "Medium", investigation: "Someone used runas or mapped drive with different creds. Common for admins." },
+  { eventId: "4672", category: "Privilege", description: "Special privileges assigned at logon", severity: "Info", investigation: "Admin logon. Track who gets elevated privileges." },
+  { eventId: "4688", category: "Process", description: "New process created", severity: "Info", investigation: "Essential for tracking execution. Enable command line logging!" },
+  { eventId: "4689", category: "Process", description: "Process terminated", severity: "Info", investigation: "Correlate with 4688 for process lifetime analysis." },
+  { eventId: "4697", category: "Service", description: "Service installed", severity: "Medium", investigation: "New service = potential persistence. Investigate unfamiliar services." },
+  { eventId: "4698", category: "Task", description: "Scheduled task created", severity: "Medium", investigation: "Persistence mechanism. Check task details for suspicious commands." },
+  { eventId: "4699", category: "Task", description: "Scheduled task deleted", severity: "Medium", investigation: "May indicate attacker cleanup or legitimate maintenance." },
+  { eventId: "4720", category: "Account", description: "User account created", severity: "High", investigation: "New accounts need justification. Attackers create backdoor accounts." },
+  { eventId: "4722", category: "Account", description: "User account enabled", severity: "Medium", investigation: "Disabled account enabled. Check if authorized." },
+  { eventId: "4724", category: "Account", description: "Password reset attempt", severity: "Medium", investigation: "Verify this was authorized. May indicate account takeover." },
+  { eventId: "4728", category: "Group", description: "Member added to security-enabled global group", severity: "Medium", investigation: "Track group membership changes, especially to privileged groups." },
+  { eventId: "4732", category: "Group", description: "Member added to local group", severity: "High", investigation: "Adding users to Administrators = major event." },
+  { eventId: "4768", category: "Kerberos", description: "Kerberos TGT requested", severity: "Info", investigation: "Normal domain auth. Anomalies may indicate Pass-the-Ticket." },
+  { eventId: "4769", category: "Kerberos", description: "Kerberos service ticket requested", severity: "Info", investigation: "Watch for Kerberoasting - many requests for service tickets." },
+  { eventId: "4776", category: "Credential", description: "NTLM authentication attempt", severity: "Info", investigation: "NTLM should be minimized. May indicate downgrade attack." },
+  { eventId: "1102", category: "Audit", description: "Audit log cleared", severity: "Critical", investigation: "RED FLAG - attackers clear logs to cover tracks. Investigate immediately." },
+  { eventId: "7045", category: "System", description: "Service installed (System log)", severity: "Medium", investigation: "Alternative to 4697. New services need investigation." },
 ];
 
-// Keyboard shortcuts
+// ============================================================================
+// KEYBOARD SHORTCUTS
+// ============================================================================
+
 const keyboardShortcuts = [
-  { shortcut: "Win + R", action: "Open Run dialog", category: "System" },
-  { shortcut: "Win + E", action: "Open File Explorer", category: "Navigation" },
-  { shortcut: "Win + X", action: "Power User menu (admin tools)", category: "System" },
-  { shortcut: "Win + I", action: "Open Settings", category: "System" },
-  { shortcut: "Ctrl + Shift + Esc", action: "Open Task Manager directly", category: "System" },
-  { shortcut: "Win + Pause", action: "System Properties", category: "System" },
-  { shortcut: "Win + L", action: "Lock workstation", category: "Security" },
-  { shortcut: "Alt + F4", action: "Close current window", category: "Navigation" },
-  { shortcut: "Ctrl + Shift + Enter", action: "Run as Administrator (from search)", category: "Security" },
-  { shortcut: "Win + Tab", action: "Task View / Virtual Desktops", category: "Navigation" },
-  { shortcut: "Win + D", action: "Show/Hide Desktop", category: "Navigation" },
-  { shortcut: "Win + S", action: "Open Search", category: "System" },
-  { shortcut: "Win + V", action: "Clipboard History", category: "System" },
-  { shortcut: "Win + Shift + S", action: "Screenshot (Snip & Sketch)", category: "System" },
-  { shortcut: "Ctrl + Alt + Del", action: "Security Options Screen", category: "Security" },
-  { shortcut: "F2", action: "Rename selected item", category: "Navigation" },
+  { shortcut: "Win + R", action: "Open Run dialog", category: "System", tip: "Quick way to launch programs and commands" },
+  { shortcut: "Win + X", action: "Power User menu (WinX menu)", category: "System", tip: "Fast access to admin tools, Event Viewer, etc." },
+  { shortcut: "Win + I", action: "Open Settings", category: "System", tip: "Modern Windows settings app" },
+  { shortcut: "Win + E", action: "Open File Explorer", category: "Navigation", tip: "Quickly browse files and folders" },
+  { shortcut: "Win + L", action: "Lock workstation", category: "Security", tip: "Always lock when leaving your desk!" },
+  { shortcut: "Ctrl + Shift + Esc", action: "Open Task Manager directly", category: "System", tip: "Faster than Ctrl+Alt+Del menu" },
+  { shortcut: "Win + Pause/Break", action: "Open System Properties", category: "System", tip: "Quick access to computer name and domain info" },
+  { shortcut: "Alt + F4", action: "Close current window/Shutdown dialog", category: "System", tip: "On desktop, opens shutdown dialog" },
+  { shortcut: "Win + Tab", action: "Task View (virtual desktops)", category: "Navigation", tip: "See all windows and create virtual desktops" },
+  { shortcut: "Win + D", action: "Show/hide desktop", category: "Navigation", tip: "Minimize all windows to see desktop" },
+  { shortcut: "Win + . (period)", action: "Emoji picker", category: "Input", tip: "Insert emojis anywhere" },
+  { shortcut: "Win + V", action: "Clipboard history", category: "Input", tip: "Access previously copied items" },
+  { shortcut: "Win + Shift + S", action: "Screenshot snipping tool", category: "Capture", tip: "Modern screenshot tool with area selection" },
+  { shortcut: "Win + PrtScn", action: "Screenshot to Pictures folder", category: "Capture", tip: "Saves full screenshot automatically" },
+  { shortcut: "Ctrl + Shift + Enter", action: "Run as Administrator", category: "Security", tip: "Launch selected item with elevated privileges" },
+  { shortcut: "F2", action: "Rename selected item", category: "File Operations", tip: "Quick rename in Explorer" },
+  { shortcut: "Shift + Delete", action: "Permanently delete (skip Recycle Bin)", category: "File Operations", tip: "Be careful - no recovery!" },
+  { shortcut: "Alt + Tab", action: "Switch between windows", category: "Navigation", tip: "Hold Alt, tap Tab to cycle" },
+  { shortcut: "Win + Arrow Keys", action: "Snap windows", category: "Navigation", tip: "Snap windows to sides or corners" },
+  { shortcut: "Ctrl + Z / Ctrl + Y", action: "Undo / Redo", category: "Editing", tip: "Works in Explorer for file operations too" },
 ];
 
-// Windows versions for context
+// ============================================================================
+// WINDOWS VERSION HISTORY
+// ============================================================================
+
 const windowsVersions = [
-  { version: "Windows 11", release: "2021", kernel: "10.0.22000+", notes: "Latest version, TPM 2.0 required, new UI" },
-  { version: "Windows 10", release: "2015", kernel: "10.0.10240+", notes: "Most common enterprise version" },
-  { version: "Windows 8.1", release: "2013", kernel: "6.3", notes: "Extended support ended Jan 2023" },
-  { version: "Windows 7", release: "2009", kernel: "6.1", notes: "End of life Jan 2020, still seen in legacy" },
-  { version: "Windows Server 2022", release: "2021", kernel: "10.0.20348", notes: "Current server release" },
-  { version: "Windows Server 2019", release: "2018", kernel: "10.0.17763", notes: "Common in enterprises" },
-  { version: "Windows Server 2016", release: "2016", kernel: "10.0.14393", notes: "Widely deployed" },
+  { version: "Windows 11", buildRange: "22000+", releaseYear: "2021", support: "Active", keyFeatures: "Centered taskbar, Snap layouts, Android apps, TPM 2.0 required" },
+  { version: "Windows 10", buildRange: "10240-19045", releaseYear: "2015", support: "Until Oct 2025", keyFeatures: "Start menu return, Cortana, Edge, Windows as a Service" },
+  { version: "Windows 8.1", buildRange: "9600", releaseYear: "2013", support: "Ended Jan 2023", keyFeatures: "Start button return, improved search" },
+  { version: "Windows 8", buildRange: "9200", releaseYear: "2012", support: "Ended", keyFeatures: "Metro UI, no Start menu, touch focus" },
+  { version: "Windows 7", buildRange: "7600-7601", releaseYear: "2009", support: "Ended Jan 2020", keyFeatures: "Aero, taskbar improvements, libraries" },
+  { version: "Windows Vista", buildRange: "6000-6002", releaseYear: "2006", support: "Ended", keyFeatures: "UAC introduced, Aero Glass, sidebar" },
+  { version: "Windows XP", buildRange: "2600", releaseYear: "2001", support: "Ended Apr 2014", keyFeatures: "Luna theme, fast boot, long lifecycle" },
+  { version: "Windows 2000", buildRange: "2195", releaseYear: "2000", support: "Ended", keyFeatures: "Active Directory, NTFS 3.0, Plug and Play" },
+  { version: "Windows Server 2022", buildRange: "20348", releaseYear: "2021", support: "Active", keyFeatures: "Secured-core, Azure integration, containers" },
+  { version: "Windows Server 2019", buildRange: "17763", releaseYear: "2018", support: "Active", keyFeatures: "Windows Admin Center, Kubernetes support" },
+  { version: "Windows Server 2016", buildRange: "14393", releaseYear: "2016", support: "Active", keyFeatures: "Nano Server, containers, Hyper-V improvements" },
 ];
 
-// Windows boot process
+// ============================================================================
+// WINDOWS BOOT PROCESS
+// ============================================================================
+
 const bootProcess = [
-  { step: "1", name: "UEFI/BIOS", description: "Hardware initialization, POST, loads bootloader from EFI System Partition or MBR" },
-  { step: "2", name: "Boot Manager", description: "bootmgfw.efi (UEFI) or bootmgr (BIOS) loads Windows Boot Configuration Data (BCD)" },
-  { step: "3", name: "Windows Loader", description: "winload.efi/winload.exe loads kernel (ntoskrnl.exe), HAL, and boot drivers" },
-  { step: "4", name: "Kernel Init", description: "ntoskrnl.exe initializes, loads SYSTEM registry hive, starts Session Manager (smss.exe)" },
-  { step: "5", name: "Session Manager", description: "smss.exe creates environment variables, starts csrss.exe and winlogon.exe" },
-  { step: "6", name: "Winlogon", description: "winlogon.exe handles logon, loads user profile, starts explorer.exe" },
+  {
+    step: 1,
+    name: "Power-On Self Test (POST)",
+    description: "BIOS/UEFI firmware initializes hardware and runs diagnostics",
+    technical: "CPU, RAM, storage devices tested. Boot device identified.",
+    beginnerNote: "This is what happens in the few seconds before you see anything on screen.",
+  },
+  {
+    step: 2,
+    name: "UEFI/BIOS Boot",
+    description: "Firmware locates and loads the bootloader from the boot device",
+    technical: "UEFI looks for EFI\\Microsoft\\Boot\\bootmgfw.efi on EFI System Partition.",
+    beginnerNote: "The firmware hands off control to Windows Boot Manager.",
+  },
+  {
+    step: 3,
+    name: "Windows Boot Manager",
+    description: "bootmgr.efi reads BCD (Boot Configuration Data) and displays boot menu",
+    technical: "BCD is the modern replacement for boot.ini. Stored in \\EFI\\Microsoft\\Boot\\BCD.",
+    beginnerNote: "If you dual-boot, this is where you choose which OS to start.",
+  },
+  {
+    step: 4,
+    name: "Windows Loader",
+    description: "winload.efi loads the kernel (ntoskrnl.exe), HAL, and boot-start drivers",
+    technical: "Verifies digital signatures, loads Registry SYSTEM hive, initializes drivers.",
+    beginnerNote: "The Windows logo appears here. Critical drivers are loaded.",
+  },
+  {
+    step: 5,
+    name: "Kernel Initialization",
+    description: "ntoskrnl.exe initializes executive subsystems and starts Session Manager",
+    technical: "Executive components: Object Manager, Security Reference Monitor, I/O Manager, etc.",
+    beginnerNote: "Windows is now running. The kernel sets up the Windows environment.",
+  },
+  {
+    step: 6,
+    name: "Session Manager (smss.exe)",
+    description: "First user-mode process - initializes sessions and starts subsystems",
+    technical: "Creates environment variables, starts csrss.exe and wininit.exe (Session 0).",
+    beginnerNote: "Session Manager prepares Windows for user logins.",
+  },
+  {
+    step: 7,
+    name: "Service Control Manager",
+    description: "services.exe starts all auto-start Windows services",
+    technical: "Reads HKLM\\SYSTEM\\CurrentControlSet\\Services, starts services by dependency order.",
+    beginnerNote: "All those background services (antivirus, network, etc.) start here.",
+  },
+  {
+    step: 8,
+    name: "Winlogon & User Session",
+    description: "winlogon.exe handles secure logon, starts LogonUI for credentials",
+    technical: "Invokes credential providers, authenticates via LSASS, starts userinit.exe then explorer.exe.",
+    beginnerNote: "You see the login screen. After you log in, your desktop appears.",
+  },
 ];
 
-// Common Windows tools
+// ============================================================================
+// WINDOWS TOOLS (BUILT-IN AND SYSINTERNALS)
+// ============================================================================
+
 const windowsTools = [
-  { tool: "Task Manager", command: "taskmgr.exe", description: "Process, performance, and service monitoring", category: "Built-in" },
-  { tool: "Event Viewer", command: "eventvwr.msc", description: "Windows logs and event analysis", category: "Built-in" },
-  { tool: "Registry Editor", command: "regedit.exe", description: "Edit Windows Registry", category: "Built-in" },
-  { tool: "Services Console", command: "services.msc", description: "Manage Windows services", category: "Built-in" },
-  { tool: "Computer Management", command: "compmgmt.msc", description: "Unified admin console", category: "Built-in" },
-  { tool: "Device Manager", command: "devmgmt.msc", description: "Hardware and drivers", category: "Built-in" },
-  { tool: "Disk Management", command: "diskmgmt.msc", description: "Partition and volume management", category: "Built-in" },
-  { tool: "Group Policy Editor", command: "gpedit.msc", description: "Local policy configuration (Pro/Enterprise)", category: "Built-in" },
-  { tool: "Process Explorer", command: "procexp.exe", description: "Advanced process management", category: "Sysinternals" },
-  { tool: "Process Monitor", command: "procmon.exe", description: "Real-time file/registry/process monitoring", category: "Sysinternals" },
-  { tool: "Autoruns", command: "autoruns.exe", description: "Shows all auto-start programs", category: "Sysinternals" },
-  { tool: "TCPView", command: "tcpview.exe", description: "Active network connections", category: "Sysinternals" },
-  { tool: "PsExec", command: "psexec.exe", description: "Remote command execution", category: "Sysinternals" },
-  { tool: "Sigcheck", command: "sigcheck.exe", description: "Verify digital signatures", category: "Sysinternals" },
+  // Built-in Tools
+  { name: "Task Manager", path: "taskmgr.exe", category: "Built-in", description: "Process, performance, startup, services management", securityUse: "Identify suspicious processes, check resource usage" },
+  { name: "Event Viewer", path: "eventvwr.msc", category: "Built-in", description: "View Windows event logs", securityUse: "Investigate security events, track user activity" },
+  { name: "Services", path: "services.msc", category: "Built-in", description: "Manage Windows services", securityUse: "Identify suspicious services, check startup types" },
+  { name: "Registry Editor", path: "regedit.exe", category: "Built-in", description: "Edit Windows Registry", securityUse: "Check persistence locations, investigate malware" },
+  { name: "Computer Management", path: "compmgmt.msc", category: "Built-in", description: "All-in-one system management", securityUse: "User management, disk, services, event logs" },
+  { name: "Device Manager", path: "devmgmt.msc", category: "Built-in", description: "Hardware and driver management", securityUse: "Check for suspicious devices or drivers" },
+  { name: "Group Policy Editor", path: "gpedit.msc", category: "Built-in", description: "Local group policy configuration", securityUse: "Configure security policies, audit settings" },
+  { name: "Resource Monitor", path: "resmon.exe", category: "Built-in", description: "Detailed resource usage monitoring", securityUse: "Track network connections per process" },
+  { name: "Windows Defender", path: "Windows Security", category: "Built-in", description: "Built-in antimalware", securityUse: "Scan for malware, check protection status" },
+  { name: "Disk Management", path: "diskmgmt.msc", category: "Built-in", description: "Partition and volume management", securityUse: "Check for hidden partitions" },
+
+  // Sysinternals Tools
+  { name: "Process Explorer", path: "procexp.exe", category: "Sysinternals", description: "Advanced Task Manager replacement", securityUse: "Deep process analysis, DLL inspection, VirusTotal integration" },
+  { name: "Process Monitor", path: "procmon.exe", category: "Sysinternals", description: "Real-time file, registry, process monitoring", securityUse: "Track malware behavior, troubleshoot issues" },
+  { name: "Autoruns", path: "autoruns.exe", category: "Sysinternals", description: "Comprehensive startup program viewer", securityUse: "Find ALL persistence mechanisms, detect malware" },
+  { name: "TCPView", path: "tcpview.exe", category: "Sysinternals", description: "Real-time network connections viewer", securityUse: "Identify suspicious network connections" },
+  { name: "Handle", path: "handle.exe", category: "Sysinternals", description: "View open handles by process", securityUse: "Find what's locking files, investigate processes" },
+  { name: "PsExec", path: "psexec.exe", category: "Sysinternals", description: "Execute processes remotely", securityUse: "Remote administration (also used by attackers!)" },
+  { name: "AccessChk", path: "accesschk.exe", category: "Sysinternals", description: "View permissions on objects", securityUse: "Find misconfigured permissions, privilege escalation paths" },
+  { name: "Sigcheck", path: "sigcheck.exe", category: "Sysinternals", description: "Verify file signatures, VirusTotal submission", securityUse: "Check if files are signed, scan suspicious files" },
+  { name: "Strings", path: "strings.exe", category: "Sysinternals", description: "Extract readable strings from binaries", securityUse: "Basic malware analysis, find embedded data" },
+  { name: "ListDLLs", path: "listdlls.exe", category: "Sysinternals", description: "List DLLs loaded by processes", securityUse: "Detect DLL injection, find suspicious DLLs" },
 ];
 
-// Environment variables
+// ============================================================================
+// ENVIRONMENT VARIABLES
+// ============================================================================
+
 const environmentVariables = [
-  { variable: "%SYSTEMROOT%", example: "C:\\Windows", description: "Windows installation directory" },
-  { variable: "%SYSTEMDRIVE%", example: "C:", description: "Drive containing Windows" },
-  { variable: "%USERPROFILE%", example: "C:\\Users\\username", description: "Current user's profile folder" },
-  { variable: "%APPDATA%", example: "C:\\Users\\username\\AppData\\Roaming", description: "Roaming application data" },
-  { variable: "%LOCALAPPDATA%", example: "C:\\Users\\username\\AppData\\Local", description: "Local application data" },
-  { variable: "%TEMP%", example: "C:\\Users\\username\\AppData\\Local\\Temp", description: "Temporary files location" },
-  { variable: "%PATH%", example: "System path directories", description: "Executable search paths" },
-  { variable: "%COMPUTERNAME%", example: "DESKTOP-ABC123", description: "Machine hostname" },
-  { variable: "%USERNAME%", example: "john.doe", description: "Current logged-in user" },
-  { variable: "%USERDOMAIN%", example: "CONTOSO", description: "User's domain name" },
-  { variable: "%PROGRAMFILES%", example: "C:\\Program Files", description: "64-bit program installations" },
-  { variable: "%PROGRAMFILES(X86)%", example: "C:\\Program Files (x86)", description: "32-bit program installations" },
-  { variable: "%WINDIR%", example: "C:\\Windows", description: "Windows directory (alias for SYSTEMROOT)" },
-  { variable: "%HOMEDRIVE%", example: "C:", description: "Drive letter of user's home" },
-  { variable: "%HOMEPATH%", example: "\\Users\\username", description: "Path to user's home from drive root" },
-  { variable: "%PUBLIC%", example: "C:\\Users\\Public", description: "Public user profile folder" },
-  { variable: "%ALLUSERSPROFILE%", example: "C:\\ProgramData", description: "All users profile data" },
-  { variable: "%LOGONSERVER%", example: "\\\\DC01", description: "Domain controller that authenticated user" },
+  { variable: "%USERPROFILE%", example: "C:\\Users\\John", description: "Current user's profile folder", usage: "Access user-specific folders" },
+  { variable: "%APPDATA%", example: "C:\\Users\\John\\AppData\\Roaming", description: "Application data that roams with user", usage: "User settings, persistence location" },
+  { variable: "%LOCALAPPDATA%", example: "C:\\Users\\John\\AppData\\Local", description: "Local application data", usage: "Cached data, local settings" },
+  { variable: "%TEMP% / %TMP%", example: "C:\\Users\\John\\AppData\\Local\\Temp", description: "Temporary files directory", usage: "Temporary file storage, common malware location" },
+  { variable: "%SYSTEMROOT%", example: "C:\\Windows", description: "Windows installation directory", usage: "System files, Windows folder" },
+  { variable: "%SYSTEMDRIVE%", example: "C:", description: "Drive where Windows is installed", usage: "System drive letter" },
+  { variable: "%PROGRAMFILES%", example: "C:\\Program Files", description: "64-bit program installation folder", usage: "Default program location" },
+  { variable: "%PROGRAMFILES(X86)%", example: "C:\\Program Files (x86)", description: "32-bit program folder on 64-bit Windows", usage: "Legacy 32-bit programs" },
+  { variable: "%PROGRAMDATA%", example: "C:\\ProgramData", description: "Shared application data", usage: "All-user application data" },
+  { variable: "%PATH%", example: "C:\\Windows\\System32;C:\\Windows;...", description: "Executable search path", usage: "Determines where Windows looks for programs" },
+  { variable: "%COMPUTERNAME%", example: "DESKTOP-ABC123", description: "Computer's network name", usage: "Machine identification" },
+  { variable: "%USERNAME%", example: "John", description: "Current user's name", usage: "Identify logged-in user" },
+  { variable: "%USERDOMAIN%", example: "WORKGROUP or DOMAIN", description: "User's domain or workgroup", usage: "Domain identification" },
+  { variable: "%HOMEDRIVE%", example: "C:", description: "Drive containing user profile", usage: "Profile location" },
+  { variable: "%HOMEPATH%", example: "\\Users\\John", description: "Path to user profile (without drive)", usage: "Profile path component" },
 ];
 
-// Windows Security Features
+// ============================================================================
+// WINDOWS SECURITY FEATURES
+// ============================================================================
+
 const windowsSecurityFeatures = [
   {
     name: "Windows Defender Antivirus",
-    icon: <ShieldIcon />,
-    color: "#10b981",
-    description: "Built-in real-time malware protection",
-    keyFeatures: [
-      "Real-time protection against malware, viruses, and spyware",
-      "Cloud-delivered protection for faster threat detection",
-      "Automatic sample submission for new threats",
-      "Behavior monitoring and suspicious activity blocking",
-      "Network inspection for exploit-based attacks",
-      "Controlled folder access (ransomware protection)",
-      "Attack Surface Reduction (ASR) rules",
-    ],
-    commands: [
-      { cmd: "Get-MpComputerStatus", desc: "Check Defender status" },
-      { cmd: "Update-MpSignature", desc: "Update definitions" },
-      { cmd: "Start-MpScan -ScanType QuickScan", desc: "Run quick scan" },
-      { cmd: "Get-MpThreatDetection", desc: "View detected threats" },
-    ],
+    description: "Built-in antimalware protection",
+    beginnerNote: "Your computer's immune system. Scans files and monitors behavior for threats.",
+    configuration: "Windows Security app or Group Policy",
+    securityTips: "Keep real-time protection on. Schedule regular scans. Don't disable for 'performance'.",
   },
   {
     name: "Windows Firewall",
-    icon: <GppGoodIcon />,
-    color: "#3b82f6",
-    description: "Host-based firewall for network traffic filtering",
-    keyFeatures: [
-      "Inbound and outbound traffic filtering",
-      "Domain, Private, and Public profiles",
-      "Application-specific rules",
-      "Connection security rules (IPsec)",
-      "Logging of blocked connections",
-      "Integration with Windows Defender",
-      "PowerShell and netsh management",
-    ],
-    commands: [
-      { cmd: "Get-NetFirewallProfile", desc: "View firewall profiles" },
-      { cmd: "Get-NetFirewallRule", desc: "List firewall rules" },
-      { cmd: "netsh advfirewall show allprofiles", desc: "Show profile status" },
-      { cmd: "New-NetFirewallRule", desc: "Create new rule" },
-    ],
+    description: "Built-in network traffic filtering",
+    beginnerNote: "Controls what network traffic is allowed in and out. Like a security guard for your network connection.",
+    configuration: "wf.msc (Windows Firewall with Advanced Security)",
+    securityTips: "Enable for all profiles. Block inbound by default. Create specific allow rules.",
   },
   {
-    name: "BitLocker Drive Encryption",
-    icon: <LockIcon />,
-    color: "#8b5cf6",
-    description: "Full disk encryption for data protection",
-    keyFeatures: [
-      "Full volume encryption using AES-128 or AES-256",
-      "TPM integration for secure key storage",
-      "Pre-boot authentication options",
-      "Recovery key for emergency access",
-      "BitLocker To Go for removable drives",
-      "Network unlock for enterprise deployments",
-      "Used space only encryption option",
-    ],
-    commands: [
-      { cmd: "manage-bde -status", desc: "Check encryption status" },
-      { cmd: "Get-BitLockerVolume", desc: "View BitLocker volumes" },
-      { cmd: "Enable-BitLocker", desc: "Enable encryption" },
-      { cmd: "(Get-BitLockerVolume).KeyProtector", desc: "View recovery keys" },
-    ],
-  },
-  {
-    name: "Credential Guard",
-    icon: <VpnKeyIcon />,
-    color: "#ef4444",
-    description: "Virtualization-based credential protection",
-    keyFeatures: [
-      "Isolates LSASS secrets using VBS",
-      "Protects NTLM hashes and Kerberos tickets",
-      "Prevents pass-the-hash and pass-the-ticket attacks",
-      "Requires UEFI Secure Boot and TPM 2.0",
-      "Hardware-based security isolation",
-      "Integrated with Windows 10/11 Enterprise",
-    ],
-    commands: [
-      { cmd: "Get-CimInstance -ClassName Win32_DeviceGuard", desc: "Check Device Guard status" },
-      { cmd: "msinfo32.exe", desc: "System Information (shows VBS status)" },
-    ],
+    name: "BitLocker",
+    description: "Full disk encryption for Windows",
+    beginnerNote: "Encrypts your entire drive so stolen laptops can't be read. Uses TPM chip for key storage.",
+    configuration: "Control Panel > BitLocker Drive Encryption",
+    securityTips: "Enable on all drives. Store recovery key securely (NOT on the encrypted drive!).",
   },
   {
     name: "User Account Control (UAC)",
-    icon: <AdminPanelSettingsIcon />,
-    color: "#f59e0b",
-    description: "Elevation prompts for administrative actions",
-    keyFeatures: [
-      "Prompts for elevation when admin rights needed",
-      "Standard user token for regular operations",
-      "Admin Approval Mode for administrators",
-      "Configurable notification levels",
-      "Secure Desktop for elevation prompts",
-      "File and registry virtualization for legacy apps",
-    ],
-    commands: [
-      { cmd: "whoami /priv", desc: "Check current privileges" },
-      { cmd: "Get-ExecutionPolicy", desc: "Check PS execution policy" },
-      { cmd: "runas /user:Administrator cmd", desc: "Run as different user" },
-    ],
+    description: "Elevation prompt for administrative actions",
+    beginnerNote: "Those 'Do you want to allow this app to make changes?' popups. Protects against accidental or malicious admin actions.",
+    configuration: "User Account Control Settings or Group Policy",
+    securityTips: "Keep at default or higher. Never set to 'Never notify' - that disables protection.",
   },
   {
-    name: "Windows Defender SmartScreen",
-    icon: <VerifiedUserIcon />,
-    color: "#06b6d4",
-    description: "Reputation-based protection against untrusted downloads",
-    keyFeatures: [
-      "Checks files against known malware database",
-      "Blocks downloads from unknown sources",
-      "Application reputation checking",
-      "Microsoft Edge integration",
-      "Phishing and malware site blocking",
-      "Enterprise configurable via Group Policy",
-    ],
-    commands: [
-      { cmd: "Get-MpPreference | Select SmartScreen*", desc: "Check SmartScreen settings" },
-    ],
+    name: "Windows Hello",
+    description: "Biometric and PIN-based authentication",
+    beginnerNote: "Sign in with your face, fingerprint, or PIN instead of a password.",
+    configuration: "Settings > Accounts > Sign-in options",
+    securityTips: "Use for convenience. PIN is stored locally and protected by TPM.",
+  },
+  {
+    name: "Credential Guard",
+    description: "Virtualization-based credential protection",
+    beginnerNote: "Uses hardware virtualization to protect passwords from theft (like Mimikatz attacks).",
+    configuration: "Group Policy or Windows Security Baseline",
+    securityTips: "Enable on all compatible systems. Requires UEFI, Secure Boot, TPM.",
+  },
+  {
+    name: "Windows Sandbox",
+    description: "Isolated desktop environment for testing",
+    beginnerNote: "A temporary Windows-within-Windows for safely testing suspicious files.",
+    configuration: "Windows Features > Windows Sandbox",
+    securityTips: "Use for testing untrusted programs. Everything is deleted when closed.",
+  },
+  {
+    name: "SmartScreen",
+    description: "Reputation-based protection for downloads and apps",
+    beginnerNote: "Checks files against Microsoft's database of known good/bad software.",
+    configuration: "Windows Security > App & browser control",
+    securityTips: "Keep enabled. Warns about unrecognized apps and blocks known malware.",
+  },
+  {
+    name: "Controlled Folder Access",
+    description: "Ransomware protection for important folders",
+    beginnerNote: "Prevents unauthorized programs from modifying files in protected folders.",
+    configuration: "Windows Security > Ransomware protection",
+    securityTips: "Enable and add trusted apps to allowed list. Protects Documents, Pictures, etc.",
+  },
+  {
+    name: "Exploit Protection",
+    description: "Mitigation technologies against exploits",
+    beginnerNote: "Technical protections like DEP, ASLR, CFG that make exploiting vulnerabilities harder.",
+    configuration: "Windows Security > App & browser control > Exploit protection",
+    securityTips: "Keep system defaults. Can configure per-application mitigations.",
   },
 ];
 
-// Group Policy Important Settings
+// ============================================================================
+// IMPORTANT GROUP POLICY SETTINGS
+// ============================================================================
+
 const groupPolicySettings = [
-  {
-    category: "Password Policy",
-    path: "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-    settings: [
-      { name: "Minimum password length", recommended: "14+ characters", risk: "Short passwords easily cracked" },
-      { name: "Password complexity requirements", recommended: "Enabled", risk: "Simple passwords vulnerable" },
-      { name: "Maximum password age", recommended: "90-365 days", risk: "Never-expiring passwords" },
-      { name: "Password history", recommended: "24 passwords", risk: "Password reuse" },
-    ],
-  },
-  {
-    category: "Account Lockout Policy",
-    path: "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy",
-    settings: [
-      { name: "Account lockout threshold", recommended: "5-10 attempts", risk: "Unlimited attempts allow brute force" },
-      { name: "Account lockout duration", recommended: "15-30 minutes", risk: "Too short allows rapid retries" },
-      { name: "Reset lockout counter after", recommended: "15 minutes", risk: "Immediate reset enables attacks" },
-    ],
-  },
-  {
-    category: "Audit Policy",
-    path: "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration",
-    settings: [
-      { name: "Audit logon events", recommended: "Success, Failure", risk: "No visibility into auth attempts" },
-      { name: "Audit process creation", recommended: "Success", risk: "Cannot track malware execution" },
-      { name: "Audit privilege use", recommended: "Success, Failure", risk: "No admin activity tracking" },
-      { name: "Audit object access", recommended: "Success, Failure", risk: "No file access auditing" },
-    ],
-  },
-  {
-    category: "User Rights Assignment",
-    path: "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment",
-    settings: [
-      { name: "Debug programs (SeDebugPrivilege)", recommended: "Administrators only", risk: "Allows memory access to any process" },
-      { name: "Act as part of OS", recommended: "No one", risk: "Highly privileged, rarely needed" },
-      { name: "Load and unload device drivers", recommended: "Administrators only", risk: "Can load malicious drivers" },
-      { name: "Take ownership of files", recommended: "Administrators only", risk: "Can access any file" },
-    ],
-  },
-  {
-    category: "Windows Defender Settings",
-    path: "Computer Configuration > Administrative Templates > Windows Components > Microsoft Defender Antivirus",
-    settings: [
-      { name: "Turn off real-time protection", recommended: "Not Configured/Disabled", risk: "No malware protection" },
-      { name: "Configure Attack Surface Reduction rules", recommended: "Enabled with rules", risk: "Missing exploit protection" },
-      { name: "Cloud-based protection", recommended: "Enabled", risk: "Slower threat detection" },
-    ],
-  },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Account Policies", setting: "Password Policy", description: "Minimum length, complexity, history", securityRecommendation: "Min 12 chars, complexity on, 24 password history" },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Account Policies", setting: "Account Lockout Policy", description: "Lockout threshold and duration", securityRecommendation: "5 invalid attempts, 15 min lockout, reset after 15 min" },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Local Policies\\Audit Policy", setting: "Audit Policy", description: "What events to log", securityRecommendation: "Enable success/failure for logon, object access, policy change" },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Local Policies\\User Rights Assignment", setting: "User Rights Assignment", description: "Who can perform system tasks", securityRecommendation: "Minimize SeDebugPrivilege, restrict remote access rights" },
+  { path: "Computer Configuration\\Administrative Templates\\System\\Credentials Delegation", setting: "Credential Delegation", description: "Controls credential forwarding", securityRecommendation: "Enable Credential Guard, restrict delegation" },
+  { path: "Computer Configuration\\Administrative Templates\\Windows Components\\Windows PowerShell", setting: "PowerShell Logging", description: "Script block and module logging", securityRecommendation: "Enable script block logging for security monitoring" },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Windows Firewall", setting: "Windows Firewall", description: "Firewall rules and settings", securityRecommendation: "Enable for all profiles, block inbound by default" },
+  { path: "User Configuration\\Administrative Templates\\System", setting: "Don't run specified Windows applications", description: "Block applications by name", securityRecommendation: "Block unauthorized tools, but prefer AppLocker" },
+  { path: "Computer Configuration\\Administrative Templates\\Windows Components\\Windows Defender", setting: "Windows Defender Settings", description: "Antimalware configuration", securityRecommendation: "Enable real-time protection, cloud-based protection, automatic updates" },
+  { path: "Computer Configuration\\Windows Settings\\Security Settings\\Advanced Audit Policy", setting: "Advanced Audit Policy", description: "Granular audit settings", securityRecommendation: "Enable detailed event logging for security-relevant categories" },
 ];
 
-// Forensic Artifacts
+// ============================================================================
+// FORENSIC ARTIFACTS
+// ============================================================================
+
 const forensicArtifacts = [
-  {
-    category: "User Activity",
-    color: "#3b82f6",
-    artifacts: [
-      { name: "NTUSER.DAT", location: "C:\\Users\\<user>\\NTUSER.DAT", description: "User registry hive - MRU lists, typed paths, user settings" },
-      { name: "UsrClass.dat", location: "C:\\Users\\<user>\\AppData\\Local\\Microsoft\\Windows\\UsrClass.dat", description: "ShellBags - folder access history" },
-      { name: "Recent Items", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Recent", description: "Recently accessed files (LNK files)" },
-      { name: "Jump Lists", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations", description: "Application-specific recent items" },
-      { name: "Prefetch", location: "C:\\Windows\\Prefetch", description: "Application execution history (.pf files)" },
-      { name: "BAM/DAM", location: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\bam\\State\\UserSettings", description: "Background/Desktop Activity Moderator - execution times" },
-    ],
-  },
-  {
-    category: "Network Activity",
-    color: "#10b981",
-    artifacts: [
-      { name: "SRUM Database", location: "C:\\Windows\\System32\\sru\\SRUDB.dat", description: "Network data usage by application" },
-      { name: "Network Profiles", location: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList", description: "Connected networks history" },
-      { name: "DNS Cache", location: "ipconfig /displaydns (memory)", description: "Recent DNS resolutions" },
-      { name: "Firewall Logs", location: "C:\\Windows\\System32\\LogFiles\\Firewall\\pfirewall.log", description: "Blocked connection attempts" },
-    ],
-  },
-  {
-    category: "File System",
-    color: "#f59e0b",
-    artifacts: [
-      { name: "$MFT", location: "C:\\$MFT (hidden)", description: "Master File Table - all file metadata" },
-      { name: "$UsnJrnl", location: "C:\\$Extend\\$UsnJrnl", description: "Change journal - file modifications" },
-      { name: "$LogFile", location: "C:\\$LogFile", description: "NTFS transaction log" },
-      { name: "Recycle Bin", location: "C:\\$Recycle.Bin\\<SID>", description: "Deleted files with original path info" },
-      { name: "Thumbcache", location: "C:\\Users\\<user>\\AppData\\Local\\Microsoft\\Windows\\Explorer", description: "Thumbnail database - viewed images" },
-    ],
-  },
-  {
-    category: "System Logs",
-    color: "#ef4444",
-    artifacts: [
-      { name: "Security.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\Security.evtx", description: "Authentication and authorization events" },
-      { name: "System.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\System.evtx", description: "Driver and service events" },
-      { name: "Application.evtx", location: "C:\\Windows\\System32\\winevt\\Logs\\Application.evtx", description: "Application errors and info" },
-      { name: "PowerShell Logs", location: "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-PowerShell%4Operational.evtx", description: "PowerShell execution history" },
-      { name: "Sysmon Logs", location: "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx", description: "Detailed process and network monitoring (if installed)" },
-    ],
-  },
-  {
-    category: "Persistence Locations",
-    color: "#8b5cf6",
-    artifacts: [
-      { name: "Run Keys", location: "HKLM/HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", description: "Startup programs" },
-      { name: "Startup Folder", location: "C:\\Users\\<user>\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", description: "User startup items" },
-      { name: "Scheduled Tasks", location: "C:\\Windows\\System32\\Tasks", description: "Task Scheduler XML files" },
-      { name: "Services", location: "HKLM\\SYSTEM\\CurrentControlSet\\Services", description: "Windows services registry" },
-      { name: "WMI Subscriptions", location: "WMI Repository", description: "WMI event subscriptions (advanced persistence)" },
-    ],
-  },
+  { artifact: "Prefetch", location: "C:\\Windows\\Prefetch", category: "Execution", description: "Records program execution for performance optimization", investigation: "Shows what programs ran and when. Files named programname-HASH.pf" },
+  { artifact: "Shimcache", location: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\AppCompatCache", category: "Execution", description: "Application compatibility cache", investigation: "Tracks executed programs, survives reboots. Parse with tools." },
+  { artifact: "Amcache", location: "C:\\Windows\\AppCompat\\Programs\\Amcache.hve", category: "Execution", description: "Application execution and installation tracking", investigation: "Rich execution data including SHA1 hashes and file sizes." },
+  { artifact: "UserAssist", location: "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\UserAssist", category: "Execution", description: "ROT13 encoded GUI program execution", investigation: "Shows programs run via Explorer, execution count and last run time." },
+  { artifact: "Recent Files", location: "%APPDATA%\\Microsoft\\Windows\\Recent", category: "File Access", description: "Recently accessed files shortcuts", investigation: "Shows what files user opened. LNK files contain metadata." },
+  { artifact: "Jump Lists", location: "%APPDATA%\\Microsoft\\Windows\\Recent\\AutomaticDestinations", category: "File Access", description: "Taskbar jump list data", investigation: "Recent files per application. Rich file access history." },
+  { artifact: "Shellbags", location: "HKCU\\Software\\Microsoft\\Windows\\Shell\\Bags", category: "File Access", description: "Folder view settings and access", investigation: "Proves folders were accessed even if deleted. Contains timestamps." },
+  { artifact: "MRU Lists", location: "Various Registry locations", category: "File Access", description: "Most Recently Used lists", investigation: "Recent documents, search terms, typed paths, run commands." },
+  { artifact: "Event Logs", location: "C:\\Windows\\System32\\winevt\\Logs", category: "Logs", description: "Windows event logging", investigation: "Security, System, Application logs. Critical for timeline." },
+  { artifact: "SRUM", location: "C:\\Windows\\System32\\sru\\SRUDB.dat", category: "Activity", description: "System Resource Usage Monitor", investigation: "Network usage, application usage, energy usage per app." },
+  { artifact: "Browser History", location: "Various per browser", category: "Web Activity", description: "Web browsing history", investigation: "URLs visited, downloads, cookies. Profile-specific locations." },
+  { artifact: "USB Device History", location: "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\USB", category: "Devices", description: "Connected USB device records", investigation: "Shows USB devices that were connected. Serial numbers, times." },
 ];
 
-// Additional Security Event IDs
-const additionalSecurityEvents = [
-  { eventId: "4634", description: "Account logoff", category: "Authentication", notes: "Correlate with 4624 for session duration" },
-  { eventId: "4647", description: "User-initiated logoff", category: "Authentication", notes: "User explicitly logged off" },
-  { eventId: "4648", description: "Explicit credentials logon", category: "Authentication", notes: "Runas or network with different creds" },
-  { eventId: "4656", description: "Handle to object requested", category: "Object Access", notes: "File/registry access attempt" },
-  { eventId: "4663", description: "Attempt to access object", category: "Object Access", notes: "Actual access to file/registry" },
-  { eventId: "4670", description: "Permissions on object changed", category: "Object Access", notes: "ACL modification" },
-  { eventId: "4697", description: "Service installed", category: "Persistence", notes: "New service (need to enable auditing)" },
-  { eventId: "4700", description: "Scheduled task enabled", category: "Persistence", notes: "Task Scheduler changes" },
-  { eventId: "4701", description: "Scheduled task disabled", category: "Persistence", notes: "Possible defense evasion" },
-  { eventId: "4702", description: "Scheduled task updated", category: "Persistence", notes: "Task modification" },
-  { eventId: "4703", description: "User right adjusted", category: "Privileges", notes: "Token manipulation" },
-  { eventId: "4719", description: "Audit policy changed", category: "Defense Evasion", notes: "Attacker may disable logging" },
-  { eventId: "4724", description: "Password reset attempted", category: "Account", notes: "Admin reset user password" },
-  { eventId: "4728", description: "Member added to global group", category: "Account", notes: "Domain group changes" },
-  { eventId: "4756", description: "Member added to universal group", category: "Account", notes: "Universal group changes" },
-  { eventId: "4768", description: "Kerberos TGT requested", category: "Kerberos", notes: "Initial authentication to DC" },
-  { eventId: "4769", description: "Kerberos service ticket requested", category: "Kerberos", notes: "Access to specific service" },
-  { eventId: "4771", description: "Kerberos pre-auth failed", category: "Kerberos", notes: "Possible password spray" },
-  { eventId: "4776", description: "NTLM authentication", category: "Authentication", notes: "Legacy NTLM authentication" },
-  { eventId: "5140", description: "Network share accessed", category: "Object Access", notes: "SMB share access" },
-  { eventId: "5145", description: "Network share object checked", category: "Object Access", notes: "Share permission check" },
-  { eventId: "5156", description: "Connection allowed by firewall", category: "Network", notes: "Allowed network connection" },
-  { eventId: "5157", description: "Connection blocked by firewall", category: "Network", notes: "Blocked network connection" },
-];
+// ============================================================================
+// NETWORK CONFIGURATION
+// ============================================================================
 
-// Network Configuration
 const networkConfiguration = [
-  {
-    topic: "IP Configuration",
-    commands: [
-      { cmd: "ipconfig /all", desc: "Full IP configuration" },
-      { cmd: "Get-NetIPConfiguration", desc: "PowerShell IP config" },
-      { cmd: "Get-NetIPAddress", desc: "List all IP addresses" },
-      { cmd: "netsh interface ip show config", desc: "Netsh IP config" },
-    ],
-  },
-  {
-    topic: "DNS",
-    commands: [
-      { cmd: "ipconfig /displaydns", desc: "Show DNS cache" },
-      { cmd: "ipconfig /flushdns", desc: "Clear DNS cache" },
-      { cmd: "Get-DnsClientCache", desc: "PowerShell DNS cache" },
-      { cmd: "Resolve-DnsName google.com", desc: "DNS lookup" },
-      { cmd: "nslookup -type=any domain.com", desc: "Advanced DNS query" },
-    ],
-  },
-  {
-    topic: "Network Connections",
-    commands: [
-      { cmd: "netstat -ano", desc: "All connections with PIDs" },
-      { cmd: "netstat -b", desc: "Connections with process names" },
-      { cmd: "Get-NetTCPConnection", desc: "PowerShell TCP connections" },
-      { cmd: "Get-NetUDPEndpoint", desc: "PowerShell UDP endpoints" },
-    ],
-  },
-  {
-    topic: "Routing",
-    commands: [
-      { cmd: "route print", desc: "Display routing table" },
-      { cmd: "Get-NetRoute", desc: "PowerShell routing table" },
-      { cmd: "tracert hostname", desc: "Trace route to host" },
-      { cmd: "pathping hostname", desc: "Combined ping and tracert" },
-    ],
-  },
-  {
-    topic: "Network Shares",
-    commands: [
-      { cmd: "net share", desc: "List local shares" },
-      { cmd: "net use", desc: "List mapped drives" },
-      { cmd: "Get-SmbShare", desc: "PowerShell list shares" },
-      { cmd: "Get-SmbConnection", desc: "Active SMB connections" },
-    ],
-  },
-  {
-    topic: "Firewall",
-    commands: [
-      { cmd: "netsh advfirewall show allprofiles", desc: "Firewall status" },
-      { cmd: "Get-NetFirewallProfile", desc: "PowerShell firewall profiles" },
-      { cmd: "Get-NetFirewallRule | Where Enabled -eq True", desc: "Active rules" },
-      { cmd: "netsh advfirewall firewall show rule name=all", desc: "All firewall rules" },
-    ],
-  },
+  { command: "ipconfig /all", description: "Show complete IP configuration", purpose: "View IP, subnet, gateway, DNS, DHCP lease" },
+  { command: "ipconfig /release", description: "Release DHCP lease", purpose: "Give up current IP address" },
+  { command: "ipconfig /renew", description: "Renew DHCP lease", purpose: "Get new IP from DHCP server" },
+  { command: "ipconfig /flushdns", description: "Clear DNS resolver cache", purpose: "Force fresh DNS lookups" },
+  { command: "netsh interface ip show config", description: "Show interface configuration", purpose: "Detailed network adapter settings" },
+  { command: "netsh wlan show profiles", description: "List saved WiFi networks", purpose: "See stored wireless profiles" },
+  { command: "netsh wlan show profile name=X key=clear", description: "Show WiFi password", purpose: "Reveal stored WiFi password (admin required)" },
+  { command: "netsh advfirewall show allprofiles", description: "Show firewall status", purpose: "Check firewall state for all profiles" },
+  { command: "netsh advfirewall set allprofiles state off", description: "Disable firewall (dangerous!)", purpose: "Turn off Windows Firewall - use with caution" },
+  { command: "net use", description: "Show mapped network drives", purpose: "List active network drive mappings" },
+  { command: "net share", description: "Show shared folders", purpose: "List folders shared from this computer" },
+  { command: "net session", description: "Show active sessions", purpose: "List users connected to this computer's shares" },
+  { command: "arp -a", description: "Show ARP cache", purpose: "View IP to MAC address mappings" },
+  { command: "route print", description: "Show routing table", purpose: "View how traffic is routed" },
+  { command: "nbtstat -n", description: "Show NetBIOS names", purpose: "View registered NetBIOS names" },
 ];
 
-// PowerShell Security Commands
+// ============================================================================
+// POWERSHELL SECURITY COMMANDS
+// ============================================================================
+
 const powershellSecurityCommands = [
-  {
-    category: "User & Group Management",
-    commands: [
-      { cmd: "Get-LocalUser", desc: "List local users" },
-      { cmd: "Get-LocalGroup", desc: "List local groups" },
-      { cmd: "Get-LocalGroupMember Administrators", desc: "List admin group members" },
-      { cmd: "New-LocalUser -Name 'Test' -NoPassword", desc: "Create user" },
-      { cmd: "Add-LocalGroupMember -Group 'Users' -Member 'Test'", desc: "Add to group" },
-      { cmd: "Disable-LocalUser -Name 'Test'", desc: "Disable user" },
-    ],
-  },
-  {
-    category: "Process Analysis",
-    commands: [
-      { cmd: "Get-Process | Sort CPU -Descending | Select -First 10", desc: "Top CPU processes" },
-      { cmd: "Get-Process | Where {$_.Path} | Select Name, Path", desc: "Processes with paths" },
-      { cmd: "Get-CimInstance Win32_Process | Select Name, CommandLine", desc: "Process command lines" },
-      { cmd: "Get-Process -IncludeUserName", desc: "Processes with owners" },
-      { cmd: "Stop-Process -Name notepad -Force", desc: "Kill process by name" },
-    ],
-  },
-  {
-    category: "Network Security",
-    commands: [
-      { cmd: "Get-NetTCPConnection -State Established", desc: "Active connections" },
-      { cmd: "Get-NetTCPConnection | Where RemotePort -eq 443", desc: "HTTPS connections" },
-      { cmd: "Test-NetConnection -ComputerName host -Port 445", desc: "Test port connectivity" },
-      { cmd: "Get-NetFirewallRule -Direction Inbound -Enabled True", desc: "Inbound firewall rules" },
-    ],
-  },
-  {
-    category: "File Security",
-    commands: [
-      { cmd: "Get-Acl C:\\folder | Format-List", desc: "View ACL details" },
-      { cmd: "Get-ChildItem -Recurse -Hidden", desc: "Find hidden files" },
-      { cmd: "Get-ChildItem -Recurse | Where {$_.Attributes -band [IO.FileAttributes]::Hidden}", desc: "Hidden files (alt)" },
-      { cmd: "Get-FileHash -Algorithm SHA256 file.exe", desc: "Get file hash" },
-      { cmd: "Get-AuthenticodeSignature file.exe", desc: "Check digital signature" },
-    ],
-  },
-  {
-    category: "Service Management",
-    commands: [
-      { cmd: "Get-Service | Where Status -eq Running", desc: "Running services" },
-      { cmd: "Get-WmiObject Win32_Service | Select Name, PathName, StartName", desc: "Service details" },
-      { cmd: "Get-Service | Where {$_.StartType -eq 'Automatic'}", desc: "Auto-start services" },
-      { cmd: "Set-Service -Name Spooler -StartupType Disabled", desc: "Disable service" },
-    ],
-  },
-  {
-    category: "Event Log Analysis",
-    commands: [
-      { cmd: "Get-EventLog -LogName Security -Newest 100", desc: "Recent security events" },
-      { cmd: "Get-WinEvent -FilterHashtable @{LogName='Security';ID=4624}", desc: "Successful logons" },
-      { cmd: "Get-WinEvent -FilterHashtable @{LogName='Security';ID=4625} -MaxEvents 50", desc: "Failed logons" },
-      { cmd: "Get-WinEvent -FilterHashtable @{LogName='System';Level=2}", desc: "System errors" },
-    ],
-  },
-  {
-    category: "Scheduled Tasks",
-    commands: [
-      { cmd: "Get-ScheduledTask | Where State -eq Ready", desc: "Active scheduled tasks" },
-      { cmd: "Get-ScheduledTask | Get-ScheduledTaskInfo", desc: "Task run history" },
-      { cmd: "Export-ScheduledTask -TaskName 'TaskName'", desc: "Export task as XML" },
-      { cmd: "Unregister-ScheduledTask -TaskName 'TaskName'", desc: "Remove task" },
-    ],
-  },
-  {
-    category: "Registry Security",
-    commands: [
-      { cmd: "Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", desc: "Startup programs" },
-      { cmd: "Get-ChildItem HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", desc: "Installed programs" },
-      { cmd: "Test-Path 'HKLM:\\SOFTWARE\\Malware'", desc: "Check registry path exists" },
-      { cmd: "Get-Acl HKLM:\\SOFTWARE | Format-List", desc: "Registry ACL" },
-    ],
-  },
+  { command: "Get-Process | Sort-Object CPU -Descending | Select -First 10", description: "Top 10 CPU-consuming processes", category: "Process Analysis" },
+  { command: "Get-NetTCPConnection -State Established | Select LocalAddress, LocalPort, RemoteAddress, RemotePort, OwningProcess", description: "Active network connections with PIDs", category: "Network" },
+  { command: "Get-WinEvent -LogName Security -MaxEvents 100", description: "Recent security events", category: "Logs" },
+  { command: "Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624} -MaxEvents 50", description: "Recent successful logons", category: "Logs" },
+  { command: "Get-LocalUser | Select Name, Enabled, LastLogon", description: "List local users with status", category: "Users" },
+  { command: "Get-LocalGroupMember -Group Administrators", description: "List members of Administrators group", category: "Users" },
+  { command: "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'", description: "Startup programs (HKLM)", category: "Persistence" },
+  { command: "Get-ScheduledTask | Where-Object State -eq Ready", description: "List enabled scheduled tasks", category: "Persistence" },
+  { command: "Get-Service | Where-Object StartType -eq Automatic | Select Name, Status, DisplayName", description: "Auto-start services", category: "Services" },
+  { command: "Get-FileHash <file> -Algorithm SHA256", description: "Calculate file hash", category: "Forensics" },
+  { command: "Get-ChildItem -Path C:\\ -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -gt (Get-Date).AddDays(-1)}", description: "Files modified in last 24 hours", category: "Forensics" },
+  { command: "Get-MpThreatDetection", description: "Recent Windows Defender detections", category: "Security" },
+  { command: "Get-MpComputerStatus", description: "Windows Defender status", category: "Security" },
+  { command: "Get-ExecutionPolicy -List", description: "PowerShell execution policy", category: "Security" },
+  { command: "Test-NetConnection -ComputerName <host> -Port <port>", description: "Test TCP connectivity", category: "Network" },
 ];
 
-// Windows Hardening Checklist
+// ============================================================================
+// WINDOWS HARDENING CHECKLIST
+// ============================================================================
+
 const hardeningChecklist = [
-  {
-    category: "User Accounts",
-    items: [
-      "Rename or disable built-in Administrator account",
-      "Disable Guest account",
-      "Enforce strong password policy (14+ characters, complexity)",
-      "Enable account lockout after 5-10 failed attempts",
-      "Use separate admin accounts (not daily use accounts)",
-      "Implement Managed Service Accounts where possible",
-      "Enable MFA for all privileged accounts",
-      "Regular review of group memberships",
-    ],
-  },
-  {
-    category: "Network Security",
-    items: [
-      "Enable Windows Firewall on all profiles",
-      "Block inbound SMB (port 445) from internet",
-      "Disable NetBIOS and LLMNR if not needed",
-      "Enable SMB signing",
-      "Disable SMBv1 protocol",
-      "Use IPsec for sensitive communications",
-      "Segment networks appropriately",
-      "Monitor outbound connections",
-    ],
-  },
-  {
-    category: "System Configuration",
-    items: [
-      "Enable Secure Boot and UEFI",
-      "Enable BitLocker on all drives",
-      "Keep system and software updated",
-      "Disable unnecessary services",
-      "Remove unnecessary features/roles",
-      "Configure AppLocker or WDAC policies",
-      "Enable Credential Guard on supported hardware",
-      "Configure Windows Defender properly",
-    ],
-  },
-  {
-    category: "Logging & Monitoring",
-    items: [
-      "Enable advanced audit policy",
-      "Configure PowerShell logging (Script Block, Module, Transcription)",
-      "Enable command-line process auditing (Event 4688)",
-      "Forward logs to SIEM",
-      "Monitor for suspicious Event IDs",
-      "Install and configure Sysmon",
-      "Set appropriate log retention periods",
-      "Alert on critical events",
-    ],
-  },
-  {
-    category: "Endpoint Protection",
-    items: [
-      "Keep Windows Defender definitions updated",
-      "Enable real-time protection",
-      "Configure Attack Surface Reduction rules",
-      "Enable cloud-delivered protection",
-      "Enable Controlled Folder Access (ransomware protection)",
-      "Configure SmartScreen",
-      "Use application whitelisting",
-      "Enable Exploit Protection",
-    ],
-  },
+  { category: "Updates", item: "Enable automatic Windows Update", priority: "Critical", description: "Patches are your first line of defense against known vulnerabilities." },
+  { category: "Updates", item: "Install updates within 48 hours of release", priority: "Critical", description: "Critical patches should be applied quickly to close attack windows." },
+  { category: "Accounts", item: "Disable default Administrator account", priority: "High", description: "Rename or disable the built-in Administrator. Create named admin accounts." },
+  { category: "Accounts", item: "Use unique local admin passwords (LAPS)", priority: "High", description: "Each machine should have a unique local admin password managed by LAPS." },
+  { category: "Accounts", item: "Remove unnecessary accounts", priority: "Medium", description: "Disable Guest account. Remove unused service accounts." },
+  { category: "Authentication", item: "Enforce strong password policy", priority: "High", description: "12+ characters, complexity, no common words. Consider passphrases." },
+  { category: "Authentication", item: "Enable account lockout", priority: "High", description: "Lock accounts after 5 failed attempts to prevent brute force." },
+  { category: "Authentication", item: "Enable MFA where possible", priority: "High", description: "Use Windows Hello, smart cards, or third-party MFA solutions." },
+  { category: "Network", item: "Enable Windows Firewall", priority: "Critical", description: "Enable for all profiles. Block inbound by default." },
+  { category: "Network", item: "Disable unnecessary services", priority: "Medium", description: "Disable services you don't need: Telnet, SMBv1, WinRM if unused." },
+  { category: "Network", item: "Disable LLMNR and NBT-NS", priority: "Medium", description: "Prevents LLMNR poisoning attacks on the local network." },
+  { category: "Endpoint", item: "Enable Windows Defender", priority: "Critical", description: "Keep real-time protection and cloud-based protection enabled." },
+  { category: "Endpoint", item: "Enable Controlled Folder Access", priority: "Medium", description: "Protects against ransomware encrypting your files." },
+  { category: "Endpoint", item: "Configure BitLocker", priority: "High", description: "Encrypt all drives, especially on laptops." },
+  { category: "Logging", item: "Enable PowerShell script block logging", priority: "High", description: "Critical for detecting malicious PowerShell activity." },
+  { category: "Logging", item: "Enable command line in process creation events", priority: "High", description: "Event ID 4688 should include command line arguments." },
+  { category: "Logging", item: "Configure adequate log sizes", priority: "Medium", description: "Increase Security log size to at least 1GB." },
+  { category: "Applications", item: "Enable UAC at default or higher", priority: "High", description: "Never disable UAC. Provides defense in depth." },
+  { category: "Applications", item: "Implement application whitelisting", priority: "High", description: "Use AppLocker or WDAC to control what can run." },
+  { category: "Applications", item: "Uninstall unnecessary software", priority: "Medium", description: "Every installed application is potential attack surface." },
 ];
 
-// Common Windows Ports
+// ============================================================================
+// COMMON WINDOWS PORTS
+// ============================================================================
+
 const commonPorts = [
-  { port: "20-21", protocol: "TCP", service: "FTP", notes: "File Transfer Protocol (avoid - use SFTP)" },
-  { port: "22", protocol: "TCP", service: "SSH", notes: "Secure Shell (OpenSSH on modern Windows)" },
-  { port: "23", protocol: "TCP", service: "Telnet", notes: "Unsecure - should be disabled" },
-  { port: "25", protocol: "TCP", service: "SMTP", notes: "Email relay" },
-  { port: "53", protocol: "TCP/UDP", service: "DNS", notes: "Domain Name System" },
-  { port: "67-68", protocol: "UDP", service: "DHCP", notes: "Dynamic Host Configuration Protocol" },
-  { port: "80", protocol: "TCP", service: "HTTP", notes: "Web traffic (unencrypted)" },
-  { port: "88", protocol: "TCP/UDP", service: "Kerberos", notes: "AD authentication" },
-  { port: "123", protocol: "UDP", service: "NTP", notes: "Network Time Protocol" },
-  { port: "135", protocol: "TCP", service: "RPC Endpoint Mapper", notes: "Windows RPC - often targeted" },
-  { port: "137-139", protocol: "TCP/UDP", service: "NetBIOS", notes: "Legacy name service - consider disabling" },
-  { port: "389", protocol: "TCP/UDP", service: "LDAP", notes: "Active Directory queries" },
-  { port: "443", protocol: "TCP", service: "HTTPS", notes: "Encrypted web traffic" },
-  { port: "445", protocol: "TCP", service: "SMB", notes: "File sharing - major attack vector" },
-  { port: "464", protocol: "TCP/UDP", service: "Kerberos Password", notes: "Kerberos password change" },
-  { port: "636", protocol: "TCP", service: "LDAPS", notes: "LDAP over SSL" },
-  { port: "3268-3269", protocol: "TCP", service: "Global Catalog", notes: "AD Global Catalog queries" },
-  { port: "3389", protocol: "TCP", service: "RDP", notes: "Remote Desktop - high value target" },
-  { port: "5985", protocol: "TCP", service: "WinRM HTTP", notes: "PowerShell Remoting" },
-  { port: "5986", protocol: "TCP", service: "WinRM HTTPS", notes: "PowerShell Remoting (encrypted)" },
+  { port: "21", protocol: "TCP", service: "FTP", description: "File Transfer Protocol (insecure)", securityNote: "Use SFTP instead. Block if not needed." },
+  { port: "22", protocol: "TCP", service: "SSH", description: "Secure Shell (OpenSSH on modern Windows)", securityNote: "OpenSSH now built into Windows 10+." },
+  { port: "23", protocol: "TCP", service: "Telnet", description: "Unencrypted remote terminal", securityNote: "NEVER use. Always use SSH instead." },
+  { port: "25", protocol: "TCP", service: "SMTP", description: "Email sending", securityNote: "Block outbound 25 except from mail servers." },
+  { port: "53", protocol: "TCP/UDP", service: "DNS", description: "Domain Name System", securityNote: "Should only be open on DNS servers." },
+  { port: "80", protocol: "TCP", service: "HTTP", description: "Web traffic (unencrypted)", securityNote: "Redirect to HTTPS where possible." },
+  { port: "88", protocol: "TCP/UDP", service: "Kerberos", description: "Domain authentication", securityNote: "Required for Active Directory." },
+  { port: "135", protocol: "TCP", service: "RPC Endpoint Mapper", description: "Remote Procedure Call", securityNote: "Often targeted. Block from internet." },
+  { port: "137-139", protocol: "TCP/UDP", service: "NetBIOS", description: "Legacy Windows networking", securityNote: "Disable if not needed. Security risk." },
+  { port: "389", protocol: "TCP/UDP", service: "LDAP", description: "Lightweight Directory Access Protocol", securityNote: "Use LDAPS (636) for encryption." },
+  { port: "443", protocol: "TCP", service: "HTTPS", description: "Encrypted web traffic", securityNote: "Default for secure web." },
+  { port: "445", protocol: "TCP", service: "SMB", description: "Windows file sharing", securityNote: "Block from internet! SMBv1 is vulnerable." },
+  { port: "636", protocol: "TCP", service: "LDAPS", description: "Secure LDAP", securityNote: "Encrypted AD queries. Prefer over 389." },
+  { port: "3389", protocol: "TCP", service: "RDP", description: "Remote Desktop Protocol", securityNote: "Never expose directly to internet. Use VPN." },
+  { port: "5985/5986", protocol: "TCP", service: "WinRM", description: "Windows Remote Management", securityNote: "PowerShell remoting. Secure but powerful." },
 ];
 
-// Active Directory Basics
+// ============================================================================
+// ACTIVE DIRECTORY BASICS
+// ============================================================================
+
 const activeDirectoryBasics = [
-  {
-    component: "Domain Controller (DC)",
-    description: "Server hosting Active Directory services",
-    keyPoints: [
-      "Stores directory database (NTDS.dit)",
-      "Handles authentication requests",
-      "Replicates data to other DCs",
-      "Hosts DNS for AD",
-    ],
-  },
-  {
-    component: "Organizational Units (OUs)",
-    description: "Containers for organizing AD objects",
-    keyPoints: [
-      "Can contain users, groups, computers",
-      "Group Policy can be linked to OUs",
-      "Delegation of admin rights at OU level",
-      "Hierarchical structure",
-    ],
-  },
-  {
-    component: "Security Groups",
-    description: "Collections of users/computers for permission assignment",
-    keyPoints: [
-      "Domain Local, Global, Universal scopes",
-      "Used for resource access control",
-      "Nested group memberships",
-      "Critical groups: Domain Admins, Enterprise Admins",
-    ],
-  },
-  {
-    component: "Group Policy Objects (GPOs)",
-    description: "Policy settings applied to users/computers",
-    keyPoints: [
-      "Computer and User configuration sections",
-      "Linked to Sites, Domains, OUs",
-      "Inheritance and precedence rules",
-      "gpresult /r to check applied policies",
-    ],
-  },
-  {
-    component: "LDAP/LDAPS",
-    description: "Protocol for querying and modifying AD",
-    keyPoints: [
-      "Port 389 (LDAP) and 636 (LDAPS)",
-      "Distinguished Names (DN) identify objects",
-      "Attributes store object properties",
-      "Tools: ldapsearch, ADExplorer",
-    ],
-  },
-  {
-    component: "Kerberos",
-    description: "Primary authentication protocol for AD",
-    keyPoints: [
-      "Ticket-based authentication",
-      "KDC on Domain Controller",
-      "TGT and Service Tickets",
-      "Vulnerable to Kerberoasting, Pass-the-Ticket",
-    ],
-  },
+  { concept: "Domain", description: "A logical grouping of objects (users, computers, groups) that share a common directory database", beginnerNote: "Think of a domain as a company's central IT management system. All employees and computers are registered here.", securityRelevance: "Compromising a domain = compromising everything in it." },
+  { concept: "Domain Controller (DC)", description: "Server that hosts the AD database and authenticates users", beginnerNote: "The 'brain' of Active Directory. When you log in, the DC checks your password.", securityRelevance: "Highest-value target. Compromise DC = game over. Protect at all costs." },
+  { concept: "Organizational Unit (OU)", description: "Container for organizing objects within a domain", beginnerNote: "Like folders for organizing users and computers. Can apply different policies to each OU.", securityRelevance: "Group Policy is applied to OUs. Misconfigured OUs may have weak policies." },
+  { concept: "Group Policy", description: "Centralized configuration management for domain computers and users", beginnerNote: "Allows IT to push settings to all computers at once - security policies, software installation, etc.", securityRelevance: "GPOs can deploy software, run scripts. Compromised GPO = mass compromise." },
+  { concept: "Security Groups", description: "Collections of users/computers for permission management", beginnerNote: "Instead of giving permissions to individuals, give them to groups and add people to groups.", securityRelevance: "Domain Admins group = full control. Monitor group membership changes." },
+  { concept: "Kerberos", description: "Authentication protocol used by Active Directory", beginnerNote: "The technology that checks your password and issues 'tickets' to access resources.", securityRelevance: "Target of Pass-the-Ticket, Golden Ticket, Kerberoasting attacks." },
+  { concept: "NTLM", description: "Legacy authentication protocol (hash-based)", beginnerNote: "Older authentication method. Less secure than Kerberos but still widely used.", securityRelevance: "NTLM hashes can be 'passed' without cracking. Disable where possible." },
+  { concept: "Forest", description: "Collection of one or more domains that share a common schema", beginnerNote: "The largest container in AD. A company might have multiple domains in one forest.", securityRelevance: "Forest is the security boundary. Compromise of forest root = all domains compromised." },
+  { concept: "Trust Relationship", description: "Link between domains that allows authentication across domain boundaries", beginnerNote: "Allows users from one domain to access resources in another domain.", securityRelevance: "Trusts can be exploited for lateral movement between domains." },
+  { concept: "LDAP", description: "Protocol for querying and modifying Active Directory", beginnerNote: "The 'language' used to search AD. Tools use LDAP to find users, groups, computers.", securityRelevance: "Anonymous LDAP binds can leak information. Use LDAPS (encrypted)." },
 ];
 
-const ACCENT_COLOR = "#0078d4";
-const QUIZ_QUESTION_COUNT = 10;
-
-const selectRandomQuestions = (questions: QuizQuestion[], count: number) =>
-  [...questions].sort(() => Math.random() - 0.5).slice(0, count);
+// ============================================================================
+// QUIZ QUESTIONS
+// ============================================================================
 
 const quizQuestions: QuizQuestion[] = [
-  {
-    id: 1,
-    topic: "NTFS",
-    question: "What is the default file system for modern Windows installations?",
-    options: ["NTFS", "FAT32", "ext4", "APFS"],
-    correctAnswer: 0,
-    explanation: "NTFS is the default file system for modern Windows versions.",
-  },
-  {
-    id: 2,
-    topic: "NTFS",
-    question: "Which NTFS feature allows data to be hidden within files?",
-    options: ["Alternate Data Streams (ADS)", "Journaling", "Compression", "Shadow Copies"],
-    correctAnswer: 0,
-    explanation: "Alternate Data Streams can store hidden data alongside a file.",
-  },
-  {
-    id: 3,
-    topic: "NTFS",
-    question: "NTFS permissions are implemented using:",
-    options: ["Access Control Lists (ACLs)", "File ownership only", "Password-protected folders", "BIOS settings"],
-    correctAnswer: 0,
-    explanation: "NTFS uses ACLs to define detailed permissions.",
-  },
-  {
-    id: 4,
-    topic: "NTFS",
-    question: "What does MFT stand for in NTFS?",
-    options: ["Master File Table", "Main File Tree", "Microsoft File Tracker", "Metadata File Table"],
-    correctAnswer: 0,
-    explanation: "The MFT stores metadata for files and directories in NTFS.",
-  },
-  {
-    id: 5,
-    topic: "NTFS",
-    question: "Which character is used as the path separator in Windows?",
-    options: ["Backslash (\\)", "Forward slash (/)", "Colon (:)", "Pipe (|)"],
-    correctAnswer: 0,
-    explanation: "Windows paths use the backslash character.",
-  },
-  {
-    id: 6,
-    topic: "NTFS",
-    question: "Drive letters like C: and D: represent:",
-    options: ["Volumes", "User accounts", "Services", "Registry hives"],
-    correctAnswer: 0,
-    explanation: "Drive letters map to volumes or partitions.",
-  },
-  {
-    id: 7,
-    topic: "NTFS",
-    question: "What Windows feature provides file-level encryption on NTFS?",
-    options: ["EFS (Encrypting File System)", "BitLocker", "Secure Boot", "SmartScreen"],
-    correctAnswer: 0,
-    explanation: "EFS provides file-level encryption on NTFS volumes.",
-  },
-  {
-    id: 8,
-    topic: "NTFS",
-    question: "Which file attribute hides files from normal directory listings?",
-    options: ["Hidden", "Archive", "System", "Read-only"],
-    correctAnswer: 0,
-    explanation: "The Hidden attribute prevents files from appearing in normal listings.",
-  },
-  {
-    id: 9,
-    topic: "NTFS",
-    question: "Which command checks a disk for file system errors?",
-    options: ["chkdsk", "dir", "tasklist", "netstat"],
-    correctAnswer: 0,
-    explanation: "chkdsk scans and repairs file system issues.",
-  },
-  {
-    id: 10,
-    topic: "NTFS",
-    question: "Which NTFS capability is not supported by FAT32?",
-    options: ["File permissions", "Basic file storage", "Short file names", "Bootable partitions"],
-    correctAnswer: 0,
-    explanation: "FAT32 does not support NTFS-style permissions.",
-  },
-  {
-    id: 11,
-    topic: "Registry",
-    question: "Which registry hive stores system-wide settings?",
-    options: ["HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_USER (HKCU)", "HKEY_USERS (HKU)", "HKEY_CLASSES_ROOT (HKCR)"],
-    correctAnswer: 0,
-    explanation: "HKLM holds system-wide configuration.",
-  },
-  {
-    id: 12,
-    topic: "Registry",
-    question: "Which registry hive stores the current user's settings?",
-    options: ["HKEY_CURRENT_USER (HKCU)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_CONFIG (HKCC)", "HKEY_CLASSES_ROOT (HKCR)"],
-    correctAnswer: 0,
-    explanation: "HKCU stores settings for the currently logged-in user.",
-  },
-  {
-    id: 13,
-    topic: "Registry",
-    question: "Which registry hive is commonly used for file associations?",
-    options: ["HKEY_CLASSES_ROOT (HKCR)", "HKEY_USERS (HKU)", "HKEY_CURRENT_CONFIG (HKCC)", "HKEY_LOCAL_MACHINE (HKLM)"],
-    correctAnswer: 0,
-    explanation: "HKCR manages file type associations and COM registrations.",
-  },
-  {
-    id: 14,
-    topic: "Registry",
-    question: "Which hive contains all user profiles on the system?",
-    options: ["HKEY_USERS (HKU)", "HKEY_CURRENT_USER (HKCU)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CLASSES_ROOT (HKCR)"],
-    correctAnswer: 0,
-    explanation: "HKU stores per-user hives for all profiles.",
-  },
-  {
-    id: 15,
-    topic: "Registry",
-    question: "Which hive represents the current hardware profile?",
-    options: ["HKEY_CURRENT_CONFIG (HKCC)", "HKEY_LOCAL_MACHINE (HKLM)", "HKEY_CURRENT_USER (HKCU)", "HKEY_USERS (HKU)"],
-    correctAnswer: 0,
-    explanation: "HKCC reflects the current hardware profile.",
-  },
-  {
-    id: 16,
-    topic: "Registry",
-    question: "What is the GUI tool for editing the Windows Registry?",
-    options: ["regedit.exe", "services.msc", "eventvwr.msc", "gpedit.msc"],
-    correctAnswer: 0,
-    explanation: "regedit.exe is the Registry Editor.",
-  },
-  {
-    id: 17,
-    topic: "Registry",
-    question: "Which command-line tool can query and edit the Registry?",
-    options: ["reg.exe", "sc.exe", "whoami", "diskpart"],
-    correctAnswer: 0,
-    explanation: "reg.exe provides command-line registry access.",
-  },
-  {
-    id: 18,
-    topic: "Registry",
-    question: "Which file stores a user's registry hive on disk?",
-    options: ["NTUSER.DAT", "SAM", "SYSTEM", "SECURITY"],
-    correctAnswer: 0,
-    explanation: "NTUSER.DAT contains the per-user registry hive.",
-  },
-  {
-    id: 19,
-    topic: "Registry",
-    question: "The Run and RunOnce keys are commonly used for:",
-    options: ["Startup programs", "Disk encryption", "Time synchronization", "Firewall rules"],
-    correctAnswer: 0,
-    explanation: "Run and RunOnce control startup execution.",
-  },
-  {
-    id: 20,
-    topic: "Registry",
-    question: "Which registry data type stores a 32-bit integer?",
-    options: ["REG_DWORD", "REG_SZ", "REG_BINARY", "REG_MULTI_SZ"],
-    correctAnswer: 0,
-    explanation: "REG_DWORD is a 32-bit integer value.",
-  },
-  {
-    id: 21,
-    topic: "Services",
-    question: "What does services.msc open?",
-    options: ["Services management console", "Event Viewer", "Registry Editor", "Task Scheduler"],
-    correctAnswer: 0,
-    explanation: "services.msc opens the Services console.",
-  },
-  {
-    id: 22,
-    topic: "Services",
-    question: "Which service account has the highest privileges?",
-    options: ["LocalSystem", "LocalService", "NetworkService", "Guest"],
-    correctAnswer: 0,
-    explanation: "LocalSystem has extensive privileges on the local machine.",
-  },
-  {
-    id: 23,
-    topic: "Services",
-    question: "Which service account is the least privileged?",
-    options: ["LocalService", "NetworkService", "LocalSystem", "Administrator"],
-    correctAnswer: 0,
-    explanation: "LocalService has minimal privileges.",
-  },
-  {
-    id: 24,
-    topic: "Services",
-    question: "Which command-line tool manages Windows services?",
-    options: ["sc.exe", "reg.exe", "icacls", "netstat"],
-    correctAnswer: 0,
-    explanation: "sc.exe is used for service control.",
-  },
-  {
-    id: 25,
-    topic: "Services",
-    question: "Which PowerShell cmdlet lists Windows services?",
-    options: ["Get-Service", "Get-Process", "Get-EventLog", "Get-Content"],
-    correctAnswer: 0,
-    explanation: "Get-Service lists installed services.",
-  },
-  {
-    id: 26,
-    topic: "Services",
-    question: "Windows services typically run in:",
-    options: ["Session 0", "Session 1", "Session 2", "Session 3"],
-    correctAnswer: 0,
-    explanation: "Services run in Session 0, isolated from user sessions.",
-  },
-  {
-    id: 27,
-    topic: "Services",
-    question: "Which startup type begins after a short boot delay?",
-    options: ["Automatic (Delayed)", "Manual", "Disabled", "Boot"],
-    correctAnswer: 0,
-    explanation: "Automatic (Delayed) starts shortly after boot.",
-  },
-  {
-    id: 28,
-    topic: "Services",
-    question: "Service dependencies are used to:",
-    options: [
-      "Ensure required services start before others",
-      "Set user permissions",
-      "Encrypt service binaries",
-      "Disable logging",
-    ],
-    correctAnswer: 0,
-    explanation: "Dependencies control service start order and prerequisites.",
-  },
-  {
-    id: 29,
-    topic: "Services",
-    question: "Service configurations are stored under which registry path?",
-    options: [
-      "HKLM\\SYSTEM\\CurrentControlSet\\Services",
-      "HKCU\\Software\\Services",
-      "HKLM\\SOFTWARE\\Classes",
-      "HKU\\Default\\Services",
-    ],
-    correctAnswer: 0,
-    explanation: "Service settings are under HKLM\\SYSTEM\\CurrentControlSet\\Services.",
-  },
-  {
-    id: 30,
-    topic: "Services",
-    question: "Misconfigured service permissions can lead to:",
-    options: ["Privilege escalation", "Network throttling", "Time drift", "File compression"],
-    correctAnswer: 0,
-    explanation: "Weak service permissions are a common escalation path.",
-  },
-  {
-    id: 31,
-    topic: "Users and Permissions",
-    question: "What is the primary purpose of User Account Control (UAC)?",
-    options: [
-      "Require elevation for administrative actions",
-      "Disable antivirus",
-      "Encrypt disks",
-      "Manage DNS records",
-    ],
-    correctAnswer: 0,
-    explanation: "UAC prompts for elevation to reduce unauthorized changes.",
-  },
-  {
-    id: 32,
-    topic: "Users and Permissions",
-    question: "Which built-in group has administrative rights on a Windows machine?",
-    options: ["Administrators", "Users", "Guests", "Remote Desktop Users"],
-    correctAnswer: 0,
-    explanation: "Members of the Administrators group have elevated rights.",
-  },
-  {
-    id: 33,
-    topic: "Users and Permissions",
-    question: "What does SID stand for?",
-    options: ["Security Identifier", "System Identity Descriptor", "Secure ID", "Session Identifier"],
-    correctAnswer: 0,
-    explanation: "A SID uniquely identifies a user or group.",
-  },
-  {
-    id: 34,
-    topic: "Users and Permissions",
-    question: "Which permission rule takes precedence in NTFS?",
-    options: ["Explicit deny", "Inherited allow", "Explicit allow", "Inherited deny"],
-    correctAnswer: 0,
-    explanation: "Explicit deny entries override allow entries.",
-  },
-  {
-    id: 35,
-    topic: "Users and Permissions",
-    question: "ACLs are made up of:",
-    options: ["Access Control Entries (ACEs)", "User tokens", "Service descriptors", "Registry keys"],
-    correctAnswer: 0,
-    explanation: "ACLs consist of ACEs that grant or deny permissions.",
-  },
-  {
-    id: 36,
-    topic: "Users and Permissions",
-    question: "Which tool manages local users and groups on Windows Pro?",
-    options: ["lusrmgr.msc", "taskschd.msc", "diskmgmt.msc", "perfmon.msc"],
-    correctAnswer: 0,
-    explanation: "lusrmgr.msc opens Local Users and Groups.",
-  },
-  {
-    id: 37,
-    topic: "Users and Permissions",
-    question: "Where are user profiles stored by default?",
-    options: ["C:\\Users", "C:\\Windows\\System32", "C:\\Program Files", "C:\\Temp"],
-    correctAnswer: 0,
-    explanation: "User profiles live under C:\\Users by default.",
-  },
-  {
-    id: 38,
-    topic: "Users and Permissions",
-    question: "A Windows access token represents:",
-    options: ["A user's security context", "A registry key", "A service dependency", "A disk partition"],
-    correctAnswer: 0,
-    explanation: "Tokens describe a user's identity and privileges.",
-  },
-  {
-    id: 39,
-    topic: "Users and Permissions",
-    question: "The principle of least privilege means:",
-    options: [
-      "Grant only the permissions needed",
-      "Grant admin rights to all",
-      "Disable auditing",
-      "Use shared accounts",
-    ],
-    correctAnswer: 0,
-    explanation: "Least privilege minimizes access to what is required.",
-  },
-  {
-    id: 40,
-    topic: "Users and Permissions",
-    question: "Which built-in account is typically disabled by default?",
-    options: ["Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount"],
-    correctAnswer: 0,
-    explanation: "The built-in Administrator account is disabled by default on modern Windows.",
-  },
-  {
-    id: 41,
-    topic: "Processes",
-    question: "Which process commonly hosts multiple Windows services?",
-    options: ["svchost.exe", "explorer.exe", "lsass.exe", "winlogon.exe"],
-    correctAnswer: 0,
-    explanation: "svchost.exe is a shared host for many services.",
-  },
-  {
-    id: 42,
-    topic: "Processes",
-    question: "What is the role of explorer.exe?",
-    options: ["Windows shell and file manager", "Firewall service", "Update manager", "Registry editor"],
-    correctAnswer: 0,
-    explanation: "explorer.exe provides the desktop UI and file manager.",
-  },
-  {
-    id: 43,
-    topic: "Processes",
-    question: "Which process handles authentication and security policies?",
-    options: ["lsass.exe", "svchost.exe", "explorer.exe", "spoolsv.exe"],
-    correctAnswer: 0,
-    explanation: "LSASS manages authentication and local security policy.",
-  },
-  {
-    id: 44,
-    topic: "Processes",
-    question: "Which process manages user logon and logoff?",
-    options: ["winlogon.exe", "services.exe", "csrss.exe", "taskhostw.exe"],
-    correctAnswer: 0,
-    explanation: "winlogon.exe handles logon and session setup.",
-  },
-  {
-    id: 45,
-    topic: "Processes",
-    question: "What file is used for virtual memory paging?",
-    options: ["pagefile.sys", "boot.ini", "swapfile.sys", "hiberfil.sys"],
-    correctAnswer: 0,
-    explanation: "pagefile.sys is used for virtual memory paging.",
-  },
-  {
-    id: 46,
-    topic: "Processes",
-    question: "The System process (PID 4) primarily represents:",
-    options: ["Kernel and drivers", "User shell", "Network stack only", "Windows Update"],
-    correctAnswer: 0,
-    explanation: "The System process is tied to kernel and driver activity.",
-  },
-  {
-    id: 47,
-    topic: "Tools",
-    question: "Which command opens Task Manager?",
-    options: ["taskmgr.exe", "services.msc", "regedit.exe", "perfmon.exe"],
-    correctAnswer: 0,
-    explanation: "taskmgr.exe launches Task Manager.",
-  },
-  {
-    id: 48,
-    topic: "Tools",
-    question: "Which Sysinternals tool provides advanced process inspection?",
-    options: ["Process Explorer", "TCPView", "Autoruns", "Sigcheck"],
-    correctAnswer: 0,
-    explanation: "Process Explorer shows detailed process information.",
-  },
-  {
-    id: 49,
-    topic: "Tools",
-    question: "Which Sysinternals tool tracks file, registry, and process activity?",
-    options: ["Process Monitor", "Process Explorer", "PsExec", "TCPView"],
-    correctAnswer: 0,
-    explanation: "Process Monitor (procmon) provides detailed activity tracing.",
-  },
-  {
-    id: 50,
-    topic: "Tools",
-    question: "Which tool opens the Windows Event Viewer?",
-    options: ["eventvwr.msc", "services.msc", "taskschd.msc", "diskmgmt.msc"],
-    correctAnswer: 0,
-    explanation: "eventvwr.msc opens Event Viewer.",
-  },
-  {
-    id: 51,
-    topic: "Command Line",
-    question: "Which command shows IP configuration?",
-    options: ["ipconfig", "whoami", "net user", "systeminfo"],
-    correctAnswer: 0,
-    explanation: "ipconfig displays network configuration details.",
-  },
-  {
-    id: 52,
-    topic: "Command Line",
-    question: "Which command lists active network connections?",
-    options: ["netstat", "tasklist", "dir", "ping"],
-    correctAnswer: 0,
-    explanation: "netstat shows active connections and listening ports.",
-  },
-  {
-    id: 53,
-    topic: "Command Line",
-    question: "Which command is commonly used to query DNS records?",
-    options: ["nslookup", "chkdsk", "sc", "icacls"],
-    correctAnswer: 0,
-    explanation: "nslookup queries DNS servers.",
-  },
-  {
-    id: 54,
-    topic: "Command Line",
-    question: "Which command tests basic network connectivity?",
-    options: ["ping", "tasklist", "reg", "gpresult"],
-    correctAnswer: 0,
-    explanation: "ping checks reachability to a host.",
-  },
-  {
-    id: 55,
-    topic: "Command Line",
-    question: "Which command traces the network path to a host?",
-    options: ["tracert", "netstat", "dir", "format"],
-    correctAnswer: 0,
-    explanation: "tracert shows each hop to a destination.",
-  },
-  {
-    id: 56,
-    topic: "Command Line",
-    question: "Which command shows the current user and groups?",
-    options: ["whoami", "ipconfig", "hostname", "net use"],
-    correctAnswer: 0,
-    explanation: "whoami prints the current user and groups.",
-  },
-  {
-    id: 57,
-    topic: "Command Line",
-    question: "Which command outputs OS and hardware details?",
-    options: ["systeminfo", "tree", "dir", "cls"],
-    correctAnswer: 0,
-    explanation: "systeminfo prints OS and hardware information.",
-  },
-  {
-    id: 58,
-    topic: "Command Line",
-    question: "Which command runs a process as another user?",
-    options: ["runas", "taskkill", "net share", "shutdown"],
-    correctAnswer: 0,
-    explanation: "runas starts a process with alternate credentials.",
-  },
-  {
-    id: 59,
-    topic: "Command Line",
-    question: "Which command modifies NTFS permissions from the CLI?",
-    options: ["icacls", "attrib", "type", "copy"],
-    correctAnswer: 0,
-    explanation: "icacls manages NTFS ACLs from the command line.",
-  },
-  {
-    id: 60,
-    topic: "PowerShell",
-    question: "Which PowerShell cmdlet lists running processes?",
-    options: ["Get-Process", "Get-Service", "Get-EventLog", "Get-ChildItem"],
-    correctAnswer: 0,
-    explanation: "Get-Process shows running processes.",
-  },
-  {
-    id: 61,
-    topic: "Security",
-    question: "Which built-in tool provides antivirus protection?",
-    options: ["Microsoft Defender", "BitLocker", "SmartScreen", "UAC"],
-    correctAnswer: 0,
-    explanation: "Microsoft Defender provides built-in antivirus protection.",
-  },
-  {
-    id: 62,
-    topic: "Security",
-    question: "Windows Defender Firewall is a:",
-    options: ["Host-based firewall", "Disk encryption tool", "Process monitor", "Registry editor"],
-    correctAnswer: 0,
-    explanation: "Windows Defender Firewall controls inbound and outbound traffic.",
-  },
-  {
-    id: 63,
-    topic: "Security",
-    question: "Which Windows feature provides full disk encryption?",
-    options: ["BitLocker", "EFS", "UAC", "SmartScreen"],
-    correctAnswer: 0,
-    explanation: "BitLocker provides full disk encryption.",
-  },
-  {
-    id: 64,
-    topic: "Security",
-    question: "SmartScreen helps by:",
-    options: ["Warning about untrusted downloads and apps", "Disabling updates", "Encrypting files", "Managing services"],
-    correctAnswer: 0,
-    explanation: "SmartScreen uses reputation checks to warn about risky downloads.",
-  },
-  {
-    id: 65,
-    topic: "Logging",
-    question: "Windows Security Event ID 4624 indicates:",
-    options: ["Successful logon", "Failed logon", "Service install", "System shutdown"],
-    correctAnswer: 0,
-    explanation: "Event ID 4624 is a successful logon event.",
-  },
-  {
-    id: 66,
-    topic: "Logging",
-    question: "Windows Security Event ID 4625 indicates:",
-    options: ["Failed logon", "Successful logon", "Account lockout", "Time change"],
-    correctAnswer: 0,
-    explanation: "Event ID 4625 is a failed logon event.",
-  },
-  {
-    id: 67,
-    topic: "Logging",
-    question: "Which Windows log stores authentication events?",
-    options: ["Security", "Application", "System", "Setup"],
-    correctAnswer: 0,
-    explanation: "The Security log stores authentication and authorization events.",
-  },
-  {
-    id: 68,
-    topic: "Networking",
-    question: "SMB typically uses which TCP port?",
-    options: ["445", "80", "22", "3389"],
-    correctAnswer: 0,
-    explanation: "SMB uses TCP port 445.",
-  },
-  {
-    id: 69,
-    topic: "Networking",
-    question: "Remote Desktop Protocol (RDP) typically uses which TCP port?",
-    options: ["3389", "443", "21", "53"],
-    correctAnswer: 0,
-    explanation: "RDP uses TCP port 3389.",
-  },
-  {
-    id: 70,
-    topic: "Networking",
-    question: "Where is the Windows hosts file located?",
-    options: [
-      "C:\\Windows\\System32\\drivers\\etc\\hosts",
-      "C:\\Windows\\System32\\hosts",
-      "C:\\Windows\\Temp\\hosts",
-      "C:\\Users\\Public\\hosts",
-    ],
-    correctAnswer: 0,
-    explanation: "The hosts file is under C:\\Windows\\System32\\drivers\\etc.",
-  },
-  {
-    id: 71,
-    topic: "Maintenance",
-    question: "Which Windows component handles system updates?",
-    options: ["Windows Update", "Task Scheduler", "Registry Editor", "Disk Cleanup"],
-    correctAnswer: 0,
-    explanation: "Windows Update manages OS patching and updates.",
-  },
-  {
-    id: 72,
-    topic: "Tools",
-    question: "Which tool opens Task Scheduler?",
-    options: ["taskschd.msc", "services.msc", "eventvwr.msc", "diskmgmt.msc"],
-    correctAnswer: 0,
-    explanation: "taskschd.msc opens Task Scheduler.",
-  },
-  {
-    id: 73,
-    topic: "Policies",
-    question: "Which tool edits Local Group Policy?",
-    options: ["gpedit.msc", "lusrmgr.msc", "mmc.exe", "regedit.exe"],
-    correctAnswer: 0,
-    explanation: "gpedit.msc opens the Local Group Policy Editor.",
-  },
-  {
-    id: 74,
-    topic: "Time",
-    question: "Which service provides time synchronization?",
-    options: ["Windows Time (w32time)", "Print Spooler", "DNS Client", "Remote Registry"],
-    correctAnswer: 0,
-    explanation: "Windows Time (w32time) synchronizes system time.",
-  },
-  {
-    id: 75,
-    topic: "Environment",
-    question: "What does the %SYSTEMROOT% environment variable point to?",
-    options: ["Windows installation directory", "User profile directory", "Temporary files", "Program Files"],
-    correctAnswer: 0,
-    explanation: "%SYSTEMROOT% points to the Windows directory (typically C:\\Windows).",
-  },
+  // File System & NTFS
+  { id: 1, question: "What file system is used by modern Windows installations?", options: ["FAT32", "NTFS", "ext4", "HFS+"], correctAnswer: 1, topic: "File System", explanation: "NTFS (New Technology File System) is the default file system for modern Windows, providing features like ACLs, encryption, and journaling." },
+  { id: 2, question: "What does the Master File Table (MFT) store?", options: ["Boot information", "User passwords", "File metadata", "Network settings"], correctAnswer: 2, topic: "File System", explanation: "The MFT is the core of NTFS, storing metadata about every file including name, timestamps, permissions, and data locations." },
+  { id: 3, question: "What are Alternate Data Streams (ADS) used for?", options: ["Network streaming", "Attaching hidden data to files", "Video playback", "System logs"], correctAnswer: 1, topic: "File System", explanation: "ADS allows additional data streams to be attached to files, used legitimately for metadata but also by malware to hide payloads." },
+  { id: 4, question: "What command shows Alternate Data Streams?", options: ["dir /s", "dir /r", "dir /a", "dir /w"], correctAnswer: 1, topic: "File System", explanation: "The 'dir /r' command reveals Alternate Data Streams attached to files." },
+
+  // Registry
+  { id: 5, question: "Which registry hive contains settings for all users?", options: ["HKEY_CURRENT_USER", "HKEY_LOCAL_MACHINE", "HKEY_USERS", "HKEY_CLASSES_ROOT"], correctAnswer: 1, topic: "Registry", explanation: "HKEY_LOCAL_MACHINE (HKLM) contains system-wide settings that apply to all users on the computer." },
+  { id: 6, question: "Where is the most common location for startup program persistence?", options: ["HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", "HKLM\\SYSTEM\\Services", "HKCU\\Environment", "HKLM\\SECURITY"], correctAnswer: 0, topic: "Registry", explanation: "The Run key is the most common persistence location. Programs listed here run at every Windows startup." },
+  { id: 7, question: "Which registry hive stores local password hashes?", options: ["SYSTEM", "SOFTWARE", "SAM", "SECURITY"], correctAnswer: 2, topic: "Registry", explanation: "The SAM (Security Account Manager) hive contains local user account information including password hashes." },
+  { id: 8, question: "What tool is used to edit the Windows Registry?", options: ["notepad.exe", "regedit.exe", "cmd.exe", "services.msc"], correctAnswer: 1, topic: "Registry", explanation: "Regedit.exe is the Registry Editor, providing a graphical interface to view and modify registry settings." },
+
+  // Services
+  { id: 9, question: "Which account type has the highest privileges for services?", options: ["NetworkService", "LocalService", "LocalSystem", "Administrator"], correctAnswer: 2, topic: "Services", explanation: "LocalSystem (SYSTEM) is the highest privilege level for services, with full access to the local machine." },
+  { id: 10, question: "What command queries a service's configuration?", options: ["sc query", "sc qc", "net start", "services list"], correctAnswer: 1, topic: "Services", explanation: "The 'sc qc servicename' command shows the service configuration including path, startup type, and service account." },
+  { id: 11, question: "What session do services run in?", options: ["Session 0", "Session 1", "User Session", "Desktop Session"], correctAnswer: 0, topic: "Services", explanation: "Services run in Session 0, isolated from user sessions (Session 1+) for security." },
+
+  // Processes
+  { id: 12, question: "What is the PID of the System process?", options: ["0", "1", "4", "Random"], correctAnswer: 2, topic: "Processes", explanation: "The System process always has PID 4 on Windows. This is the kernel's user-mode representation." },
+  { id: 13, question: "Which process handles authentication and contains credentials?", options: ["csrss.exe", "lsass.exe", "services.exe", "svchost.exe"], correctAnswer: 1, topic: "Processes", explanation: "LSASS (Local Security Authority Subsystem Service) handles authentication and stores credentials in memory - a high-value target for attackers." },
+  { id: 14, question: "What is the parent process of all svchost.exe instances?", options: ["System", "wininit.exe", "services.exe", "explorer.exe"], correctAnswer: 2, topic: "Processes", explanation: "All svchost.exe processes should have services.exe as their parent. Any other parent is suspicious." },
+  { id: 15, question: "Which Sysinternals tool is best for detailed process analysis?", options: ["TCPView", "Autoruns", "Process Explorer", "Handle"], correctAnswer: 2, topic: "Processes", explanation: "Process Explorer is an advanced Task Manager replacement with detailed process information, DLL inspection, and VirusTotal integration." },
+
+  // Security
+  { id: 16, question: "What does UAC stand for?", options: ["User Access Control", "User Account Control", "Universal Access Check", "User Authentication Center"], correctAnswer: 1, topic: "Security", explanation: "UAC (User Account Control) prompts for consent before allowing administrative actions, protecting against unauthorized changes." },
+  { id: 17, question: "Which feature protects credentials using virtualization?", options: ["BitLocker", "Windows Defender", "Credential Guard", "SmartScreen"], correctAnswer: 2, topic: "Security", explanation: "Credential Guard uses virtualization-based security to protect credentials from theft by tools like Mimikatz." },
+  { id: 18, question: "What is the Security Identifier (SID) for the SYSTEM account?", options: ["S-1-5-18", "S-1-5-32-544", "S-1-1-0", "S-1-5-21"], correctAnswer: 0, topic: "Security", explanation: "S-1-5-18 is the SID for the LocalSystem account, the highest privilege account on Windows." },
+  { id: 19, question: "Which Event ID indicates a successful logon?", options: ["4624", "4625", "4648", "4672"], correctAnswer: 0, topic: "Security", explanation: "Event ID 4624 is logged when an account successfully logs on to a Windows system." },
+
+  // Networking
+  { id: 20, question: "What port does RDP use?", options: ["22", "443", "3389", "5985"], correctAnswer: 2, topic: "Networking", explanation: "Remote Desktop Protocol (RDP) uses TCP port 3389 by default." },
+  { id: 21, question: "What command shows all active network connections with PIDs?", options: ["ipconfig /all", "netstat -ano", "route print", "arp -a"], correctAnswer: 1, topic: "Networking", explanation: "The 'netstat -ano' command shows all connections with their states and owning process IDs." },
+  { id: 22, question: "What port does SMB use?", options: ["135", "139", "445", "3389"], correctAnswer: 2, topic: "Networking", explanation: "SMB (Server Message Block) for Windows file sharing uses TCP port 445." },
+  { id: 23, question: "Which command shows WiFi passwords?", options: ["ipconfig /all", "netsh wlan show profiles key=clear", "route print", "net use"], correctAnswer: 1, topic: "Networking", explanation: "The netsh command with 'key=clear' parameter reveals stored WiFi passwords." },
+
+  // Boot Process
+  { id: 24, question: "What is the first user-mode process during Windows boot?", options: ["csrss.exe", "smss.exe", "wininit.exe", "services.exe"], correctAnswer: 1, topic: "Boot", explanation: "Session Manager Subsystem (smss.exe) is the first user-mode process, started by the kernel during boot." },
+  { id: 25, question: "Where is the Boot Configuration Data stored on UEFI systems?", options: ["boot.ini", "BCD on EFI partition", "MBR", "C:\\Windows\\Boot"], correctAnswer: 1, topic: "Boot", explanation: "On UEFI systems, BCD is stored on the EFI System Partition at \\EFI\\Microsoft\\Boot\\BCD." },
+  { id: 26, question: "What file is the Windows kernel?", options: ["kernel32.dll", "ntdll.dll", "ntoskrnl.exe", "hal.dll"], correctAnswer: 2, topic: "Boot", explanation: "ntoskrnl.exe is the Windows NT kernel, the core of the operating system." },
+
+  // PowerShell
+  { id: 27, question: "What is the PowerShell equivalent of 'dir'?", options: ["Get-Directory", "Get-ChildItem", "List-Files", "Show-Item"], correctAnswer: 1, topic: "PowerShell", explanation: "Get-ChildItem (aliases: ls, dir, gci) is the PowerShell equivalent of the dir command." },
+  { id: 28, question: "Which PowerShell cmdlet lists running services?", options: ["Get-Process", "Get-Service", "Get-Task", "Get-Running"], correctAnswer: 1, topic: "PowerShell", explanation: "Get-Service lists all Windows services and their current status." },
+  { id: 29, question: "What PowerShell feature should be enabled for security monitoring?", options: ["Execution Policy", "Script Block Logging", "Remote Signing", "Constrained Mode"], correctAnswer: 1, topic: "PowerShell", explanation: "Script Block Logging records all PowerShell code execution, critical for detecting malicious activity." },
+
+  // Active Directory
+  { id: 30, question: "What authentication protocol does Active Directory primarily use?", options: ["NTLM", "Kerberos", "OAuth", "SAML"], correctAnswer: 1, topic: "Active Directory", explanation: "Active Directory primarily uses Kerberos for authentication, though NTLM is still supported for compatibility." },
+  { id: 31, question: "What is a Domain Controller?", options: ["The main user account", "Server hosting AD database", "Firewall appliance", "DNS server only"], correctAnswer: 1, topic: "Active Directory", explanation: "A Domain Controller hosts the Active Directory database and handles authentication for domain users." },
+  { id: 32, question: "Which attack targets Kerberos service tickets?", options: ["Pass-the-Hash", "Kerberoasting", "Silver Ticket", "LDAP Injection"], correctAnswer: 1, topic: "Active Directory", explanation: "Kerberoasting requests service tickets that can be cracked offline to reveal service account passwords." },
+
+  // Tools
+  { id: 33, question: "Which Sysinternals tool shows ALL startup programs?", options: ["Process Explorer", "Autoruns", "TCPView", "ProcMon"], correctAnswer: 1, topic: "Tools", explanation: "Autoruns shows all programs configured to run at startup from every possible persistence location." },
+  { id: 34, question: "What tool captures real-time file, registry, and network activity?", options: ["Task Manager", "Resource Monitor", "Process Monitor", "Event Viewer"], correctAnswer: 2, topic: "Tools", explanation: "Process Monitor (ProcMon) captures real-time file system, registry, and process/thread activity." },
+  { id: 35, question: "Which built-in tool manages disk partitions?", options: ["diskpart.exe", "diskmgmt.msc", "Both", "Neither"], correctAnswer: 2, topic: "Tools", explanation: "Both diskpart (command-line) and diskmgmt.msc (GUI) can manage disk partitions on Windows." },
 ];
+
+// Quiz helper constants
+const QUIZ_QUESTION_COUNT = 15;
+
+const selectRandomQuestions = (questions: QuizQuestion[], count: number): QuizQuestion[] => {
+  const shuffled = [...questions].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export default function WindowsBasicsPage() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [quizPool] = React.useState<QuizQuestion[]>(() =>
-    selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT)
-  );
+  const accent = "#0078d4"; // Windows blue
 
   // Navigation state
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("");
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const accent = "#0078d4"; // Windows blue
-
   // Section navigation items
   const sectionNavItems = [
-    { id: "intro", label: "Introduction", icon: <InfoIcon /> },
-    { id: "version-history", label: "Version History", icon: <HistoryIcon /> },
-    { id: "boot-process", label: "Boot Process", icon: <SpeedIcon /> },
+    { id: "overview", label: "Overview", icon: <SchoolIcon /> },
     { id: "core-concepts", label: "Core Concepts", icon: <DesktopWindowsIcon /> },
-    { id: "architecture", label: "Architecture", icon: <AccountTreeIcon /> },
+    { id: "architecture", label: "Architecture", icon: <LayersIcon /> },
+    { id: "directories", label: "Important Directories", icon: <FolderIcon /> },
+    { id: "registry", label: "Registry Keys", icon: <StorageIcon /> },
+    { id: "commands", label: "CMD Commands", icon: <TerminalIcon /> },
+    { id: "powershell", label: "PowerShell", icon: <DataObjectIcon /> },
+    { id: "processes", label: "Critical Processes", icon: <MemoryIcon /> },
+    { id: "events", label: "Security Events", icon: <HistoryIcon /> },
+    { id: "shortcuts", label: "Keyboard Shortcuts", icon: <KeyIcon /> },
+    { id: "versions", label: "Windows Versions", icon: <UpdateIcon /> },
+    { id: "boot", label: "Boot Process", icon: <PlayArrowIcon /> },
+    { id: "tools", label: "Windows Tools", icon: <BuildIcon /> },
+    { id: "env-vars", label: "Environment Variables", icon: <DataObjectIcon /> },
     { id: "security-features", label: "Security Features", icon: <ShieldIcon /> },
-    { id: "directories", label: "Directories", icon: <FolderIcon /> },
-    { id: "registry-keys", label: "Registry Keys", icon: <KeyIcon /> },
-    { id: "cmd-commands", label: "CMD Commands", icon: <TerminalIcon /> },
-    { id: "powershell", label: "PowerShell", icon: <TerminalIcon /> },
-    { id: "powershell-security", label: "PS Security", icon: <SecurityIcon /> },
-    { id: "processes", label: "Processes", icon: <MemoryIcon /> },
-    { id: "networking", label: "Networking", icon: <NetworkCheckIcon /> },
-    { id: "common-ports", label: "Common Ports", icon: <RouterIcon /> },
-    { id: "active-directory", label: "Active Directory", icon: <DnsIcon /> },
     { id: "group-policy", label: "Group Policy", icon: <PolicyIcon /> },
-    { id: "security-events", label: "Security Events", icon: <SecurityIcon /> },
-    { id: "forensic-artifacts", label: "Forensics", icon: <FindInPageIcon /> },
-    { id: "hardening", label: "Hardening", icon: <GppGoodIcon /> },
-    { id: "shortcuts", label: "Shortcuts", icon: <KeyboardArrowUpIcon /> },
-    { id: "tools", label: "Tools", icon: <BuildIcon /> },
-    { id: "environment-vars", label: "Environment Vars", icon: <SettingsIcon /> },
-    { id: "pro-tips", label: "Pro Tips", icon: <TipsAndUpdatesIcon /> },
-    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+    { id: "forensics", label: "Forensic Artifacts", icon: <FindInPageIcon /> },
+    { id: "network-config", label: "Network Config", icon: <NetworkCheckIcon /> },
+    { id: "ps-security", label: "PS Security Commands", icon: <LockIcon /> },
+    { id: "hardening", label: "Hardening Checklist", icon: <VerifiedUserIcon /> },
+    { id: "ports", label: "Common Ports", icon: <RouterIcon /> },
+    { id: "active-directory", label: "Active Directory", icon: <AccountTreeIcon /> },
+    { id: "quiz", label: "Knowledge Check", icon: <QuizIcon /> },
   ];
 
-  // Scroll to section
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      const yOffset = -80;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
       setNavDrawerOpen(false);
     }
   };
 
-  // Track active section on scroll
   useEffect(() => {
     const handleScroll = () => {
       const sections = sectionNavItems.map((item) => item.id);
       let currentSection = "";
-
       for (const sectionId of sections) {
         const element = document.getElementById(sectionId);
         if (element) {
           const rect = element.getBoundingClientRect();
-          if (rect.top <= 150) {
+          if (rect.top <= 150 && rect.bottom >= 150) {
             currentSection = sectionId;
+            break;
           }
         }
       }
       setActiveSection(currentSection);
     };
-
     window.addEventListener("scroll", handleScroll);
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll to top
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
-  // Progress calculation
   const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
   const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
-  const pageContext = `Windows Fundamentals learning page - Comprehensive guide to the Microsoft Windows operating system for security professionals, system administrators, and IT practitioners. This in-depth resource covers core concepts including the NTFS file system, Windows Registry, Services architecture, Users & Permissions model, Command Line interfaces (CMD and PowerShell), and Process/Memory management. Includes detailed reference tables for important directory locations, security-critical registry keys, essential CMD commands with PowerShell equivalents, critical system processes, Windows Security Event IDs for detection and forensics, and productivity keyboard shortcuts.`;
+  const [quizPool] = useState<QuizQuestion[]>(() => selectRandomQuestions(quizQuestions, QUIZ_QUESTION_COUNT));
 
-  const commandCategories = [...new Set(essentialCommands.map(c => c.category))];
+  const pageContext = `Windows Basics learning page - Comprehensive Windows operating system fundamentals for IT professionals and security practitioners. Covers file system, registry, services, processes, security features, and more.`;
 
   // Sidebar navigation component
   const sidebarNav = (
     <Paper
       elevation={0}
       sx={{
-        width: 220,
-        flexShrink: 0,
         position: "sticky",
         top: 80,
+        p: 2,
+        borderRadius: 3,
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        backdropFilter: "blur(20px)",
         maxHeight: "calc(100vh - 100px)",
         overflowY: "auto",
-        borderRadius: 3,
-        border: `1px solid ${alpha(accent, 0.15)}`,
-        bgcolor: alpha(theme.palette.background.paper, 0.6),
-        display: { xs: "none", lg: "block" },
-        "&::-webkit-scrollbar": {
-          width: 6,
-        },
+        "&::-webkit-scrollbar": { width: 6 },
+        "&::-webkit-scrollbar-track": { background: "transparent" },
         "&::-webkit-scrollbar-thumb": {
-          bgcolor: alpha(accent, 0.3),
+          background: alpha(accent, 0.3),
           borderRadius: 3,
+          "&:hover": { background: alpha(accent, 0.5) },
         },
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Typography
-          variant="subtitle2"
-          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <ListAltIcon sx={{ fontSize: 18 }} />
-          Course Navigation
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", textTransform: "uppercase", letterSpacing: 1 }}>
+          Navigation
         </Typography>
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-            <Typography variant="caption" color="text.secondary">
-              Progress
-            </Typography>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
-              {Math.round(progressPercent)}%
-            </Typography>
-          </Box>
+        <Box sx={{ mt: 1 }}>
           <LinearProgress
             variant="determinate"
             value={progressPercent}
             sx={{
-              height: 6,
-              borderRadius: 3,
+              height: 4,
+              borderRadius: 2,
               bgcolor: alpha(accent, 0.1),
-              "& .MuiLinearProgress-bar": {
-                bgcolor: accent,
-                borderRadius: 3,
-              },
+              "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 2 },
             }}
           />
         </Box>
-        <Divider sx={{ mb: 1 }} />
-        <List dense sx={{ mx: -1 }}>
-          {sectionNavItems.map((item) => (
-            <ListItem
-              key={item.id}
-              onClick={() => scrollToSection(item.id)}
-              sx={{
-                borderRadius: 1.5,
-                mb: 0.25,
-                py: 0.5,
-                cursor: "pointer",
-                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
-                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
-                "&:hover": {
-                  bgcolor: alpha(accent, 0.08),
-                },
-                transition: "all 0.15s ease",
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: activeSection === item.id ? 700 : 500,
-                      color: activeSection === item.id ? accent : "text.secondary",
-                    }}
-                  >
-                    {item.label}
-                  </Typography>
-                }
-              />
-            </ListItem>
-          ))}
-        </List>
       </Box>
+      <Divider sx={{ mb: 1 }} />
+      <List dense sx={{ mx: -1 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1.5,
+              mb: 0.25,
+              py: 0.5,
+              cursor: "pointer",
+              bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+              "&:hover": { bgcolor: alpha(accent, 0.08) },
+              transition: "all 0.15s ease",
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? accent : "text.secondary" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: activeSection === item.id ? 700 : 500,
+                    color: activeSection === item.id ? accent : "text.secondary",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              }
+            />
+          </ListItem>
+        ))}
+      </List>
     </Paper>
   );
 
   return (
-    <LearnPageLayout pageTitle="Windows Fundamentals" pageContext={pageContext}>
-      <Box sx={{ display: "flex", gap: 3, position: "relative" }}>
-        {/* Sidebar Navigation */}
-        {sidebarNav}
-
-        {/* Main Content */}
-        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
-          {/* Back Button */}
-          <Chip
-            component={Link}
-            to="/learn"
-            icon={<ArrowBackIcon />}
-            label="Back to Learning Hub"
-            clickable
-            variant="outlined"
-            sx={{ borderRadius: 2, mb: 3 }}
-          />
-
-        {/* Hero Banner */}
-        <Paper
-          sx={{
-            p: 4,
-            mb: 4,
-            borderRadius: 4,
-            background: `linear-gradient(135deg, ${alpha("#0078d4", 0.15)} 0%, ${alpha("#00a2ed", 0.1)} 100%)`,
-            border: `1px solid ${alpha("#0078d4", 0.2)}`,
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              position: "absolute",
-              top: -50,
-              right: -50,
-              width: 200,
-              height: 200,
-              borderRadius: "50%",
-              background: `linear-gradient(135deg, ${alpha("#0078d4", 0.1)}, transparent)`,
-            }}
-          />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
-            <Box
-              sx={{
-                width: 80,
-                height: 80,
-                borderRadius: 3,
-                background: `linear-gradient(135deg, #0078d4, #00a2ed)`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: `0 8px 32px ${alpha("#0078d4", 0.3)}`,
-              }}
-            >
-              <DesktopWindowsIcon sx={{ fontSize: 45, color: "white" }} />
-            </Box>
-            <Box>
-              <Chip label="IT Fundamentals" size="small" sx={{ mb: 1, fontWeight: 600, bgcolor: alpha("#0078d4", 0.1), color: "#0078d4" }} />
-              <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
-                Windows Fundamentals
-              </Typography>
-              <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600 }}>
-                Master the Windows operating system from the ground up
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
-
-        {/* Overview Section */}
-        <Box id="intro">
-          <Paper
-            sx={{
-              p: 4,
-              mb: 5,
-              borderRadius: 4,
-              bgcolor: alpha(theme.palette.background.paper, 0.6),
-              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            }}
-          >
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <InfoIcon sx={{ color: "#0078d4" }} />
-              Overview
-            </Typography>
-          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-            Microsoft Windows is the world's most widely deployed desktop operating system, powering over 1 billion devices globally 
-            and dominating enterprise environments with approximately 75% market share in corporate settings. Originally released in 1985 
-            as a graphical shell for MS-DOS, Windows has evolved into a sophisticated, multi-user, multitasking operating system that 
-            forms the backbone of most business IT infrastructure.
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.8 }}>
-            For cybersecurity professionals, understanding Windows fundamentals is not optional—it's essential. Whether you're 
-            conducting penetration tests, performing incident response, analyzing malware, or securing enterprise networks, you'll 
-            encounter Windows systems at every turn. The operating system's architecture, including its file system (NTFS), registry, 
-            service model, user permissions framework, and command-line interfaces, provides both the attack surface that adversaries 
-            exploit and the defensive mechanisms that security teams leverage.
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.8 }}>
-            This comprehensive guide covers the core components of Windows that every IT professional and security practitioner must 
-            understand. From navigating the file system and managing services to interpreting security events and leveraging PowerShell, 
-            these fundamentals form the foundation for more advanced topics like Active Directory, privilege escalation, and Windows 
-            internals for reverse engineering.
-          </Typography>
-          
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>Who This Is For</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Security analysts, penetration testers, system administrators, IT support professionals, and anyone beginning their 
-                  cybersecurity journey who needs to understand Windows.
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#3b82f6", 0.05), border: `1px solid ${alpha("#3b82f6", 0.2)}` }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Prerequisites</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Basic computer literacy and familiarity with general computing concepts. No prior Windows administration experience 
-                  required—we start from the basics.
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>What You'll Learn</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  File system navigation, registry structure, service management, user permissions, command-line proficiency, 
-                  process analysis, and security event interpretation.
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Quick Stats - Updated */}
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {[
-            { value: "6", label: "Core Concepts", color: "#0078d4", icon: <LayersIcon /> },
-            { value: "18", label: "Key Directories", color: "#10b981", icon: <FolderIcon /> },
-            { value: "30", label: "Essential Commands", color: "#f59e0b", icon: <TerminalIcon /> },
-            { value: "14", label: "Admin Tools", color: "#8b5cf6", icon: <BuildIcon /> },
-            { value: "10", label: "Critical Processes", color: "#ef4444", icon: <MemoryIcon /> },
-            { value: "12", label: "Security Events", color: "#06b6d4", icon: <SecurityIcon /> },
-          ].map((stat) => (
-            <Grid item xs={6} md={2} key={stat.label}>
-              <Paper
-                sx={{
-                  p: 2,
-                  textAlign: "center",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(stat.color, 0.2)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: `0 4px 20px ${alpha(stat.color, 0.15)}`,
-                  },
-                }}
-              >
-                <Box sx={{ color: stat.color, mb: 0.5 }}>{stat.icon}</Box>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: stat.color }}>
-                  {stat.value}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {stat.label}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Windows Versions Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            WINDOWS VERSIONS
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-        </Box>
-
-        {/* Version History Section */}
-        <Box id="version-history">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            📅 Windows Version History
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Understanding which Windows versions you may encounter
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {windowsVersions.map((ver) => (
-            <Grid item xs={12} sm={6} md={3} key={ver.version}>
-              <Paper
-                sx={{
-                  p: 2,
-                  height: "100%",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha("#0078d4", 0.15)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    borderColor: "#0078d4",
-                  },
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0078d4", mb: 0.5 }}>
-                  {ver.version}
-                </Typography>
-                <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
-                  <Chip label={ver.release} size="small" sx={{ fontSize: "0.65rem", fontWeight: 600 }} />
-                  <Chip label={`NT ${ver.kernel}`} size="small" variant="outlined" sx={{ fontSize: "0.65rem", fontFamily: "monospace" }} />
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {ver.notes}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        </Box>
-
-        {/* Boot Process Section */}
-        <Box id="boot-process">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🚀 Windows Boot Process
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Understanding how Windows starts - essential for troubleshooting and security analysis
-        </Typography>
-
-        <Paper sx={{ p: 3, mb: 5, borderRadius: 4, border: `1px solid ${alpha("#10b981", 0.2)}` }}>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-            {bootProcess.map((step, index) => (
-              <Box key={step.step} sx={{ display: "flex", alignItems: "flex-start", flex: "1 1 300px" }}>
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    bgcolor: "#10b981",
-                    color: "white",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    mr: 2,
-                    flexShrink: 0,
-                  }}
-                >
-                  {step.step}
-                </Box>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{step.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">{step.description}</Typography>
-                </Box>
-                {index < bootProcess.length - 1 && (
-                  <Box sx={{ display: { xs: "none", md: "block" }, ml: 2, color: "#10b981", fontWeight: 700 }}>→</Box>
-                )}
-              </Box>
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Introduction Alert */}
-        <Alert 
-          severity="info" 
-          icon={<InfoIcon />}
-          sx={{ mb: 4, borderRadius: 3 }}
-        >
-          <AlertTitle sx={{ fontWeight: 700 }}>Why Learn Windows Fundamentals?</AlertTitle>
-          Windows dominates enterprise environments with over 75% market share in corporate settings. 
-          Understanding Windows internals is essential for penetration testing, incident response, 
-          malware analysis, and system administration. This guide covers the core concepts you need.
-        </Alert>
-
-        </Box>
-
-        {/* Core Concepts */}
-        <Box id="core-concepts">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🖥️ Core Windows Concepts
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Fundamental building blocks of the Windows operating system
-        </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 5 }}>
-          {windowsConcepts.map((concept) => (
-            <Grid item xs={12} md={6} key={concept.title}>
-              <Paper
-                sx={{
-                  p: 0,
-                  height: "100%",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                  border: `1px solid ${alpha(concept.color, 0.2)}`,
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-4px)",
-                    boxShadow: `0 12px 40px ${alpha(concept.color, 0.15)}`,
-                  },
-                }}
-              >
-                <Box
-                  sx={{
-                    p: 2,
-                    background: `linear-gradient(135deg, ${alpha(concept.color, 0.15)} 0%, ${alpha(concept.color, 0.05)} 100%)`,
-                    borderBottom: `1px solid ${alpha(concept.color, 0.1)}`,
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2,
-                        background: `linear-gradient(135deg, ${concept.color}, ${alpha(concept.color, 0.7)})`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                      }}
-                    >
-                      {concept.icon}
-                    </Box>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {concept.title}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {concept.description}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-                <Box sx={{ p: 2.5 }}>
-                  <List dense>
-                    {concept.keyPoints.map((point) => (
-                      <ListItem key={point} sx={{ py: 0.3, px: 0 }}>
-                        <ListItemIcon sx={{ minWidth: 24 }}>
-                          <CheckCircleIcon sx={{ fontSize: 14, color: concept.color }} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={point}
-                          primaryTypographyProps={{ variant: "body2", lineHeight: 1.4, fontSize: "0.85rem" }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                  
-                  {/* Details Accordion */}
-                  {concept.details && (
-                    <Accordion 
-                      sx={{ 
-                        mt: 1.5, 
-                        boxShadow: "none", 
-                        bgcolor: alpha(concept.color, 0.03),
-                        "&:before": { display: "none" },
-                        borderRadius: "8px !important",
-                      }}
-                    >
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 40 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: concept.color }}>
-                          Technical Details
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0 }}>
-                        <List dense>
-                          {concept.details.map((detail, i) => (
-                            <ListItem key={i} sx={{ py: 0.2, px: 0 }}>
-                              <ListItemIcon sx={{ minWidth: 20 }}>
-                                <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: concept.color }} />
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={detail}
-                                primaryTypographyProps={{ variant: "caption" }}
-                              />
-                            </ListItem>
-                          ))}
-                        </List>
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-
-                  <Box
-                    sx={{
-                      mt: 2,
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: alpha("#f59e0b", 0.05),
-                      border: `1px dashed ${alpha("#f59e0b", 0.3)}`,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, fontWeight: 500 }}
-                    >
-                      <SecurityIcon sx={{ fontSize: 14, color: "#f59e0b", mt: 0.2, flexShrink: 0 }} />
-                      {concept.securityNote}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Windows Architecture */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            ARCHITECTURE
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Architecture Section */}
-        <Box id="architecture">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🏗️ Windows Architecture Overview
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Understanding the layered structure of Windows
-        </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 5 }}>
-          {windowsArchitecture.map((layer) => (
-            <Grid item xs={12} md={6} key={layer.layer}>
-              <Paper
-                sx={{
-                  p: 3,
-                  borderRadius: 4,
-                  border: `2px solid ${layer.color}`,
-                  background: `linear-gradient(135deg, ${alpha(layer.color, 0.05)} 0%, transparent 100%)`,
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-                  <AccountTreeIcon sx={{ color: layer.color, fontSize: 28 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: layer.color }}>
-                    {layer.layer}
-                  </Typography>
-                  <Chip 
-                    label={layer.layer === "Kernel Mode" ? "Ring 0" : "Ring 3"} 
-                    size="small"
-                    sx={{ 
-                      bgcolor: alpha(layer.color, 0.1), 
-                      color: layer.color,
-                      fontWeight: 700,
-                      fontSize: "0.7rem",
-                    }} 
-                  />
-                </Box>
-                {layer.components.map((comp) => (
-                  <Box 
-                    key={comp.name} 
-                    sx={{ 
-                      p: 1.5, 
-                      mb: 1, 
-                      borderRadius: 2, 
-                      bgcolor: alpha(layer.color, 0.05),
-                      borderLeft: `3px solid ${layer.color}`,
-                    }}
-                  >
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      {comp.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {comp.description}
-                    </Typography>
-                  </Box>
-                ))}
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        </Box>
-
-        {/* Windows Security Features Section */}
-        <Box id="security-features" sx={{ mt: 5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-              SECURITY FEATURES
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Box>
-
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🛡️ Windows Security Features
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Built-in security technologies that protect Windows systems
-          </Typography>
-
-          <Grid container spacing={3} sx={{ mb: 5 }}>
-            {windowsSecurityFeatures.map((feature) => (
-              <Grid item xs={12} md={6} key={feature.name}>
-                <Paper
-                  sx={{
-                    p: 0,
-                    height: "100%",
-                    borderRadius: 4,
-                    overflow: "hidden",
-                    border: `1px solid ${alpha(feature.color, 0.2)}`,
-                    transition: "all 0.3s ease",
-                    "&:hover": {
-                      transform: "translateY(-4px)",
-                      boxShadow: `0 12px 40px ${alpha(feature.color, 0.15)}`,
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      p: 2,
-                      background: `linear-gradient(135deg, ${alpha(feature.color, 0.15)} 0%, ${alpha(feature.color, 0.05)} 100%)`,
-                      borderBottom: `1px solid ${alpha(feature.color, 0.1)}`,
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 2,
-                          background: `linear-gradient(135deg, ${feature.color}, ${alpha(feature.color, 0.7)})`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "white",
-                        }}
-                      >
-                        {feature.icon}
-                      </Box>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          {feature.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {feature.description}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                  <Box sx={{ p: 2.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      Key Features
-                    </Typography>
-                    <List dense>
-                      {feature.keyFeatures.slice(0, 5).map((point) => (
-                        <ListItem key={point} sx={{ py: 0.2, px: 0 }}>
-                          <ListItemIcon sx={{ minWidth: 20 }}>
-                            <CheckCircleIcon sx={{ fontSize: 14, color: feature.color }} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={point}
-                            primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                    
-                    <Accordion 
-                      sx={{ 
-                        mt: 1.5, 
-                        boxShadow: "none", 
-                        bgcolor: alpha(feature.color, 0.03),
-                        "&:before": { display: "none" },
-                        borderRadius: "8px !important",
-                      }}
-                    >
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 40 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: feature.color }}>
-                          Management Commands
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0 }}>
-                        {feature.commands.map((cmd) => (
-                          <Box key={cmd.cmd} sx={{ mb: 1 }}>
-                            <Typography variant="caption" sx={{ fontFamily: "monospace", color: feature.color, fontWeight: 600 }}>
-                              {cmd.cmd}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {cmd.desc}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </AccordionDetails>
-                    </Accordion>
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Section Divider */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            FILE SYSTEM
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        {/* Important Directories */}
-        <Box id="directories">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            📁 Important Directories
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Key locations you should know on a Windows system
-        </Typography>
-
-        <TableContainer
-          component={Paper}
-          sx={{
-            mb: 5,
-            borderRadius: 4,
-            border: `1px solid ${alpha("#0078d4", 0.15)}`,
-          }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha("#0078d4", 0.1)} 0%, ${alpha("#00a2ed", 0.1)} 100%)`,
-                }}
-              >
-                <TableCell sx={{ fontWeight: 700 }}>Path</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {importantDirectories.map((dir, index) => (
-                <TableRow
-                  key={dir.path}
-                  sx={{
-                    bgcolor: index % 2 === 0 ? "transparent" : alpha("#0078d4", 0.02),
-                  }}
-                >
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078d4", fontSize: "0.75rem" }}
-                    >
-                      {dir.path}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>{dir.description}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={dir.purpose}
-                      size="small"
-                      sx={{
-                        bgcolor:
-                          dir.purpose === "System"
-                            ? alpha("#ef4444", 0.1)
-                            : dir.purpose === "User Data"
-                            ? alpha("#10b981", 0.1)
-                            : dir.purpose === "Applications"
-                            ? alpha("#3b82f6", 0.1)
-                            : alpha("#f59e0b", 0.1),
-                        color:
-                          dir.purpose === "System"
-                            ? "#ef4444"
-                            : dir.purpose === "User Data"
-                            ? "#10b981"
-                            : dir.purpose === "Applications"
-                            ? "#3b82f6"
-                            : "#f59e0b",
-                        fontWeight: 600,
-                        fontSize: "0.65rem",
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">{dir.notes}</Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {/* Registry Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            REGISTRY
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Registry Keys Section */}
-        <Box id="registry-keys">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🗝️ Important Registry Keys
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Security-relevant registry locations to monitor
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {registryKeys.map((regKey) => (
-            <Grid item xs={12} md={6} key={regKey.key}>
-              <Paper
-                sx={{
-                  p: 2,
-                  height: "100%",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(
-                    regKey.securityRelevance === "CRITICAL" ? "#ef4444" :
-                    regKey.securityRelevance === "HIGH" ? "#f59e0b" : "#10b981", 0.2
-                  )}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: `0 4px 20px ${alpha("#8b5cf6", 0.1)}`,
-                  },
-                }}
-              >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-                  <Chip 
-                    label={regKey.hive} 
-                    size="small" 
-                    sx={{ 
-                      fontFamily: "monospace", 
-                      fontWeight: 700,
-                      bgcolor: alpha("#8b5cf6", 0.1),
-                      color: "#8b5cf6",
-                    }} 
-                  />
-                  <Chip
-                    label={regKey.securityRelevance}
-                    size="small"
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: "0.65rem",
-                      bgcolor: alpha(
-                        regKey.securityRelevance === "CRITICAL" ? "#ef4444" :
-                        regKey.securityRelevance === "HIGH" ? "#f59e0b" :
-                        regKey.securityRelevance === "MEDIUM" ? "#3b82f6" : "#10b981", 0.1
-                      ),
-                      color: regKey.securityRelevance === "CRITICAL" ? "#ef4444" :
-                        regKey.securityRelevance === "HIGH" ? "#f59e0b" :
-                        regKey.securityRelevance === "MEDIUM" ? "#3b82f6" : "#10b981",
-                    }}
-                  />
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#8b5cf6", mb: 1, wordBreak: "break-all" }}
-                >
-                  {regKey.key}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>{regKey.description}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <WarningIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: "middle" }} />
-                  {regKey.notes}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Section Divider */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            COMMAND LINE
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Essential Commands - Grouped by Category */}
-        <Box id="cmd-commands">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            ⌨️ Essential CMD Commands
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Comprehensive command reference organized by category
-        </Typography>
-
-        {commandCategories.map((category) => (
-          <Box key={category} sx={{ mb: 4 }}>
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                fontWeight: 700, 
-                mb: 2, 
-                display: "flex", 
-                alignItems: "center", 
-                gap: 1,
-                color: "#10b981",
-              }}
-            >
-              {category === "Navigation" && <FolderIcon sx={{ fontSize: 20 }} />}
-              {category === "Files" && <FolderIcon sx={{ fontSize: 20 }} />}
-              {category === "Processes" && <MemoryIcon sx={{ fontSize: 20 }} />}
-              {category === "Services" && <SettingsIcon sx={{ fontSize: 20 }} />}
-              {category === "Users" && <PersonIcon sx={{ fontSize: 20 }} />}
-              {category === "Network" && <NetworkCheckIcon sx={{ fontSize: 20 }} />}
-              {category === "Security" && <SecurityIcon sx={{ fontSize: 20 }} />}
-              {category === "System" && <BuildIcon sx={{ fontSize: 20 }} />}
-              {category}
-            </Typography>
-            <Grid container spacing={2}>
-              {essentialCommands.filter(c => c.category === category).map((cmd) => (
-                <Grid item xs={12} sm={6} md={4} key={cmd.command}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      height: "100%",
-                      borderRadius: 3,
-                      border: `1px solid ${alpha("#10b981", 0.15)}`,
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        borderColor: "#10b981",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ fontWeight: 700, fontFamily: "monospace", color: "#10b981", mb: 0.5, fontSize: "0.9rem" }}
-                    >
-                      {cmd.command}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: "0.8rem" }}>
-                      {cmd.description}
-                    </Typography>
-                    <Chip
-                      label={cmd.example}
-                      size="small"
-                      sx={{
-                        fontFamily: "monospace",
-                        fontSize: "0.65rem",
-                        bgcolor: alpha("#10b981", 0.08),
-                        mb: 1,
-                      }}
-                    />
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
-                      {cmd.flags}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-        ))}
-
-        </Box>
-
-        {/* PowerShell Comparison */}
-        <Box id="powershell">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🔷 PowerShell Equivalents
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Modern PowerShell cmdlets with usage examples
-        </Typography>
-
-        <TableContainer
-          component={Paper}
-          sx={{
-            mb: 5,
-            borderRadius: 4,
-            border: `1px solid ${alpha("#8b5cf6", 0.15)}`,
-          }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha("#8b5cf6", 0.1)} 0%, ${alpha("#6366f1", 0.1)} 100%)`,
-                }}
-              >
-                <TableCell sx={{ fontWeight: 700 }}>CMD</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>PowerShell Cmdlet</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Aliases</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Example Usage</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {powershellCommands.map((cmd, index) => (
-                <TableRow
-                  key={cmd.cmd}
-                  sx={{
-                    bgcolor: index % 2 === 0 ? "transparent" : alpha("#8b5cf6", 0.02),
-                  }}
-                >
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8rem" }}>
-                      {cmd.cmd}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 600, color: "#8b5cf6", fontSize: "0.8rem" }}
-                    >
-                      {cmd.ps}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", color: "text.secondary", fontSize: "0.75rem" }}>
-                      {cmd.alias}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" sx={{ fontFamily: "monospace", fontSize: "0.65rem" }}>
-                      {cmd.usage}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        </Box>
-
-        {/* PowerShell Security Commands Section */}
-        <Box id="powershell-security" sx={{ mt: 5 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🔒 PowerShell Security Commands
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Essential PowerShell cmdlets for security analysis and administration
-          </Typography>
-
-          <Grid container spacing={2} sx={{ mb: 5 }}>
-            {powershellSecurityCommands.map((category) => (
-              <Grid item xs={12} md={6} key={category.category}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    height: "100%",
-                    borderRadius: 3,
-                    border: `1px solid ${alpha("#8b5cf6", 0.15)}`,
-                  }}
-                >
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 1 }}
-                  >
-                    <TerminalIcon sx={{ fontSize: 20 }} />
-                    {category.category}
-                  </Typography>
-                  {category.commands.map((cmd) => (
-                    <Box
-                      key={cmd.cmd}
-                      sx={{
-                        p: 1,
-                        mb: 1,
-                        borderRadius: 2,
-                        bgcolor: alpha("#8b5cf6", 0.03),
-                        borderLeft: `3px solid ${alpha("#8b5cf6", 0.3)}`,
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        sx={{ fontFamily: "monospace", color: "#8b5cf6", fontWeight: 600, display: "block" }}
-                      >
-                        {cmd.cmd}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {cmd.desc}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Networking Section */}
-        <Box id="networking" sx={{ mt: 5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-              NETWORKING
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Box>
-
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🌐 Network Configuration
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Commands for network troubleshooting and analysis
-          </Typography>
-
-          <Grid container spacing={2} sx={{ mb: 5 }}>
-            {networkConfiguration.map((topic) => (
-              <Grid item xs={12} sm={6} md={4} key={topic.topic}>
-                <Paper
-                  sx={{
-                    p: 2,
-                    height: "100%",
-                    borderRadius: 3,
-                    border: `1px solid ${alpha("#06b6d4", 0.15)}`,
-                    transition: "all 0.2s",
-                    "&:hover": {
-                      borderColor: "#06b6d4",
-                    },
-                  }}
-                >
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ fontWeight: 700, mb: 2, color: "#06b6d4", display: "flex", alignItems: "center", gap: 1 }}
-                  >
-                    <NetworkCheckIcon sx={{ fontSize: 20 }} />
-                    {topic.topic}
-                  </Typography>
-                  {topic.commands.map((cmd) => (
-                    <Box key={cmd.cmd} sx={{ mb: 1 }}>
-                      <Typography
-                        variant="caption"
-                        sx={{ fontFamily: "monospace", color: "#06b6d4", fontWeight: 600, display: "block" }}
-                      >
-                        {cmd.cmd}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {cmd.desc}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Common Ports Section */}
-        <Box id="common-ports">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🔌 Common Windows Ports
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Important ports to know for Windows networking and security
-          </Typography>
-
-          <TableContainer
-            component={Paper}
-            sx={{
-              mb: 5,
-              borderRadius: 4,
-              border: `1px solid ${alpha("#f59e0b", 0.15)}`,
-            }}
-          >
-            <Table size="small">
-              <TableHead>
-                <TableRow
-                  sx={{
-                    background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.1)} 0%, ${alpha("#f97316", 0.1)} 100%)`,
-                  }}
-                >
-                  <TableCell sx={{ fontWeight: 700 }}>Port</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Protocol</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Service</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {commonPorts.map((port, index) => (
-                  <TableRow
-                    key={port.port}
-                    sx={{
-                      bgcolor: index % 2 === 0 ? "transparent" : alpha("#f59e0b", 0.02),
-                    }}
-                  >
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontFamily: "monospace", fontWeight: 700, color: "#f59e0b", fontSize: "0.85rem" }}
-                      >
-                        {port.port}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={port.protocol} size="small" sx={{ fontSize: "0.7rem", fontWeight: 600 }} />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                        {port.service}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {port.notes}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-
-        {/* Active Directory Section */}
-        <Box id="active-directory" sx={{ mt: 5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-              ACTIVE DIRECTORY
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Box>
-
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🏢 Active Directory Basics
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Fundamental concepts of Windows domain environments
-          </Typography>
-
-          <Grid container spacing={2} sx={{ mb: 5 }}>
-            {activeDirectoryBasics.map((item) => (
-              <Grid item xs={12} sm={6} md={4} key={item.component}>
-                <Paper
-                  sx={{
-                    p: 2.5,
-                    height: "100%",
-                    borderRadius: 3,
-                    border: `1px solid ${alpha("#3b82f6", 0.15)}`,
-                    transition: "all 0.2s",
-                    "&:hover": {
-                      transform: "translateY(-2px)",
-                      borderColor: "#3b82f6",
-                    },
-                  }}
-                >
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>
-                    {item.component}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: "0.85rem" }}>
-                    {item.description}
-                  </Typography>
-                  <List dense>
-                    {item.keyPoints.map((point) => (
-                      <ListItem key={point} sx={{ py: 0.2, px: 0 }}>
-                        <ListItemIcon sx={{ minWidth: 20 }}>
-                          <CheckCircleIcon sx={{ fontSize: 12, color: "#3b82f6" }} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={point}
-                          primaryTypographyProps={{ variant: "caption", fontSize: "0.75rem" }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Group Policy Section */}
-        <Box id="group-policy" sx={{ mt: 5 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            📋 Group Policy Settings
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Important security-related Group Policy configurations
-          </Typography>
-
-          {groupPolicySettings.map((category) => (
-            <Accordion
-              key={category.category}
-              sx={{
-                mb: 2,
-                borderRadius: 3,
-                "&:before": { display: "none" },
-                border: `1px solid ${alpha("#10b981", 0.2)}`,
-              }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{ bgcolor: alpha("#10b981", 0.05) }}
-              >
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    {category.category}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.65rem" }}>
-                    {category.path}
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Setting</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Recommended</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Risk if Misconfigured</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {category.settings.map((setting) => (
-                      <TableRow key={setting.name}>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontSize: "0.85rem" }}>{setting.name}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={setting.recommended}
-                            size="small"
-                            sx={{ bgcolor: alpha("#10b981", 0.1), color: "#10b981", fontWeight: 600, fontSize: "0.7rem" }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="error">
-                            <WarningIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: "middle" }} />
-                            {setting.risk}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </AccordionDetails>
-            </Accordion>
-          ))}
-        </Box>
-
-        {/* Important Processes Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4, mt: 5 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            PROCESSES
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        {/* Processes Section */}
-        <Box id="processes">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            ⚙️ Critical Windows Processes
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Know these processes - suspicious variations often indicate compromise
-        </Typography>
-
-        <TableContainer
-          component={Paper}
-          sx={{
-            mb: 5,
-            borderRadius: 4,
-            border: `1px solid ${alpha("#ef4444", 0.15)}`,
-          }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha("#ef4444", 0.1)} 0%, ${alpha("#f97316", 0.1)} 100%)`,
-                }}
-              >
-                <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>PID</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Parent</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Security Notes</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {importantProcesses.map((proc, index) => (
-                <TableRow
-                  key={proc.process}
-                  sx={{
-                    bgcolor: index % 2 === 0 ? "transparent" : alpha("#ef4444", 0.02),
-                  }}
-                >
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 700, color: "#ef4444", fontSize: "0.8rem" }}
-                    >
-                      {proc.process}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>{proc.pid}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                      {proc.parent}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>{proc.description}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">
-                      <BugReportIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: "middle" }} />
-                      {proc.notes}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {/* Security Events Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            EVENT LOGS
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Security Events Section */}
-        <Box id="security-events">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            📋 Security Event IDs
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Key Windows Security Log events for detection and forensics
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {securityEventIds.map((evt) => (
-            <Grid item xs={12} sm={6} md={4} key={evt.eventId}>
-              <Paper
-                sx={{
-                  p: 2,
-                  height: "100%",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha("#06b6d4", 0.15)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    borderColor: "#06b6d4",
-                  },
-                }}
-              >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                  <Typography
-                    variant="h6"
-                    sx={{ fontFamily: "monospace", fontWeight: 800, color: "#06b6d4" }}
-                  >
-                    {evt.eventId}
-                  </Typography>
-                  <Chip 
-                    label={evt.category} 
-                    size="small"
-                    sx={{ 
-                      fontSize: "0.65rem",
-                      fontWeight: 600,
-                      bgcolor: alpha("#06b6d4", 0.1),
-                      color: "#06b6d4",
-                    }}
-                  />
-                </Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                  {evt.description}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {evt.notes}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Additional Security Events */}
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-          Additional Important Event IDs
-        </Typography>
-        <TableContainer
-          component={Paper}
-          sx={{
-            mb: 5,
-            borderRadius: 4,
-            border: `1px solid ${alpha("#06b6d4", 0.15)}`,
-          }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.1)} 0%, ${alpha("#0891b2", 0.1)} 100%)` }}>
-                <TableCell sx={{ fontWeight: 700 }}>Event ID</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Security Relevance</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {additionalSecurityEvents.map((evt, index) => (
-                <TableRow key={evt.eventId} sx={{ bgcolor: index % 2 === 0 ? "transparent" : alpha("#06b6d4", 0.02) }}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 700, color: "#06b6d4" }}>
-                      {evt.eventId}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.85rem" }}>{evt.description}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={evt.category} size="small" sx={{ fontSize: "0.65rem", fontWeight: 600 }} />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">{evt.notes}</Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {/* Keyboard Shortcuts */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            PRODUCTIVITY
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Shortcuts Section */}
-        <Box id="shortcuts">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            ⌨️ Essential Keyboard Shortcuts
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Speed up your Windows workflow with these key combinations
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {keyboardShortcuts.map((shortcut) => (
-            <Grid item xs={6} sm={4} md={3} key={shortcut.shortcut}>
-              <Paper
-                sx={{
-                  p: 2,
-                  textAlign: "center",
-                  borderRadius: 3,
-                  border: `1px solid ${alpha("#f59e0b", 0.15)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    bgcolor: alpha("#f59e0b", 0.03),
-                  },
-                }}
-              >
-                <Chip
-                  label={shortcut.shortcut}
-                  sx={{
-                    fontFamily: "monospace",
-                    fontWeight: 700,
-                    fontSize: "0.75rem",
-                    bgcolor: alpha("#f59e0b", 0.1),
-                    color: "#f59e0b",
-                    mb: 1,
-                  }}
-                />
-                <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-                  {shortcut.action}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Windows Tools Section */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-          <Divider sx={{ flex: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-            TOOLS
-          </Typography>
-          <Divider sx={{ flex: 1 }} />
-        </Box>
-
-        </Box>
-
-        {/* Tools Section */}
-        <Box id="tools">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🛠️ Essential Windows Tools
-          </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Built-in and Sysinternals tools every admin should know
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 5 }}>
-          {["Built-in", "Sysinternals"].map((category) => (
-            <Grid item xs={12} md={6} key={category}>
-              <Paper
-                sx={{
-                  p: 3,
-                  borderRadius: 4,
-                  border: `1px solid ${alpha(category === "Built-in" ? "#3b82f6" : "#8b5cf6", 0.2)}`,
-                  height: "100%",
-                }}
-              >
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    fontWeight: 700, 
-                    mb: 2, 
-                    color: category === "Built-in" ? "#3b82f6" : "#8b5cf6",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                  }}
-                >
-                  <BuildIcon sx={{ fontSize: 20 }} />
-                  {category} Tools
-                </Typography>
-                <Grid container spacing={1}>
-                  {windowsTools.filter(t => t.category === category).map((tool) => (
-                    <Grid item xs={12} key={tool.tool}>
-                      <Box
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 2,
-                          bgcolor: alpha(category === "Built-in" ? "#3b82f6" : "#8b5cf6", 0.03),
-                          borderLeft: `3px solid ${category === "Built-in" ? "#3b82f6" : "#8b5cf6"}`,
-                        }}
-                      >
-                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{tool.tool}</Typography>
-                          <Chip 
-                            label={tool.command} 
-                            size="small" 
-                            sx={{ 
-                              fontFamily: "monospace", 
-                              fontSize: "0.65rem",
-                              bgcolor: alpha(category === "Built-in" ? "#3b82f6" : "#8b5cf6", 0.1),
-                              color: category === "Built-in" ? "#3b82f6" : "#8b5cf6",
-                            }} 
-                          />
-                        </Box>
-                        <Typography variant="caption" color="text.secondary">{tool.description}</Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-
-        </Box>
-
-        {/* Environment Variables Section */}
-        <Box id="environment-vars">
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          🔤 Environment Variables
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          System and user environment variables you'll encounter frequently
-        </Typography>
-
-        <TableContainer
-          component={Paper}
-          sx={{
-            mb: 5,
-            borderRadius: 4,
-            border: `1px solid ${alpha("#06b6d4", 0.15)}`,
-          }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha("#06b6d4", 0.1)} 0%, ${alpha("#0891b2", 0.1)} 100%)`,
-                }}
-              >
-                <TableCell sx={{ fontWeight: 700 }}>Variable</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Example Value</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {environmentVariables.map((env, index) => (
-                <TableRow
-                  key={env.variable}
-                  sx={{
-                    bgcolor: index % 2 === 0 ? "transparent" : alpha("#06b6d4", 0.02),
-                  }}
-                >
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 700, color: "#06b6d4", fontSize: "0.8rem" }}
-                    >
-                      {env.variable}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                      {env.example}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>{env.description}</Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        </Box>
-
-        {/* Forensic Artifacts Section */}
-        <Box id="forensic-artifacts" sx={{ mt: 5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-              FORENSICS
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Box>
-
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🔍 Forensic Artifacts
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Key locations and files for Windows forensic analysis
-          </Typography>
-
-          {forensicArtifacts.map((category) => (
-            <Accordion
-              key={category.category}
-              sx={{
-                mb: 2,
-                borderRadius: 3,
-                "&:before": { display: "none" },
-                border: `1px solid ${alpha("#ec4899", 0.2)}`,
-              }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{ bgcolor: alpha("#ec4899", 0.05) }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <FindInPageIcon sx={{ color: "#ec4899", fontSize: 20 }} />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    {category.category}
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Grid container spacing={2}>
-                  {category.artifacts.map((artifact) => (
-                    <Grid item xs={12} sm={6} key={artifact.name}>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          bgcolor: alpha("#ec4899", 0.02),
-                          borderLeft: `3px solid ${alpha("#ec4899", 0.3)}`,
-                        }}
-                      >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                          {artifact.name}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontFamily: "monospace",
-                            color: "#ec4899",
-                            display: "block",
-                            mb: 0.5,
-                            wordBreak: "break-all",
-                            fontSize: "0.65rem",
-                          }}
-                        >
-                          {artifact.location}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {artifact.description}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </AccordionDetails>
-            </Accordion>
-          ))}
-        </Box>
-
-        {/* Hardening Checklist Section */}
-        <Box id="hardening" sx={{ mt: 5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 2 }}>
-              HARDENING
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Box>
-
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-            🛡️ Windows Hardening Checklist
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Essential security hardening measures for Windows systems
-          </Typography>
-
-          <Grid container spacing={2}>
-            {hardeningChecklist.map((category) => (
-              <Grid item xs={12} md={6} key={category.category}>
-                <Paper
-                  sx={{
-                    p: 2.5,
-                    height: "100%",
-                    borderRadius: 3,
-                    border: `1px solid ${alpha("#22c55e", 0.15)}`,
-                    transition: "all 0.2s",
-                    "&:hover": {
-                      borderColor: "#22c55e",
-                    },
-                  }}
-                >
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ fontWeight: 700, mb: 2, color: "#22c55e", display: "flex", alignItems: "center", gap: 1 }}
-                  >
-                    <VerifiedUserIcon sx={{ fontSize: 20 }} />
-                    {category.category}
-                  </Typography>
-                  <List dense>
-                    {category.items.map((item, index) => (
-                      <ListItem key={index} sx={{ py: 0.3, px: 0 }}>
-                        <ListItemIcon sx={{ minWidth: 24 }}>
-                          <CheckCircleIcon sx={{ fontSize: 14, color: "#22c55e" }} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={item}
-                          primaryTypographyProps={{ variant: "body2", fontSize: "0.85rem" }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Pro Tips - Enhanced */}
-        <Box id="pro-tips" sx={{ mt: 5 }}>
-          <Paper
-            sx={{
-              p: 3,
-              mb: 5,
-              borderRadius: 4,
-              background: `linear-gradient(135deg, ${alpha("#f59e0b", 0.05)} 0%, ${alpha("#f59e0b", 0.02)} 100%)`,
-              border: `1px solid ${alpha("#f59e0b", 0.2)}`,
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
-            >
-              <TipsAndUpdatesIcon sx={{ color: "#f59e0b" }} />
-              Pro Tips for Security Professionals
-            </Typography>
-          <Grid container spacing={2}>
-            {[
-              "Use Win+R to open the Run dialog for quick access to commands like mmc, regedit, services.msc",
-              "Press Tab in CMD/PowerShell for auto-completion of commands and paths",
-              "Use 'runas /user:Administrator cmd' to run commands as admin without UAC popup",
-              "PowerShell's Get-Help -Full and Get-Member are your friends for learning cmdlets",
-              "Enable PowerShell Script Block Logging for security monitoring",
-              "Use Process Monitor (procmon) from Sysinternals for deep system analysis",
-              "Run 'wmic startup list full' to see all autostart programs",
-              "Use 'netsh advfirewall show allprofiles' to check firewall status",
-              "Enable command-line auditing (Event 4688) in Group Policy for process tracking",
-              "Always check digital signatures with 'sigcheck' from Sysinternals",
-            ].map((tip, i) => (
-              <Grid item xs={12} sm={6} key={i}>
-                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-                  <CheckCircleIcon sx={{ fontSize: 18, color: "#f59e0b", mt: 0.3, flexShrink: 0 }} />
-                  <Typography variant="body2">{tip}</Typography>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
-
-        {/* Security Warning */}
-        <Alert 
-          severity="warning" 
-          icon={<WarningIcon />}
-          sx={{ mb: 4, borderRadius: 3 }}
-        >
-          <AlertTitle sx={{ fontWeight: 700 }}>Security Reminder</AlertTitle>
-          Always practice these skills in authorized environments only. Many techniques covered here 
-          are used for both system administration and attack detection. Never use these skills on 
-          systems you don't have explicit permission to test.
-        </Alert>
-
-          {/* Related Learning */}
-          <Paper
-            sx={{
-              p: 3,
-              borderRadius: 4,
-              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, transparent 100%)`,
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}
-            >
-              <SchoolIcon sx={{ color: theme.palette.primary.main }} />
-              Continue Learning
-            </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Build on these fundamentals with more advanced topics
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Chip
-              label="Windows Internals for RE →"
-              clickable
-              onClick={() => navigate("/learn/windows-internals")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="Privilege Escalation →"
-              clickable
-              onClick={() => navigate("/learn/privilege-escalation")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="Commands Reference →"
-              clickable
-              onClick={() => navigate("/learn/commands")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="Active Directory Basics →"
-              clickable
-              onClick={() => navigate("/learn/active-directory")}
-              sx={{ fontWeight: 600 }}
-            />
-            <Chip
-              label="PowerShell for Security →"
-              clickable
-              onClick={() => navigate("/learn/powershell-security")}
-              sx={{ fontWeight: 600 }}
-            />
-          </Box>
-          </Paper>
-        </Box>
-
-        {/* Quiz Section */}
-        <Box id="quiz" sx={{ mt: 5 }}>
-          <QuizSection
-            questions={quizPool}
-            accentColor={ACCENT_COLOR}
-            title="Windows Fundamentals Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time the page loads."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Box>
-        </Container>
-      </Box>
-
+    <LearnPageLayout pageTitle="Windows Basics" pageContext={pageContext}>
       {/* Floating Action Buttons */}
-      <Fab
-        color="primary"
-        onClick={() => setNavDrawerOpen(true)}
-        sx={{
-          position: "fixed",
-          bottom: 90,
-          right: 24,
-          zIndex: 1000,
-          bgcolor: accent,
-          "&:hover": { bgcolor: "#005a9e" },
-          boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
-          display: { xs: "flex", lg: "none" },
-        }}
-      >
-        <ListAltIcon />
-      </Fab>
+      <Tooltip title="Navigation" placement="left">
+        <Fab
+          color="primary"
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            bgcolor: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.9) },
+            zIndex: 1000,
+          }}
+          onClick={() => setNavDrawerOpen(true)}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
 
-      {/* Scroll to Top FAB */}
-      <Fab
-        size="small"
-        onClick={scrollToTop}
-        sx={{
-          position: "fixed",
-          bottom: 32,
-          right: 28,
-          zIndex: 1000,
-          bgcolor: alpha(accent, 0.15),
-          color: accent,
-          "&:hover": { bgcolor: alpha(accent, 0.25) },
-          display: { xs: "flex", lg: "none" },
-        }}
-      >
-        <KeyboardArrowUpIcon />
-      </Fab>
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          sx={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            backdropFilter: "blur(10px)",
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            "&:hover": { bgcolor: theme.palette.background.paper },
+            zIndex: 1000,
+          }}
+          onClick={scrollToTop}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
 
-      {/* Navigation Drawer for Mobile */}
+      {/* Navigation Drawer - Mobile */}
       <Drawer
         anchor="right"
         open={navDrawerOpen}
@@ -3785,28 +1467,17 @@ export default function WindowsBasicsPage() {
           },
         }}
       >
-        <Box sx={{ p: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
-              <ListAltIcon sx={{ color: accent }} />
-              Course Navigation
-            </Typography>
-            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Navigation</Typography>
+            <IconButton size="small" onClick={() => setNavDrawerOpen(false)}>
               <CloseIcon />
             </IconButton>
           </Box>
-
-          <Divider sx={{ mb: 2 }} />
-
-          {/* Progress indicator */}
-          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                Progress
-              </Typography>
-              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
-                {Math.round(progressPercent)}%
-              </Typography>
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>Progress</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: accent }}>{Math.round(progressPercent)}%</Typography>
             </Box>
             <LinearProgress
               variant="determinate"
@@ -3815,15 +1486,10 @@ export default function WindowsBasicsPage() {
                 height: 6,
                 borderRadius: 3,
                 bgcolor: alpha(accent, 0.1),
-                "& .MuiLinearProgress-bar": {
-                  bgcolor: accent,
-                  borderRadius: 3,
-                },
+                "& .MuiLinearProgress-bar": { bgcolor: accent, borderRadius: 3 },
               }}
             />
           </Box>
-
-          {/* Navigation List */}
           <List dense sx={{ mx: -1 }}>
             {sectionNavItems.map((item) => (
               <ListItem
@@ -3835,13 +1501,11 @@ export default function WindowsBasicsPage() {
                   cursor: "pointer",
                   bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
                   borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
-                  "&:hover": {
-                    bgcolor: alpha(accent, 0.08),
-                  },
-                  transition: "all 0.15s ease",
+                  "&:hover": { bgcolor: alpha(accent, 0.1) },
+                  transition: "all 0.2s ease",
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? accent : "text.secondary" }}>
+                <ListItemIcon sx={{ color: activeSection === item.id ? accent : "text.secondary", minWidth: 36 }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
@@ -3863,17 +1527,811 @@ export default function WindowsBasicsPage() {
         </Box>
       </Drawer>
 
-      {/* Bottom Navigation */}
-      <Box sx={{ mt: 4, textAlign: "center" }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
-          sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
-        >
-          Back to Learning Hub
-        </Button>
-      </Box>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item md={3}>
+              {sidebarNav}
+            </Grid>
+          )}
+
+          {/* Main Content */}
+          <Grid item xs={12} md={9}>
+            {/* Back Button */}
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 3 }}
+            />
+
+            {/* Hero Banner */}
+            <Paper
+              sx={{
+                p: 4,
+                mb: 4,
+                borderRadius: 4,
+                background: `linear-gradient(135deg, ${alpha(accent, 0.15)} 0%, ${alpha("#00a4ef", 0.1)} 100%)`,
+                border: `1px solid ${alpha(accent, 0.2)}`,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: -50,
+                  right: -50,
+                  width: 200,
+                  height: 200,
+                  borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${alpha(accent, 0.1)}, transparent)`,
+                }}
+              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, ${accent}, #00a4ef)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 8px 32px ${alpha(accent, 0.3)}`,
+                  }}
+                >
+                  <DesktopWindowsIcon sx={{ fontSize: 45, color: "white" }} />
+                </Box>
+                <Box>
+                  <Chip label="IT Fundamentals" size="small" sx={{ mb: 1, fontWeight: 600, bgcolor: alpha(accent, 0.1), color: accent }} />
+                  <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>Windows Basics</Typography>
+                  <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600 }}>
+                    Master Windows operating system fundamentals for IT and security
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* Overview Section */}
+            <Box id="overview" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <SchoolIcon sx={{ color: accent }} /> Overview
+              </Typography>
+              <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.background.paper, 0.6) }}>
+                <Typography variant="body1" paragraph>
+                  Windows is the world's most widely used desktop operating system, powering over 1 billion devices worldwide.
+                  Understanding Windows fundamentals is essential for IT professionals, system administrators, and security practitioners.
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  This comprehensive guide covers everything from the Windows file system and registry to security features
+                  and Active Directory. Whether you're troubleshooting issues, hardening systems, or investigating incidents,
+                  this knowledge forms the foundation of Windows expertise.
+                </Typography>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <AlertTitle>For Beginners</AlertTitle>
+                  Each topic includes beginner-friendly explanations alongside technical details. Look for the "For Beginners" boxes
+                  and the "beginnerNote" fields to get plain-language explanations of complex concepts.
+                </Alert>
+              </Paper>
+            </Box>
+
+            {/* Core Concepts Section */}
+            <Box id="core-concepts" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DesktopWindowsIcon sx={{ color: accent }} /> Core Windows Concepts
+              </Typography>
+              {windowsConcepts.map((concept, index) => (
+                <Accordion
+                  key={index}
+                  sx={{
+                    mb: 2,
+                    borderRadius: "12px !important",
+                    "&:before": { display: "none" },
+                    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 2,
+                          bgcolor: alpha(concept.color, 0.15),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: concept.color,
+                        }}
+                      >
+                        {concept.icon}
+                      </Box>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>{concept.title}</Typography>
+                        <Typography variant="body2" color="text.secondary">{concept.shortDescription}</Typography>
+                      </Box>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      <AlertTitle>For Beginners</AlertTitle>
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>{concept.beginnerExplanation}</Typography>
+                    </Alert>
+                    <Typography variant="body1" sx={{ mb: 2, whiteSpace: "pre-line" }}>{concept.technicalDescription}</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Key Points:</Typography>
+                    <List dense>
+                      {concept.keyPoints.map((point, i) => (
+                        <ListItem key={i} sx={{ py: 0.25 }}>
+                          <ListItemIcon sx={{ minWidth: 28 }}>
+                            <CheckCircleIcon sx={{ fontSize: 16, color: concept.color }} />
+                          </ListItemIcon>
+                          <ListItemText primary={point} primaryTypographyProps={{ variant: "body2" }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      <AlertTitle>Security Note</AlertTitle>
+                      {concept.securityNote}
+                    </Alert>
+                    {concept.realWorldExample && (
+                      <Paper sx={{ p: 2, mt: 2, bgcolor: alpha(concept.color, 0.05), borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                          <TipsAndUpdatesIcon sx={{ fontSize: 18 }} /> Try It Yourself
+                        </Typography>
+                        <Typography variant="body2">{concept.realWorldExample}</Typography>
+                      </Paper>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+            </Box>
+
+            {/* Architecture Section */}
+            <Box id="architecture" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <LayersIcon sx={{ color: accent }} /> Windows Architecture
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Windows is organized in layers, like a building with different floors. The top floors (User Mode) are where
+                your programs run. The bottom floors (Kernel Mode) are where Windows itself operates with full access to hardware.
+              </Alert>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Layer</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Ring</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Components</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {windowsArchitecture.map((layer, index) => (
+                      <TableRow key={index} sx={{ "&:hover": { bgcolor: alpha(accent, 0.05) } }}>
+                        <TableCell sx={{ fontWeight: 600 }}>{layer.layer}</TableCell>
+                        <TableCell>
+                          <Chip label={layer.ring} size="small" sx={{ bgcolor: layer.ring === "Ring 0" ? alpha("#ef4444", 0.1) : alpha("#22c55e", 0.1) }} />
+                        </TableCell>
+                        <TableCell>{layer.description}</TableCell>
+                        <TableCell>
+                          {layer.components.map((comp, i) => (
+                            <Chip key={i} label={comp} size="small" sx={{ mr: 0.5, mb: 0.5, fontSize: "0.7rem" }} />
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Important Directories Section */}
+            <Box id="directories" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <FolderIcon sx={{ color: accent }} /> Important Directories
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Windows organizes files in a specific folder structure. Understanding where things are stored helps with troubleshooting
+                and is essential for security investigations.
+              </Alert>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Path</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Security Relevance</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importantDirectories.map((dir, index) => (
+                      <TableRow key={index} sx={{ "&:hover": { bgcolor: alpha(accent, 0.05) } }}>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: "0.85rem", fontWeight: 600 }}>{dir.path}</TableCell>
+                        <TableCell>
+                          <Chip label={dir.purpose} size="small" />
+                        </TableCell>
+                        <TableCell>{dir.description}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="warning.main">{dir.securityRelevance}</Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Registry Keys Section */}
+            <Box id="registry" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <StorageIcon sx={{ color: accent }} /> Security-Critical Registry Keys
+              </Typography>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <AlertTitle>Security Warning</AlertTitle>
+                The Registry is a common target for malware persistence. These keys should be monitored for unauthorized changes.
+              </Alert>
+              {registryKeys.map((key, index) => (
+                <Paper key={index} sx={{ p: 2, mb: 2, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                  <Typography variant="subtitle1" sx={{ fontFamily: "monospace", fontWeight: 600, color: accent, mb: 1 }}>
+                    {key.key}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>{key.description}</Typography>
+                  <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
+                    Data Type: {key.dataType}
+                  </Typography>
+                  <Alert severity="info" sx={{ py: 0 }}>
+                    <Typography variant="caption">{key.beginnerNote}</Typography>
+                  </Alert>
+                </Paper>
+              ))}
+            </Box>
+
+            {/* CMD Commands Section */}
+            <Box id="commands" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <TerminalIcon sx={{ color: accent }} /> Essential CMD Commands
+              </Typography>
+              {["File System", "System Info", "Network", "Process", "User"].map((category) => (
+                <Box key={category} sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>{category}</Typography>
+                  <Grid container spacing={2}>
+                    {essentialCommands
+                      .filter((cmd) => cmd.category === category)
+                      .map((cmd, index) => (
+                        <Grid item xs={12} md={6} key={index}>
+                          <Card sx={{ height: "100%", borderRadius: 2 }}>
+                            <CardContent>
+                              <Typography variant="subtitle1" sx={{ fontFamily: "monospace", fontWeight: 700, color: accent }}>
+                                {cmd.command}
+                              </Typography>
+                              <Typography variant="body2" sx={{ mb: 1 }}>{cmd.description}</Typography>
+                              <Paper sx={{ p: 1, bgcolor: alpha(theme.palette.common.black, 0.05), borderRadius: 1, mb: 1 }}>
+                                <Typography variant="caption" sx={{ fontFamily: "monospace" }}>{cmd.example}</Typography>
+                              </Paper>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                Flags: {cmd.flags}
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                  </Grid>
+                </Box>
+              ))}
+            </Box>
+
+            {/* PowerShell Section */}
+            <Box id="powershell" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DataObjectIcon sx={{ color: accent }} /> PowerShell Commands
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                PowerShell is the modern command-line for Windows. It works with objects, not just text, making it much more powerful than CMD.
+              </Alert>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>CMD</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>PowerShell</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Aliases</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Example</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {powershellCommands.map((cmd, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontFamily: "monospace" }}>{cmd.cmdCommand}</TableCell>
+                        <TableCell sx={{ fontFamily: "monospace", color: accent, fontWeight: 600 }}>{cmd.psCommand}</TableCell>
+                        <TableCell>{cmd.alias}</TableCell>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{cmd.example}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Critical Processes Section */}
+            <Box id="processes" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <MemoryIcon sx={{ color: accent }} /> Critical Windows Processes
+              </Typography>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <AlertTitle>Security Note</AlertTitle>
+                Knowing normal process behavior helps identify anomalies. Malware often impersonates these processes or runs from wrong locations.
+              </Alert>
+              <Grid container spacing={2}>
+                {importantProcesses.map((proc, index) => (
+                  <Grid item xs={12} md={6} key={index}>
+                    <Card sx={{ height: "100%", borderRadius: 2 }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: accent }}>{proc.name}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>{proc.description}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          <strong>Path:</strong> {proc.path}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          <strong>Parent:</strong> {proc.parent}
+                        </Typography>
+                        <Alert severity="info" sx={{ mt: 1, py: 0 }}>
+                          <Typography variant="caption">{proc.securityNote}</Typography>
+                        </Alert>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
+            {/* Security Events Section */}
+            <Box id="events" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <HistoryIcon sx={{ color: accent }} /> Security Event IDs
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Windows logs everything in Event Viewer. These Event IDs are the most important for security monitoring and incident response.
+              </Alert>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Event ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Investigation Tips</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {securityEventIds.map((evt, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontWeight: 700, color: accent }}>{evt.eventId}</TableCell>
+                        <TableCell>{evt.category}</TableCell>
+                        <TableCell>{evt.description}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={evt.severity}
+                            size="small"
+                            sx={{
+                              bgcolor:
+                                evt.severity === "Critical" ? alpha("#ef4444", 0.15) :
+                                evt.severity === "High" ? alpha("#f97316", 0.15) :
+                                evt.severity === "Medium" ? alpha("#eab308", 0.15) :
+                                evt.severity === "Warning" ? alpha("#f59e0b", 0.15) :
+                                alpha("#22c55e", 0.15),
+                              color:
+                                evt.severity === "Critical" ? "#ef4444" :
+                                evt.severity === "High" ? "#f97316" :
+                                evt.severity === "Medium" ? "#eab308" :
+                                evt.severity === "Warning" ? "#f59e0b" :
+                                "#22c55e",
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell><Typography variant="caption">{evt.investigation}</Typography></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Keyboard Shortcuts Section */}
+            <Box id="shortcuts" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <KeyIcon sx={{ color: accent }} /> Keyboard Shortcuts
+              </Typography>
+              <Grid container spacing={2}>
+                {keyboardShortcuts.map((shortcut, index) => (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
+                      <Chip label={shortcut.shortcut} sx={{ fontWeight: 700, mb: 1, bgcolor: alpha(accent, 0.1), color: accent }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{shortcut.action}</Typography>
+                      <Typography variant="caption" color="text.secondary">{shortcut.tip}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
+            {/* Windows Versions Section */}
+            <Box id="versions" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <UpdateIcon sx={{ color: accent }} /> Windows Version History
+              </Typography>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Version</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Build Range</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Release Year</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Support Status</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Key Features</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {windowsVersions.map((ver, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontWeight: 600 }}>{ver.version}</TableCell>
+                        <TableCell>{ver.buildRange}</TableCell>
+                        <TableCell>{ver.releaseYear}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={ver.support}
+                            size="small"
+                            sx={{
+                              bgcolor: ver.support === "Active" ? alpha("#22c55e", 0.15) : alpha("#ef4444", 0.15),
+                              color: ver.support === "Active" ? "#22c55e" : "#ef4444",
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell><Typography variant="caption">{ver.keyFeatures}</Typography></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Boot Process Section */}
+            <Box id="boot" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <PlayArrowIcon sx={{ color: accent }} /> Windows Boot Process
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                When you turn on your computer, a complex sequence of events happens before you see your desktop.
+                Understanding this helps with troubleshooting boot issues and detecting boot-level malware.
+              </Alert>
+              <Box sx={{ position: "relative" }}>
+                {bootProcess.map((step, index) => (
+                  <Box key={index} sx={{ display: "flex", mb: 2 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mr: 3 }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          bgcolor: accent,
+                          color: "white",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {step.step}
+                      </Box>
+                      {index < bootProcess.length - 1 && (
+                        <Box sx={{ width: 2, flexGrow: 1, bgcolor: alpha(accent, 0.3), my: 1 }} />
+                      )}
+                    </Box>
+                    <Paper sx={{ p: 2, flexGrow: 1, borderRadius: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>{step.name}</Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>{step.description}</Typography>
+                      <Typography variant="caption" color="text.secondary">{step.technical}</Typography>
+                    </Paper>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            {/* Windows Tools Section */}
+            <Box id="tools" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <BuildIcon sx={{ color: accent }} /> Windows Tools
+              </Typography>
+              {["Built-in", "Sysinternals"].map((category) => (
+                <Box key={category} sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>{category} Tools</Typography>
+                  <Grid container spacing={2}>
+                    {windowsTools
+                      .filter((tool) => tool.category === category)
+                      .map((tool, index) => (
+                        <Grid item xs={12} md={6} key={index}>
+                          <Card sx={{ height: "100%", borderRadius: 2 }}>
+                            <CardContent>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: accent }}>{tool.name}</Typography>
+                              <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary", display: "block", mb: 1 }}>
+                                {tool.path}
+                              </Typography>
+                              <Typography variant="body2" sx={{ mb: 1 }}>{tool.description}</Typography>
+                              <Typography variant="caption" color="warning.main">{tool.securityUse}</Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                  </Grid>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Environment Variables Section */}
+            <Box id="env-vars" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <DataObjectIcon sx={{ color: accent }} /> Environment Variables
+              </Typography>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Variable</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Example Value</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Usage</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {environmentVariables.map((env, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, color: accent }}>{env.variable}</TableCell>
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{env.example}</TableCell>
+                        <TableCell>{env.description}</TableCell>
+                        <TableCell>{env.usage}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Security Features Section */}
+            <Box id="security-features" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <ShieldIcon sx={{ color: accent }} /> Windows Security Features
+              </Typography>
+              <Grid container spacing={2}>
+                {windowsSecurityFeatures.map((feature, index) => (
+                  <Grid item xs={12} md={6} key={index}>
+                    <Card sx={{ height: "100%", borderRadius: 2 }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: accent }}>{feature.name}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>{feature.description}</Typography>
+                        <Alert severity="info" sx={{ py: 0, mb: 1 }}>
+                          <Typography variant="caption">{feature.beginnerNote}</Typography>
+                        </Alert>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          <strong>Configure:</strong> {feature.configuration}
+                        </Typography>
+                        <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 1 }}>
+                          {feature.securityTips}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
+            {/* Group Policy Section */}
+            <Box id="group-policy" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <PolicyIcon sx={{ color: accent }} /> Group Policy Settings
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Group Policy (gpedit.msc) allows centralized configuration of Windows settings. In enterprises, policies are pushed from
+                domain controllers. On standalone machines, local policies can still be configured.
+              </Alert>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Setting</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Recommendation</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {groupPolicySettings.map((gpo, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontWeight: 600 }}>{gpo.setting}</TableCell>
+                        <TableCell>{gpo.description}</TableCell>
+                        <TableCell><Typography variant="caption" color="success.main">{gpo.securityRecommendation}</Typography></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Forensic Artifacts Section */}
+            <Box id="forensics" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <FindInPageIcon sx={{ color: accent }} /> Forensic Artifacts
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Windows leaves traces of activity everywhere. Forensic investigators use these artifacts to reconstruct what happened on a system.
+              </Alert>
+              {forensicArtifacts.map((artifact, index) => (
+                <Paper key={index} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>{artifact.artifact}</Typography>
+                    <Chip label={artifact.category} size="small" />
+                  </Box>
+                  <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary", display: "block", mb: 1 }}>
+                    {artifact.location}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>{artifact.description}</Typography>
+                  <Typography variant="caption" color="warning.main">{artifact.investigation}</Typography>
+                </Paper>
+              ))}
+            </Box>
+
+            {/* Network Configuration Section */}
+            <Box id="network-config" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <NetworkCheckIcon sx={{ color: accent }} /> Network Configuration Commands
+              </Typography>
+              <Grid container spacing={2}>
+                {networkConfiguration.map((cmd, index) => (
+                  <Grid item xs={12} md={6} key={index}>
+                    <Paper sx={{ p: 2, borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ fontFamily: "monospace", fontWeight: 700, color: accent }}>{cmd.command}</Typography>
+                      <Typography variant="body2">{cmd.description}</Typography>
+                      <Typography variant="caption" color="text.secondary">{cmd.purpose}</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
+            {/* PowerShell Security Commands Section */}
+            <Box id="ps-security" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <LockIcon sx={{ color: accent }} /> PowerShell Security Commands
+              </Typography>
+              {powershellSecurityCommands.map((cmd, index) => (
+                <Paper key={index} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                  <Chip label={cmd.category} size="small" sx={{ mb: 1 }} />
+                  <Typography variant="body2" sx={{ fontFamily: "monospace", bgcolor: alpha(theme.palette.common.black, 0.05), p: 1, borderRadius: 1, mb: 1 }}>
+                    {cmd.command}
+                  </Typography>
+                  <Typography variant="caption">{cmd.description}</Typography>
+                </Paper>
+              ))}
+            </Box>
+
+            {/* Hardening Checklist Section */}
+            <Box id="hardening" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <VerifiedUserIcon sx={{ color: accent }} /> Windows Hardening Checklist
+              </Typography>
+              {["Updates", "Accounts", "Authentication", "Network", "Endpoint", "Logging", "Applications"].map((category) => (
+                <Box key={category} sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>{category}</Typography>
+                  {hardeningChecklist
+                    .filter((item) => item.category === category)
+                    .map((item, index) => (
+                      <Paper key={index} sx={{ p: 2, mb: 1, borderRadius: 2, display: "flex", alignItems: "flex-start", gap: 2 }}>
+                        <Chip
+                          label={item.priority}
+                          size="small"
+                          sx={{
+                            bgcolor:
+                              item.priority === "Critical" ? alpha("#ef4444", 0.15) :
+                              item.priority === "High" ? alpha("#f97316", 0.15) :
+                              alpha("#22c55e", 0.15),
+                            color:
+                              item.priority === "Critical" ? "#ef4444" :
+                              item.priority === "High" ? "#f97316" :
+                              "#22c55e",
+                            minWidth: 70,
+                          }}
+                        />
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{item.item}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.description}</Typography>
+                        </Box>
+                      </Paper>
+                    ))}
+                </Box>
+              ))}
+            </Box>
+
+            {/* Common Ports Section */}
+            <Box id="ports" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <RouterIcon sx={{ color: accent }} /> Common Windows Ports
+              </Typography>
+              <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Port</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Protocol</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Service</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Security Note</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {commonPorts.map((port, index) => (
+                      <TableRow key={index}>
+                        <TableCell sx={{ fontWeight: 700, color: accent }}>{port.port}</TableCell>
+                        <TableCell>{port.protocol}</TableCell>
+                        <TableCell>{port.service}</TableCell>
+                        <TableCell>{port.description}</TableCell>
+                        <TableCell><Typography variant="caption" color="warning.main">{port.securityNote}</Typography></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Active Directory Section */}
+            <Box id="active-directory" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <AccountTreeIcon sx={{ color: accent }} /> Active Directory Basics
+              </Typography>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>For Beginners</AlertTitle>
+                Active Directory (AD) is Microsoft's directory service for Windows domain networks. It's how enterprises manage
+                users, computers, and security at scale. Understanding AD is essential for enterprise security.
+              </Alert>
+              <Grid container spacing={2}>
+                {activeDirectoryBasics.map((item, index) => (
+                  <Grid item xs={12} md={6} key={index}>
+                    <Card sx={{ height: "100%", borderRadius: 2 }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: accent }}>{item.concept}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>{item.description}</Typography>
+                        <Alert severity="info" sx={{ py: 0, mb: 1 }}>
+                          <Typography variant="caption">{item.beginnerNote}</Typography>
+                        </Alert>
+                        <Typography variant="caption" color="warning.main">{item.securityRelevance}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
+            {/* Quiz Section */}
+            <Box id="quiz" sx={{ mb: 6, scrollMarginTop: 100 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+                <QuizIcon sx={{ color: accent }} /> Knowledge Check
+              </Typography>
+              <QuizSection questions={quizPool} />
+            </Box>
+
+          </Grid>
+        </Grid>
+      </Container>
     </LearnPageLayout>
   );
 }

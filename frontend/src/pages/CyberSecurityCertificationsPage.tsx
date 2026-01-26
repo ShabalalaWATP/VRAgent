@@ -115,12 +115,21 @@ interface SubjectSection {
   tracks: Record<Level, CertificationItem[]>;
 }
 
+interface PathwayCard {
+  title: string;
+  description: string;
+  focus: string;
+  steps: string[];
+  careerPaths: CareerPathType[];
+  color: string;
+}
+
 const levelOrder: Level[] = ["Beginner", "Intermediate", "Advanced"];
 
 const levelMeta: Record<Level, { color: string; hint: string }> = {
-  Beginner: { color: "#22c55e", hint: "Foundations and entry level exams" },
-  Intermediate: { color: "#f59e0b", hint: "Role-ready depth and practical labs" },
-  Advanced: { color: "#ef4444", hint: "Expert level and specialization" },
+  Beginner: { color: "#22c55e", hint: "Foundations, entry level certs, and undergraduate routes" },
+  Intermediate: { color: "#f59e0b", hint: "Role-ready depth, postgraduate study, and practical labs" },
+  Advanced: { color: "#ef4444", hint: "Expert level, specialization, and research" },
 };
 
 const providers = [
@@ -214,7 +223,317 @@ const providers = [
   "Unity",
   "The Open Group",
   "BCS",
+  "ISTQB",
+  "Founders and Coders",
+  "42 London",
+  "Codecademy",
+  "The Odin Project",
+  "Open University",
+  "Birkbeck, University of London",
+  "University of London",
+  "University of Oxford",
+  "University of Cambridge",
+  "University College London (UCL)",
+  "King's College London",
+  "Queen Mary University of London",
+  "Royal Holloway, University of London",
+  "University of Manchester",
+  "University of Edinburgh",
+  "University of Glasgow",
+  "University of Birmingham",
+  "University of Southampton",
+  "University of Warwick",
+  "University of Bristol",
+  "University of Leeds",
+  "University of Nottingham",
+  "University of Sheffield",
+  "University of York",
+  "University of Bath",
+  "University of Exeter",
+  "University of Liverpool",
+  "Newcastle University",
+  "Cardiff University",
+  "Queen's University Belfast",
+  "University of Strathclyde",
+  "Lancaster University",
+  "University of Sussex",
+  "University of Kent",
+  "University of Essex",
+  "University of Reading",
+  "University of Portsmouth",
+  "Coventry University",
+  "De Montfort University",
+  "University of Hertfordshire",
+  "University of Brighton",
+  "Sheffield Hallam University",
+  "University of the West of England (UWE Bristol)",
+  "University of Salford",
+  "University of Lincoln",
+  "University of Hull",
+  "University of East Anglia",
+  "University of West of Scotland",
+  "University of Sunderland",
+  "University of Aberdeen",
+  "University of Dundee",
+  "Ulster University",
 ];
+
+const pathways: PathwayCard[] = [
+  {
+    title: "SOC Analyst -> Incident Responder",
+    description: "Start with IT and networking basics, then build SIEM, detection, and IR depth.",
+    focus: "Detection, triage, and incident response workflows",
+    steps: [
+      "Foundations: IT and networking (A+/Network+/Security+ or ISC2 CC)",
+      "SOC tooling: SIEM, alert triage, and IR (BTL1, SC-200, Splunk/Elastic)",
+      "Hands-on: SOC labs and log analysis (TryHackMe, HTB, LetsDefend)",
+      "Advance: threat hunting, automation, and IR depth (GCIH/GCFA)",
+    ],
+    careerPaths: ["blue-team", "forensics", "threat-intel"],
+    color: "#3b82f6",
+  },
+  {
+    title: "Penetration Tester -> Red Team Operator",
+    description: "Build a strong offensive core and expand into AD, cloud, and evasive tradecraft.",
+    focus: "Ethical hacking, exploitation, and red team operations",
+    steps: [
+      "Foundations: Linux, networking, scripting, and web basics",
+      "Core pentest: OSCP/PNPT or CREST, web and AD fundamentals",
+      "Specialize: AD, cloud, mobile, or wireless tradecraft",
+      "Portfolio: lab writeups, CTFs, and professional reporting",
+    ],
+    careerPaths: ["red-team", "bug-bounty", "vuln-research"],
+    color: "#ef4444",
+  },
+  {
+    title: "Cloud Security Engineer",
+    description: "Combine cloud platform skills with security architecture and hardening.",
+    focus: "IAM, logging, cloud hardening, and incident response",
+    steps: [
+      "Foundations: cloud basics (AZ-900 or AWS Cloud Practitioner)",
+      "Security core: IAM, logging, and cloud controls (AZ-500, AWS Security)",
+      "Platform depth: IaC, Kubernetes security, and CSPM tools",
+      "Practice: multi-account lab, threat modeling, and IR runbooks",
+    ],
+    careerPaths: ["cloud-security", "security-engineering", "devsecops"],
+    color: "#06b6d4",
+  },
+  {
+    title: "Application Security Engineer",
+    description: "Start with software engineering fundamentals, then layer secure SDLC skills.",
+    focus: "Secure coding, AppSec tooling, and threat modeling",
+    steps: [
+      "Foundations: web dev, APIs, and databases (JS, SQL, HTTP)",
+      "Core AppSec: OWASP Top 10, SAST/DAST, and code review",
+      "Specialize: API security, secure SDLC, and dependency hygiene",
+      "Advance: OSWE/CSSLP, security architecture, and AppSec leadership",
+    ],
+    careerPaths: ["appsec", "security-engineering", "devsecops"],
+    color: "#ec4899",
+  },
+  {
+    title: "DevSecOps / Platform Security",
+    description: "Embed security into CI/CD, infrastructure, and cloud-native platforms.",
+    focus: "CI/CD security, IaC, and supply chain controls",
+    steps: [
+      "Foundations: Linux, Git, CI/CD, and containers",
+      "Core: pipeline security, SAST/DAST, secrets, and SBOMs",
+      "Specialize: Kubernetes security, policy-as-code, SLSA",
+      "Practice: build secure pipelines and automated guardrails",
+    ],
+    careerPaths: ["devsecops", "security-engineering", "cloud-security"],
+    color: "#6366f1",
+  },
+  {
+    title: "GRC / Risk Analyst -> Security Manager",
+    description: "Focus on governance, risk, and compliance with leadership progression.",
+    focus: "Risk management, compliance, and security governance",
+    steps: [
+      "Foundations: ISO 27001, Security+, and data protection basics",
+      "Core: risk assessments, audits, and control frameworks (CISA/CRISC)",
+      "Specialize: CISM/CISSP, privacy engineering, vendor risk",
+      "Experience: policy, reporting, and stakeholder management",
+    ],
+    careerPaths: ["grc", "privacy", "security-engineering"],
+    color: "#f59e0b",
+  },
+  {
+    title: "Security Software Engineer (Tooling)",
+    description: "Build security tools and automation with strong software engineering.",
+    focus: "Automation, detection engineering, and security tooling",
+    steps: [
+      "Foundations: CS fundamentals, data structures, Python/Go",
+      "Core: secure coding, APIs, telemetry, and code quality",
+      "Specialize: detection engineering, scanners, and SOAR",
+      "Portfolio: build tools, write docs, and ship maintainable code",
+    ],
+    careerPaths: ["tool-dev", "security-engineering", "appsec"],
+    color: "#f97316",
+  },
+  {
+    title: "Digital Forensics & Malware Analysis",
+    description: "Develop OS and forensic fundamentals, then specialize in malware RE.",
+    focus: "Evidence handling, timelines, and malware analysis",
+    steps: [
+      "Foundations: OS internals, file systems, and scripting",
+      "Core: DFIR certifications and memory forensics (GCFE/EnCE)",
+      "Specialize: malware RE, mobile, and cloud forensics",
+      "Practice: lab cases, writeups, and evidence handling",
+    ],
+    careerPaths: ["forensics", "malware-analysis", "blue-team"],
+    color: "#14b8a6",
+  },
+];
+
+const ukCyberBscUniversities = [
+  "Royal Holloway, University of London",
+  "University of Birmingham",
+  "University of Southampton",
+  "University of Warwick",
+  "University of York",
+  "University of Kent",
+  "University of Portsmouth",
+  "University of Essex",
+  "University of Hertfordshire",
+  "Coventry University",
+  "De Montfort University",
+  "University of the West of England (UWE Bristol)",
+  "Sheffield Hallam University",
+  "University of Brighton",
+  "University of West of Scotland",
+  "University of Sunderland",
+  "Ulster University",
+  "University of Lincoln",
+  "University of Salford",
+  "University of Strathclyde",
+  "University of Aberdeen",
+  "University of Dundee",
+];
+
+const ukCyberMscUniversities = [
+  "Royal Holloway, University of London",
+  "University of Birmingham",
+  "University of Southampton",
+  "University of Warwick",
+  "University of Manchester",
+  "University of Edinburgh",
+  "University of Glasgow",
+  "University of York",
+  "University of Strathclyde",
+  "University of Bristol",
+  "University of Leeds",
+  "University of Sheffield",
+  "University of Nottingham",
+  "University of Bath",
+  "Newcastle University",
+  "Cardiff University",
+  "Queen's University Belfast",
+  "Lancaster University",
+  "University of Exeter",
+  "University of Kent",
+  "University of Essex",
+  "University of Portsmouth",
+  "Coventry University",
+  "University of the West of England (UWE Bristol)",
+  "Ulster University",
+];
+
+const ukCyberResearchUniversities = [
+  "University of Oxford",
+  "University of Cambridge",
+  "Imperial College London",
+  "University College London (UCL)",
+  "University of Southampton",
+  "Royal Holloway, University of London",
+  "University of Warwick",
+  "University of Edinburgh",
+];
+
+const ukCsBscUniversities = [
+  "University of Oxford",
+  "University of Cambridge",
+  "Imperial College London",
+  "University College London (UCL)",
+  "King's College London",
+  "Queen Mary University of London",
+  "University of Edinburgh",
+  "University of Manchester",
+  "University of Bristol",
+  "University of Warwick",
+  "University of Southampton",
+  "University of Birmingham",
+  "University of Leeds",
+  "University of Nottingham",
+  "University of Sheffield",
+  "University of York",
+  "University of Glasgow",
+  "University of Bath",
+  "University of Exeter",
+  "University of Liverpool",
+  "Newcastle University",
+  "Cardiff University",
+  "Queen's University Belfast",
+  "University of Strathclyde",
+  "Lancaster University",
+  "University of Sussex",
+  "University of Kent",
+  "University of Essex",
+  "Open University",
+  "Birkbeck, University of London",
+];
+
+const ukCsMscUniversities = [
+  "University of Oxford",
+  "University of Cambridge",
+  "Imperial College London",
+  "University College London (UCL)",
+  "King's College London",
+  "Queen Mary University of London",
+  "University of Edinburgh",
+  "University of Manchester",
+  "University of Bristol",
+  "University of Warwick",
+  "University of Southampton",
+  "University of Birmingham",
+  "University of Leeds",
+  "University of Nottingham",
+  "University of Sheffield",
+  "University of York",
+  "University of Glasgow",
+  "University of Bath",
+  "University of Exeter",
+  "University of Liverpool",
+  "Newcastle University",
+  "Cardiff University",
+  "Queen's University Belfast",
+  "University of Strathclyde",
+  "Lancaster University",
+  "University of Sussex",
+  "University of Kent",
+  "University of Essex",
+  "University of Reading",
+  "Open University",
+  "University of London",
+  "Birkbeck, University of London",
+];
+
+const ukCsResearchUniversities = [
+  "University of Oxford",
+  "University of Cambridge",
+  "Imperial College London",
+  "University College London (UCL)",
+  "University of Edinburgh",
+  "University of Manchester",
+  "University of Southampton",
+  "University of Warwick",
+];
+
+const ukCyberBscNotes = "Undergraduate | FT/PT (varies) | 3-4 years | Cyber security, networks, secure systems, and labs";
+const ukCyberMscNotes = "Postgraduate taught | FT/PT (varies) | 1-2 years | Advanced security, secure systems, and a research project";
+const ukCyberResearchNotes = "Research | FT/PT (varies) | Thesis-led cyber security or security-focused CS research";
+const ukCsBscNotes = "Undergraduate | FT/PT (varies) | 3-4 years | Algorithms, systems, and software engineering foundations";
+const ukCsMscNotes = "Postgraduate taught | FT/PT (varies) | 1-2 years | Advanced CS and software engineering with a dissertation";
+const ukCsResearchNotes = "Research | FT/PT (varies) | Thesis-led CS or software engineering research";
 
 const subjects: SubjectSection[] = [
   {
@@ -780,6 +1099,11 @@ const subjects: SubjectSection[] = [
         { name: "Software Engineering Immersive", provider: "General Assembly", careerPaths: ["appsec", "devsecops"], notes: "12-24 weeks | London, UK | HTML, CSS, JavaScript, React, Node.js, and MongoDB" },
         { name: "Nanodegree (Full-Stack/Data)", provider: "Code First Girls", careerPaths: ["appsec", "devsecops", "data-science"], notes: "Free/Sponsored | UK | Women-focused coding education, web dev, data, and software" },
         { name: "Software Development Bootcamp", provider: "School of Code", careerPaths: ["appsec", "devsecops"], notes: "16 weeks | UK Remote | Free bootcamp, full-stack JavaScript, and career support" },
+        { name: "Founders and Coders Bootcamp", provider: "Founders and Coders", careerPaths: ["appsec", "devsecops", "tool-dev"], notes: "16-24 weeks | UK | Free (selective) | Full-stack JavaScript, product delivery, and teamwork" },
+        { name: "42 London Core Curriculum", provider: "42 London", careerPaths: ["tool-dev", "security-engineering"], notes: "Self-paced | UK | Peer-to-peer learning, C, algorithms, and systems programming" },
+        { name: "The Odin Project: Foundations", provider: "The Odin Project", careerPaths: ["appsec", "tool-dev"], notes: "Free | Online | HTML, CSS, JavaScript, Git, and project-based learning" },
+        { name: "Codecademy Full-Stack Engineer Path", provider: "Codecademy", careerPaths: ["appsec", "devsecops"], notes: "Online | 4-6 months | JavaScript, Node.js, React, SQL, and deployment fundamentals" },
+        { name: "OpenLearn: Learn to Code", provider: "Open University", careerPaths: ["appsec", "tool-dev"], notes: "Free short courses | Online | Intro programming, Python basics, and problem solving" },
         { name: "Certified Entry-Level Python Programmer (PCEP)", provider: "Python Institute", careerPaths: ["tool-dev", "security-engineering"], notes: "Entry-level | Python syntax, data types, control flow, and functions basics" },
         { name: "GitHub Foundations Certification", provider: "GitHub", careerPaths: ["devsecops", "tool-dev"], notes: "Foundational | Git basics, GitHub features, collaboration, and repositories" },
         { name: "Linux Foundation Certified IT Associate (LFCA)", provider: "Linux Foundation", careerPaths: ["blue-team", "security-engineering"], notes: "Entry-level | Linux basics, cloud, DevOps, and security fundamentals" },
@@ -795,6 +1119,9 @@ const subjects: SubjectSection[] = [
         { name: "CS50M: Mobile App Development with React Native", provider: "HarvardX (edX)", careerPaths: ["appsec"], notes: "13 weeks | CS50 or JavaScript | Cross-platform mobile development and deployment" },
         { name: "CS50 Cybersecurity: Introduction to Cybersecurity", provider: "HarvardX (edX)", careerPaths: ["blue-team", "red-team", "appsec"], notes: "5 weeks | Free | Securing accounts, data, systems, software, and networks" },
         { name: "Professional Certificate in Computer Science for Game Development", provider: "HarvardX (edX)", careerPaths: ["tool-dev"], notes: "6 months | CS50 recommended | Unity, Lua, game design patterns, and 3D graphics" },
+        { name: "Meta Back-End Developer Professional Certificate", provider: "Meta (Coursera)", careerPaths: ["appsec", "devsecops"], notes: "6-8 months | Online | Python, Django, APIs, SQL, and backend fundamentals" },
+        { name: "IBM Full Stack Software Developer Professional Certificate", provider: "IBM (Coursera)", careerPaths: ["appsec", "devsecops", "tool-dev"], notes: "6-9 months | Online | Cloud-native apps, containers, microservices, and DevOps basics" },
+        { name: "ISTQB Certified Tester Foundation Level (CTFL)", provider: "ISTQB", careerPaths: ["appsec", "security-engineering"], notes: "Testing fundamentals | Test design, QA processes, and software quality basics" },
         { name: "Certified Kubernetes Application Developer (CKAD)", provider: "CNCF", careerPaths: ["devsecops", "cloud-security"], notes: "K8s developer skills | Design, build, and deploy cloud-native applications" },
         { name: "HashiCorp Certified: Terraform Associate", provider: "HashiCorp", careerPaths: ["devsecops", "security-engineering"], notes: "IaC certification | Infrastructure provisioning and management with Terraform" },
         { name: "AWS Certified Developer – Associate", provider: "AWS", careerPaths: ["devsecops", "cloud-security"], notes: "Cloud development | Build and maintain AWS applications" },
@@ -822,7 +1149,61 @@ const subjects: SubjectSection[] = [
         { name: "CISSP (Architecture Focus)", provider: "ISC2", careerPaths: ["security-engineering", "grc"], notes: "Expert | Security architecture domains within CISSP certification" },
         { name: "Software Architecture: Principles and Practices", provider: "MIT Professional Education", careerPaths: ["security-engineering", "appsec"], notes: "Short course | Architecture patterns, microservices, and system design" },
         { name: "Software Security Foundations Professional Certificate", provider: "Stanford Online", careerPaths: ["appsec", "security-engineering"], notes: "Professional cert | Secure coding, vulnerability analysis, and security design" },
+        { name: "ISTQB Advanced Test Analyst", provider: "ISTQB", careerPaths: ["appsec", "security-engineering"], notes: "Advanced | Test strategy, test analysis, and quality leadership" },
+        { name: "BCS Chartered IT Professional (CITP)", provider: "BCS", careerPaths: ["security-engineering", "grc"], notes: "Professional status | Experience-based | Demonstrates advanced software engineering practice" },
       ],
+    },
+  },
+  {
+    title: "UK University Degrees: Cyber Security & Digital Forensics",
+    description: "UK undergraduate and postgraduate degrees in cyber security, information security, and digital forensics. Titles, study modes, and conversion routes vary by university - confirm on official sites.",
+    icon: <SchoolIcon sx={{ fontSize: 32 }} />,
+    color: "#10b981",
+    tracks: {
+      Beginner: ukCyberBscUniversities.map((provider) => ({
+        name: "BSc Cyber Security",
+        provider,
+        careerPaths: ["blue-team", "security-engineering", "grc"],
+        notes: ukCyberBscNotes,
+      })),
+      Intermediate: ukCyberMscUniversities.map((provider) => ({
+        name: "MSc Cyber Security / Information Security",
+        provider,
+        careerPaths: ["security-engineering", "blue-team", "grc"],
+        notes: ukCyberMscNotes,
+      })),
+      Advanced: ukCyberResearchUniversities.map((provider) => ({
+        name: "MRes/PhD Cyber Security (or CS Security)",
+        provider,
+        careerPaths: ["security-engineering", "crypto"],
+        notes: ukCyberResearchNotes,
+      })),
+    },
+  },
+  {
+    title: "UK University Degrees: Computer Science & Software Engineering",
+    description: "UK degrees in computer science and software engineering. Course titles, study modes, and conversion routes vary by institution - verify on official university sites.",
+    icon: <SchoolIcon sx={{ fontSize: 32 }} />,
+    color: "#2563eb",
+    tracks: {
+      Beginner: ukCsBscUniversities.map((provider) => ({
+        name: "BSc Computer Science / Software Engineering",
+        provider,
+        careerPaths: ["security-engineering", "tool-dev", "appsec"],
+        notes: ukCsBscNotes,
+      })),
+      Intermediate: ukCsMscUniversities.map((provider) => ({
+        name: "MSc Computer Science / Software Engineering",
+        provider,
+        careerPaths: ["security-engineering", "tool-dev", "appsec"],
+        notes: ukCsMscNotes,
+      })),
+      Advanced: ukCsResearchUniversities.map((provider) => ({
+        name: "MRes/PhD Computer Science / Software Engineering",
+        provider,
+        careerPaths: ["security-engineering", "tool-dev"],
+        notes: ukCsResearchNotes,
+      })),
     },
   },
 ];
@@ -881,7 +1262,7 @@ const CyberSecurityCertificationsPage: React.FC = () => {
     };
   }, []);
 
-  // Filter subjects and certifications based on search and filters
+  // Filter subjects and programs based on search and filters
   const filteredSubjects = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     
@@ -969,6 +1350,8 @@ SUBJECT AREAS:
 - System Administration: Windows Server, Active Directory, Linux, Red Hat, shell scripting
 - Cloud Computing & DevOps: AWS, Azure, GCP, Kubernetes, Docker, CI/CD, IaC, DevSecOps
 - Software Engineering & Development: Programming languages, bootcamps, software architecture, CS fundamentals
+- UK University Degrees: Cyber Security & Digital Forensics: BSc/MSc options, FT/PT modes, research routes
+- UK University Degrees: Computer Science & Software Engineering: BSc/MSc options, conversion routes, research pathways
 - AI and Machine Learning: Data science, ML/DL certifications, AI engineering, neural networks
 - Project Management, Leadership & GRC: PRINCE2, PMP, Agile/Scrum, GRC, ISACA, ISO 27001, ITIL
 - Defensive Security & SOC Analysis: Blue team, incident response, SOC, threat intelligence, SIEM
@@ -980,7 +1363,7 @@ SUBJECT AREAS:
 
 PROVIDERS: SANS/GIAC, CompTIA, OffSec, CREST, ISC2, ISACA, EC-Council, Microsoft, AWS, Google Cloud, Hack The Box, Cisco, HarvardX, DeepLearning.AI, Scrum Alliance, PMI, AXELOS, and many others.
 
-All certifications organized by Beginner/Intermediate/Advanced levels with career path mappings.`;
+All programs organized by Beginner/Intermediate/Advanced levels with career path mappings and role pathways.`;
 
   return (
     <LearnPageLayout pageTitle="Education & Certifications" pageContext={pageContext}>
@@ -1012,13 +1395,13 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
           </Typography>
         </Box>
         <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          Comprehensive learning paths organized by subject area with beginner, intermediate, and advanced options.
+          Comprehensive learning paths with certifications, courses, and UK degree routes across beginner, intermediate, and advanced levels.
         </Typography>
 
         {/* Statistics Summary */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
-            { label: "Total Certifications", value: stats.totalCerts, icon: <SchoolIcon />, color: "#38bdf8" },
+            { label: "Total Programs", value: stats.totalCerts, icon: <SchoolIcon />, color: "#38bdf8" },
             { label: "Subject Areas", value: stats.totalSubjects, icon: <CategoryIcon />, color: "#22c55e" },
             { label: "Training Providers", value: stats.totalProviders, icon: <BusinessIcon />, color: "#f59e0b" },
           ].map((stat) => (
@@ -1084,7 +1467,7 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
         >
           <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
             <TextField
-              placeholder="Search certifications, providers, or topics..."
+              placeholder="Search programs, providers, or topics..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               size="small"
@@ -1198,7 +1581,7 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
                 <Box component="span" sx={{ color: "#38bdf8", fontWeight: 700 }}>
                   {filteredSubjects.reduce((acc, s) => acc + Object.values(s.tracks).flat().length, 0)}
                 </Box>
-                {" "}certifications across{" "}
+                {" "}programs across{" "}
                 <Box component="span" sx={{ color: "#22c55e", fontWeight: 700 }}>
                   {filteredSubjects.length}
                 </Box>
@@ -1273,6 +1656,11 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
                 copy: "Always check the provider site for prerequisites, exam updates, and recert rules.",
                 color: "#f59e0b",
               },
+              {
+                title: "🎓 Compare degree routes",
+                copy: "Review FT/PT modes, duration, and conversion options for UK degree programs.",
+                color: "#14b8a6",
+              },
             ].map((item) => (
               <Grid item xs={12} md={4} key={item.title}>
                 <Paper
@@ -1290,6 +1678,82 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
                   <Typography variant="body2" sx={{ color: "grey.400" }}>
                     {item.copy}
                   </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Role-based Pathways */}
+        <Paper
+          sx={{
+            p: 3,
+            mb: 3,
+            bgcolor: "#0f1424",
+            borderRadius: 2,
+            border: "1px solid rgba(148,163,184,0.2)",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <TrendingUpIcon sx={{ color: "#38bdf8" }} />
+            <Typography variant="h6" sx={{ color: "grey.200" }}>
+              Role-based pathways
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+            Pick a target role and follow a staged path across foundations, core credentials, and specialization.
+          </Typography>
+          <Grid container spacing={2}>
+            {pathways.map((pathway) => (
+              <Grid item xs={12} md={6} key={pathway.title}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    bgcolor: "#0c0f1c",
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(pathway.color, 0.35)}`,
+                    height: "100%",
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ color: pathway.color, fontWeight: 700 }}>
+                    {pathway.title}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "grey.500" }}>
+                    {pathway.focus}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mt: 1 }}>
+                    {pathway.description}
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 2, mt: 1.5, mb: 1.5, color: "grey.400" }}>
+                    {pathway.steps.map((step) => (
+                      <Box component="li" key={`${pathway.title}-${step}`} sx={{ mb: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: "grey.400" }}>
+                          {step}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                    {pathway.careerPaths.map((path) => (
+                      <Tooltip key={`${pathway.title}-${path}`} title={careerPathMeta[path].description} arrow>
+                        <Chip
+                          label={careerPathMeta[path].label}
+                          size="small"
+                          icon={<TrendingUpIcon sx={{ fontSize: 12 }} />}
+                          onClick={() => navigate("/learn/career-paths")}
+                          sx={{
+                            height: 20,
+                            fontSize: "0.65rem",
+                            bgcolor: alpha(careerPathMeta[path].color, 0.12),
+                            color: careerPathMeta[path].color,
+                            cursor: "pointer",
+                            "&:hover": { bgcolor: alpha(careerPathMeta[path].color, 0.25) },
+                            "& .MuiChip-icon": { color: careerPathMeta[path].color },
+                          }}
+                        />
+                      </Tooltip>
+                    ))}
+                  </Box>
                 </Paper>
               </Grid>
             ))}
@@ -1322,7 +1786,7 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
             ))}
           </Box>
           <Typography variant="caption" sx={{ color: "grey.500" }}>
-            Provider names and exam details change. Validate prerequisites and current exam versions on official sites.
+            Provider names, exam details, and degree modes change. Validate prerequisites and current offerings on official sites.
           </Typography>
         </Paper>
 
@@ -1391,7 +1855,7 @@ All certifications organized by Beginner/Intermediate/Advanced levels with caree
           >
             <SearchIcon sx={{ fontSize: 48, color: "grey.600", mb: 2 }} />
             <Typography variant="h6" sx={{ color: "grey.400", mb: 1 }}>
-              No certifications found
+              No programs found
             </Typography>
             <Typography variant="body2" sx={{ color: "grey.500", mb: 2 }}>
               Try adjusting your search query or filters

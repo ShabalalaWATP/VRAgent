@@ -369,6 +369,8 @@ export default function Debugging101Page() {
   const sectionNavItems = [
     { id: "intro", label: "Introduction", icon: <SchoolIcon /> },
     { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+    { id: "reverse-engineer", label: "Reverse Engineer Lens", icon: <BugReportIcon /> },
+    { id: "platform-tools", label: "Platform Tools", icon: <BuildIcon /> },
     { id: "workflow", label: "Workflow", icon: <TuneIcon /> },
     { id: "breakpoints", label: "Breakpoints", icon: <CodeIcon /> },
     { id: "memory", label: "Memory & Registers", icon: <MemoryIcon /> },
@@ -418,6 +420,8 @@ export default function Debugging101Page() {
     "Teach core debugging concepts: breakpoints, stepping, and inspection.",
     "Show a repeatable workflow for finding bugs.",
     "Introduce memory, stack, and register basics.",
+    "Adopt a reverse engineer mindset for runtime investigation.",
+    "Map platform-specific debugging tools for Android, Windows, and web apps.",
     "Provide safe, beginner-friendly practice steps.",
   ];
   const beginnerPath = [
@@ -481,6 +485,103 @@ export default function Debugging101Page() {
     "Align logs with debugger steps using timestamps.",
     "Prefer debugger state over printed output.",
     "Ignore unrelated warnings until the main failure is fixed.",
+  ];
+  const reverseEngineerMindset = [
+    {
+      title: "Treat the program as evidence",
+      description: "Assume the running binary is the source of truth. Validate hypotheses against runtime state, not assumptions.",
+      focus: "Live memory, registers, stack frames, system calls",
+    },
+    {
+      title: "Reconstruct intent from behavior",
+      description: "When source is missing or obfuscated, infer intent by watching inputs, outputs, and side effects.",
+      focus: "Network traffic, filesystem writes, API usage",
+    },
+    {
+      title: "Follow the data, not the code",
+      description: "Track the data that triggers the bug. The first wrong transformation is the real root cause.",
+      focus: "Watchpoints, tainted inputs, argument tracing",
+    },
+    {
+      title: "Symbols are a map, not a guarantee",
+      description: "Debug symbols, stack traces, and logs accelerate work, but always verify with runtime state.",
+      focus: "Symbol servers, crash dumps, module boundaries",
+    },
+  ];
+  const reverseEngineerArtifacts = [
+    { artifact: "Crash dumps", use: "Recover call stacks, registers, and memory at failure time" },
+    { artifact: "Strings and imports", use: "Quickly identify capabilities and code paths" },
+    { artifact: "Dynamic traces", use: "Observe runtime behavior and hidden branches" },
+    { artifact: "Binary diffs", use: "Locate changes across versions and regressions" },
+    { artifact: "Network captures", use: "See protocol usage and malformed inputs" },
+    { artifact: "Heap/stack snapshots", use: "Find corruption and unexpected mutations" },
+  ];
+  const reverseEngineerWorkflow = [
+    "Establish a reliable repro in a controlled lab.",
+    "Identify the failure boundary (input, function, or module).",
+    "Capture artifacts: stack trace, memory snapshot, logs, and network traces.",
+    "Instrument the binary to observe data flow and side effects.",
+    "Confirm the first wrong value and trace back to its origin.",
+    "Validate the fix with the same inputs and environment.",
+  ];
+  const androidTools = [
+    { name: "Android Studio Debugger", category: "IDE", use: "Breakpoints, variables, and JDWP inspection" },
+    { name: "adb + logcat", category: "CLI", use: "Device control, logs, app lifecycle, and intents" },
+    { name: "Frida", category: "Dynamic instrumentation", use: "Hook Java and native methods at runtime" },
+    { name: "Objection", category: "Runtime tooling", use: "Convenience layer over Frida for mobile apps" },
+    { name: "Jadx", category: "Decompiler", use: "Inspect APK code and control flow" },
+    { name: "apktool", category: "Patching", use: "Decode resources and modify smali" },
+    { name: "LLDB", category: "Native debug", use: "Debug JNI/native libraries and crashes" },
+  ];
+  const windowsTools = [
+    { name: "WinDbg", category: "System debugger", use: "Crash dumps, symbols, and kernel/user stacks" },
+    { name: "x64dbg", category: "User-mode debugger", use: "Breakpoints, memory maps, and patching" },
+    { name: "Visual Studio Debugger", category: "IDE", use: "Source-level and mixed-mode debugging" },
+    { name: "Process Explorer", category: "Sysinternals", use: "Inspect handles, threads, and loaded modules" },
+    { name: "Process Monitor", category: "Sysinternals", use: "Trace file, registry, and network activity" },
+    { name: "API Monitor", category: "API tracing", use: "Observe Win32 API calls and parameters" },
+    { name: "Ghidra", category: "Disassembler", use: "Static analysis and function recovery" },
+  ];
+  const webTools = [
+    { name: "Chrome DevTools", category: "Browser", use: "Breakpoints, network, performance, and memory tools" },
+    { name: "Firefox DevTools", category: "Browser", use: "JS debugging, network analysis, and CSS inspection" },
+    { name: "React DevTools", category: "Framework", use: "Component tree, props, and state inspection" },
+    { name: "Redux DevTools", category: "State", use: "Action timeline and time-travel debugging" },
+    { name: "VS Code Debugger", category: "IDE", use: "Node.js server-side breakpoints and attach" },
+    { name: "Burp Suite", category: "Proxy", use: "Intercept, replay, and modify HTTP requests" },
+    { name: "Fiddler Classic", category: "Proxy", use: "Capture and analyze HTTP(S) traffic" },
+  ];
+  const debuggingMentalModel = [
+    "Inputs flow into code paths, update internal state, and produce outputs you can observe.",
+    "The first wrong value is usually upstream of the visible symptom; find that divergence point.",
+    "Invariants describe what must always be true; breakpoints around invariant checks are powerful.",
+    "The call stack is a timeline of decisions that explains how you arrived at the current state.",
+  ];
+  const narrowingStrategies = [
+    "Use binary search on commits (git bisect) to isolate when a regression was introduced.",
+    "Disable or stub subsystems to shrink the path while keeping the bug reproducible.",
+    "Bracket the failure with early and late breakpoints to isolate the smallest failing region.",
+    "Add assertions for expected state to pinpoint where the assumption breaks.",
+    "Reduce concurrency by forcing single-threaded execution or deterministic scheduling.",
+  ];
+  const breakpointPlacementTips = [
+    "Place breakpoints at boundaries: input parsing, validation, and data transformations.",
+    "Stop at loop entry and add conditions to catch the first bad iteration.",
+    "Target error handling branches to understand why a failure path was taken.",
+    "Use temporary breakpoints to confirm a path, then remove to reduce noise.",
+    "Prefer a few high-signal breakpoints over dozens of low-signal ones.",
+  ];
+  const triagePriorities = [
+    "User impact: data loss, security risk, or widespread failures come first.",
+    "Frequency: issues that happen often are easier to reproduce and should be fixed quickly.",
+    "Scope: determine if the bug is isolated or systemic to avoid partial fixes.",
+    "Regression risk: prioritize bugs introduced by recent changes or deployments.",
+  ];
+  const safeLabChecklistExpanded = [
+    "Use sanitized or synthetic data that mirrors production structure without sensitive content.",
+    "Record exact environment versions (runtime, dependencies, OS) to avoid mismatches.",
+    "Keep destructive actions disabled by default until you confirm safety.",
+    "Document how to reset the environment so you can reproduce from a clean state.",
   ];
 
   const howDebuggingWorks = [
@@ -735,7 +836,7 @@ break validateUser if userId <= 0
 # Stop when loop index reaches the boundary
 break processItems if i == items.size - 1`;
 
-  const pageContext = `This page covers debugging fundamentals including debugger concepts, breakpoints, memory inspection, call stacks, and common debugging tools. Topics include reproducible workflows, hypothesis-driven debugging, build symbols, logging vs debugging tradeoffs, and safe practice routines.`;
+  const pageContext = `This page covers debugging fundamentals including debugger concepts, breakpoints, memory inspection, call stacks, and common debugging tools. Topics include reproducible workflows, hypothesis-driven debugging, narrowing strategies, build symbols, logging vs debugging tradeoffs, bug triage priorities, reverse engineering perspective, platform toolkits for Android/Windows/web apps, and safe practice routines.`;
 
   const sidebarNav = (
     <Paper
@@ -1089,6 +1190,8 @@ break processItems if i == items.size - 1`;
                 <Chip icon={<BugReportIcon />} label="Breakpoints" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
                 <Chip icon={<SearchIcon />} label="Stepping" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
                 <Chip icon={<MemoryIcon />} label="Memory" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+                <Chip icon={<SecurityIcon />} label="RE Mindset" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
+                <Chip icon={<BuildIcon />} label="Platform Tools" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
                 <Chip icon={<ShieldIcon />} label="Safe Workflow" size="small" sx={{ bgcolor: alpha(accent, 0.2), color: accent }} />
               </Box>
 
@@ -1112,14 +1215,45 @@ break processItems if i == items.size - 1`;
               see the real values in memory, the exact line being executed, and the call stack that led there.
             </Typography>
             <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A beginner-friendly way to think about debugging is: you are comparing <strong>what you expected</strong>
+              with <strong>what actually happened</strong>. That gap is your clue. A debugger makes the gap visible by
+              showing you the real values at the exact moment the program makes a decision. Every time you step,
+              you answer a simple question: "Did the program still behave as I expected on this line?"
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
               Think of a debugger like a "pause and inspect" button for software. You can stop at a line, inspect
               variables, and move forward one step at a time. This is especially powerful when a bug only appears
               after many steps or under specific inputs.
             </Typography>
             <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Beginners often feel lost because a running program has lots of moving parts. The trick is to narrow
+              your focus to a small, observable path. Pick one failing input. Identify the function or screen where
+              the symptom appears. Then move backward, line by line, until you find the first place where the state
+              stops matching your expectation.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
               Debugging is not about stepping randomly. The best debuggers use a simple workflow: reproduce the bug,
               isolate the first wrong value, test a hypothesis, and verify the fix. The goal is to learn what the
               program is truly doing, not what we hope it is doing.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If you ever feel stuck, pause and write down three things: what you expected, what you saw, and what
+              you plan to test next. This turns a messy problem into a small experiment. Debugging is a sequence of
+              experiments, not a single moment of genius.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Think of debugging as data collection. You are gathering evidence about state transitions, inputs, and
+              outputs until the behavior makes sense. The fastest path to a fix is rarely intuition alone; it is a
+              careful trail of observations that narrows the search space.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Most bugs are chains, not single points. A small configuration mistake can flow through a system and
+              surface as a crash far away. Your job is to separate symptoms from causes and identify the earliest
+              incorrect assumption that started the chain.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Good debuggers define invariants: rules that must always be true. When an invariant fails, you have a
+              precise anchor for investigation. This is more reliable than guessing and keeps debugging systematic.
             </Typography>
             <Typography variant="body2" sx={{ color: "grey.400" }}>
               This guide explains core debugging concepts, common tools, and a safe practice workflow for beginners.
@@ -1138,6 +1272,41 @@ break processItems if i == items.size - 1`;
             </Typography>
             <List dense>
               {objectives.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Debugging Mental Model
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Debugging is a disciplined search for the first point where reality diverges from expectation. Every
+              program can be viewed as a series of state changes: inputs arrive, code executes, state updates, and
+              outputs are produced. When outputs are wrong, the fastest path is to locate the earliest incorrect state.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Start by drawing a simple pipeline in your head: <em>Input → Transform → Output</em>. When the output is
+              wrong, ask which transform could have produced that wrong value. Then inspect the input and the state
+              just before the transform. This keeps you from jumping around and helps you debug in a straight line.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              The call stack tells you how you arrived at the current line. Treat it as a breadcrumb trail of decisions.
+              When the current state looks wrong, walk up the stack to see which function first introduced the bad value.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A good mental model also includes <strong>invariants</strong> (facts that should always be true). For example,
+              "userId should never be empty here" or "array index must be within bounds." Place breakpoints around
+              these invariants and check them at runtime. When an invariant breaks, you are very close to the bug.
+            </Typography>
+            <List dense>
+              {debuggingMentalModel.map((item) => (
                 <ListItem key={item}>
                   <ListItemIcon>
                     <CheckCircleIcon color="info" fontSize="small" />
@@ -1312,6 +1481,179 @@ break processItems if i == items.size - 1`;
             </Grid>
           </Paper>
 
+          {/* ==================== REVERSE ENGINEER ==================== */}
+          <Typography id="reverse-engineer" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Reverse Engineer's Perspective
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Reverse engineers debug software without trusting source code. They treat the running program as evidence,
+              validate hypotheses against live state, and reconstruct intent from behavior. This perspective is valuable
+              even in normal development because it forces you to rely on facts: memory, registers, call stacks, and I/O.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300" }}>
+              When a bug is elusive, think like a reverse engineer: capture artifacts, instrument runtime behavior,
+              and track the data that triggered the failure until you find the first incorrect transformation.
+            </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 2 }}>
+              Reverse Engineering Mindset
+            </Typography>
+            <Grid container spacing={2}>
+              {reverseEngineerMindset.map((item) => (
+                <Grid item xs={12} md={6} key={item.title}>
+                  <Paper sx={{ p: 2, bgcolor: "#0b1020", borderRadius: 2, border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                    <Typography variant="subtitle2" sx={{ color: "#38bdf8", mb: 1 }}>
+                      {item.title}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
+                      {item.description}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "grey.400" }}>
+                      Focus: {item.focus}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              High-Value Artifacts
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#3b82f6" }}>Artifact</TableCell>
+                    <TableCell sx={{ color: "#3b82f6" }}>Why it helps</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reverseEngineerArtifacts.map((item) => (
+                    <TableRow key={item.artifact}>
+                      <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{item.artifact}</TableCell>
+                      <TableCell sx={{ color: "grey.400" }}>{item.use}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 4, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Reverse Engineering Workflow
+            </Typography>
+            <List dense>
+              {reverseEngineerWorkflow.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          {/* ==================== PLATFORM TOOLS ==================== */}
+          <Typography id="platform-tools" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
+            Platform Debugging Toolkits
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="body1" sx={{ color: "grey.300" }}>
+              Each platform has its own debugging stack. The tools below are widely used by software reverse engineers
+              and engineers in practice. Start with the platform debugger, then add instrumentation, tracing, and proxies
+              when behavior is hidden or hard to reproduce.
+            </Typography>
+          </Paper>
+
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: "#0f1422", borderRadius: 2, height: "100%" }}>
+                <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+                  Android
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#38bdf8" }}>Tool</TableCell>
+                        <TableCell sx={{ color: "#38bdf8" }}>Use</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {androidTools.map((tool) => (
+                        <TableRow key={tool.name}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{tool.name}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{tool.use}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: "#0f1422", borderRadius: 2, height: "100%" }}>
+                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+                  Windows
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#3b82f6" }}>Tool</TableCell>
+                        <TableCell sx={{ color: "#3b82f6" }}>Use</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {windowsTools.map((tool) => (
+                        <TableRow key={tool.name}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{tool.name}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{tool.use}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: "#0f1422", borderRadius: 2, height: "100%" }}>
+                <Typography variant="h6" sx={{ color: "#22c55e", mb: 1 }}>
+                  Web Apps
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "#22c55e" }}>Tool</TableCell>
+                        <TableCell sx={{ color: "#22c55e" }}>Use</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {webTools.map((tool) => (
+                        <TableRow key={tool.name}>
+                          <TableCell sx={{ color: "grey.200", fontWeight: 600 }}>{tool.name}</TableCell>
+                          <TableCell sx={{ color: "grey.400" }}>{tool.use}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          </Grid>
+
           {/* ==================== WORKFLOW ==================== */}
           <Typography id="workflow" variant="h4" sx={{ fontWeight: 800, mb: 1, scrollMarginTop: 100 }}>
             Workflow
@@ -1321,6 +1663,21 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               How Debugging Works
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A debugger sits between you and the running program. It can pause execution, inspect live data, and then
+              resume. The trick is to pause at the right moment and ask focused questions about the current state.
+              Stepping without a hypothesis often wastes time, so pair each breakpoint with a concrete question.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Beginners often try to step through everything. That is overwhelming and slow. Instead, place a breakpoint
+              near the symptom, then use "step over" to skip known-good code and "step into" only when you need to see
+              a function's internal behavior. This makes debugging targeted and efficient.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If the bug only happens after many steps, use conditional breakpoints or logpoints. They let you pause
+              only when a condition is true (for example, a value becomes negative), which keeps you focused on the
+              exact moment the state changes.
             </Typography>
             <List dense>
               {howDebuggingWorks.map((item) => (
@@ -1338,6 +1695,20 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Debugging Workflow
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A workflow keeps you from chasing random clues. Start with a reliable reproduction, move to a narrow
+              region of code, and then validate each assumption. If you cannot reproduce, you cannot fix. If you cannot
+              explain why a fix worked, the bug may return later.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Think of each step as a gate. You cannot pass to the next gate until the current one is solid. For example:
+              do you have the same input each time? Are you sure you are in the right function? Have you confirmed the
+              variable is wrong at this line? This disciplined approach prevents "fixing" the wrong thing.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Once you find the first wrong value, stop and trace backward to the line where it was created. The creation
+              point is almost always the root cause. Fixing anything after that is usually just hiding the symptom.
+            </Typography>
             <List dense>
               {workflow.map((item) => (
                 <ListItem key={item}>
@@ -1354,6 +1725,15 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Hypothesis Loop
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A hypothesis is a specific, testable guess. "The data is wrong" is too broad. "The discount is applied
+              twice when the cart has more than five items" is a good hypothesis. Good hypotheses lead to clear tests
+              and quick answers.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If your hypothesis is wrong, that is progress. It means you just eliminated a path. Debugging is the
+              process of eliminating paths until only the real cause remains.
+            </Typography>
             <List dense>
               {hypothesisLoop.map((item) => (
                 <ListItem key={item}>
@@ -1368,7 +1748,32 @@ break processItems if i == items.size - 1`;
 
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Narrowing Strategies
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              When a bug feels overwhelming, focus on shrinking the search space. Reduce the input, isolate the feature,
+              and remove anything unrelated to the failure. The goal is to make the bug small enough that it cannot hide.
+            </Typography>
+            <List dense>
+              {narrowingStrategies.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Minimum Repro Checklist
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A minimal reproduction is the smallest test that still fails. The smaller it is, the faster you can
+              iterate. It also makes it easier to share the issue with teammates, file a bug report, or write a test
+              that prevents regressions.
             </Typography>
             <List dense>
               {minimalReproChecklist.map((item) => (
@@ -1386,6 +1791,11 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Build Settings That Matter
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Build flags shape how debuggable a binary is. Optimizations can reorder, inline, or remove code, which
+              makes stepping confusing and can hide variables. Debug symbols map compiled instructions back to source
+              lines so the debugger can show meaningful context.
+            </Typography>
             <List dense>
               {buildSettings.map((item) => (
                 <ListItem key={item}>
@@ -1401,6 +1811,11 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Logging vs Debugger
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Logging is great for long-running or production-only issues, while a debugger shines when you can
+              reproduce locally and need precise state. Many teams use both: logs to detect the failure and a debugger
+              to isolate the root cause. The key is choosing the least intrusive tool that still answers your question.
             </Typography>
             <TableContainer>
               <Table size="small">
@@ -1504,8 +1919,48 @@ break processItems if i == items.size - 1`;
           </Paper>
 
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Breakpoint Placement Guide
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Breakpoints are most useful when they validate a specific hypothesis. Place them where data crosses
+              a boundary, where it is transformed, or right before a decision is made. This minimizes stepping while
+              maximizing the information you collect.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              For beginners, a simple rule helps: set the first breakpoint at the <strong>symptom</strong>, then set
+              the next breakpoint just before the code that produced that symptom. Repeat until you find the first
+              wrong value. This "walk backward" pattern keeps your investigation focused and avoids random stepping.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If you are unsure where to start, place breakpoints on input parsing, validation, and output formatting.
+              These are natural boundaries where the program takes in data, changes it, and exposes results.
+            </Typography>
+            <List dense>
+              {breakpointPlacementTips.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Stepping Modes
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Stepping is a control knob. Use step into when you need to inspect a function's internals, step over to
+              avoid library noise, and step out to return to higher level context. If you find yourself stepping for a
+              long time, you probably need a better breakpoint.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A practical beginner tactic is to step until the values diverge from your expectation, then stop and
+              inspect. You do not need to understand every line. Focus on where the state becomes surprising, because
+              that is where the bug is born.
             </Typography>
             <TableContainer>
               <Table size="small">
@@ -1555,6 +2010,11 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Watchpoints and Data Breakpoints
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Watchpoints pause when a value changes, which is perfect for tracking mysterious mutations. If a variable
+              flips unexpectedly, set a watchpoint on its memory location and let the debugger catch the exact line that
+              changed it. This is one of the fastest ways to find hidden side effects.
             </Typography>
             <List dense>
               {watchpointTips.map((item) => (
@@ -1608,6 +2068,26 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Memory Basics
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Memory is just storage, but different regions have different lifetimes and rules. The stack is fast and
+              automatic, the heap is flexible but requires careful ownership, and globals live for the entire program.
+              Many bugs happen when code assumes one lifetime but uses another.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A beginner-friendly mental model is to imagine a stack of sticky notes (the stack) and a big bulletin board
+              (the heap). Stack notes are temporary and get thrown away automatically when a function ends. Heap notes
+              stay until you remove them. If you keep using a sticky note after it was thrown away, you get crashes or
+              strange behavior.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If a crash appears far away from the cause, suspect memory corruption or unexpected mutation. Watchpoints
+              and heap tooling help you catch the exact write that introduced the bad data.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              When debugging memory issues, slow down and inspect one pointer at a time. Check whether it is null, whether
+              it points to valid memory, and whether the data at that address matches what you expect. A single invalid
+              pointer can create a chain of confusing symptoms.
+            </Typography>
             <List dense>
               {memoryBasics.map((item) => (
                 <ListItem key={item}>
@@ -1624,6 +2104,15 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Register Hints
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Registers show what the CPU is doing right now. Even if you never touch assembly, registers are useful
+              for spotting patterns like bad pointer values, unexpected return codes, or inputs that were never validated.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              As a beginner, you do not need to memorize every register. Focus on a few: the instruction pointer
+              (where you are), the stack pointer (where the stack is), and registers holding function arguments. These
+              can quickly reveal whether a function was called with the wrong data.
+            </Typography>
             <List dense>
               {registerHints.map((item) => (
                 <ListItem key={item}>
@@ -1639,6 +2128,16 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Stack Frames in Practice
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Each stack frame represents one function call. When you move up a frame, you move backward in time to see
+              the arguments and local variables that led to the current state. This is one of the fastest ways to find
+              where a bad value originated.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              If you are unsure where the bug started, pick the frame that first sees the wrong value. Inspect its
+              arguments and then step into the function that produced them. This "find the first frame with bad data"
+              technique is reliable across most bugs.
             </Typography>
             <List dense>
               {stackFrameTips.map((item) => (
@@ -1736,8 +2235,38 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Detection Signals
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Detection is about noticing patterns that indicate something is wrong. A crash is obvious, but many bugs
+              are quieter: wrong totals, missing UI updates, or a request that succeeds with the wrong data. Train yourself
+              to treat "almost right" results as clues, not noise.
+            </Typography>
             <List dense>
               {detectionSignals.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
+              Triage Priorities
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Not every bug should be treated equally. Triage is the process of deciding what to investigate first, based
+              on impact, urgency, and confidence in reproduction. This helps teams focus on the most important fixes and
+              avoid thrashing.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Beginners often chase the most mysterious bug first. A better approach is to prioritize by impact and
+              certainty. A small bug you can reproduce is often more valuable to fix than a huge bug you cannot reproduce.
+            </Typography>
+            <List dense>
+              {triagePriorities.map((item) => (
                 <ListItem key={item}>
                   <ListItemIcon>
                     <CheckCircleIcon color="info" fontSize="small" />
@@ -1767,6 +2296,10 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Crash Artifacts to Capture
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              When a crash happens, your goal is to capture the moment. Even a short stack trace can save hours. If you
+              can gather artifacts once, you can debug offline without reproducing the crash every time.
             </Typography>
             <List dense>
               {crashArtifacts.map((item) => (
@@ -1816,6 +2349,11 @@ break processItems if i == items.size - 1`;
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Quick Triage Steps
             </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Triage is a fast, structured check. The goal is not to fix the bug yet, but to confirm it exists, gather
+              evidence, and decide how to proceed. Think of this as your 10-minute investigation before you commit
+              to a longer debugging session.
+            </Typography>
             <List dense>
               {triageSteps.map((item) => (
                 <ListItem key={item}>
@@ -1836,7 +2374,38 @@ break processItems if i == items.size - 1`;
 
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              Safe Lab Setup Notes
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Debugging changes the running state of a program and can expose sensitive data. Use an isolated lab
+              environment that mirrors production in structure but not in secrets. If you must debug a live system, do
+              it with strict permissions and clear rollback plans.
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              A safe lab for beginners can be as simple as a local virtual machine or a separate test account. The key is
+              to avoid real user data and to keep logs, keys, and credentials out of your debugging session. This makes
+              it safe to pause, inspect, and modify state without risking production systems.
+            </Typography>
+            <List dense>
+              {safeLabChecklistExpanded.map((item) => (
+                <ListItem key={item}>
+                  <ListItemIcon>
+                    <CheckCircleIcon color="info" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+
+          <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
               Safe Lab Walkthrough
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Think of the lab walkthrough as a checklist you can repeat. Each step is designed to reduce uncertainty:
+              capture the environment, reproduce the bug, instrument the code, and verify the fix. When you can repeat
+              this process, debugging becomes predictable instead of stressful.
             </Typography>
             <List dense>
               {labSteps.map((item) => (
@@ -1853,6 +2422,11 @@ break processItems if i == items.size - 1`;
           <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0f1422", borderRadius: 2 }}>
             <Typography variant="h6" sx={{ color: "#38bdf8", mb: 1 }}>
               Practice Exercises
+            </Typography>
+            <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+              Practice is what turns concepts into skills. Start with small, controlled bugs and gradually increase
+              complexity. The goal is not speed, but confidence: can you reproduce the issue, isolate the cause, and
+              explain the fix clearly?
             </Typography>
             <List dense>
               {practiceExercises.map((item) => (

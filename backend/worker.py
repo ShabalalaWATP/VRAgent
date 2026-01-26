@@ -85,8 +85,8 @@ def cleanup_orphaned_jobs():
                     try:
                         registry.remove(job_id)
                         total_cleaned += 1
-                    except:
-                        pass
+                    except Exception:
+                        pass  # Cleanup failure is non-critical
                         
         except Exception as e:
             logger.warning(f"Error cleaning up queue {queue.name}: {e}")

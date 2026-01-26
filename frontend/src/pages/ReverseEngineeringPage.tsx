@@ -156,6 +156,10 @@ const ReverseEngineeringPage: React.FC = () => {
 
   const pageContext = `This page covers reverse engineering fundamentals and VRAgent's RE Hub capabilities including:
 - VRAgent RE Hub: Binary Analysis (PE/ELF/DLL/SO), Unified APK Scanning, and Docker Inspector (layer risk + secrets)
+- Agentic Malware Analysis: 6 AI agents (Orchestrator, Static, Dynamic, Behavioral, Unpacking, Evasion Detection)
+- Malware Detection: YARA rules, packer/crypter detection, C2 beacons, persistence mechanisms, MITRE ATT&CK mapping
+- Frida Dynamic Analysis: API hooking, runtime monitoring, sandbox execution, artifact collection
+- Agentic Binary Fuzzer: AI-driven campaigns, crash triage, exploit generation, ROP gadgets, bypass suggestions
 - Ghidra integration for decompilation, Capstone for disassembly, YARA for signature matching, and fuzzy hashing
 - AI-powered analysis with Google Gemini, vulnerability hunt results, attack surface mapping, and exportable reports
 - What reverse engineering is and when to use it
@@ -163,7 +167,7 @@ const ReverseEngineeringPage: React.FC = () => {
 - x86/x64 assembly language fundamentals
 - Static analysis techniques and disassembly
 - Dynamic analysis and debugging workflows
-- Malware analysis techniques: unpacking, config extraction, behavioral analysis
+- Malware analysis techniques: unpacking, config extraction, behavioral analysis, evasion detection
 - Mobile RE: Android APK reversing, iOS app analysis, Frida hooking
 - Embedded systems and firmware analysis
 - Complete RE workflow from binary to understanding`;
@@ -284,6 +288,45 @@ const ReverseEngineeringPage: React.FC = () => {
                   "Exportable reports (Markdown/PDF/DOCX) and sharing",
                 ],
               },
+              {
+                title: "Agentic Malware Analysis",
+                icon: <SecurityIcon />,
+                color: "#dc2626",
+                capabilities: [
+                  "6 AI agents: Orchestrator, Static, Dynamic, Behavioral, Unpacking, Evasion",
+                  "YARA rules: Ransomware, RAT, Backdoor, Infostealer, Cryptominer",
+                  "Packer/crypter detection with entropy analysis",
+                  "C2 beacon detection (HTTP/DNS/TCP) with interval analysis",
+                  "Persistence, privilege escalation, lateral movement detection",
+                  "MITRE ATT&CK technique mapping and threat scoring",
+                ],
+              },
+              {
+                title: "Frida Dynamic Analysis",
+                icon: <BugReportIcon />,
+                color: "#ea580c",
+                capabilities: [
+                  "Runtime API call hooking and tracing",
+                  "Network/filesystem/registry monitoring in real-time",
+                  "Crypto operation detection (keys, algorithms, operations)",
+                  "Anti-evasion sandbox with isolated execution",
+                  "Artifact collection (dropped files, registry changes)",
+                  "Process injection and code modification detection",
+                ],
+              },
+              {
+                title: "Agentic Fuzzing",
+                icon: <BuildIcon />,
+                color: "#f97316",
+                capabilities: [
+                  "AI-driven fuzzing campaigns with decision-making",
+                  "Intelligent crash triage with root cause analysis",
+                  "Automated exploit generation for crashes",
+                  "ROP gadget finding for bypass techniques",
+                  "Campaign management (start/pause/resume/stop)",
+                  "Mitigation bypass suggestions (NX/ASLR/Stack canary)",
+                ],
+              },
             ].map((feature) => (
               <Grid item xs={12} md={6} key={feature.title}>
                 <Card
@@ -326,11 +369,13 @@ const ReverseEngineeringPage: React.FC = () => {
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {[
               { value: "11", label: "Binary Scan Phases", color: "#8b5cf6" },
+              { value: "6", label: "AI Malware Agents", color: "#dc2626" },
               { value: "80+", label: "Vuln Patterns", color: "#ef4444" },
               { value: "40+", label: "Secret Patterns", color: "#f59e0b" },
               { value: "5000", label: "Max Functions", color: "#06b6d4" },
+              { value: "YARA", label: "Malware Rules", color: "#ea580c" },
             ].map((stat, idx) => (
-              <Grid item xs={6} sm={3} key={idx}>
+              <Grid item xs={6} sm={4} md={2} key={idx}>
                 <Box sx={{ textAlign: "center", py: 1 }}>
                   <Typography variant="h5" sx={{ fontWeight: 800, color: stat.color }}>
                     {stat.value}

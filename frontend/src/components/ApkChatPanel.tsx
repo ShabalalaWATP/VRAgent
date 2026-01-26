@@ -45,6 +45,8 @@ import {
   CloseFullscreen as CloseFullscreenIcon,
 } from "@mui/icons-material";
 import { reverseEngineeringClient, type ApkChatMessage, type ApkChatResponse, type UnifiedApkScanResult } from "../api/client";
+import ReactMarkdown from "react-markdown";
+import { createChatMarkdownComponents, chatMarkdownContainerSx } from "./ChatMarkdownComponents";
 
 interface ApkChatPanelProps {
   // The main unified scan result
@@ -596,21 +598,17 @@ export default function ApkChatPanel({
                   borderTopRightRadius: msg.role === "user" ? 4 : 16,
                 }}
               >
-                <Typography
-                  variant="body2"
+                <Box
                   sx={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    "& code": {
-                      bgcolor: alpha(theme.palette.primary.main, 0.1),
-                      px: 0.5,
-                      borderRadius: 0.5,
-                      fontFamily: "monospace",
-                    },
+                    ...chatMarkdownContainerSx,
+                    fontSize: "0.875rem",
+                    lineHeight: 1.6,
                   }}
                 >
-                  {msg.content}
-                </Typography>
+                  <ReactMarkdown components={createChatMarkdownComponents(theme)}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </Box>
 
                 {/* Learning tip */}
                 {msg.learning_tip && (

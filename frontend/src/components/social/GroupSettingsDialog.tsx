@@ -80,6 +80,10 @@ export default function GroupSettingsDialog({
   // Menu state
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedMember, setSelectedMember] = useState<GroupMemberInfo | null>(null);
+  
+  // Leave group confirmation dialog state
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const myRole = conversation.my_role || 'member';
   const isOwner = myRole === 'owner';
@@ -194,17 +198,20 @@ export default function GroupSettingsDialog({
   const handleLeaveGroup = async () => {
     if (!user?.id) return;
     
-    if (!confirm('Are you sure you want to leave this group?')) return;
-    
-    setLoading(true);
+    setLeaving(true);
     try {
       await socialApi.leaveGroup(conversation.id, user.id);
       onLeftGroup();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to leave group');
-      setLoading(false);
+      setLeaving(false);
+      setShowLeaveConfirm(false);
     }
+  };
+
+  const handleLeaveClick = () => {
+    setShowLeaveConfirm(true);
   };
 
   const getRoleIcon = (role: ParticipantRole) => {
@@ -293,8 +300,8 @@ export default function GroupSettingsDialog({
           <Button
             color="error"
             startIcon={<LeaveIcon />}
-            onClick={handleLeaveGroup}
-            disabled={loading || isOwner}
+            onClick={handleLeaveClick}
+            disabled={loading || leaving || isOwner}
           >
             Leave Group
           </Button>
@@ -428,6 +435,34 @@ export default function GroupSettingsDialog({
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
+
+      {/* Leave Group Confirmation Dialog */}
+      <Dialog
+        open={showLeaveConfirm}
+        onClose={() => !leaving && setShowLeaveConfirm(false)}
+      >
+        <DialogTitle>Leave Group?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to leave <strong>{conversation.name || 'this group'}</strong>?
+            You can be re-added by an admin later.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowLeaveConfirm(false)} disabled={leaving}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleLeaveGroup}
+            disabled={leaving}
+            startIcon={leaving ? <CircularProgress size={16} /> : <LeaveIcon />}
+          >
+            {leaving ? 'Leaving...' : 'Leave Group'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }

@@ -1,0 +1,164 @@
+# Sensitive Files Discovery Wordlist
+# Files that may contain sensitive information
+
+# Credentials & Keys
+.env
+.env.local
+.env.prod
+.env.production
+.env.dev
+.env.development
+.env.staging
+.env.test
+.env.backup
+config.json
+config.yaml
+settings.json
+secrets.json
+credentials.json
+credentials.xml
+service-account.json
+google-credentials.json
+aws-credentials
+.aws/credentials
+.netrc
+.npmrc
+.pypirc
+
+# Private Keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_ecdsa
+id_ed25519
+.ssh/id_rsa
+.ssh/config
+.ssh/known_hosts
+.pem
+.key
+.ppk
+private.key
+server.key
+ssl.key
+tls.key
+cert.key
+certificate.key
+
+# Database
+database.yml
+database.json
+database.php
+db.php
+db_connection.php
+wp-config.php
+config.php
+settings.php
+local_settings.py
+settings_local.py
+
+# Tokens & API Keys
+token.json
+tokens.json
+api_key.txt
+apikeys.txt
+.htpasswd
+passwd
+shadow
+master.key
+encryption.key
+
+# Git & Version Control
+.git/config
+.git/HEAD
+.git/index
+.git/logs/HEAD
+.git/refs/heads/master
+.git/refs/heads/main
+.gitconfig
+.svn/wc.db
+.svn/entries
+
+# Logs with Sensitive Data
+access.log
+error.log
+debug.log
+application.log
+server.log
+auth.log
+security.log
+audit.log
+
+# Backup Files
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*~
+#*#
+backup.sql
+dump.sql
+database.sql
+data.sql
+users.sql
+
+# Configuration Files
+web.config
+applicationHost.config
+machine.config
+php.ini
+.htaccess
+nginx.conf
+apache2.conf
+httpd.conf
+my.cnf
+redis.conf
+mongod.conf
+elasticsearch.yml
+kibana.yml
+
+# CMS Config
+wp-config.php
+wp-config.php.bak
+configuration.php
+settings.php
+LocalSettings.php
+
+# Framework Secrets
+secret_key_base
+application.yml
+application.properties
+application-prod.properties
+
+# Cloud Configs
+.aws/credentials
+.aws/config
+.boto
+.s3cfg
+gcloud.json
+azure.json
+terraform.tfstate
+terraform.tfvars
+.terraform/
+kubeconfig
+kubectl.config
+
+# Docker Secrets
+.docker/config.json
+docker-compose.override.yml
+.dockercfg
+
+# JWT/Session
+session.json
+jwt.json
+refresh_token.txt
+
+# Debug Info
+phpinfo.php
+info.php
+test.php
+debug.php
+server-status
+server-info
+trace.axd
+elmah.axd

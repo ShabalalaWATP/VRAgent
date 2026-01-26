@@ -397,7 +397,7 @@ export default function WiresharkGuidePage() {
   const pageContext = `Wireshark Complete Guide - The definitive network protocol analyzer tutorial. Covers: display filters (IP, port, protocol, flags, content), capture techniques (interface selection, ring buffers, remote capture), packet analysis (HTTP, DNS, TCP/TLS dissection), advanced techniques (following streams, conversations, expert info), coloring rules, protocol dissectors, command-line tools (tshark, dumpcap), keyboard shortcuts, and security analysis patterns. Essential for network troubleshooting, security monitoring, forensics, and protocol debugging.`;
 
   return (
-    <LearnPageLayout pageTitle="Wireshark Complete Guide" pageContext={pageContext}>
+    <LearnPageLayout pageTitle="PCAP Analyzer Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Link */}
       <Box sx={{ mb: 3 }}>

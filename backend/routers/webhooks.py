@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from backend import models
 from backend.core.database import get_db
 from backend.core.logging import get_logger
+from backend.core.auth import get_current_active_user
+from backend.models.models import User
 from backend.services.webhook_service import (
     WebhookConfig,
     WebhookType,
@@ -41,22 +43,29 @@ class WebhookResponse(BaseModel):
 def create_webhook(
     project_id: int,
     webhook: WebhookCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Register a webhook for scan notifications.
-    
+
     Supported webhook types:
     - **slack**: Slack incoming webhook (Block Kit format)
     - **teams**: Microsoft Teams webhook (Adaptive Card format)
     - **discord**: Discord webhook (embed format)
     - **generic**: Generic JSON payload with full scan data
-    
+
     Webhooks are triggered when a scan completes.
+
+    Requires authentication and project ownership.
     """
     project = db.get(models.Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Verify user owns the project
+    if project.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied to this project")
     
     config = WebhookConfig(
         url=webhook.url,
@@ -78,12 +87,20 @@ def create_webhook(
 @router.get("/{project_id}/webhooks", response_model=List[WebhookResponse])
 def list_webhooks(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """List all webhooks configured for a project."""
+    """List all webhooks configured for a project.
+
+    Requires authentication and project ownership.
+    """
     project = db.get(models.Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Verify user owns the project
+    if project.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied to this project")
     
     webhooks = get_webhooks(project_id)
     return [
@@ -99,12 +116,20 @@ def list_webhooks(
 @router.delete("/{project_id}/webhooks")
 def delete_all_webhooks(
     project_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Remove all webhooks for a project."""
+    """Remove all webhooks for a project.
+
+    Requires authentication and project ownership.
+    """
     project = db.get(models.Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Verify user owns the project
+    if project.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied to this project")
     
     clear_webhooks(project_id)
     logger.info(f"Cleared all webhooks for project {project_id}")

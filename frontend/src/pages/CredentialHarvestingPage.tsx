@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -27,6 +25,12 @@ import {
   IconButton,
   Tooltip,
   alpha,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
+  Divider,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -39,22 +43,40 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ShieldIcon from "@mui/icons-material/Shield";
 import BuildIcon from "@mui/icons-material/Build";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
+import StorageIcon from "@mui/icons-material/Storage";
+import ScienceIcon from "@mui/icons-material/Science";
 import { Link, useNavigate } from "react-router-dom";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+const themeColors = {
+  primary: "#a855f7",
+  primaryLight: "#c084fc",
+  secondary: "#ec4899",
+  accent: "#8b5cf6",
+  success: "#10b981",
+  warning: "#f59e0b",
+  info: "#3b82f6",
+  text: "#e2e8f0",
+  textMuted: "#94a3b8",
+  bgDark: "#0a0d18",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(255,255,255,0.08)",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <VpnKeyIcon /> },
+  { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+  { id: "methods", label: "Methods", icon: <WarningIcon /> },
+  { id: "storage-risks", label: "Storage & Risks", icon: <StorageIcon /> },
+  { id: "detection", label: "Detection", icon: <SearchIcon /> },
+  { id: "prevention", label: "Prevention", icon: <ShieldIcon /> },
+  { id: "beginner-lab", label: "Beginner Lab", icon: <SchoolIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -1087,7 +1109,76 @@ const quizQuestions: QuizQuestion[] = [
 
 const CredentialHarvestingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom >= 150) {
+            setActiveSection(sectionId);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const sidebarNav = (
+    <Box sx={{ p: 2 }}>
+      <Typography variant="overline" sx={{ color: themeColors.textMuted, fontWeight: 600, mb: 2, display: "block" }}>
+        On This Page
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <LinearProgress
+          variant="determinate"
+          value={((sectionNavItems.findIndex((item) => item.id === activeSection) + 1) / sectionNavItems.length) * 100}
+          sx={{ height: 4, borderRadius: 2, bgcolor: "rgba(168,85,247,0.2)", "& .MuiLinearProgress-bar": { bgcolor: themeColors.primary } }}
+        />
+      </Box>
+      <List dense sx={{ p: 0 }}>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor: activeSection === item.id ? alpha(themeColors.primary, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${themeColors.primary}` : "3px solid transparent",
+              "&:hover": { bgcolor: alpha(themeColors.primary, 0.1) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: activeSection === item.id ? themeColors.primary : themeColors.textMuted }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={item.label}
+              sx={{ "& .MuiListItemText-primary": { fontSize: "0.85rem", fontWeight: activeSection === item.id ? 600 : 400, color: activeSection === item.id ? themeColors.primary : themeColors.textMuted } }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   const pageContext = `This page covers credential harvesting concepts and defense strategies. Topics include harvesting methods (phishing, browser/password manager abuse, credential dumping, keylogging, token/ticket theft, secrets in files, legacy protocol abuse, password spraying), credential storage locations (Windows Credential Manager, LSASS memory, browser profiles, local files, SSH keys, CI/CD secrets, cloud access keys), detection signals and behavior indicators, telemetry sources, prevention strategies, and response actions. The page focuses on defensive awareness with safe, read-only checks and beginner-friendly lab exercises.`;
 
@@ -1378,121 +1469,165 @@ security list-keychains`;
 
   return (
     <LearnPageLayout pageTitle="Credential Harvesting" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
-        <Chip
-          component={Link}
-          to="/learn"
-          icon={<ArrowBackIcon />}
-          label="Back to Learning Hub"
-          clickable
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 2 }}
-        />
+    <Box sx={{ minHeight: "100vh", bgcolor: themeColors.bgDark, py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+          {/* Sidebar Navigation */}
+          {!isMobile && (
+            <Grid item md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+              <Box sx={{ position: "sticky", top: 80 }}>
+                <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden" }}>
+                  {sidebarNav}
+                </Paper>
+              </Box>
+            </Grid>
+          )}
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <VpnKeyIcon sx={{ fontSize: 42, color: "#a855f7" }} />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-            }}
-          >
-            Credential Harvesting
-          </Typography>
-        </Box>
-        <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
-          Credential harvesting is the process of collecting usernames, passwords, or tokens so an attacker can log in.
-        </Typography>
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-          <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
-            In simple terms, attackers want the same things you use to log in. They might trick people with fake
-            login pages, look for passwords saved in files, or abuse tools that access stored credentials. This page
-            focuses on the basics, the most common risks, and safe checks you can run in a lab.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
-            Think of credentials like keys. If someone copies the key, they can open the door without breaking it.
-            Learning where those keys are stored and how they are abused helps you protect accounts early.
-          </Typography>
-          <Typography variant="body2" sx={{ color: "grey.400" }}>
-            Everything here is designed for beginners and uses read-only commands. The goal is to understand where
-            credentials live, how they are abused, and how to detect and prevent it.
-          </Typography>
-        </Paper>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-          <Chip icon={<SecurityIcon />} label="Credentials" size="small" />
-          <Chip icon={<SearchIcon />} label="Detection" size="small" />
-          <Chip icon={<ShieldIcon />} label="Prevention" size="small" />
-          <Chip icon={<WarningIcon />} label="Risk Areas" size="small" />
-        </Box>
+          {/* Main Content */}
+          <Grid item xs={12} md={9.5}>
+            <Chip
+              component={Link}
+              to="/learn"
+              icon={<ArrowBackIcon />}
+              label="Back to Learning Hub"
+              clickable
+              variant="outlined"
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
 
-        <Paper sx={{ bgcolor: "#111424", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#a855f7" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<WarningIcon />} label="Methods (High Level)" />
-            <Tab icon={<SearchIcon />} label="Storage and Risks" />
-            <Tab icon={<ShieldIcon />} label="Detection" />
-            <Tab icon={<BuildIcon />} label="Prevention and Response" />
-            <Tab icon={<VpnKeyIcon />} label="Beginner Lab" />
-          </Tabs>
-
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
-                  Learning Objectives
+            {/* Introduction Section */}
+            <Box id="intro" sx={{ scrollMarginTop: 80 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <VpnKeyIcon sx={{ fontSize: 42, color: themeColors.primary }} />
+                <Typography
+                  variant="h3"
+                  sx={{
+                    fontWeight: 700,
+                    background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  Credential Harvesting
                 </Typography>
-                <List dense>
-                  {objectives.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
+              </Box>
+              <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
+                Credential harvesting is the process of collecting usernames, passwords, or tokens so an attacker can log in.
+              </Typography>
+              <Paper elevation={0} sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2, border: `1px solid ${themeColors.border}` }}>
+                <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
+                  In simple terms, attackers want the same things you use to log in. They might trick people with fake
+                  login pages, look for passwords saved in files, or abuse tools that access stored credentials. This page
+                  focuses on the basics, the most common risks, and safe checks you can run in a lab.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Credential harvesting is broader than just passwords. It includes API keys, session cookies, OAuth
+                  tokens, and any secret that can prove identity. The techniques range from social engineering to
+                  misconfigured storage to careless sharing in code or documentation.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Think of credentials like keys. If someone copies the key, they can open the door without breaking it.
+                  Learning where those keys are stored and how they are abused helps you protect accounts early.
+                </Typography>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1, mt: 2 }}>
+                  Defensive Focus
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
+                  Defenders care about reducing exposure, limiting credential reuse, and spotting abnormal access paths.
+                  This page frames the topic from a protection and detection lens so teams can act before harvested
+                  credentials lead to broader compromise.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400" }}>
+                  Everything here is designed for beginners and uses read-only commands. The goal is to understand where
+                  credentials live, how they are abused, and how to detect and prevent it.
+                </Typography>
               </Paper>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+                <Chip icon={<SecurityIcon />} label="Credentials" size="small" />
+                <Chip icon={<SearchIcon />} label="Detection" size="small" />
+                <Chip icon={<ShieldIcon />} label="Prevention" size="small" />
+                <Chip icon={<WarningIcon />} label="Risk Areas" size="small" />
+              </Box>
+            </Box>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
-                  Beginner Path
+            {/* Overview Section */}
+            <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SecurityIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Overview
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  How to Use This Section
                 </Typography>
-                <List dense>
-                  {beginnerPath.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="info" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  Use the overview to build a shared vocabulary and a clear mental model. Each block below adds context
+                  for the part of the lifecycle it describes, so you can map real-world alerts and incidents to the
+                  right prevention or detection control.
+                </Typography>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
-                  Why This Is Hard
-                </Typography>
-                <List dense>
-                  {whyHard.map((item) => (
-                    <ListItem key={item}>
-                      <ListItemIcon>
-                        <CheckCircleIcon color="warning" fontSize="small" />
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
+                    Learning Objectives
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    These objectives emphasize recognition and defensive response. By the end, you should be able to
+                    explain where credentials tend to leak, describe common warning signals, and outline safe mitigation
+                    steps without relying on offensive techniques.
+                  </Typography>
+                  <List dense>
+                    {objectives.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="info" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
+                    Beginner Path
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    Follow this path to build intuition before diving into advanced details. Start with what
+                    credentials are, where they live, and how normal access looks so you can quickly spot unusual
+                    behavior later.
+                  </Typography>
+                  <List dense>
+                    {beginnerPath.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="info" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+
+                <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
+                    Why This Is Hard
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    Credential theft blends into everyday activity. Legitimate logins look similar to malicious ones,
+                    and credentials can leak from many places at once, from browser stores to cloud tokens to exposed
+                    files in repositories.
+                  </Typography>
+                  <List dense>
+                    {whyHard.map((item) => (
+                      <ListItem key={item}>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="warning" fontSize="small" />
                       </ListItemIcon>
                       <ListItemText primary={item} sx={{ "& .MuiListItemText-primary": { color: "grey.300" } }} />
                     </ListItem>
@@ -1503,6 +1638,10 @@ security list-keychains`;
               <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
                   What This Is Not
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  This page intentionally avoids step-by-step harvesting instructions or exploit guidance. It is
+                  designed for awareness, defense, and safe lab learning only.
                 </Typography>
                 <List dense>
                   {whatItIsNot.map((item) => (
@@ -1519,6 +1658,10 @@ security list-keychains`;
               <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Quick Glossary
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Terminology in credential security can be confusing. These short definitions help standardize
+                  language across teams so tickets and reports stay clear.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1544,6 +1687,10 @@ security list-keychains`;
                 <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
                   Who Uses This Knowledge
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Credential risks cut across roles. Developers need to avoid hard-coded secrets, IT needs to manage
+                  identity systems, and security teams need to detect suspicious access.
+                </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
@@ -1567,6 +1714,10 @@ security list-keychains`;
               <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
                   Credential Types
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Different credential types carry different risks. Some are long-lived and reused, while others are
+                  short-lived tokens that can still cause major damage if stolen within their validity window.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1592,6 +1743,10 @@ security list-keychains`;
                 <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
                   Where Credentials Come From
                 </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Most leaks are accidental rather than deliberate. Shared documents, misconfigured cloud storage,
+                  and leftover test files are common sources that are easy to overlook.
+                </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
@@ -1612,9 +1767,13 @@ security list-keychains`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Account Types and Impact
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The same credential leak can have very different consequences depending on the account type. Service
+                  accounts and admin accounts usually have the widest blast radius.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1636,9 +1795,13 @@ security list-keychains`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Common Misconceptions
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Misconceptions often lead to weak controls or false confidence. Use these quick myth versus reality
+                  notes to calibrate expectations across teams.
                 </Typography>
                 <Grid container spacing={2}>
                   {misconceptions.map((item) => (
@@ -1648,11 +1811,11 @@ security list-keychains`;
                           p: 2,
                           bgcolor: "#0b1020",
                           borderRadius: 2,
-                          border: "1px solid rgba(168,85,247,0.3)",
+                          border: `1px solid ${alpha(themeColors.primary, 0.3)}`,
                           height: "100%",
                         }}
                       >
-                        <Typography variant="subtitle2" sx={{ color: "#a855f7", mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ color: themeColors.primary, mb: 1 }}>
                           Myth
                         </Typography>
                         <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
@@ -1670,9 +1833,13 @@ security list-keychains`;
                 </Grid>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Example Flow (Simple)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  This high-level flow helps you understand where detection points live. The intent is to connect
+                  a suspicious event to the phase where a control or response action is most effective.
                 </Typography>
                 <List dense>
                   {exampleFlow.map((item) => (
@@ -1685,24 +1852,47 @@ security list-keychains`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
+            {/* Methods Section */}
+            <Box id="methods" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <WarningIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Methods (High Level)
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  Understanding Method Themes
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Credential harvesting methods generally fall into a few broad themes: tricking users, discovering
+                  stored secrets, or intercepting authentication material in transit. Knowing the theme helps you pick
+                  the right detection and prevention control.
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  The entries below describe each method at a safe, conceptual level. Focus on the signals and the
+                  prevention notes to understand how defenders can break the chain early.
+                </Typography>
+
               <Grid container spacing={2}>
                 {methods.map((item) => (
                   <Grid item xs={12} md={6} key={item.title}>
                     <Paper
                       sx={{
                         p: 2,
-                        bgcolor: "#0c0f1c",
+                        bgcolor: themeColors.bgNested,
                         borderRadius: 2,
-                        border: "1px solid rgba(168,85,247,0.2)",
+                        border: `1px solid ${alpha(themeColors.primary, 0.2)}`,
                         height: "100%",
                       }}
                     >
-                      <Typography variant="subtitle1" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
+                      <Typography variant="subtitle1" sx={{ color: themeColors.text, fontWeight: 600 }}>
                         {item.title}
                       </Typography>
                       <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
@@ -1711,25 +1901,44 @@ security list-keychains`;
                       <Typography variant="caption" sx={{ color: "#a5b4fc", display: "block" }}>
                         Signals: {item.signals}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#94a3b8", display: "block" }}>
+                      <Typography variant="caption" sx={{ color: themeColors.textMuted, display: "block" }}>
                         Prevention: {item.prevention}
                       </Typography>
                     </Paper>
                   </Grid>
                 ))}
               </Grid>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
+            {/* Storage & Risks Section */}
+            <Box id="storage-risks" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <StorageIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Storage and Risks
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  Where Secrets Tend to Linger
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Credentials persist in more places than most teams expect. They can remain in browser stores, config
+                  files, environment variables, or automation scripts long after the original need has passed. This
+                  section highlights common locations and the risks tied to each.
+                </Typography>
+
               <TableContainer sx={{ mb: 3 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#a855f7" }}>Location</TableCell>
-                      <TableCell sx={{ color: "#a855f7" }}>Risk</TableCell>
-                      <TableCell sx={{ color: "#a855f7" }}>Safe Check</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Location</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Risk</TableCell>
+                      <TableCell sx={{ color: themeColors.primary }}>Safe Check</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1744,7 +1953,14 @@ security list-keychains`;
                 </Table>
               </TableContainer>
 
-              <Accordion>
+              <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                Safe Verification
+              </Typography>
+              <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                Use the checks below only in controlled labs or approved environments. The intent is to confirm where
+                credentials could be stored, not to extract or misuse sensitive data.
+              </Typography>
+              <Accordion sx={{ bgcolor: themeColors.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Safe Read-only Checks</Typography>
                 </AccordionSummary>
@@ -1752,14 +1968,36 @@ security list-keychains`;
                   <CodeBlock code={safeChecks} language="powershell" />
                 </AccordionDetails>
               </Accordion>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+            {/* Detection Section */}
+            <Box id="detection" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <SearchIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Detection
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  Detection Strategy
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  Credential harvesting detection is strongest when identity, endpoint, and network telemetry are
+                  correlated. Single events can look benign, but patterns across systems often reveal misuse.
+                </Typography>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Detection Signals
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Signals are early clues that something is wrong. Treat them as prompts to investigate rather than
+                  definitive proof of compromise.
                 </Typography>
                 <List dense>
                   {signals.map((item) => (
@@ -1773,9 +2011,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Red Flags for Investigations
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Red flags are higher-confidence indicators that access may be compromised. They often combine unusual
+                  authentication behavior with evidence of new tools, new devices, or unexpected data access.
                 </Typography>
                 <List dense>
                   {redFlags.map((item) => (
@@ -1789,9 +2031,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Behavior Indicators
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Behavior indicators often show up as changes in cadence or scope rather than a single alert. Look for
+                  an account that suddenly touches many systems or accesses data it never used before.
                 </Typography>
                 <List dense>
                   {behaviorIndicators.map((item) => (
@@ -1805,9 +2051,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Telemetry Sources to Check
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Strong telemetry includes who, what, where, and when. Prioritize sources that tie actions to users
+                  and devices so you can build a reliable timeline.
                 </Typography>
                 <List dense>
                   {telemetrySources.map((item) => (
@@ -1821,9 +2071,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Detection Matrix (Simple)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The matrix links stages to evidence so you can track a case from initial exposure to confirmed misuse.
+                  It also helps identify which parts of the chain you cannot yet observe.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1847,9 +2101,13 @@ security list-keychains`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Platform Log Pointers
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Logs vary by platform and identity provider. Use these pointers as a starting point, then align them
+                  with the exact log names and retention settings in your environment.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
@@ -1871,9 +2129,13 @@ security list-keychains`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Evidence Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Evidence collection should preserve the original timeline and context. Keep it read-only, and record
+                  hashes or timestamps so findings can be validated later.
                 </Typography>
                 <List dense>
                   {evidenceChecklist.map((item) => (
@@ -1886,14 +2148,36 @@ security list-keychains`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+            {/* Prevention Section */}
+            <Box id="prevention" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ShieldIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Prevention and Response
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  Layered Defense
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  Effective prevention combines identity controls, endpoint hardening, and continuous monitoring.
+                  No single control stops every leak, but layered defenses reduce both likelihood and impact.
+                </Typography>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Prevention Basics
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These basics are high-impact and broadly applicable. Start here before implementing specialized
+                  tooling or advanced identity controls.
                 </Typography>
                 <List dense>
                   {[
@@ -1913,9 +2197,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Prevention Checklist
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  The checklist is designed for repeatable hygiene. Use it during onboarding, audits, and incident
+                  response reviews to ensure coverage stays consistent.
                 </Typography>
                 <List dense>
                   {preventionChecklist.map((item) => (
@@ -1929,9 +2217,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Policy and Control Ideas
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Policies make expectations clear and enforceable. When policies align with technical controls, teams
+                  can prevent risky behavior without relying on manual review.
                 </Typography>
                 <List dense>
                   {policyIdeas.map((item) => (
@@ -1944,9 +2236,13 @@ security list-keychains`;
                   ))}
                 </List>
               </Paper>
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+              <Paper sx={{ p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
                   Beginner Triage Steps
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Triage should be calm and methodical. The goal is to confirm impact, contain risk, and communicate
+                  clearly while preserving evidence.
                 </Typography>
                 <List dense>
                   {[
@@ -1966,9 +2262,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ mt: 3, p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ mt: 3, p: 2.5, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Response Actions (Safe)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  These actions prioritize safety and accountability. Record what you change, ensure approvals are in
+                  place, and coordinate with identity owners and platform teams.
                 </Typography>
                 <List dense>
                   {responseSteps.map((item) => (
@@ -1981,14 +2281,36 @@ security list-keychains`;
                   ))}
                 </List>
               </Paper>
+              </Paper>
             </Box>
-          </TabPanel>
 
-          <TabPanel value={tabValue} index={5}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+            {/* Beginner Lab Section */}
+            <Box id="beginner-lab" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper elevation={0} sx={{ bgcolor: themeColors.bgCard, borderRadius: 3, border: `1px solid ${themeColors.border}`, overflow: "hidden", p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <ScienceIcon sx={{ color: themeColors.primary }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Beginner Lab
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ color: themeColors.primary, fontWeight: 600, mb: 1 }}>
+                  Lab Goals and Safety
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 3 }}>
+                  The lab focuses on observation and safe verification. You will practice recognizing where secrets
+                  can appear and how to document findings without interacting with real user credentials.
+                </Typography>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Beginner Lab Walkthrough (Safe)
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Use the walkthrough to build a repeatable, low-risk routine. The aim is to understand what normal
+                  storage looks like and how to report exposures clearly.
                 </Typography>
                 <List dense>
                   {beginnerLabSteps.map((item) => (
@@ -2002,9 +2324,13 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a855f7", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: themeColors.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: themeColors.primary, mb: 1 }}>
                   Safe Boundaries
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                  Boundaries are essential. Keep the lab isolated, use fictional data, and stop immediately if any
+                  action could touch production systems or real accounts.
                 </Typography>
                 <List dense>
                   {safeBoundaries.map((item) => (
@@ -2018,11 +2344,15 @@ security list-keychains`;
                 </List>
               </Paper>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: themeColors.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Fake Secret Search Example</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
+                  <Typography variant="body2" sx={{ color: "grey.400", mb: 2 }}>
+                    This example creates a fake secret for practice. It demonstrates safe search techniques without
+                    touching any real credentials or sensitive data.
+                  </Typography>
                   <CodeBlock
                     language="powershell"
                     code={`# Create a safe lab file with a fake secret
@@ -2037,44 +2367,84 @@ Remove-Item -Recurse -Force C:\\LabSecrets`}
                   />
                 </AccordionDetails>
               </Accordion>
+              </Paper>
             </Box>
-          </TabPanel>
-        </Paper>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
+            {/* Quiz Section */}
+            <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  bgcolor: themeColors.bgCard,
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+                  overflow: "hidden",
+                  p: 3,
+                }}
+              >
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                    <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+                    <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${QUIZ_ACCENT_COLOR} 0%, ${themeColors.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                      Knowledge Check
+                    </Typography>
+                  </Box>
+                  <Divider sx={{ mt: 2, borderColor: themeColors.border }} />
+                </Box>
+                <QuizSection
+                  questions={quizQuestions}
+                  accentColor={QUIZ_ACCENT_COLOR}
+                  title="Credential Harvesting Knowledge Check"
+                  description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+                  questionsPerQuiz={QUIZ_QUESTION_COUNT}
+                />
+              </Paper>
+            </Box>
+
+            <Box sx={{ mt: 4, textAlign: "center" }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/learn")}
+                sx={{ borderColor: themeColors.primary, color: themeColors.primary }}
+              >
+                Back to Learning Hub
+              </Button>
+            </Box>
+            </Grid>
+          </Grid>
+        </Container>
+
+        {/* Mobile navigation drawer */}
+        <Drawer
+          anchor="left"
+          open={navDrawerOpen}
+          onClose={() => setNavDrawerOpen(false)}
+          sx={{ display: { xs: "block", md: "none" }, "& .MuiDrawer-paper": { width: 280, bgcolor: themeColors.bgCard, borderRight: `1px solid ${themeColors.border}` } }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Credential Harvesting Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: themeColors.primary }}>
+                Navigation
+              </Typography>
+              <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: themeColors.textMuted }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            {sidebarNav}
+          </Box>
+        </Drawer>
 
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#a855f7", color: "#a855f7" }}
-          >
-            Back to Learning Hub
-          </Button>
+        {/* Mobile FABs */}
+        <Box sx={{ display: { xs: "flex", md: "none" }, position: "fixed", bottom: 16, right: 16, flexDirection: "column", gap: 1, zIndex: 1000 }}>
+          <Fab size="small" onClick={() => setNavDrawerOpen(true)} sx={{ bgcolor: themeColors.primary, color: "#fff", "&:hover": { bgcolor: themeColors.primaryLight } }}>
+            <ListAltIcon />
+          </Fab>
+          <Fab size="small" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} sx={{ bgcolor: themeColors.bgCard, color: themeColors.primary, border: `1px solid ${themeColors.border}`, "&:hover": { bgcolor: themeColors.bgNested } }}>
+            <KeyboardArrowUpIcon />
+          </Fab>
         </Box>
-      </Container>
-    </Box>
+      </Box>
     </LearnPageLayout>
   );
 };

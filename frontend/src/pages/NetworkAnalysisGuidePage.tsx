@@ -24,6 +24,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import LearnPageLayout from "../components/LearnPageLayout";
 import HubIcon from "@mui/icons-material/Hub";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import RadarIcon from "@mui/icons-material/Radar";
 import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import SecurityIcon from "@mui/icons-material/Security";
@@ -73,49 +74,33 @@ export default function NetworkAnalysisGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
 
-  const pageContext = `This page is the Network Analysis Hub learning guide covering:
-- API Endpoint Tester: OWASP API Top 10 2023 security testing with 10 test categories
-- Nmap Scanner: Port scanning, 30+ high-risk port detection, 9 scan profiles
+  const pageContext = `This page is the Dynamic Analysis Hub learning guide covering:
+- Dynamic Scanner: AI-orchestrated pentesting with Nmap, ZAP, Nuclei, OpenVAS, SQLMap integration
 - PCAP Analyzer: 7 capture profiles, live capture, deep packet inspection
-- SSL/TLS Analysis: 12 CVE vulnerability checks, cipher suite analysis
-- DNS Intelligence: 9 record types, 150+ subdomain enumeration, email security
-- Traceroute: Cross-platform network path analysis with hop visualization
+- SSL/TLS Scanner: 12 CVE vulnerability checks, cipher suite analysis
+- DNS Reconnaissance: 9 record types, 150+ subdomain enumeration, email security
+- Traceroute & Nmap: Network path analysis and port scanning combined
+- API Endpoint Tester: OWASP API Top 10 2023 security testing with 10 test categories
 - Security Fuzzer: Web application fuzzing with Smart Detection and 500+ payloads
-- Agentic Fuzzer: AI-powered autonomous vulnerability discovery
 - Binary Fuzzer: Native code fuzzing with AFL++, Honggfuzz, and libFuzzer
-- MITM Workbench: Traffic interception with AI-powered rule creation
-- AI-enhanced analysis powered by Google Gemini for all 10 network tools`;
+- MITM Workbench: Traffic interception, inspection, and modification
+- AI-enhanced analysis powered by Google Gemini for all 9 security tools`;
 
   const features = [
     {
-      title: "API Endpoint Tester",
-      icon: <ApiIcon sx={{ fontSize: 32 }} />,
-      color: "#22c55e",
-      gradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
-      description: "OWASP API Top 10 2023 security testing with 10 test categories and AI-powered network scanning.",
-      capabilities: [
-        "OWASP API Top 10 2023: BOLA, BFLA, Injection, SSRF, Mass Assignment",
-        "AI Auto-Test: CIDR network scanning with automatic service discovery",
-        "10 Test Categories: Authentication, Authorization, Injection, SSRF, Rate Limiting",
-        "WebSocket & JWT security testing with token analysis",
-        "Export results as JSON, Markdown, PDF, or DOCX",
-      ],
-      link: "/network/api-tester",
-    },
-    {
-      title: "Nmap Scanner & Analyzer",
-      icon: <RadarIcon sx={{ fontSize: 32 }} />,
+      title: "Dynamic Scanner",
+      icon: <AutoAwesomeIcon sx={{ fontSize: 32 }} />,
       color: "#8b5cf6",
-      gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-      description: "Industry-standard port scanning with 30+ high-risk port detection and AI-powered insights.",
+      gradient: "linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)",
+      description: "AI-orchestrated automated pentesting combining 8+ security tools for comprehensive vulnerability discovery.",
       capabilities: [
-        "9+ Scan profiles: Basic, Quick, Full, Service, Aggressive, Stealth, UDP, Comprehensive",
-        "30+ high-risk ports automatically flagged (SSH, RDP, SMB, databases, etc.)",
-        "Upload and analyze existing Nmap XML output files",
-        "Target validation for IPs, CIDR ranges, and hostnames",
-        "Real-time scan progress with live output streaming",
+        "Integrated tools: Nmap, OWASP ZAP, Nuclei, OpenVAS, SQLMap, Wapiti, Gobuster, ExploitDB",
+        "AI-Led mode: Intelligent scan strategy with adaptive tool selection",
+        "Multi-phase pipeline: Reconnaissance → Routing → Scanning → Exploit Mapping → AI Analysis",
+        "Advanced features: Authenticated scanning, API testing, OOB testing, validation pass",
+        "Generates attack narratives, exploit chains, and prioritized remediation",
       ],
-      link: "/network/nmap",
+      link: "/dynamic",
     },
     {
       title: "PCAP Analyzer",
@@ -163,19 +148,34 @@ export default function NetworkAnalysisGuidePage() {
       link: "/network/dns",
     },
     {
-      title: "Traceroute Visualization",
+      title: "Traceroute & Nmap Analyzer",
       icon: <RouteIcon sx={{ fontSize: 32 }} />,
       color: "#ec4899",
       gradient: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
-      description: "Network path analysis with hop-by-hop latency and packet loss visualization.",
+      description: "Network path analysis with hop-by-hop visualization, plus Nmap port scanning and service detection.",
       capabilities: [
-        "Cross-platform: Windows tracert, Linux/macOS traceroute, MTR fallback",
-        "Configurable: max hops (1-64), timeout, queries per hop (1-10)",
-        "ICMP and UDP probe support with hostname resolution",
-        "ASN and geographic location enrichment (when available)",
-        "Interactive path visualization with AI bottleneck analysis",
+        "Traceroute: Windows tracert, Linux/macOS traceroute, MTR fallback",
+        "Nmap: Launch scans or analyze existing Nmap output files",
+        "Port scanning with 10+ scan type profiles (basic to comprehensive)",
+        "Service version detection and vulnerability scanning",
+        "Interactive path visualization with AI analysis",
       ],
       link: "/network/traceroute",
+    },
+    {
+      title: "API Endpoint Tester",
+      icon: <ApiIcon sx={{ fontSize: 32 }} />,
+      color: "#22c55e",
+      gradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      description: "OWASP API Top 10 2023 security testing with 10 test categories and AI-powered network scanning.",
+      capabilities: [
+        "OWASP API Top 10 2023: BOLA, BFLA, Injection, SSRF, Mass Assignment",
+        "AI Auto-Test: CIDR network scanning with automatic service discovery",
+        "10 Test Categories: Authentication, Authorization, Injection, SSRF, Rate Limiting",
+        "WebSocket & JWT security testing with token analysis",
+        "Export results as JSON, Markdown, PDF, or DOCX",
+      ],
+      link: "/network/api-tester",
     },
     {
       title: "Security Fuzzer",
@@ -191,21 +191,6 @@ export default function NetworkAnalysisGuidePage() {
         "Full request/response logging with vulnerability classification",
       ],
       link: "/network/fuzzer",
-    },
-    {
-      title: "Agentic Fuzzer",
-      icon: <SmartToyIcon sx={{ fontSize: 32 }} />,
-      color: "#8b5cf6",
-      gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-      description: "AI-powered autonomous vulnerability discovery with endpoint discovery and adaptive attacks.",
-      capabilities: [
-        "Endpoint Discovery: Intelligent crawling and hidden path enumeration",
-        "Tech Fingerprinting: Server, framework, and WAF detection",
-        "Adaptive Attacks: Response-based strategy adjustment and bypass generation",
-        "5-Phase pipeline: Recon → Fingerprint → Discover → Validate → Report",
-        "AI-generated findings with remediation advice",
-      ],
-      link: "/network/agentic-fuzzer",
     },
     {
       title: "Binary Fuzzer",
@@ -301,7 +286,7 @@ export default function NetworkAnalysisGuidePage() {
   const workflowSteps = [
     {
       label: "Choose Your Analysis Type",
-      description: "Select from 10 specialized tools: Nmap for port scanning, PCAP for traffic analysis, SSL/TLS for certificates, DNS for domain reconnaissance, Traceroute for path analysis, API Tester for endpoint security, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer for vulnerability discovery, or MITM for traffic interception.",
+      description: "Select from 9 specialized tools: Dynamic Scanner for AI pentesting, PCAP for traffic analysis, SSL/TLS for certificates, DNS for domain reconnaissance, Traceroute & Nmap for network analysis, API Tester for endpoint security, Security Fuzzer and Binary Fuzzer for vulnerability discovery, or MITM for traffic interception.",
       icon: <HubIcon />,
     },
     {
@@ -359,7 +344,7 @@ export default function NetworkAnalysisGuidePage() {
   ];
 
   return (
-    <LearnPageLayout pageTitle="Network Analysis Hub" pageContext={pageContext}>
+    <LearnPageLayout pageTitle="Dynamic Analysis Hub Guide" pageContext={pageContext}>
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Back Link */}
       <Box sx={{ mb: 3 }}>
@@ -443,18 +428,18 @@ export default function NetworkAnalysisGuidePage() {
                   animation: `${shimmer} 4s linear infinite`,
                 }}
               >
-                Network Analysis Hub
+                Dynamic Analysis Hub Guide
               </Typography>
               <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
-                AI-Powered Network Security Analysis
+                AI-Powered Runtime Security Analysis
               </Typography>
             </Box>
           </Box>
 
           <Typography variant="body1" sx={{ maxWidth: 700, mb: 3, fontSize: "1.1rem", lineHeight: 1.7 }}>
-            The Network Analysis Hub combines industry-standard tools like <strong>Nmap</strong> and{" "}
-            <strong>Wireshark</strong> with Google <strong>Gemini AI</strong> to deliver comprehensive 
-            security insights. Scan networks, analyze traffic, and get actionable intelligence—all in one place.
+            The Dynamic Analysis Hub combines industry-standard tools like <strong>Nmap</strong>,{" "}
+            <strong>OWASP ZAP</strong>, and <strong>Wireshark</strong> with Google <strong>Gemini AI</strong> to deliver comprehensive
+            runtime security analysis. Scan networks, test applications dynamically, and get actionable intelligence—all in one place.
           </Typography>
 
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -741,7 +726,7 @@ export default function NetworkAnalysisGuidePage() {
             },
           }}
         >
-          Launch Network Analysis Hub
+          Launch Dynamic Analysis Hub
         </Button>
       </Paper>
 

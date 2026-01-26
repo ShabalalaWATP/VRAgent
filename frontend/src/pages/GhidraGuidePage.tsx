@@ -1414,16 +1414,32 @@ const GhidraGuidePage: React.FC = () => {
 
         <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
           <strong>Ghidra</strong> (pronounced "GEE-dra") is a free, open-source software reverse engineering (SRE) tool
-          developed by the National Security Agency (NSA). Released to the public in 2019, Ghidra has quickly become
-          one of the most popular tools for analyzing compiled programs - competing directly with expensive commercial
-          tools like IDA Pro that can cost thousands of dollars.
+          developed by the National Security Agency (NSA). Released to the public in 2019 after being used internally
+          for over a decade, Ghidra has quickly become one of the most popular tools for analyzing compiled programs - 
+          competing directly with expensive commercial tools like IDA Pro that can cost thousands of dollars. The name
+          "Ghidra" comes from the three-headed dragon monster from Japanese cinema, symbolizing its multi-faceted
+          approach to binary analysis: disassembly, decompilation, and scripting.
         </Typography>
 
         <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
           <strong>What does "reverse engineering" mean?</strong> When programmers write code, they use human-readable
-          languages like C, Python, or Java. This code is then <em>compiled</em> into machine code (binary) that computers
-          can execute. Reverse engineering is the process of taking that compiled binary and working backwards to understand
-          what it does - essentially trying to reconstruct the original logic and behavior of the program.
+          languages like C, Python, or Java. This source code is then <em>compiled</em> by a compiler (like GCC, Clang,
+          or MSVC) into machine code (binary) that computers can execute directly. During this compilation process,
+          variable names, function names, comments, and most structural information is lost - the resulting binary
+          contains only the raw instructions that the CPU needs to execute. Reverse engineering is the art and science
+          of taking that compiled binary and working backwards to understand what it does - essentially trying to
+          reconstruct the original logic, data structures, algorithms, and behavior of the program without access
+          to the original source code.
+        </Typography>
+
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>The Compilation Process and What Gets Lost:</strong> Understanding what happens during compilation
+          helps explain why reverse engineering is challenging. When source code is compiled: (1) variable names become
+          memory addresses or register references, (2) function names become addresses unless exported, (3) comments
+          are completely discarded, (4) high-level control structures (if/else, loops) become jump instructions,
+          (5) data types are reduced to sizes (a 'char' becomes a single byte, an 'int' becomes 4 bytes), and (6) 
+          compiler optimizations may completely restructure the code for performance. The reverse engineer's job is
+          to reconstruct meaning from these raw bytes.
         </Typography>
 
         <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
@@ -1466,6 +1482,69 @@ const GhidraGuidePage: React.FC = () => {
             supports collaborative analysis. For most tasks, Ghidra is an excellent choice.
           </Typography>
         </Alert>
+
+        <Divider sx={{ my: 3, borderColor: alpha("#8b5cf6", 0.2) }} />
+
+        {/* Understanding Binary Analysis */}
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: "#e0e0e0", mt: 3 }}>
+          Understanding Binary Analysis
+        </Typography>
+
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>Static vs Dynamic Analysis:</strong> Binary analysis broadly falls into two categories. Static 
+          analysis, which Ghidra excels at, involves examining a program without executing it - looking at the code,
+          data structures, strings, and control flow. Dynamic analysis involves running the program (usually in a 
+          controlled environment) and observing its behavior - what files it creates, network connections it makes,
+          and how memory changes during execution. Professional reverse engineers typically combine both approaches:
+          using static analysis to understand the overall structure and identify interesting code paths, then using
+          dynamic analysis (with debuggers) to verify their understanding and observe runtime behavior.
+        </Typography>
+
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>The Role of the Decompiler:</strong> One of Ghidra's most powerful features is its decompiler, which
+          attempts to convert low-level assembly instructions back into human-readable C-like pseudocode. This is not
+          a perfect reversal of compilation - variable names cannot be recovered (they're replaced with generic names
+          like "local_4" or "param_1"), and complex compiler optimizations may result in code that looks quite different
+          from the original source. However, the decompiler dramatically speeds up analysis by presenting code in a
+          familiar high-level format rather than requiring you to mentally execute assembly instructions.
+        </Typography>
+
+        <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, color: "grey.300" }}>
+          <strong>Why Assembly Knowledge Still Matters:</strong> While the decompiler handles most cases well, there are
+          situations where you'll need to dive into assembly: when the decompiler produces incorrect output (it can be
+          fooled by obfuscation or unusual code patterns), when analyzing inline assembly, when understanding precise
+          timing or memory ordering (important for exploit development), or when working with architectures or code
+          patterns that the decompiler doesn't handle well. The good news is that you don't need to be an assembly
+          expert to start - you can learn gradually as you encounter specific instructions in your analysis.
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mt: 2 }}>
+          {[
+            { icon: <SearchIcon />, title: "Pattern Recognition", desc: "Learn to recognize common code patterns: function prologues/epilogues, switch statements, virtual function tables, exception handlers, and loop constructs", color: "#8b5cf6" },
+            { icon: <AccountTreeIcon />, title: "Control Flow Analysis", desc: "Understand how high-level constructs (if/else, while, for, switch) translate to assembly jumps and branches", color: "#22c55e" },
+            { icon: <MemoryIcon />, title: "Data Flow Tracking", desc: "Follow data as it moves through registers and memory, understanding how variables are accessed and modified", color: "#f59e0b" },
+            { icon: <FunctionsIcon />, title: "API Understanding", desc: "Recognize library and system calls - knowing what CreateFileW or socket() does helps you understand program behavior without analyzing every line", color: "#06b6d4" },
+          ].map((item) => (
+            <Grid item xs={12} sm={6} key={item.title}>
+              <Card
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(item.color, 0.1),
+                  border: `1px solid ${alpha(item.color, 0.3)}`,
+                  borderRadius: 2,
+                }}
+              >
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, color: item.color }}>
+                    {item.icon}
+                    <Typography variant="subtitle2" fontWeight="bold" sx={{ color: "#e0e0e0" }}>{item.title}</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
       </Paper>
 
       {/* VRAgent Ghidra Integration */}
@@ -1492,9 +1571,19 @@ const GhidraGuidePage: React.FC = () => {
           </Box>
         </Box>
 
-        <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+        <Typography variant="body1" sx={{ color: "grey.300", mb: 2 }}>
           VRAgent's RE Hub uses Ghidra's headless analyzer to automatically decompile and analyze binaries.
-          Upload any supported file and get instant AI-powered security insights.
+          Upload any supported file and get instant AI-powered security insights. This integration demonstrates
+          one of Ghidra's most powerful enterprise features: the ability to perform automated, scriptable
+          analysis without any GUI interaction.
+        </Typography>
+
+        <Typography variant="body1" sx={{ color: "grey.300", mb: 3 }}>
+          <strong>How It Works:</strong> When you upload a binary to VRAgent's RE Hub, the backend runs Ghidra
+          in headless mode with custom scripts that extract decompiled functions, cross-references, strings,
+          and other metadata. This data is then fed to AI models that can identify security-relevant patterns,
+          potential vulnerabilities, and suspicious code. This approach combines Ghidra's accurate decompilation
+          with modern AI analysis capabilities, providing results that would take a human analyst hours to produce.
         </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1640,11 +1729,31 @@ const GhidraGuidePage: React.FC = () => {
           </Box>
         </Box>
 
+        <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+          Malware analysis is one of the most important applications of reverse engineering. When a new malware 
+          sample is discovered, analysts use tools like Ghidra to understand its capabilities: What does it steal?
+          How does it spread? Where does it send data? What systems is it targeting? This intelligence is crucial
+          for developing detections, understanding threat actors, and protecting systems. Ghidra's comprehensive
+          feature set makes it an excellent choice for both quick triage and deep dive analysis.
+        </Typography>
+
+        <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+          <strong>The Analysis Workflow:</strong> Effective malware analysis typically follows a pattern. Start with
+          basic static analysis: check file type, examine strings, review imports, and look for obvious indicators.
+          Then move to deeper static analysis in Ghidra: identify the main logic, find C2 communication code, locate
+          persistence mechanisms, and understand evasion techniques. Finally, validate findings with dynamic analysis
+          (running the malware in a sandbox) if needed. This combination of approaches gives you confidence in your
+          conclusions while keeping analysis time reasonable.
+        </Typography>
+
         <Alert severity="warning" sx={{ mb: 3, bgcolor: alpha("#f59e0b", 0.1), border: `1px solid ${alpha("#f59e0b", 0.3)}` }}>
           <AlertTitle sx={{ color: "#e0e0e0" }}>Safety First</AlertTitle>
           <Typography sx={{ color: "grey.300" }}>
-            Always analyze malware in an isolated environment (VM with snapshots). Disable network access,
-            use a dedicated analysis machine, and never execute samples on your host system.
+            Always analyze malware in an isolated environment. Use a virtual machine with snapshots so you can restore
+            to a clean state. Disable network access or route through a controlled environment. Never analyze malware
+            on your host system or on systems with access to sensitive data. Consider using dedicated analysis machines
+            that can be reimaged if compromised. Tools like FlareVM (Windows) or REMnux (Linux) provide pre-configured
+            analysis environments.
           </Typography>
         </Alert>
 
@@ -1758,6 +1867,188 @@ const GhidraGuidePage: React.FC = () => {
                 </ListItem>
               ))}
             </List>
+          </AccordionDetails>
+        </Accordion>
+      </Paper>
+
+      {/* Vulnerability Research with Ghidra */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#f59e0b", 0.3)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <SecurityIcon sx={{ color: "white", fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              Vulnerability Research with Ghidra
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              Finding security vulnerabilities through static binary analysis
+            </Typography>
+          </Box>
+        </Box>
+
+        <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+          Vulnerability research is the process of finding security bugs in software. When source code isn't available,
+          reverse engineering is the primary method for discovering vulnerabilities. Ghidra excels at this task because
+          its decompiler produces readable code that security researchers can audit systematically. Many critical CVEs
+          have been discovered through binary analysis of closed-source software.
+        </Typography>
+
+        <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+          <strong>The Vulnerability Research Mindset:</strong> Effective vulnerability research requires thinking like
+          both a developer and an attacker. You need to understand how the code is supposed to work (developer perspective)
+          and then consider how it could be abused (attacker perspective). Common questions to ask: What happens if this
+          input is longer than expected? What if this integer overflows? What if this pointer is NULL? What if the file
+          format is malformed? What if two threads access this simultaneously?
+        </Typography>
+
+        <Typography variant="h6" sx={{ mt: 3, mb: 2, color: "#e0e0e0" }}>
+          Common Vulnerability Patterns
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            {
+              type: "Buffer Overflow",
+              desc: "Writing more data than a buffer can hold, overwriting adjacent memory. Look for strcpy, memcpy, sprintf without bounds checking.",
+              danger: "Can lead to code execution",
+              color: "#ef4444",
+            },
+            {
+              type: "Format String",
+              desc: "User-controlled format strings in printf-family functions. The attacker can read/write arbitrary memory.",
+              danger: "Memory disclosure, code execution",
+              color: "#ef4444",
+            },
+            {
+              type: "Integer Overflow",
+              desc: "Arithmetic operations that wrap around (e.g., 0xFFFFFFFF + 1 = 0). Often leads to undersized buffer allocations.",
+              danger: "Heap overflow, logic bugs",
+              color: "#f59e0b",
+            },
+            {
+              type: "Use After Free",
+              desc: "Accessing memory after it's been freed. The memory may have been reallocated for a different purpose.",
+              danger: "Code execution, information leak",
+              color: "#ef4444",
+            },
+            {
+              type: "Race Condition",
+              desc: "Time-of-check to time-of-use (TOCTOU) bugs where state changes between verification and use.",
+              danger: "Privilege escalation, file access",
+              color: "#f59e0b",
+            },
+            {
+              type: "Command Injection",
+              desc: "User input passed to system(), popen(), or similar without sanitization. Look for shell metacharacters.",
+              danger: "Arbitrary command execution",
+              color: "#ef4444",
+            },
+          ].map((vuln) => (
+            <Grid item xs={12} md={6} key={vuln.type}>
+              <Card
+                sx={{
+                  height: "100%",
+                  bgcolor: alpha(vuln.color, 0.08),
+                  border: `1px solid ${alpha(vuln.color, 0.2)}`,
+                  borderRadius: 2,
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: vuln.color, mb: 1 }}>
+                    {vuln.type}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
+                    {vuln.desc}
+                  </Typography>
+                  <Chip
+                    label={vuln.danger}
+                    size="small"
+                    sx={{
+                      bgcolor: alpha(vuln.color, 0.15),
+                      color: vuln.color,
+                      fontSize: "0.7rem",
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Accordion sx={{ bgcolor: "#12121a", mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+            <Typography sx={{ fontWeight: 600, color: "#e0e0e0" }}>Attack Surface Mapping Methodology</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography paragraph sx={{ color: "grey.300" }}>
+              Before looking for vulnerabilities, map the attack surface - places where untrusted data enters the program:
+            </Typography>
+            <List dense>
+              {[
+                { area: "File Parsing", desc: "Any file format the program reads: images, documents, configs, databases. Look for parsers with little error handling." },
+                { area: "Network Input", desc: "Sockets, HTTP handling, protocol parsing. Network data is always untrusted." },
+                { area: "IPC Mechanisms", desc: "Named pipes, shared memory, RPC/COM interfaces, D-Bus. Often less hardened than network inputs." },
+                { area: "Command Line Arguments", desc: "Especially for setuid programs. Check for buffer overflows in argument parsing." },
+                { area: "Environment Variables", desc: "Programs that use getenv() may be vulnerable if they trust environment data." },
+                { area: "Registry/Config Files", desc: "If attackers can modify configuration, they may be able to influence program behavior." },
+              ].map((item, idx) => (
+                <ListItem key={idx} sx={{ py: 0.5 }}>
+                  <ListItemText
+                    primary={<Typography sx={{ color: "#f59e0b", fontWeight: 600 }}>{item.area}</Typography>}
+                    secondary={<Typography variant="body2" sx={{ color: "grey.400" }}>{item.desc}</Typography>}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion sx={{ bgcolor: "#12121a" }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "grey.400" }} />}>
+            <Typography sx={{ fontWeight: 600, color: "#e0e0e0" }}>Dangerous Functions to Search For</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography paragraph sx={{ color: "grey.300" }}>
+              Use Search → For Strings or grep in the Symbol Tree for these commonly vulnerable functions:
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { category: "Buffer Operations", funcs: ["strcpy", "strcat", "sprintf", "vsprintf", "gets", "scanf", "memcpy (with user-controlled size)"] },
+                { category: "Format Strings", funcs: ["printf", "sprintf", "fprintf", "syslog", "snprintf (if format is controlled)"] },
+                { category: "Memory Management", funcs: ["malloc", "realloc", "free", "new/delete (C++)"] },
+                { category: "Command Execution", funcs: ["system", "popen", "exec*", "ShellExecute", "CreateProcess"] },
+              ].map((cat) => (
+                <Grid item xs={12} sm={6} key={cat.category}>
+                  <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 600, mb: 1 }}>
+                    {cat.category}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                    {cat.funcs.map((func) => (
+                      <Chip
+                        key={func}
+                        label={func}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha("#f59e0b", 0.15),
+                          color: "grey.300",
+                          fontFamily: "monospace",
+                          fontSize: "0.75rem",
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
           </AccordionDetails>
         </Accordion>
       </Paper>
@@ -1970,6 +2261,141 @@ const GhidraGuidePage: React.FC = () => {
         </Grid>
       </Paper>
 
+      {/* Understanding Assembly Patterns */}
+      <Paper
+        sx={{
+          p: 4,
+          mb: 4,
+          borderRadius: 3,
+          bgcolor: "#0f1024",
+          border: `1px solid ${alpha("#ec4899", 0.3)}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, background: "linear-gradient(135deg, #ec4899, #be185d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <CodeIcon sx={{ color: "white", fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#e0e0e0" }}>
+              Recognizing Common Assembly Patterns
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              Key patterns that appear frequently in compiled code
+            </Typography>
+          </Box>
+        </Box>
+
+        <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+          While Ghidra's decompiler handles most code translation, understanding common assembly patterns helps you
+          verify the decompiler's output and analyze code that doesn't decompile well. These patterns appear repeatedly
+          in compiled code from any compiler - recognizing them becomes second nature with practice.
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", bgcolor: alpha("#ec4899", 0.1), border: `1px solid ${alpha("#ec4899", 0.2)}`, borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 2 }}>
+                  Function Prologue/Epilogue
+                </Typography>
+                <CodeBlock title="x86 Standard Prologue">{`; Function prologue - sets up stack frame
+push    ebp          ; Save old base pointer
+mov     ebp, esp     ; New base pointer = stack pointer
+sub     esp, 0x20    ; Allocate 32 bytes for locals
+
+; ... function body ...
+
+; Function epilogue - cleans up and returns
+mov     esp, ebp     ; Restore stack pointer
+pop     ebp          ; Restore old base pointer
+ret                  ; Return to caller`}</CodeBlock>
+                <Typography variant="body2" sx={{ color: "grey.400", mt: 1 }}>
+                  The prologue establishes a stack frame; the epilogue tears it down. Local variables are accessed
+                  as negative offsets from EBP (e.g., [ebp-8]). Parameters are positive offsets (e.g., [ebp+8]).
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", bgcolor: alpha("#ec4899", 0.1), border: `1px solid ${alpha("#ec4899", 0.2)}`, borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 2 }}>
+                  If/Else Statements
+                </Typography>
+                <CodeBlock title="Conditional Branching">{`; if (eax == 0) { /* then */ } else { /* else */ }
+test    eax, eax     ; Test if EAX is zero
+jnz     else_block   ; Jump if NOT zero (else)
+; ... then block code ...
+jmp     end_if       ; Skip else block
+else_block:
+; ... else block code ...
+end_if:
+; ... continues ...`}</CodeBlock>
+                <Typography variant="body2" sx={{ color: "grey.400", mt: 1 }}>
+                  Note: The jump condition is often the OPPOSITE of what you'd write in C. "if (x == 0)" becomes 
+                  "jump if not zero to skip the then-block".
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", bgcolor: alpha("#ec4899", 0.1), border: `1px solid ${alpha("#ec4899", 0.2)}`, borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 2 }}>
+                  While/For Loops
+                </Typography>
+                <CodeBlock title="Loop Pattern">{`; for (int i = 0; i < 10; i++)
+xor     ecx, ecx     ; i = 0 (xor reg,reg is fastest way to zero)
+loop_start:
+cmp     ecx, 0Ah     ; Compare i with 10
+jge     loop_end     ; Exit if i >= 10
+; ... loop body ...
+inc     ecx          ; i++
+jmp     loop_start   ; Back to condition check
+loop_end:`}</CodeBlock>
+                <Typography variant="body2" sx={{ color: "grey.400", mt: 1 }}>
+                  Look for a compare-and-jump at the start (or end) of a block, with a jump back at the end.
+                  The loop variable is often in a register (ECX is traditional for loops).
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: "100%", bgcolor: alpha("#ec4899", 0.1), border: `1px solid ${alpha("#ec4899", 0.2)}`, borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ec4899", mb: 2 }}>
+                  Switch Statements
+                </Typography>
+                <CodeBlock title="Jump Table Pattern">{`; switch (eax) { case 0: ... case 1: ... }
+cmp     eax, 5       ; Check if eax > max case
+ja      default      ; Jump to default if above
+jmp     [jump_table + eax*4]  ; Index into table
+
+jump_table:
+dd      case_0       ; Address for case 0
+dd      case_1       ; Address for case 1
+dd      case_2       ; Address for case 2
+; ...`}</CodeBlock>
+                <Typography variant="body2" sx={{ color: "grey.400", mt: 1 }}>
+                  Compilers optimize switch statements into jump tables. Look for bounds checks followed by
+                  indirect jumps through a table of addresses.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        <Alert severity="success" sx={{ bgcolor: alpha("#22c55e", 0.1), border: `1px solid ${alpha("#22c55e", 0.3)}` }}>
+          <AlertTitle sx={{ color: "#e0e0e0" }}>Pro Tip: Use the Function Graph</AlertTitle>
+          <Typography sx={{ color: "grey.300" }}>
+            Ghidra's Function Graph view (press Space in the Listing) visualizes control flow as a flowchart.
+            Loops appear as cycles in the graph, if/else as diamond-shaped branches, and switch statements
+            as nodes with many outgoing edges. This visual representation often makes code structure obvious
+            at a glance, even before reading any assembly.
+          </Typography>
+        </Alert>
+      </Paper>
+
       {/* Processor Architectures */}
       <Paper
         sx={{
@@ -2054,10 +2480,30 @@ const GhidraGuidePage: React.FC = () => {
         <TabPanel value={tabValue} index={0}>
           <Typography variant="h5" gutterBottom>Getting Started with Ghidra</Typography>
 
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            Ghidra is a powerful tool, but getting started is straightforward. This section will walk you through
+            installation on all major platforms, creating your first project, and understanding the initial analysis
+            workflow. By the end of this section, you'll be ready to load a binary and start exploring its internals.
+          </Typography>
+
           <Alert severity="success" sx={{ mb: 3 }}>
             <AlertTitle>Prerequisites</AlertTitle>
-            Ghidra requires Java 17+ (JDK) to run. Download from adoptium.net or use your package manager.
+            <Typography>
+              Ghidra requires Java 17+ (JDK) to run. This is because Ghidra itself is written in Java, allowing it
+              to run on Windows, macOS, and Linux with the same codebase. Download from adoptium.net or use your 
+              package manager. Make sure to get the JDK (Java Development Kit), not just the JRE (Runtime Environment),
+              as Ghidra needs the development tools for some features.
+            </Typography>
           </Alert>
+
+          <Typography variant="h6" gutterBottom>Why Java?</Typography>
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            You might wonder why the NSA chose Java for a performance-critical tool like a disassembler. The primary
+            reasons are cross-platform compatibility (one codebase runs everywhere), mature ecosystem for GUI 
+            development (Swing), excellent threading support for parallel analysis, and the ability to write
+            plugins without recompiling the core application. The decompiler engine itself uses a custom C-like
+            intermediate representation (P-code) that provides good performance even in Java.
+          </Typography>
 
           <Typography variant="h6" gutterBottom>Installation</Typography>
           <Accordion defaultExpanded>
@@ -2320,10 +2766,39 @@ srv*/home/user/.symbols*https://msdl.microsoft.com/download/symbols`}</CodeBlock
         <TabPanel value={tabValue} index={1}>
           <Typography variant="h5" gutterBottom>Ghidra Interface Overview</Typography>
 
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            The CodeBrowser is Ghidra's main analysis window and where you'll spend most of your time. It contains
+            multiple synchronized views that update together as you navigate through the binary. Understanding how
+            these components work together is essential for efficient analysis. The interface may seem overwhelming
+            at first, but each component serves a specific purpose, and you'll quickly develop a workflow that
+            takes advantage of their strengths.
+          </Typography>
+
           <Alert severity="info" sx={{ mb: 3 }}>
-            The CodeBrowser is Ghidra's main analysis window. It contains multiple synchronized views 
-            that update together as you navigate through the binary. Master the interface to analyze efficiently.
+            <Typography>
+              <strong>View Synchronization:</strong> One of Ghidra's best features is that its views are synchronized.
+              Click on a function in the Symbol Tree, and the Listing and Decompiler jump to that function. Click on
+              a variable in the Decompiler, and the Listing highlights the corresponding assembly. This bidirectional
+              synchronization lets you quickly switch between high-level and low-level views of the same code.
+            </Typography>
           </Alert>
+
+          <Typography variant="h6" gutterBottom>Understanding Memory Addresses</Typography>
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Virtual Addresses vs File Offsets:</strong> Every line in the Listing shows a virtual memory address
+            (like 0x00401000). This is where the code would reside in memory when the program runs, not where it exists
+            in the file on disk. The operating system's loader maps the binary into memory at these addresses. Understanding
+            this distinction is important when correlating Ghidra analysis with hex editors or when writing exploits that
+            need to reference specific addresses.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Memory Sections:</strong> Executables are divided into sections with different purposes. The .text
+            section contains executable code, .data contains initialized global variables, .bss contains uninitialized
+            globals, .rodata contains read-only data (strings, constants), and .rdata (Windows) contains similar read-only
+            data. Import and export tables have their own sections. Understanding section purposes helps you navigate:
+            if you're looking for a hardcoded string, check .rodata or .rdata; for code, look in .text.
+          </Typography>
 
           <Typography variant="h6" gutterBottom>Main Windows</Typography>
           <TableContainer component={Paper} sx={{ mb: 3 }}>
@@ -2609,12 +3084,55 @@ void process_file(FileHeader *header) {
         <TabPanel value={tabValue} index={2}>
           <Typography variant="h5" gutterBottom>Analysis Features</Typography>
 
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            Ghidra's analysis capabilities are what set it apart from simpler disassemblers. When you import a binary,
+            Ghidra doesn't just convert bytes to assembly instructions - it performs sophisticated analysis to recover
+            as much semantic information as possible. This includes identifying function boundaries, tracking data flow,
+            propagating type information, and building a comprehensive cross-reference database. Understanding these
+            analysis features and when to use them is key to effective reverse engineering.
+          </Typography>
+
           <Alert severity="info" sx={{ mb: 3 }}>
             <AlertTitle>Auto-Analysis</AlertTitle>
-            When you first open a binary, Ghidra offers to run Auto-Analysis. This performs disassembly, 
-            function detection, and type propagation automatically. You can always re-run specific analyzers 
-            later from Analysis → Auto Analyze or Analysis → One Shot.
+            <Typography>
+              When you first open a binary, Ghidra offers to run Auto-Analysis. This performs disassembly, 
+              function detection, and type propagation automatically. You can always re-run specific analyzers 
+              later from Analysis → Auto Analyze or Analysis → One Shot. For large binaries (over 10MB), you may
+              want to be selective about which analyzers run to avoid long wait times. For malware analysis, you
+              might disable some aggressive analyzers that could be confused by anti-analysis tricks.
+            </Typography>
           </Alert>
+
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>Understanding Analysis Phases</Typography>
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Phase 1 - Disassembly:</strong> Ghidra converts raw bytes to assembly instructions. This sounds
+            simple, but is complicated by variable-length instructions (x86 instructions range from 1 to 15 bytes)
+            and the challenge of distinguishing code from data. Ghidra uses multiple strategies: following control
+            flow from known entry points, looking for function prologues (common instruction patterns that start
+            functions), and analyzing call/jump targets.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Phase 2 - Function Detection:</strong> Once instructions are disassembled, Ghidra identifies
+            function boundaries. It looks for call targets, function prologues (like PUSH EBP; MOV EBP, ESP on x86),
+            and export table entries. This is imperfect - hand-written assembly or heavily obfuscated code may
+            have functions that Ghidra doesn't detect automatically. You can always manually create functions
+            at addresses you identify (press F).
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Phase 3 - Reference Analysis:</strong> Ghidra builds a comprehensive database of cross-references
+            (XRefs). This tracks everywhere a function is called from, everywhere a variable is read or written,
+            and relationships between code and data. XRefs are perhaps the most valuable navigation tool - press
+            X on any symbol to see all places that reference it.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Phase 4 - Type Propagation:</strong> Ghidra infers data types by analyzing how values are used.
+            If a function calls strcpy() with a pointer, that pointer is likely a char*. If a 4-byte value is
+            compared to -1 and then used with file operations, it's probably a file descriptor. This type
+            information propagates through the codebase, improving decompiler output everywhere.
+          </Typography>
 
           <Typography variant="h6" gutterBottom>Key Features</Typography>
           <TableContainer component={Paper} sx={{ mb: 3 }}>
@@ -2698,6 +3216,33 @@ void process_file(FileHeader *header) {
           <Typography paragraph>
             Ghidra's decompiler converts assembly code into readable C-like pseudocode. This is one of its 
             most powerful features, making it much easier to understand program logic without reading assembly.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>How the Decompiler Works:</strong> Ghidra's decompiler is a sophisticated multi-stage system
+            that goes far beyond simple pattern matching. It performs data flow analysis to track how values
+            move through registers and memory, uses type propagation to infer variable types, applies
+            structured control flow recovery to identify loops and conditionals, and performs dead code 
+            elimination to remove instructions that don't affect the final output. The result is surprisingly
+            readable code that closely approximates what the original source might have looked like.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Decompiler Limitations:</strong> Understanding what the decompiler can't do is as important
+            as knowing what it can do. Variable names and comments are irrecoverably lost during compilation -
+            the decompiler assigns generic names like "local_8" (a local variable at stack offset 8) or "param_1"
+            (the first parameter). Complex compiler optimizations can produce code that looks quite different
+            from the original: inlined functions, loop unrolling, strength reduction, and other optimizations
+            may create code patterns that are hard to map back to high-level constructs. Obfuscated code can
+            also confuse the decompiler, producing nonsensical or incorrect output.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Improving Decompiler Output:</strong> The quality of decompiler output improves dramatically
+            as you add information. Rename variables with meaningful names (press L), define function signatures
+            with correct parameter types (Y), create and apply custom structures for data types (Data Type Manager),
+            and set the correct calling convention. Each piece of information you add propagates through the
+            analysis, improving not just the current function but potentially many others that interact with it.
           </Typography>
           <CodeBlock title="Example: Assembly vs Decompiled">{`; Original Assembly (x86)
 push    ebp
@@ -2901,11 +3446,40 @@ void decrypt_rolling(char *str, int len) {
         <TabPanel value={tabValue} index={3}>
           <Typography variant="h5" gutterBottom>Ghidra Scripting</Typography>
 
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            One of Ghidra's most powerful capabilities is its scripting system. Ghidra supports both Java and Python
+            (via Jython, which runs Python 2.7 on the JVM) for automation and custom analysis. Scripts can access 
+            virtually all of Ghidra's internal APIs, allowing you to automate repetitive tasks, batch process multiple
+            files, implement custom analysis algorithms, or extend Ghidra with entirely new features. Many professional
+            reverse engineers develop libraries of personal scripts that dramatically accelerate their workflows.
+          </Typography>
+
           <Alert severity="info" sx={{ mb: 3 }}>
-            Ghidra supports Java and Python (Jython) scripting for automation and custom analysis. 
-            Scripts can access all of Ghidra's APIs to automate repetitive tasks, batch process files, 
-            or add custom functionality.
+            <Typography>
+              <strong>Java vs Python Trade-offs:</strong> Java offers better IDE support (code completion, debugging),
+              type safety that catches errors at compile time, and slightly better performance. Python (Jython) offers
+              faster prototyping, simpler syntax, and is often easier for small utility scripts. Both have full access
+              to Ghidra's APIs. Most analysts use Python for quick scripts and switch to Java for larger, more complex
+              projects. Note that Jython is Python 2.7, not Python 3, so be aware of syntax differences.
+            </Typography>
           </Alert>
+
+          <Typography variant="h6" gutterBottom>The Flat API vs Full API</Typography>
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>FlatProgramAPI (Flat API):</strong> Ghidra provides a simplified "Flat API" that's designed for
+            common scripting tasks. When you write a Python script that extends GhidraScript, you automatically
+            have access to convenient methods like getBytes(), createFunction(), getFunctionAt(), and many others.
+            The Flat API is well-documented and handles most common use cases. Variables like currentProgram,
+            currentAddress, and currentSelection are automatically available in your scripts.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>Full Ghidra API:</strong> For more complex operations, you can access Ghidra's full Java API.
+            This includes the FunctionManager for working with functions, the SymbolTable for managing symbols,
+            the Listing for accessing disassembly, the Memory interface for reading/writing bytes, and many other
+            components. The full API is more verbose but provides complete control over every aspect of your analysis.
+            Ghidra's Help menu includes comprehensive API documentation.
+          </Typography>
 
           <Typography variant="h6" gutterBottom>Running Scripts</Typography>
           <Grid container spacing={2}>
@@ -3219,6 +3793,21 @@ print("\\nRenamed {} functions".format(renamed_count))`}</CodeBlock>
         {/* Tab 4: Tips & Tricks */}
         <TabPanel value={tabValue} index={4}>
           <Typography variant="h5" gutterBottom>Tips & Best Practices</Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            Effective reverse engineering is as much about methodology and habits as it is about tool knowledge.
+            The tips in this section come from experienced analysts who have spent thousands of hours in Ghidra
+            and similar tools. Following these practices will help you work more efficiently, avoid common pitfalls,
+            and produce analysis that you (and others) can understand months later.
+          </Typography>
+
+          <Typography paragraph sx={{ color: "grey.300", lineHeight: 1.8 }}>
+            <strong>The Iterative Nature of RE:</strong> Reverse engineering is rarely linear. You'll often start
+            analyzing one function, realize you need to understand another function it calls, dive into that, discover
+            a data structure you need to define, come back to the original function with new understanding, and repeat.
+            Embrace this iterative process - it's how you build a complete mental model of the program. Use bookmarks
+            liberally to mark where you left off when you go down rabbit holes.
+          </Typography>
 
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>

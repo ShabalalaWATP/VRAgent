@@ -1102,17 +1102,42 @@ const injectionMethods = [
 ];
 
 const WindowsInternalsREPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState("intro");
-  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const theme = useTheme();
   const navigate = useNavigate();
+  const accent = "#3b82f6";
+
+  // Navigation state
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
   const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
 
-  // Scroll tracking for active section
+  const sectionNavItems = [
+    { id: "intro", label: "Introduction", icon: <InfoIcon /> },
+    { id: "pe-format", label: "PE File Format", icon: <StorageIcon /> },
+    { id: "teb-peb", label: "TEB/PEB", icon: <AccountTreeIcon /> },
+    { id: "memory-mgmt", label: "Memory Management", icon: <MemoryIcon /> },
+    { id: "syscalls", label: "Syscalls & NTAPI", icon: <SpeedIcon /> },
+    { id: "api-patterns", label: "API Patterns", icon: <AppsIcon /> },
+    { id: "hooking", label: "Hooking", icon: <LayersIcon /> },
+    { id: "injection", label: "Code Injection", icon: <BugReportIcon /> },
+    { id: "anti-debug", label: "Anti-Debug", icon: <LockIcon /> },
+    { id: "tools", label: "RE Tools", icon: <TerminalIcon /> },
+    { id: "quiz", label: "Quiz", icon: <QuizIcon /> },
+  ];
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setNavDrawerOpen(false);
+    }
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       const sections = sectionNavItems.map((item) => item.id);
       let currentSection = "";
+
       for (const sectionId of sections) {
         const element = document.getElementById(sectionId);
         if (element) {
@@ -1122,118 +1147,288 @@ const WindowsInternalsREPage: React.FC = () => {
           }
         }
       }
-      if (currentSection) {
-        setActiveSection(currentSection);
-      }
+      setActiveSection(currentSection);
     };
+
     window.addEventListener("scroll", handleScroll);
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActiveSection(sectionId);
-      setNavDrawerOpen(false);
-    }
-  };
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const currentSectionIndex = sectionNavItems.findIndex(
-    (item) => item.id === activeSection
-  );
-  const progress = ((currentSectionIndex + 1) / sectionNavItems.length) * 100;
+  const currentIndex = sectionNavItems.findIndex((item) => item.id === activeSection);
+  const progressPercent = currentIndex >= 0 ? ((currentIndex + 1) / sectionNavItems.length) * 100 : 0;
 
   const pageContext = `Windows Internals for Reverse Engineering - Comprehensive guide covering PE file format (DOS header, NT headers, sections, directories, IAT/EAT), Windows process architecture (TEB, PEB, loaded modules), memory management (virtual memory, heaps, stacks), Windows API patterns for malware analysis, DLL injection techniques (CreateRemoteThread, process hollowing, APC injection), hooking methods (IAT, inline, SSDT), anti-debugging techniques and bypasses, kernel structures, and essential RE tools (WinDbg, x64dbg, Process Monitor, API Monitor). Critical knowledge for malware analysis, exploit development, and Windows security research.`;
 
-  // Sidebar navigation component
   const sidebarNav = (
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: 3,
-        bgcolor: alpha(theme.palette.background.paper, 0.8),
-        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        width: 220,
+        flexShrink: 0,
         position: "sticky",
-        top: 20,
+        top: 80,
+        maxHeight: "calc(100vh - 100px)",
+        overflowY: "auto",
+        borderRadius: 3,
+        border: `1px solid ${alpha(accent, 0.15)}`,
+        bgcolor: alpha(theme.palette.background.paper, 0.6),
+        display: { xs: "none", lg: "block" },
+        "&::-webkit-scrollbar": {
+          width: 6,
+        },
+        "&::-webkit-scrollbar-thumb": {
+          bgcolor: alpha(accent, 0.3),
+          borderRadius: 3,
+        },
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <ListAltIcon sx={{ color: "#3b82f6" }} />
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+      <Box sx={{ p: 2 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, mb: 1, color: accent, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ListAltIcon sx={{ fontSize: 18 }} />
           Contents
         </Typography>
-      </Box>
-      <LinearProgress
-        variant="determinate"
-        value={progress}
-        sx={{
-          mb: 2,
-          height: 6,
-          borderRadius: 3,
-          bgcolor: alpha("#3b82f6", 0.1),
-          "& .MuiLinearProgress-bar": {
-            bgcolor: "#3b82f6",
-            borderRadius: 3,
-          },
-        }}
-      />
-      <List dense sx={{ p: 0 }}>
-        {sectionNavItems.map((item) => (
-          <ListItem
-            key={item.id}
-            component="div"
-            onClick={() => scrollToSection(item.id)}
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Progress
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+              {Math.round(progressPercent)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
             sx={{
-              borderRadius: 2,
-              mb: 0.5,
-              cursor: "pointer",
-              bgcolor:
-                activeSection === item.id
-                  ? alpha("#3b82f6", 0.15)
-                  : "transparent",
-              borderLeft:
-                activeSection === item.id
-                  ? `3px solid #3b82f6`
-                  : "3px solid transparent",
-              "&:hover": {
-                bgcolor: alpha("#3b82f6", 0.08),
+              height: 6,
+              borderRadius: 3,
+              bgcolor: alpha(accent, 0.1),
+              "& .MuiLinearProgress-bar": {
+                bgcolor: accent,
+                borderRadius: 3,
               },
             }}
-          >
-            <ListItemIcon
+          />
+        </Box>
+        <Divider sx={{ mb: 1 }} />
+        <List dense sx={{ mx: -1 }}>
+          {sectionNavItems.map((item) => (
+            <ListItem
+              key={item.id}
+              onClick={() => scrollToSection(item.id)}
               sx={{
-                minWidth: 32,
-                color: activeSection === item.id ? "#3b82f6" : "text.secondary",
+                borderRadius: 1.5,
+                mb: 0.25,
+                py: 0.5,
+                cursor: "pointer",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                "&:hover": {
+                  bgcolor: alpha(accent, 0.08),
+                },
+                transition: "all 0.15s ease",
               }}
             >
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText
-              primary={item.label}
-              primaryTypographyProps={{
-                fontSize: "0.85rem",
-                fontWeight: activeSection === item.id ? 700 : 500,
-                color: activeSection === item.id ? "#3b82f6" : "text.primary",
-              }}
-            />
-          </ListItem>
-        ))}
-      </List>
+              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem", color: activeSection === item.id ? accent : "text.secondary" }}>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
     </Paper>
   );
 
   return (
     <LearnPageLayout pageTitle="Windows Internals for RE" pageContext={pageContext}>
-      <Container maxWidth="xl" sx={{ py: 4 }}>
-        {/* Back Link */}
-        <Box sx={{ mb: 3 }}>
+      {/* Floating Navigation Button - Mobile Only */}
+      <Tooltip title="Navigate Sections" placement="left">
+        <Fab
+          color="primary"
+          onClick={() => setNavDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 1000,
+            bgcolor: accent,
+            "&:hover": { bgcolor: "#2563eb" },
+            boxShadow: `0 4px 20px ${alpha(accent, 0.4)}`,
+            display: { xs: "flex", lg: "none" },
+          }}
+        >
+          <ListAltIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Scroll to Top Button */}
+      <Tooltip title="Scroll to Top" placement="left">
+        <Fab
+          size="small"
+          onClick={scrollToTop}
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 28,
+            zIndex: 1000,
+            bgcolor: alpha(accent, 0.15),
+            color: accent,
+            "&:hover": { bgcolor: alpha(accent, 0.25) },
+          }}
+        >
+          <KeyboardArrowUpIcon />
+        </Fab>
+      </Tooltip>
+
+      {/* Navigation Drawer - Mobile */}
+      <Drawer
+        anchor="right"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: isMobile ? "85%" : 320,
+            bgcolor: theme.palette.background.paper,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+              <ListAltIcon sx={{ color: accent }} />
+              Contents
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Progress indicator */}
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: alpha(accent, 0.05) }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Progress
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: accent }}>
+                {Math.round(progressPercent)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progressPercent}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: alpha(accent, 0.1),
+                "& .MuiLinearProgress-bar": {
+                  bgcolor: accent,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+
+          {/* Navigation List */}
+          <List dense sx={{ mx: -1 }}>
+            {sectionNavItems.map((item) => (
+              <ListItem
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  cursor: "pointer",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.1),
+                  },
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, fontSize: "1.1rem", color: activeSection === item.id ? accent : "text.secondary" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  }
+                />
+                {activeSection === item.id && (
+                  <Chip
+                    label="Current"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      bgcolor: alpha(accent, 0.2),
+                      color: accent,
+                    }}
+                  />
+                )}
+              </ListItem>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Quick Actions */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={scrollToTop}
+              startIcon={<KeyboardArrowUpIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Top
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => scrollToSection("quiz")}
+              startIcon={<QuizIcon />}
+              sx={{ flex: 1, borderColor: alpha(accent, 0.3), color: accent }}
+            >
+              Quiz
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Main Layout with Sidebar */}
+      <Box sx={{ display: "flex", gap: 3, maxWidth: 1400, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {sidebarNav}
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Back Button */}
           <Chip
             component={Link}
             to="/learn"
@@ -1241,48 +1436,149 @@ const WindowsInternalsREPage: React.FC = () => {
             label="Back to Learning Hub"
             clickable
             variant="outlined"
-            sx={{ borderRadius: 2 }}
+            sx={{ borderRadius: 2, mb: 3 }}
           />
-        </Box>
 
-        {/* Hero Header */}
-        <Paper
-          sx={{
-            p: 4,
-            mb: 4,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.15)} 0%, ${alpha("#8b5cf6", 0.1)} 50%, ${alpha("#06b6d4", 0.05)} 100%)`,
-            border: `1px solid ${alpha("#3b82f6", 0.3)}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}>
+          {/* Hero Header */}
+          <Paper
+            sx={{
+              p: 4,
+              mb: 4,
+              borderRadius: 4,
+              background: `linear-gradient(135deg, ${alpha("#3b82f6", 0.15)} 0%, ${alpha("#8b5cf6", 0.15)} 50%, ${alpha("#06b6d4", 0.15)} 100%)`,
+              border: `1px solid ${alpha("#3b82f6", 0.2)}`,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            {/* Decorative background elements */}
             <Box
               sx={{
-                width: 72,
-                height: 72,
-                borderRadius: 3,
-                background: `linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: `0 8px 32px ${alpha("#3b82f6", 0.4)}`,
+                position: "absolute",
+                top: -50,
+                right: -50,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#3b82f6", 0.1)} 0%, transparent 70%)`,
               }}
-            >
-              <MemoryIcon sx={{ fontSize: 40, color: "white" }} />
-            </Box>
-            <Box>
-              <Typography variant="h3" fontWeight={800}>
-                Windows Internals for RE
-              </Typography>
-              <Typography variant="h6" color="text.secondary">
-                Deep dive into Windows architecture for reverse engineering
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -30,
+                left: "30%",
+                width: 150,
+                height: 150,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${alpha("#8b5cf6", 0.1)} 0%, transparent 70%)`,
+              }}
+            />
 
-        {/* Comprehensive Introduction Section */}
-        <Paper id="intro" sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}`, scrollMarginTop: "20px" }}>
+            <Box sx={{ position: "relative", zIndex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, #3b82f6, #8b5cf6)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: `0 8px 32px ${alpha("#3b82f6", 0.3)}`,
+                  }}
+                >
+                  <MemoryIcon sx={{ fontSize: 44, color: "white" }} />
+                </Box>
+                <Box>
+                  <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+                    Windows Internals for RE
+                  </Typography>
+                  <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
+                    Deep dive into Windows architecture for reverse engineering
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Chip label="Intermediate" sx={{ bgcolor: alpha("#f59e0b", 0.15), color: "#f59e0b", fontWeight: 600 }} />
+                <Chip label="PE Format" sx={{ bgcolor: alpha("#3b82f6", 0.15), color: "#3b82f6", fontWeight: 600 }} />
+                <Chip label="Process Architecture" sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }} />
+                <Chip label="Malware Analysis" sx={{ bgcolor: alpha("#ef4444", 0.15), color: "#ef4444", fontWeight: 600 }} />
+                <Chip label="Code Injection" sx={{ bgcolor: alpha("#10b981", 0.15), color: "#10b981", fontWeight: 600 }} />
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Quick Navigation */}
+          <Paper
+            sx={{
+              p: 2,
+              mb: 4,
+              borderRadius: 3,
+              position: "sticky",
+              top: 70,
+              zIndex: 100,
+              backdropFilter: "blur(10px)",
+              bgcolor: alpha(theme.palette.background.paper, 0.9),
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              boxShadow: `0 4px 20px ${alpha("#000", 0.1)}`,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+              <Chip
+                label="← Learning Hub"
+                size="small"
+                clickable
+                onClick={() => navigate("/learn")}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  bgcolor: alpha(accent, 0.1),
+                  color: accent,
+                  "&:hover": {
+                    bgcolor: alpha(accent, 0.2),
+                  },
+                }}
+              />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                Quick Navigation
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {[
+                { label: "Introduction", id: "intro" },
+                { label: "PE Format", id: "pe-format" },
+                { label: "TEB/PEB", id: "teb-peb" },
+                { label: "API Patterns", id: "api-patterns" },
+                { label: "Hooking", id: "hooking" },
+                { label: "Code Injection", id: "injection" },
+                { label: "Anti-Debug", id: "anti-debug" },
+                { label: "RE Tools", id: "tools" },
+                { label: "Quiz", id: "quiz" },
+              ].map((nav) => (
+                <Chip
+                  key={nav.id}
+                  label={nav.label}
+                  size="small"
+                  clickable
+                  onClick={() => scrollToSection(nav.id)}
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    "&:hover": {
+                      bgcolor: alpha(accent, 0.15),
+                      color: accent,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          </Paper>
+
+          {/* Comprehensive Introduction Section */}
+          <Paper id="intro" sx={{ p: 4, mb: 4, borderRadius: 3, bgcolor: alpha("#3b82f6", 0.03), border: `1px solid ${alpha("#3b82f6", 0.15)}`, scrollMarginTop: "180px" }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: "#3b82f6" }}>
             🔬 What is Windows Internals for Reverse Engineering?
           </Typography>
@@ -1375,31 +1671,61 @@ const WindowsInternalsREPage: React.FC = () => {
           </Box>
         </Paper>
 
-        {/* Main Content with Sidebar */}
-        <Grid container spacing={3}>
-          {/* Sidebar Navigation - Desktop */}
-          {!isMobile && (
-            <Grid item lg={3}>
-              {sidebarNav}
-            </Grid>
-          )}
-
-          {/* Main Content */}
-          <Grid item xs={12} lg={isMobile ? 12 : 9}>
             {/* Section: PE Format */}
-            <Box id="pe-format" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="pe-format" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">PE File Format</Typography>
-            <Typography paragraph>
-              The Portable Executable (PE) format is the standard for executables (.exe), DLLs (.dll), and drivers (.sys) on Windows.
-              Understanding PE structure is fundamental for reverse engineering, malware analysis, and exploit development.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The <strong>Portable Executable (PE) format</strong> is the foundational file format for all executable code on 
+              Windows systems, including applications (.exe), dynamic link libraries (.dll), kernel-mode drivers (.sys), and 
+              even screensavers (.scr). Introduced with Windows NT in 1993, the PE format evolved from the earlier Common Object 
+              File Format (COFF) used in Unix systems, adapting it for the Windows environment while maintaining compatibility 
+              with older DOS executables through the inclusion of a DOS stub header.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              For reverse engineers and malware analysts, deep knowledge of the PE format is absolutely critical. Every binary 
+              you analyze will be a PE file, and the header structures contain a wealth of information about the program's 
+              behavior, dependencies, and potential malicious indicators. The PE header tells you where code execution begins 
+              (the entry point), which external libraries and functions the program depends on (imports), what functionality 
+              it exposes to other programs (exports), and how the operating system should load it into memory.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The PE format is hierarchical in nature. At the very beginning is the DOS header, a 64-byte structure that starts 
+              with the famous "MZ" signature (0x5A4D, representing the initials of Mark Zbikowski, one of the original DOS 
+              architects). This header exists purely for backward compatibility — if you try to run a modern Windows executable 
+              under DOS, the DOS stub (which follows the DOS header) will execute and display "This program cannot be run in DOS 
+              mode." The crucial field in the DOS header is <code>e_lfanew</code> at offset 0x3C, which contains a pointer to 
+              the actual PE headers.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The NT Headers structure is where the real PE information resides. It begins with the PE signature ("PE\0\0"), 
+              followed by the File Header containing machine type (x86 or x64), number of sections, timestamp, and characteristics 
+              flags. The Optional Header (which is not optional for executables) contains the most critical reverse engineering 
+              information: the entry point address, image base (the preferred load address), section and file alignment values, 
+              subsystem type (GUI or Console), DLL characteristics (including security features like ASLR and DEP), and most 
+              importantly, the Data Directories array — 16 entries pointing to crucial structures like imports, exports, 
+              resources, relocations, TLS callbacks, debug information, and more.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              When the Windows loader executes a PE file, it reads the headers to understand how to set up the process. It 
+              allocates virtual memory based on <code>SizeOfImage</code>, maps each section to its specified virtual address 
+              with the appropriate memory protections (read, write, execute), processes relocations if the image couldn't load 
+              at its preferred base address (due to ASLR or conflicts), resolves all imported functions by loading required 
+              DLLs and filling in the Import Address Table (IAT), runs any TLS callbacks (often abused by malware for 
+              anti-debugging), and finally transfers execution to the entry point address.
             </Typography>
 
             <Alert severity="info" sx={{ mb: 3 }}>
               <AlertTitle>Key Concepts</AlertTitle>
-              <strong>RVA (Relative Virtual Address)</strong>: Offset from ImageBase when loaded in memory.<br/>
-              <strong>VA (Virtual Address)</strong>: Actual address in process memory (ImageBase + RVA).<br/>
-              <strong>File Offset</strong>: Offset in the file on disk. Use section headers to convert RVA ↔ File Offset.
+              <strong>RVA (Relative Virtual Address)</strong>: Offset from ImageBase when loaded in memory. Most addresses in PE headers are RVAs.<br/>
+              <strong>VA (Virtual Address)</strong>: Actual address in process memory, calculated as ImageBase + RVA. This is what you see in debuggers.<br/>
+              <strong>File Offset</strong>: Offset in the file on disk. Section headers contain both RVA and file offsets — use them to convert between the two.<br/>
+              <strong>Raw vs Virtual Size</strong>: Raw size is the data in the file; virtual size is the memory allocation. If virtual &gt; raw, extra space is zero-filled (BSS data).
             </Alert>
 
             <Accordion defaultExpanded>
@@ -1611,13 +1937,53 @@ Export Resolution (GetProcAddress):
             </Box>
 
             {/* Section: TEB/PEB */}
-            <Box id="teb-peb" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="teb-peb" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Process & Thread Environment</Typography>
-            <Typography paragraph>
-              Every Windows process has a PEB (Process Environment Block) and each thread has a TEB (Thread Environment Block).
-              These undocumented structures contain critical runtime information used by both malware and security tools.
-              Understanding TEB/PEB is essential for shellcode development, anti-debugging, and process manipulation.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              At the heart of every Windows process lies a complex web of data structures that the operating system uses to 
+              manage execution state, track loaded libraries, and maintain thread-specific information. The two most critical 
+              structures for reverse engineers are the <strong>Process Environment Block (PEB)</strong> and the <strong>Thread 
+              Environment Block (TEB)</strong>. While Microsoft considers these structures "undocumented" (meaning they can change 
+              between Windows versions), they are extensively used by both legitimate software and malware, making them essential 
+              knowledge for anyone analyzing Windows binaries.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The <strong>PEB</strong> is a process-wide structure that exists once per process and contains fundamental information 
+              about the running program. It holds the image base address (where the executable is loaded in memory), a pointer to 
+              the loaded modules list (PEB_LDR_DATA, which tracks all DLLs in the process), the process heap handle, process 
+              parameters (including the command line, current directory, and environment variables), and critically important 
+              flags used for debugging detection. The <code>BeingDebugged</code> flag at offset 0x02 is the single most commonly 
+              checked anti-debugging indicator — when a debugger attaches, Windows sets this flag to 1, and malware frequently 
+              checks it to detect analysis environments.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The <strong>TEB</strong> (also called the Thread Information Block or TIB) exists once per thread and contains 
+              thread-specific data. Each thread gets its own TEB, accessible through the FS segment register on 32-bit Windows 
+              or the GS segment register on 64-bit Windows. The TEB contains the thread's stack boundaries (base and limit), 
+              the Structured Exception Handling (SEH) chain on 32-bit systems, thread-local storage (TLS) data, the last error 
+              value (set by GetLastError), and a pointer back to the parent process's PEB. The TEB is always at FS:[0] or GS:[0], 
+              making it trivially accessible from any code running in the thread.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Why do these structures matter for reverse engineering?</strong> Shellcode commonly uses PEB walking to 
+              find loaded DLLs and resolve API addresses without calling GetProcAddress (which would be visible to API monitors). 
+              By walking the InMemoryOrderModuleList in PEB_LDR_DATA, shellcode can locate kernel32.dll's base address, then 
+              parse its export table to find functions like LoadLibrary and GetProcAddress. This technique, known as "PEB walking," 
+              is a hallmark of position-independent shellcode and is essential to understand for malware analysis.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              Anti-debugging techniques heavily rely on PEB and TEB fields. Beyond the obvious BeingDebugged flag, the 
+              <code>NtGlobalFlag</code> field changes when a process is created under a debugger (it gets heap debugging flags 
+              set), the process heap itself has different flags when debugging, and even the <code>ProcessParameters</code> 
+              structure can be inspected for debugger-related artifacts. Security researchers and malware analysts must understand 
+              these structures to both implement and bypass anti-debugging techniques. WinDbg commands like <code>!peb</code> and 
+              <code>!teb</code> provide easy access to view these structures during debugging sessions.
             </Typography>
 
             <Alert severity="warning" sx={{ mb: 3 }}>
@@ -1887,14 +2253,681 @@ mov eax, [eax+0x40]          ; CommandLine.Buffer`}</CodeBlock>
               </Paper>
             </Box>
 
+            {/* Section: Memory Management */}
+            <Box id="memory-mgmt" sx={{ mb: 5, scrollMarginTop: "180px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
+                <Typography variant="h5" gutterBottom fontWeight="bold">Windows Memory Management</Typography>
+                
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  Windows implements a sophisticated <strong>virtual memory system</strong> that provides each process with 
+                  the illusion of having its own private, contiguous address space. This abstraction layer sits between 
+                  applications and physical RAM, enabling features like memory protection, memory-mapped files, copy-on-write 
+                  optimization, and the ability to run programs larger than available physical memory through paging. For 
+                  reverse engineers, understanding virtual memory is fundamental — every address you see in a debugger is a 
+                  virtual address, and comprehending how these map to physical memory (or don't, in the case of paged-out 
+                  memory) is essential for effective analysis.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  The Windows memory manager divides each process's virtual address space into two halves: <strong>user space</strong> 
+                  and <strong>kernel space</strong>. On 32-bit systems, user mode code gets the lower 2GB (0x00000000 to 0x7FFFFFFF) 
+                  while the kernel reserves the upper 2GB. On 64-bit systems, the division is much more dramatic — user mode 
+                  processes have access to 128TB of virtual address space (with 48-bit addressing), while the kernel space is 
+                  similarly sized. This separation is enforced by hardware (the CPU's supervisor bit) and ensures that user-mode 
+                  code cannot directly access kernel memory — a protection that exploit developers constantly seek to bypass.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  Memory in Windows is managed at the <strong>page level</strong>, with the default page size being 4KB. Each 
+                  page can have its own protection attributes: readable, writable, executable, or combinations thereof. The 
+                  memory manager maintains page tables that map virtual addresses to physical addresses and track protection 
+                  flags. When a program accesses memory, the CPU's Memory Management Unit (MMU) translates the virtual address 
+                  using these page tables. If the page isn't in physical memory (a page fault), the memory manager either 
+                  loads it from disk (for memory-mapped files or paged-out data) or raises an access violation if the access 
+                  is invalid.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  For exploit development and malware analysis, the <strong>memory protection flags</strong> are critically important. 
+                  The PAGE_EXECUTE_READWRITE (RWX) permission is a major red flag — legitimate code rarely needs memory that 
+                  is simultaneously writable and executable. Shellcode, JIT compilers, and unpacking stubs require RWX memory, 
+                  making it a key indicator of suspicious activity. Modern mitigations like Data Execution Prevention (DEP) 
+                  prevent execution of non-executable pages, while technologies like Control Flow Guard (CFG) and Arbitrary 
+                  Code Guard (ACG) add additional layers of protection that exploits must circumvent.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+                  The <strong>Windows heap</strong> and <strong>stack</strong> are the primary memory regions where vulnerabilities 
+                  manifest. Stack buffer overflows can overwrite return addresses for control flow hijacking, while heap 
+                  corruption can lead to arbitrary write primitives through metadata manipulation. Modern Windows includes 
+                  numerous heap hardening features (safe unlinking, heap cookies, LFH randomization) and stack protections 
+                  (stack canaries/GS, SAFESEH, SEHOP) that exploit developers must understand and bypass. The WinDbg commands 
+                  <code>!heap</code> and <code>!address</code> are indispensable for analyzing memory layout during debugging.
+                </Typography>
+
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  <AlertTitle>Memory Layout Overview</AlertTitle>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={3}><Typography variant="body2"><strong>User Space:</strong> 0x00000000 - 0x7FFFFFFF (2GB, or 3GB with /3GB)</Typography></Grid>
+                    <Grid item xs={12} md={3}><Typography variant="body2"><strong>Kernel Space:</strong> 0x80000000+ (shared across all processes)</Typography></Grid>
+                    <Grid item xs={12} md={3}><Typography variant="body2"><strong>x64 User:</strong> 0 - 0x7FFFFFFFFFFF (128TB with 48-bit addressing)</Typography></Grid>
+                    <Grid item xs={12} md={3}><Typography variant="body2"><strong>Page Size:</strong> 4KB (small), 2MB/1GB (large pages)</Typography></Grid>
+                  </Grid>
+                </Alert>
+
+                <Accordion defaultExpanded>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Virtual Address Space Layout</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock title="x64 Process Memory Layout">{`┌─────────────────────────────────────────────────────────────────┐
+│ 0x00007FFFFFFFFFFF ─┬─ User/Kernel Boundary                     │
+├─────────────────────┼───────────────────────────────────────────┤
+│                     │  Stack (grows down)                        │
+│ 0x00007FF...        │  TEB, PEB                                  │
+│                     │  Thread Local Storage (TLS)                │
+├─────────────────────┼───────────────────────────────────────────┤
+│                     │  Memory-Mapped Files                       │
+│ 0x000007FF...       │  Shared DLLs (ntdll, kernel32, etc.)      │
+│                     │  ASLR-randomized region                    │
+├─────────────────────┼───────────────────────────────────────────┤
+│                     │  Heap(s) - Process Heap, Private Heaps     │
+│ 0x00000001...       │  VirtualAlloc regions                      │
+│                     │  Mapped sections                           │
+├─────────────────────┼───────────────────────────────────────────┤
+│                     │  .data, .bss (writable data)               │
+│ Image Base          │  .rdata (read-only data)                   │
+│ (ASLR randomized)   │  .text (executable code)                   │
+│                     │  PE Headers                                │
+├─────────────────────┼───────────────────────────────────────────┤
+│ 0x0000000000000000 ─┴─ NULL Pointer Guard (64KB reserved)       │
+└─────────────────────────────────────────────────────────────────┘
+
+Key Memory Regions for RE:
+- Stack: Local variables, return addresses (ROP gadgets here)
+- Heap:  Dynamic allocations, often contains sensitive data
+- Image: PE sections, imports/exports
+- DLLs:  System libraries, often hooked by security tools`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Memory Protection Flags</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+                            <TableCell><strong>Constant</strong></TableCell>
+                            <TableCell><strong>Value</strong></TableCell>
+                            <TableCell><strong>Description</strong></TableCell>
+                            <TableCell><strong>RE Significance</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {[
+                            { name: "PAGE_NOACCESS", val: "0x01", desc: "No access allowed", re: "Guard pages, unmapped memory" },
+                            { name: "PAGE_READONLY", val: "0x02", desc: "Read only", re: ".rdata, imported data" },
+                            { name: "PAGE_READWRITE", val: "0x04", desc: "Read/Write", re: ".data, heap, stack" },
+                            { name: "PAGE_EXECUTE", val: "0x10", desc: "Execute only (rare)", re: "Code pages (uncommon)" },
+                            { name: "PAGE_EXECUTE_READ", val: "0x20", desc: "Execute + Read", re: ".text section (normal)" },
+                            { name: "PAGE_EXECUTE_READWRITE", val: "0x40", desc: "Execute + Read + Write", re: "⚠️ Shellcode, JIT, packers" },
+                            { name: "PAGE_GUARD", val: "0x100", desc: "Guard page (one-shot)", re: "Stack guard, exception-based hooks" },
+                            { name: "PAGE_NOCACHE", val: "0x200", desc: "Non-cached memory", re: "Device memory, rare in usermode" },
+                          ].map((p) => (
+                            <TableRow key={p.name}>
+                              <TableCell><code>{p.name}</code></TableCell>
+                              <TableCell><code>{p.val}</code></TableCell>
+                              <TableCell>{p.desc}</TableCell>
+                              <TableCell><Typography variant="body2" color="text.secondary">{p.re}</Typography></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      <AlertTitle>Red Flag: PAGE_EXECUTE_READWRITE</AlertTitle>
+                      Memory with RWX permissions is a strong indicator of shellcode, unpacking stubs, or JIT compilation.
+                      Legitimate code rarely needs this. Modern mitigations like CFG and ACG restrict RWX allocations.
+                    </Alert>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Windows Heap Internals</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Typography paragraph>
+                      Windows uses a segment heap (Win10+) and the NT heap for memory allocation. Understanding heap structures
+                      is essential for heap exploitation, malware analysis, and debugging memory corruption.
+                    </Typography>
+                    <CodeBlock title="Heap Structure & Exploitation">{`┌─────────────────────────────────────────────────────────────┐
+│                     NT HEAP STRUCTURE                        │
+├─────────────────────────────────────────────────────────────┤
+│ HEAP (main structure at heap base)                          │
+│   +0x000 Segment              ; First segment               │
+│   +0x0C0 FreeListsInUse       ; Bitmap of used free lists   │
+│   +0x158 FreeLists[128]       ; Free block lists by size    │
+│   +0x178 LockVariable         ; Heap lock                   │
+│   +0x198 CommitRoutine        ; Custom commit function      │
+│                                                              │
+│ HEAP_ENTRY (8/16 bytes per allocation)                      │
+│   +0x000 Size                 ; Block size / 8              │
+│   +0x002 Flags                ; BUSY, EXTRA_PRESENT, etc.   │
+│   +0x003 SmallTagIndex        ; For heap debugging          │
+│   +0x004 PreviousSize         ; Previous block size         │
+│   +0x006 SegmentOffset        ; Segment index               │
+│   +0x007 UnusedBytes          ; Padding byte count          │
+└─────────────────────────────────────────────────────────────┘
+
+Heap Exploitation Concepts:
+1. Heap Overflow: Overwrite adjacent block metadata
+2. Use-After-Free: Access freed memory, control allocation
+3. Double Free: Corrupt free list, get same block twice
+4. Heap Spray: Fill heap with controlled data (NOP sleds)
+
+// Analyze heap in WinDbg:
+!heap -stat                  ; Heap statistics
+!heap -a <addr>              ; Analyze specific heap
+!heap -flt s <size>          ; Find blocks of specific size
+dt ntdll!_HEAP <addr>        ; Dump heap structure
+dt ntdll!_HEAP_ENTRY <addr>  ; Dump block header`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Stack Layout & Exploitation</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock title="x64 Stack Frame Layout">{`┌─────────────────────────────────────────────────────────────┐
+│                    x64 STACK FRAME                           │
+├─────────────────────────────────────────────────────────────┤
+│ [Higher Addresses]                                           │
+│                                                              │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Caller's Stack Frame                                    │ │
+│ │   Return Address (pushed by CALL)                       │ │
+│ │   Shadow Space (32 bytes for RCX, RDX, R8, R9)         │ │
+│ │   Stack Parameters (if > 4 args)                        │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Current Frame (callee)                                  │ │
+│ │   Saved RBP (if frame pointer used)        ← RBP        │ │
+│ │   Local Variables                                       │ │
+│ │   Saved Non-volatile Registers (RBX, RSI, RDI, R12-R15)│ │
+│ │   Red Zone (128 bytes, leaf functions only) ← RSP       │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ [Lower Addresses - Stack grows DOWN]                        │
+└─────────────────────────────────────────────────────────────┘
+
+x64 Calling Convention (Microsoft):
+- Args 1-4: RCX, RDX, R8, R9 (floats in XMM0-XMM3)
+- Args 5+:  Stack (right-to-left)
+- Return:   RAX (floats in XMM0)
+- Volatile: RAX, RCX, RDX, R8-R11, XMM0-XMM5
+- Non-vol:  RBX, RBP, RDI, RSI, RSP, R12-R15, XMM6-XMM15
+
+Stack Canary (GS Cookie):
+- Placed between locals and return address
+- Checked before return: __security_check_cookie
+- XOR'd with RSP to make prediction harder
+
+// Bypass stack canary:
+1. Information leak to read canary value
+2. Overwrite SEH handler (if available)
+3. Arbitrary write to bypass check entirely`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Memory Security Mitigations</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      {[
+                        { name: "ASLR", desc: "Address Space Layout Randomization", detail: "Randomizes base addresses of EXE, DLLs, heap, stack. Bypass: info leak, partial overwrite, heap spray", flag: "IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE (0x40)" },
+                        { name: "DEP/NX", desc: "Data Execution Prevention", detail: "Non-executable stack/heap. Bypass: ROP chains to call VirtualProtect or mprotect", flag: "IMAGE_DLLCHARACTERISTICS_NX_COMPAT (0x100)" },
+                        { name: "CFG", desc: "Control Flow Guard", detail: "Validates indirect call targets. Bypass: call valid targets, corrupt CFG bitmap", flag: "IMAGE_DLLCHARACTERISTICS_GUARD_CF (0x4000)" },
+                        { name: "ACG", desc: "Arbitrary Code Guard", detail: "Prevents RWX memory, blocks VirtualProtect to +X. Very hard to bypass", flag: "SetProcessMitigationPolicy" },
+                        { name: "CIG", desc: "Code Integrity Guard", detail: "Only signed DLLs can load. Blocks reflective DLL injection", flag: "SetProcessMitigationPolicy" },
+                        { name: "CET", desc: "Control-flow Enforcement", detail: "Hardware shadow stack for return addresses (Intel CET). Very strong protection", flag: "CPU feature + OS support" },
+                      ].map((m) => (
+                        <Grid item xs={12} md={6} key={m.name}>
+                          <Card variant="outlined" sx={{ height: "100%" }}>
+                            <CardContent>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                                <Typography variant="subtitle1" fontWeight="bold" color="primary">{m.name}</Typography>
+                                <Chip label={m.desc} size="small" variant="outlined" />
+                              </Box>
+                              <Typography variant="body2" paragraph>{m.detail}</Typography>
+                              <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>{m.flag}</Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Memory Analysis Commands</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock title="WinDbg Memory Commands">{`# Memory inspection
+db <addr>           ; Display bytes
+dd <addr>           ; Display DWORDs  
+dq <addr>           ; Display QWORDs
+da/du <addr>        ; Display ASCII/Unicode string
+dps <addr>          ; Display pointers with symbols
+
+# Memory information
+!address            ; Full address space layout
+!address <addr>     ; Info about specific address
+!vprot <addr>       ; Virtual protection info
+!dh <module>        ; Display headers of module
+
+# Memory search
+s -a <start> L<len> "string"  ; Search ASCII
+s -u <start> L<len> "string"  ; Search Unicode
+s -b <start> L<len> <bytes>   ; Search bytes
+s -d <start> L<len> <dword>   ; Search DWORD
+
+# VAD (Virtual Address Descriptor) tree
+!vad                ; Display VAD tree
+!vad <addr> 1       ; Detailed VAD info
+
+# Example: Find RWX regions (shellcode indicator)
+.foreach (addr {!address -f:PAGE_EXECUTE_READWRITE}) { !address addr }
+
+# Example: Search for PE header in memory
+s -b 0 L7fffffff 4D 5A 90 00  ; Search for MZ header`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+              </Paper>
+            </Box>
+
+            {/* Section: Syscalls & NTAPI */}
+            <Box id="syscalls" sx={{ mb: 5, scrollMarginTop: "180px" }}>
+              <Paper sx={{ p: 4, borderRadius: 3 }}>
+                <Typography variant="h5" gutterBottom fontWeight="bold">Windows Syscalls & Native API</Typography>
+                
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  <strong>System calls</strong> represent the fundamental boundary between user-mode applications and the Windows 
+                  kernel. Every significant operation that a program performs — reading a file, allocating memory, creating a 
+                  process, or establishing a network connection — ultimately requires crossing this boundary. The Windows API 
+                  that programmers use (the Win32 API in kernel32.dll, user32.dll, etc.) is merely a high-level wrapper around 
+                  lower-level functions in ntdll.dll, which in turn execute the actual system call instructions that transition 
+                  into kernel mode. Understanding this layered architecture is crucial for both offensive security research and 
+                  defensive malware analysis.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  The <strong>Native API</strong> (functions prefixed with Nt or Zw in ntdll.dll) represents the true system 
+                  interface that Microsoft uses internally. These functions are largely undocumented, meaning Microsoft can 
+                  change them between Windows versions without notice. Functions like <code>NtAllocateVirtualMemory</code>, 
+                  <code>NtWriteVirtualMemory</code>, and <code>NtCreateThreadEx</code> provide the actual functionality that 
+                  higher-level APIs like <code>VirtualAlloc</code>, <code>WriteProcessMemory</code>, and <code>CreateRemoteThread</code> 
+                  build upon. The Native API offers more precise control and access to features not exposed through Win32.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  From a security perspective, the syscall boundary is where endpoint detection and response (EDR) products 
+                  traditionally place their monitoring hooks. By intercepting calls to ntdll.dll functions, security software 
+                  can observe and potentially block malicious operations like code injection, credential dumping, or lateral 
+                  movement. This has led to an arms race: modern malware increasingly uses <strong>direct syscalls</strong> — 
+                  executing the syscall instruction directly without going through ntdll.dll — to bypass these usermode hooks 
+                  entirely. Techniques like SysWhispers, Hell's Gate, and Halo's Gate have become standard tools in the red 
+                  team arsenal for syscall-based evasion.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+                  The syscall mechanism itself varies by architecture. On modern 64-bit Windows, the <code>syscall</code> 
+                  instruction is used, which transfers execution to the kernel's system service dispatcher (KiSystemCall64) 
+                  based on the syscall number in the EAX/RAX register. On 32-bit systems, either <code>sysenter</code> or 
+                  <code>int 0x2E</code> is used depending on CPU capabilities. The critical challenge for direct syscall 
+                  implementations is that syscall numbers are not stable — they change between Windows versions and even 
+                  between builds. A syscall number that works on Windows 10 1909 may crash on Windows 11 23H2. This is why 
+                  techniques that dynamically resolve syscall numbers at runtime (by reading from ntdll) have become essential.
+                </Typography>
+
+                <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+                  For reverse engineers analyzing malware, recognizing direct syscall patterns is critical. Telltale signs 
+                  include the presence of <code>mov r10, rcx</code> and <code>mov eax, [number]</code> followed by <code>syscall</code> 
+                  instruction sequences outside of ntdll.dll, or the use of known syscall evasion libraries. Defensive tools 
+                  are adapting with kernel-mode ETW (Event Tracing for Windows) providers and syscall filtering mechanisms that 
+                  cannot be bypassed from usermode. The cat-and-mouse game between syscall evasion and detection continues to 
+                  evolve rapidly, making this knowledge essential for anyone working in Windows security.
+                </Typography>
+
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                  <AlertTitle>Why Syscalls Matter for Security</AlertTitle>
+                  Security products (AV/EDR) typically hook Win32 APIs and ntdll functions. Direct syscalls bypass these hooks entirely.
+                  Malware using direct syscalls is harder to detect and analyze with usermode tools. Kernel-level monitoring via ETW
+                  and minifilter drivers is increasingly necessary to catch syscall-based evasion techniques.
+                </Alert>
+
+                <Accordion defaultExpanded>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Syscall Architecture</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock title="Windows System Call Flow">{`┌─────────────────────────────────────────────────────────────────┐
+│                    USER MODE                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Application                                                     │
+│       │                                                          │
+│       ▼                                                          │
+│  kernel32.dll / kernelbase.dll                                  │
+│  (CreateFile, VirtualAlloc, etc.)                               │
+│       │                                                          │
+│       ▼                                                          │
+│  ntdll.dll   ←── EDR hooks often placed here                    │
+│  (NtCreateFile, NtAllocateVirtualMemory)                        │
+│       │                                                          │
+│       │  syscall instruction (x64)                               │
+│       │  int 0x2E or sysenter (x86)                             │
+│       ▼                                                          │
+├─────────────────────────────────────────────────────────────────┤
+│                    KERNEL MODE                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ntoskrnl.exe / win32k.sys                                      │
+│  (Nt* / Zw* functions)                                          │
+│       │                                                          │
+│       ▼                                                          │
+│  Hardware / HAL                                                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+Syscall Stub in ntdll.dll (x64):
+  mov r10, rcx          ; Save first arg
+  mov eax, <syscall#>   ; Syscall number (OS version specific!)
+  syscall               ; Transition to kernel
+  ret                   ; Return to caller
+
+Syscall Numbers Change Per Build!
+- Windows 10 1809: NtAllocateVirtualMemory = 0x18
+- Windows 10 21H2: NtAllocateVirtualMemory = 0x18
+- Windows 11:      NtAllocateVirtualMemory = 0x18
+Always resolve dynamically or use version-specific tables.`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Common Native API Functions</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
+                            <TableCell><strong>Native API (Nt*)</strong></TableCell>
+                            <TableCell><strong>Win32 Equivalent</strong></TableCell>
+                            <TableCell><strong>Purpose</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {[
+                            { nt: "NtAllocateVirtualMemory", win32: "VirtualAlloc(Ex)", purpose: "Allocate virtual memory" },
+                            { nt: "NtProtectVirtualMemory", win32: "VirtualProtect(Ex)", purpose: "Change memory protection" },
+                            { nt: "NtWriteVirtualMemory", win32: "WriteProcessMemory", purpose: "Write to process memory" },
+                            { nt: "NtReadVirtualMemory", win32: "ReadProcessMemory", purpose: "Read from process memory" },
+                            { nt: "NtCreateThreadEx", win32: "CreateRemoteThread", purpose: "Create thread (remote capable)" },
+                            { nt: "NtOpenProcess", win32: "OpenProcess", purpose: "Open process handle" },
+                            { nt: "NtCreateFile", win32: "CreateFile", purpose: "Create/open file" },
+                            { nt: "NtQueryInformationProcess", win32: "GetProcessInformation", purpose: "Query process info (debug detection)" },
+                            { nt: "NtSetInformationThread", win32: "SetThreadInformation", purpose: "Set thread info (hide from debugger)" },
+                            { nt: "NtMapViewOfSection", win32: "MapViewOfFile", purpose: "Map section into address space" },
+                            { nt: "NtUnmapViewOfSection", win32: "UnmapViewOfFile", purpose: "Unmap section (process hollowing)" },
+                            { nt: "NtQueueApcThread", win32: "QueueUserAPC", purpose: "Queue APC (injection technique)" },
+                          ].map((api) => (
+                            <TableRow key={api.nt}>
+                              <TableCell><code>{api.nt}</code></TableCell>
+                              <TableCell><code>{api.win32}</code></TableCell>
+                              <TableCell><Typography variant="body2">{api.purpose}</Typography></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Direct Syscall Implementation</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Typography paragraph>
+                      Direct syscalls bypass all usermode hooks by invoking the kernel directly. This technique is used by
+                      advanced malware and red team tools. The main challenge is handling version-specific syscall numbers.
+                    </Typography>
+                    <CodeBlock title="Direct Syscall Techniques">{`// Method 1: Hardcoded syscall stub (version-specific)
+// DANGEROUS: Syscall numbers change between Windows versions!
+__asm {
+    mov r10, rcx
+    mov eax, 0x18          ; NtAllocateVirtualMemory on some versions
+    syscall
+    ret
+}
+
+// Method 2: Read syscall number from ntdll (safer)
+DWORD GetSyscallNumber(const char* funcName) {
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    FARPROC func = GetProcAddress(ntdll, funcName);
+    if (!func) return 0;
+    
+    // Syscall stub: mov r10, rcx; mov eax, <num>; syscall
+    // Bytes:        4C 8B D1      B8 XX XX XX XX  0F 05
+    BYTE* code = (BYTE*)func;
+    if (code[0] == 0x4C && code[1] == 0x8B && code[2] == 0xD1 &&
+        code[3] == 0xB8) {
+        return *(DWORD*)(code + 4);  // Extract syscall number
+    }
+    return 0;  // Hooked or unexpected pattern
+}
+
+// Method 3: SysWhispers-style (generate syscall stubs)
+// Uses MASM to create direct syscall functions
+// https://github.com/jthuraisamy/SysWhispers2
+
+// Method 4: Hell's Gate (runtime syscall resolution)
+// Walks ntdll export table, finds clean syscall stubs
+// Works even when ntdll is hooked (reads from other copies)
+// https://github.com/am0nsec/HellsGate
+
+// Example: Direct NtAllocateVirtualMemory
+NTSTATUS NTAPI DirectNtAllocateVirtualMemory(
+    HANDLE ProcessHandle,
+    PVOID* BaseAddress,
+    ULONG_PTR ZeroBits,
+    PSIZE_T RegionSize,
+    ULONG AllocationType,
+    ULONG Protect
+);
+
+// Assembly implementation (MASM syntax):
+DirectNtAllocateVirtualMemory PROC
+    mov r10, rcx              ; ProcessHandle
+    mov eax, syscall_number   ; Resolved at runtime
+    syscall
+    ret
+DirectNtAllocateVirtualMemory ENDP`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Syscall Evasion Techniques</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                      {[
+                        { name: "Hell's Gate", desc: "Dynamically resolve syscall numbers by walking ntdll exports", bypass: "Reads syscall # from memory", detection: "Medium" },
+                        { name: "Halo's Gate", desc: "If function is hooked, search nearby functions for clean stubs", bypass: "Falls back to neighbors", detection: "Medium" },
+                        { name: "Tartarus' Gate", desc: "Search for syscall instruction in ntdll, calculate number from offset", bypass: "Pattern matching", detection: "Medium-Hard" },
+                        { name: "SysWhispers", desc: "Generate syscall stubs at compile time with version detection", bypass: "No ntdll dependency", detection: "Hard" },
+                        { name: "Fresh Copy", desc: "Read clean ntdll from disk or KnownDlls section", bypass: "Avoids in-memory hooks", detection: "Medium" },
+                        { name: "Manual Mapping", desc: "Manually map ntdll to new location, use that copy", bypass: "Complete hook bypass", detection: "Hard" },
+                      ].map((tech) => (
+                        <Grid item xs={12} md={6} key={tech.name}>
+                          <Card variant="outlined">
+                            <CardContent>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                                <Typography variant="subtitle1" fontWeight="bold" color="primary">{tech.name}</Typography>
+                                <Chip label={`Detection: ${tech.detection}`} size="small" variant="outlined" 
+                                  color={tech.detection === "Hard" ? "success" : tech.detection === "Medium-Hard" ? "warning" : "default"} />
+                              </Box>
+                              <Typography variant="body2" paragraph>{tech.desc}</Typography>
+                              <Typography variant="caption" color="text.secondary">{tech.bypass}</Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Detecting Hooked Functions</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CodeBlock title="Hook Detection Techniques">{`// Detect inline hooks (JMP/CALL at function start)
+BOOL IsHooked(FARPROC funcAddr) {
+    BYTE* code = (BYTE*)funcAddr;
+    
+    // Check for JMP (E9) or CALL (E8) at start
+    if (code[0] == 0xE9 || code[0] == 0xE8) {
+        return TRUE;  // Inline hook
+    }
+    
+    // Check for MOV RAX, addr; JMP RAX pattern
+    if (code[0] == 0x48 && code[1] == 0xB8) {
+        // 48 B8 XX XX XX XX XX XX XX XX = mov rax, imm64
+        if (code[10] == 0xFF && code[11] == 0xE0) {
+            return TRUE;  // JMP RAX
+        }
+    }
+    
+    // Expected ntdll syscall stub start:
+    // 4C 8B D1 = mov r10, rcx
+    // B8 XX XX XX XX = mov eax, syscall#
+    if (code[0] != 0x4C || code[1] != 0x8B || code[2] != 0xD1) {
+        return TRUE;  // Not expected pattern = hooked
+    }
+    
+    return FALSE;
+}
+
+// Compare with disk copy to detect patches
+BOOL CompareWithDisk(const char* funcName) {
+    // Read ntdll from disk
+    HANDLE hFile = CreateFileA("C:\\\\Windows\\\\System32\\\\ntdll.dll",
+        GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    
+    // Map file, find export, compare bytes...
+    // If different = hooked
+}
+
+// Example output of hook scanner:
+// ntdll.dll!NtAllocateVirtualMemory - CLEAN
+// ntdll.dll!NtCreateThreadEx - HOOKED (JMP detected)
+// ntdll.dll!NtWriteVirtualMemory - HOOKED (bytes modified)`}</CodeBlock>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography fontWeight="bold">Syscall Resources & Tools</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      {[
+                        { name: "SysWhispers2/3", desc: "Generate direct syscall stubs for your project", url: "github.com/jthuraisamy/SysWhispers2" },
+                        { name: "Hell's Gate", desc: "Runtime syscall number resolution", url: "github.com/am0nsec/HellsGate" },
+                        { name: "SyscallTables", desc: "Complete Windows syscall number database", url: "github.com/j00ru/windows-syscalls" },
+                        { name: "ntdll-sys", desc: "Rust bindings for Windows syscalls", url: "crates.io/crates/ntapi" },
+                        { name: "InlineWhispers", desc: "Inline assembly syscalls for C/C++", url: "github.com/outflanknl/InlineWhispers" },
+                        { name: "SharpWhispers", desc: "Direct syscalls for .NET", url: "github.com/jthuraisamy/SharpWhispers" },
+                      ].map((tool) => (
+                        <Grid item xs={12} md={6} key={tool.name}>
+                          <Card variant="outlined">
+                            <CardContent>
+                              <Typography variant="subtitle1" fontWeight="bold" color="primary">{tool.name}</Typography>
+                              <Typography variant="body2">{tool.desc}</Typography>
+                              <Typography variant="caption" color="text.secondary">{tool.url}</Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              </Paper>
+            </Box>
+
             {/* Section: API Patterns */}
-            <Box id="api-patterns" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="api-patterns" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Windows API Patterns</Typography>
-            <Typography paragraph>
-              Identifying suspicious API calls and their combinations is crucial for malware analysis. 
-              Understanding typical API sequences helps identify malicious behavior like code injection,
-              persistence mechanisms, and data exfiltration.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              One of the most powerful techniques in malware analysis is <strong>behavioral pattern recognition</strong> — 
+              identifying sequences of Windows API calls that, when combined, indicate specific malicious activities. While a 
+              single call to <code>VirtualAlloc</code> is innocuous (programs allocate memory constantly), the combination of 
+              <code>VirtualAlloc</code> with <code>PAGE_EXECUTE_READWRITE</code> permissions, followed by memory copying and 
+              thread creation, is a classic shellcode execution pattern that should immediately raise red flags. Developing 
+              an intuition for these patterns is essential for efficient triage and deep-dive analysis.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The Windows API is vast, encompassing thousands of functions across dozens of DLLs. For malware analysis, we 
+              can categorize APIs by their potential for abuse. <strong>Process manipulation APIs</strong> like <code>OpenProcess</code>, 
+              <code>CreateRemoteThread</code>, and <code>NtCreateThreadEx</code> enable code execution in other processes — a 
+              fundamental capability for injection attacks. <strong>Memory APIs</strong> like <code>VirtualAllocEx</code>, 
+              <code>WriteProcessMemory</code>, and <code>NtMapViewOfSection</code> allow reading and writing another process's 
+              memory. <strong>Persistence APIs</strong> involve registry manipulation (RegSetValueEx with Run keys), service 
+              creation (CreateService), scheduled task creation, or WMI subscriptions. Each category has characteristic patterns 
+              that analysts learn to recognize.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Dynamic API resolution</strong> is another critical pattern. Malware frequently avoids static imports 
+              (which appear in the PE import table and can be easily analyzed) by resolving function addresses at runtime 
+              using <code>GetProcAddress</code> or by directly walking the PEB's loaded module list and parsing export tables. 
+              Some malware goes further, using hash-based API resolution where function names are pre-computed hashes, making 
+              static analysis even more difficult. When you see calls to <code>GetModuleHandle</code> followed by 
+              <code>GetProcAddress</code>, or direct PEB manipulation to find DLL bases, the program is likely trying to hide 
+              its true capabilities from static analysis tools.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              Understanding API <strong>call flows</strong> is equally important. Legitimate programs typically follow predictable 
+              patterns: open file, read file, close file. Malware often exhibits anomalous patterns: allocate memory, copy 
+              encrypted data, decrypt in place, execute. Process injection follows a predictable flow: open target process, 
+              allocate memory in target, write payload to target, trigger execution (via remote thread, APC, or other technique). 
+              Process hollowing has its own signature: create suspended process, unmap original image, write new image, resume. 
+              Learning these flows helps you quickly categorize and understand unknown samples.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              The transition to <strong>Native API</strong> usage (Nt* and Zw* functions) is a significant indicator of 
+              sophistication. While legitimate software occasionally uses native APIs for functionality not exposed through 
+              Win32, heavy reliance on ntdll functions — especially combined with direct syscalls — suggests deliberate 
+              attempts to evade security monitoring. Tools like API Monitor, Process Monitor, and ETW-based solutions are 
+              essential for observing these patterns in action during dynamic analysis. Combining static import analysis with 
+              dynamic API monitoring gives you the complete picture of a sample's behavior.
             </Typography>
 
             <Alert severity="error" sx={{ mb: 3 }}>
@@ -2065,13 +3098,55 @@ ret`}</CodeBlock>
             </Box>
 
             {/* Section: Hooking */}
-            <Box id="hooking" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="hooking" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Hooking Techniques</Typography>
-            <Typography paragraph>
-              Hooking allows intercepting function calls to monitor, modify, or redirect execution.
-              Used by security tools (AV, EDR), debugging frameworks, and malware alike.
-              Understanding hooks is essential for both implementing and detecting them.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Hooking</strong> is the practice of intercepting function calls, system events, or messages to observe, 
+              modify, or redirect their behavior. This powerful technique sits at the heart of many security technologies and 
+              is equally essential for both attackers and defenders. Antivirus and EDR products hook Windows APIs to monitor 
+              for malicious activity; debuggers hook to enable breakpoints and tracing; rootkits hook to hide their presence; 
+              and game cheats hook to modify game behavior. For reverse engineers, understanding hooking is essential both 
+              for implementing analysis tools and for detecting when software is being monitored or tampered with.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              Hooks can be categorized by their mechanism. <strong>Code modification hooks</strong> physically alter the target 
+              code or data structures. Import Address Table (IAT) hooks replace function pointers in a module's import table, 
+              so calls to imported functions are redirected. Export Address Table (EAT) hooks modify the export table so that 
+              modules importing from the hooked DLL get redirected addresses. Inline hooks (also called detours or trampolines) 
+              patch the first bytes of the target function itself, inserting a jump to the hook handler. These are the most 
+              common techniques and are used extensively by both security software and malware.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Exception-based hooks</strong> use the CPU's debugging and exception mechanisms rather than modifying code. 
+              Hardware breakpoints use the CPU's debug registers (DR0-DR7) to trigger exceptions when specific addresses are 
+              executed, read, or written — these are completely invisible to code inspection since no bytes are modified. 
+              Vectored Exception Handlers (VEH) can catch these exceptions before structured exception handling, enabling 
+              powerful hooking frameworks. Page guard hooks use the PAGE_GUARD memory protection flag to trigger a one-shot 
+              exception when a page is first accessed. These techniques are stealthier than code modification but have limitations 
+              (hardware breakpoints are limited to 4 addresses; page guards can only trigger once per page).
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              At the <strong>kernel level</strong>, hooks become even more powerful but require elevated privileges. System 
+              Service Descriptor Table (SSDT) hooks intercept system calls before they reach the kernel, though this technique 
+              is largely blocked by Kernel Patch Protection (PatchGuard) on modern 64-bit Windows. Filter drivers (minifilters 
+              for file system, network filter drivers, etc.) provide Microsoft-sanctioned ways to intercept I/O operations. 
+              IRP hooks intercept driver communications. Callback mechanisms like PsSetCreateProcessNotifyRoutine provide 
+              official ways to monitor process creation. EDR vendors combine usermode hooks with kernel callbacks for 
+              comprehensive coverage.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              <strong>Detecting hooks</strong> is an important skill for malware analysis. Code modification hooks can be 
+              detected by comparing in-memory code against the original on-disk bytes — any discrepancy indicates modification. 
+              The first bytes of commonly hooked functions (like NtAllocateVirtualMemory in ntdll) can be checked for JMP or 
+              CALL instructions that shouldn't be there. Hardware breakpoints can be detected by reading the debug registers 
+              via GetThreadContext. Advanced malware scans for hooks as part of its anti-analysis routines, and sophisticated 
+              techniques exist to bypass detected hooks (reading clean ntdll from disk, manual mapping, direct syscalls).
             </Typography>
 
             <Alert severity="info" sx={{ mb: 3 }}>
@@ -2079,15 +3154,15 @@ ret`}</CodeBlock>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" fontWeight="bold">Code Modification</Typography>
-                  <Typography variant="body2">IAT, EAT, Inline hooks modify code/data</Typography>
+                  <Typography variant="body2">IAT, EAT, Inline hooks modify code/data — detectable by byte comparison</Typography>
                 </Grid>
                 <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" fontWeight="bold">Exception-Based</Typography>
-                  <Typography variant="body2">Hardware BP, VEH, Page Guard use exceptions</Typography>
+                  <Typography variant="body2">Hardware BP, VEH, Page Guard use exceptions — stealthier but limited</Typography>
                 </Grid>
                 <Grid item xs={12} md={4}>
                   <Typography variant="subtitle2" fontWeight="bold">Kernel-Level</Typography>
-                  <Typography variant="body2">SSDT, IRP, Filter drivers intercept syscalls</Typography>
+                  <Typography variant="body2">SSDT, IRP, Filter drivers intercept at kernel — requires privilege</Typography>
                 </Grid>
               </Grid>
             </Alert>
@@ -2302,13 +3377,57 @@ LONG CALLBACK VehHandler(PEXCEPTION_POINTERS pExInfo) {
             </Box>
 
             {/* Section: Injection */}
-            <Box id="injection" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="injection" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Code Injection Techniques</Typography>
-            <Typography paragraph>
-              Code injection allows executing code in another process's address space. Essential knowledge 
-              for understanding malware behavior, developing security tools, and EDR evasion research.
-              These techniques range from simple (easily detected) to advanced (stealthy).
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Code injection</strong> refers to a family of techniques that enable executing arbitrary code within 
+              the address space of another process. This capability is one of the most critical concepts in both offensive 
+              and defensive security. Malware uses injection to execute payloads in trusted processes (evading application 
+              whitelisting), to gain access to sensitive data in other processes (credential theft), to hide malicious activity 
+              behind legitimate process names (evasion), and to persist across process termination. Defensive tools use similar 
+              techniques for monitoring and instrumentation. Every malware analyst and security researcher must deeply understand 
+              these techniques to recognize them during analysis.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The fundamental requirement for most injection techniques is the ability to manipulate another process's memory 
+              and trigger code execution there. This typically involves three phases: <strong>opening the target process</strong> 
+              with appropriate access rights (PROCESS_VM_WRITE, PROCESS_VM_OPERATION, PROCESS_CREATE_THREAD), <strong>writing 
+              code or data</strong> into the target's address space (via WriteProcessMemory or section mapping), and 
+              <strong>triggering execution</strong> (via remote thread creation, APC queuing, context manipulation, or other 
+              means). Different techniques vary in how they accomplish each phase, with more sophisticated techniques using 
+              less detectable methods.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              The classic <strong>CreateRemoteThread + LoadLibrary</strong> technique is the most well-known: open the target, 
+              allocate memory for a DLL path string, write the path, and create a remote thread starting at LoadLibraryA with 
+              the path as its argument. Simple and effective, but heavily monitored by every EDR on the market. <strong>Process 
+              hollowing</strong> takes a different approach: create a legitimate process in suspended state, unmap its original 
+              image, write a malicious PE in its place, fix up the context, and resume. The malicious code runs under the 
+              identity of the original process. <strong>APC injection</strong> uses the Asynchronous Procedure Call mechanism 
+              to queue code execution in threads of the target process, executing when the thread enters an alertable wait state.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              More advanced techniques emerged to evade detection. <strong>Thread hijacking</strong> avoids creating new threads 
+              entirely by suspending an existing thread, modifying its instruction pointer to point at injected code, and resuming. 
+              <strong>Process doppelgänging</strong> abuses Windows transactional NTFS to create a process from a file that 
+              never actually exists on disk. <strong>AtomBombing</strong> uses the global atom table and APC to achieve injection 
+              without WriteProcessMemory. <strong>Early Bird</strong> injects before security software has a chance to hook the 
+              target process by targeting a suspended process before its entry point executes. <strong>Module stomping</strong> 
+              overwrites a legitimately loaded DLL's code section with malicious code, making the code appear backed by a real file.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              <strong>Detection approaches</strong> for injection have evolved alongside the techniques. Monitoring for 
+              suspicious combinations of process access rights, tracking cross-process memory operations, observing thread 
+              creation in foreign processes, checking for unbacked executable memory regions (memory not backed by a file on 
+              disk), and behavioral analysis of process relationships all contribute to detection. Modern EDR products 
+              implement kernel-mode callbacks (PsSetCreateThreadNotifyRoutine, etc.) that cannot be bypassed from usermode. 
+              Understanding both the attack techniques and their detection methods is essential for effective security research.
             </Typography>
 
             <Alert severity="warning" sx={{ mb: 3 }}>
@@ -2588,21 +3707,64 @@ LONG CALLBACK VehHandler(PEXCEPTION_POINTERS pExInfo) {
             </Box>
 
             {/* Section: Anti-Debug */}
-            <Box id="anti-debug" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="anti-debug" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Anti-Debugging Techniques</Typography>
-            <Typography paragraph>
-              Malware and protected software use various techniques to detect debuggers, VMs, and analysis environments.
-              Understanding these techniques is essential for bypassing protections during reverse engineering.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Anti-debugging</strong> refers to techniques that software uses to detect or hinder analysis by debuggers. 
+              Both malware and legitimate software (games, DRM systems, commercial applications) employ these techniques — 
+              malware to evade analysis, legitimate software to protect intellectual property or prevent cheating. For reverse 
+              engineers, understanding anti-debugging is essential not just for bypassing these protections, but also for 
+              recognizing them as behavioral indicators during malware analysis. Heavy use of anti-debugging techniques is 
+              itself suspicious and suggests the software has something to hide.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              Anti-debugging techniques can be categorized into several families. <strong>API-based checks</strong> use Windows 
+              functions designed to detect debugging, like <code>IsDebuggerPresent</code> (which simply checks the PEB.BeingDebugged 
+              flag) and <code>CheckRemoteDebuggerPresent</code> (which uses NtQueryInformationProcess internally). These are 
+              trivial to bypass but often serve as a first line of defense. <strong>Structure-based checks</strong> directly 
+              examine the PEB, TEB, and heap structures for debugging indicators — the NtGlobalFlag field (which has heap 
+              debugging flags set when a debugger launches the process), heap metadata flags, and the BeingDebugged flag itself 
+              accessed directly without API calls.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Timing-based checks</strong> exploit the fact that stepping through code in a debugger is vastly slower 
+              than normal execution. By measuring time between operations using RDTSC (CPU timestamp counter), GetTickCount, 
+              or QueryPerformanceCounter, software can detect the slowdown characteristic of debugging. These checks are 
+              harder to bypass because they don't rely on any specific flag or API — they measure real-world behavior. 
+              Solutions involve modifying the timing values returned or using specialized tools that compensate for debugging 
+              delays.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Exception-based checks</strong> are among the most interesting. The INT 3 instruction (breakpoint) raises 
+              an exception that debuggers catch; if the program's own exception handler doesn't run, a debugger is attached. 
+              The INT 2D instruction triggers special behavior in kernel debuggers — if one is attached, the byte following INT 
+              2D is skipped. Hardware breakpoints use the CPU's debug registers (DR0-DR7), which can be queried via 
+              GetThreadContext; if any DRx register contains a non-zero value, breakpoints are set. The trap flag in EFLAGS 
+              causes a single-step exception after each instruction; setting it and checking if the exception handler ran 
+              reveals debugger presence.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              <strong>Bypassing anti-debugging</strong> is a core skill for reverse engineers. Manual approaches include 
+              patching check instructions with NOPs, modifying PEB/TEB fields in the debugger, and using debugger plugins that 
+              automatically hide debugging artifacts. Tools like ScyllaHide (x64dbg plugin), TitanHide (kernel driver), and the 
+              built-in anti-anti-debug features in modern debuggers handle common techniques automatically. For sophisticated 
+              samples, you may need to trace through the anti-debug checks and patch them individually, or use emulation 
+              frameworks like Unicorn/Qiling that don't trigger any debugging artifacts because they're not actually debugging.
             </Typography>
 
             <Alert severity="info" sx={{ mb: 3 }}>
               <AlertTitle>Anti-Debug Categories</AlertTitle>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={3}><Typography variant="body2"><strong>API-Based:</strong> IsDebuggerPresent, CheckRemoteDebuggerPresent</Typography></Grid>
-                <Grid item xs={12} md={3}><Typography variant="body2"><strong>PEB/TEB Flags:</strong> BeingDebugged, NtGlobalFlag, Heap flags</Typography></Grid>
-                <Grid item xs={12} md={3}><Typography variant="body2"><strong>Timing:</strong> RDTSC, GetTickCount, QueryPerformanceCounter</Typography></Grid>
-                <Grid item xs={12} md={3}><Typography variant="body2"><strong>Exceptions:</strong> INT 2D, INT 3, trap flag, hardware breakpoints</Typography></Grid>
+                <Grid item xs={12} md={3}><Typography variant="body2"><strong>API-Based:</strong> IsDebuggerPresent, CheckRemoteDebuggerPresent, NtQueryInformationProcess</Typography></Grid>
+                <Grid item xs={12} md={3}><Typography variant="body2"><strong>PEB/TEB Flags:</strong> BeingDebugged, NtGlobalFlag, Heap flags, ProcessParameters</Typography></Grid>
+                <Grid item xs={12} md={3}><Typography variant="body2"><strong>Timing:</strong> RDTSC, GetTickCount, QueryPerformanceCounter, timeGetTime</Typography></Grid>
+                <Grid item xs={12} md={3}><Typography variant="body2"><strong>Exceptions:</strong> INT 2D, INT 3, trap flag, hardware breakpoints, CloseHandle</Typography></Grid>
               </Grid>
             </Alert>
 
@@ -2813,12 +3975,54 @@ if (ctx.Dr0 || ctx.Dr1 || ctx.Dr2 || ctx.Dr3) {
             </Box>
 
             {/* Section: Tools */}
-            <Box id="tools" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="tools" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <Paper sx={{ p: 4, borderRadius: 3 }}>
             <Typography variant="h5" gutterBottom fontWeight="bold">Essential RE Tools for Windows</Typography>
-            <Typography paragraph>
-              A well-equipped reverse engineering environment requires debuggers, disassemblers, monitoring tools,
-              and utilities. Here's a comprehensive toolkit for Windows RE work.
+            
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              A professional reverse engineering workflow relies on a carefully curated collection of tools, each serving 
+              specific purposes in the analysis process. The tools fall into several categories: <strong>static analysis 
+              tools</strong> (disassemblers and decompilers that analyze code without execution), <strong>dynamic analysis 
+              tools</strong> (debuggers and monitors that observe code during execution), <strong>behavioral monitoring 
+              tools</strong> (utilities that track file, registry, network, and API activity), and <strong>automation 
+              frameworks</strong> (scripting environments and libraries for building custom analysis tools). Mastery of 
+              these tools and knowing when to use each is what separates efficient analysts from those who struggle.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Static analysis</strong> forms the foundation of reverse engineering. Before executing unknown code 
+              (which may be malicious), analysts examine it statically to understand its structure, identify interesting 
+              functions, recognize known library code, and develop hypotheses about its behavior. Modern disassemblers like 
+              Ghidra and IDA Pro not only translate machine code to assembly but also recover high-level constructs through 
+              decompilation, dramatically accelerating analysis. They identify function boundaries, resolve cross-references, 
+              apply type information, and integrate with symbol servers to label known functions automatically.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Dynamic analysis</strong> complements static work by observing actual behavior. Debuggers let you 
+              execute code instruction by instruction, inspect memory and registers, set breakpoints at critical points, 
+              and trace execution flow. For Windows reverse engineering, x64dbg has become the standard open-source choice 
+              for usermode debugging, while WinDbg remains essential for kernel debugging and crash dump analysis. The 
+              ability to modify code and data during execution makes debugging invaluable for bypassing protections, 
+              understanding obfuscated code, and testing hypotheses developed during static analysis.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8 }}>
+              <strong>Behavioral monitoring</strong> reveals what software actually does without requiring deep code 
+              understanding. Process Monitor captures every file and registry operation, showing you exactly what 
+              persistence mechanisms are being established or what files are being accessed. API Monitor intercepts 
+              Windows API calls with full parameter logging, revealing what functions are being called and with what 
+              arguments. Network monitors capture communication attempts. These tools are often the fastest way to 
+              understand malware behavior and identify indicators of compromise.
+            </Typography>
+
+            <Typography paragraph sx={{ fontSize: "1.05rem", lineHeight: 1.8, mb: 3 }}>
+              <strong>Automation and scripting</strong> multiply your effectiveness. Python has become the lingua franca 
+              of security research, with libraries like pefile for PE parsing, capstone for disassembly, unicorn for 
+              emulation, and angr for symbolic execution. Writing scripts to automate repetitive tasks, extract configuration 
+              data from malware samples, or build custom deobfuscation tools is a critical skill. Both Ghidra (Python/Java) 
+              and IDA Pro (IDAPython) support scripting for extending their analysis capabilities, enabling automation of 
+              complex analysis tasks that would be impractical to perform manually.
             </Typography>
 
             <Alert severity="success" sx={{ mb: 3 }}>
@@ -3054,88 +4258,33 @@ dt ntdll!_TEB       # Dump TEB structure
             </Box>
 
             {/* Section: Quiz */}
-            <Box id="quiz" sx={{ mb: 5, scrollMarginTop: "20px" }}>
+            <Box id="quiz" sx={{ mb: 5, scrollMarginTop: "180px" }}>
               <QuizSection />
             </Box>
 
-          </Grid>
-        </Grid>
-
-        {/* Bottom Navigation */}
-        <Box sx={{ mt: 4, textAlign: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
-          >
-            Back to Learning Hub
-          </Button>
+            {/* Back to Learning Hub Button */}
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/learn")}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 3,
+                  fontWeight: 700,
+                  background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
+                  "&:hover": {
+                    background: `linear-gradient(135deg, #2563eb, #7c3aed)`,
+                  },
+                }}
+              >
+                Back to Learning Hub
+              </Button>
+            </Box>
+          </Box>
         </Box>
-      </Container>
-
-      {/* Mobile Navigation Drawer */}
-      <Drawer
-        anchor="left"
-        open={navDrawerOpen}
-        onClose={() => setNavDrawerOpen(false)}
-        sx={{
-          "& .MuiDrawer-paper": {
-            width: 280,
-            p: 2,
-            bgcolor: theme.palette.background.default,
-          },
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Navigation
-          </Typography>
-          <IconButton onClick={() => setNavDrawerOpen(false)}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-        {sidebarNav}
-      </Drawer>
-
-      {/* FAB Buttons */}
-      {isMobile && (
-        <Fab
-          color="primary"
-          size="medium"
-          onClick={() => setNavDrawerOpen(true)}
-          sx={{
-            position: "fixed",
-            bottom: 80,
-            right: 16,
-            bgcolor: "#3b82f6",
-            "&:hover": { bgcolor: "#2563eb" },
-          }}
-        >
-          <ListAltIcon />
-        </Fab>
-      )}
-      <Fab
-        size="small"
-        onClick={scrollToTop}
-        sx={{
-          position: "fixed",
-          bottom: 24,
-          right: 16,
-          bgcolor: alpha("#3b82f6", 0.9),
-          color: "white",
-          "&:hover": { bgcolor: "#3b82f6" },
-        }}
-      >
-        <KeyboardArrowUpIcon />
-      </Fab>
     </LearnPageLayout>
   );
 };

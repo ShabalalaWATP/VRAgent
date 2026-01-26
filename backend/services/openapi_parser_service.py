@@ -385,10 +385,16 @@ class OpenAPIParser:
         self.result: ParsedAPISpec = ParsedAPISpec()
         self._resolved_refs: Dict[str, Any] = {}
     
-    async def parse_url(self, url: str, headers: Optional[Dict[str, str]] = None) -> ParsedAPISpec:
-        """Parse an OpenAPI spec from a URL."""
+    async def parse_url(self, url: str, headers: Optional[Dict[str, str]] = None, verify_ssl: bool = True) -> ParsedAPISpec:
+        """Parse an OpenAPI spec from a URL.
+
+        Args:
+            url: URL to fetch the OpenAPI spec from
+            headers: Optional HTTP headers
+            verify_ssl: Whether to verify SSL certificates (default True)
+        """
         try:
-            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            async with httpx.AsyncClient(timeout=30.0, verify=verify_ssl) as client:
                 response = await client.get(url, headers=headers or {})
                 response.raise_for_status()
                 
@@ -818,9 +824,15 @@ COMMON_SPEC_PATHS = [
 ]
 
 
-async def discover_openapi_spec(base_url: str, headers: Optional[Dict[str, str]] = None) -> Optional[str]:
-    """Try to discover an OpenAPI spec at common paths."""
-    async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+async def discover_openapi_spec(base_url: str, headers: Optional[Dict[str, str]] = None, verify_ssl: bool = True) -> Optional[str]:
+    """Try to discover an OpenAPI spec at common paths.
+
+    Args:
+        base_url: Base URL to search for OpenAPI spec
+        headers: Optional HTTP headers
+        verify_ssl: Whether to verify SSL certificates (default True)
+    """
+    async with httpx.AsyncClient(timeout=10.0, verify=verify_ssl) as client:
         for path in COMMON_SPEC_PATHS:
             try:
                 url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))

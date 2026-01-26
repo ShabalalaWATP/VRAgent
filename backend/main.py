@@ -7,7 +7,8 @@ from backend.core.config import settings
 from backend.core.database import Base, engine
 from backend.core.exceptions import VRAgentError
 from backend.core.logging import get_logger
-from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files, kanban, compliance, ai_analysis, fuzzer_reports, interactive_replay, agentic_fuzzer, whiteboard, whiteboard_ws, notes_websocket, kanban_ws, combined_analysis, api_collections
+from backend.core.security_middleware import SecurityHeadersMiddleware
+from backend.routers import projects, scans, reports, exports, exploitability, websocket, webhooks, pcap, network, dns, traceroute, api_tester, fuzzing, mitm, vulnhuntr, auth, admin, agentic_scan, findings, reverse_engineering, learn_chat, social, chat_websocket, project_files, kanban, compliance, ai_analysis, fuzzer_reports, interactive_replay, agentic_fuzzer, whiteboard, whiteboard_ws, notes_websocket, kanban_ws, combined_analysis, api_collections, zap, coverage, dynamic_scan, protocol_network, agentic_binary, android_fuzzer, jwt_security, malware_analysis, unified_binary_scanner, health, secure_files
 from backend import models  # noqa: F401  # ensure models are registered
 
 logger = get_logger(__name__)
@@ -27,19 +28,52 @@ app = FastAPI(
     redoc_url="/redoc" if settings.environment != "production" else None,
 )
 
-# Configure CORS - restrict in production
-allowed_origins = ["*"] if settings.environment == "development" else [
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+# Configure CORS
+# In development, allow all origins for flexibility (local network access, etc.)
+# In production, restrict to specific origins via CORS_ORIGINS env var
+cors_origins_env = os.getenv("CORS_ORIGINS", "")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if cors_origins_env:
+    # Explicit origins configured - use them in any environment
+    allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    )
+elif settings.environment == "development":
+    # Development: allow all origins for flexibility (LAN access, etc.)
+    # Note: allow_credentials=False is required when using wildcard origins
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Production without CORS_ORIGINS: restrict to common localhost ports
+    logger.warning(
+        "CORS_ORIGINS not configured for production. "
+        "Set CORS_ORIGINS environment variable for proper security."
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    )
+
+# Add security headers middleware (runs after CORS)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Add rate limiting middleware in production
 if ENABLE_RATE_LIMITING:
@@ -54,7 +88,7 @@ async def vragent_exception_handler(request: Request, exc: VRAgentError):
     """Handle custom VRAgent exceptions with structured response."""
     logger.warning(f"VRAgent error: {exc.error_code} - {exc.message}", extra=exc.details)
     return JSONResponse(
-        status_code=400 if exc.error_code.endswith("NOT_FOUND") else 422,
+        status_code=404 if exc.error_code.endswith("NOT_FOUND") else 422,
         content={
             "error": exc.error_code,
             "message": exc.message,
@@ -78,9 +112,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(admin.router, tags=["admin"])
+app.include_router(health.router, tags=["health"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(scans.router, prefix="/projects", tags=["scans"])
 app.include_router(reports.router, prefix="/projects/{project_id}/reports", tags=["reports"])
+app.include_router(reports.global_router, prefix="/reports", tags=["reports-global"])  # For /recent endpoint
 app.include_router(exports.router, prefix="/reports", tags=["exports"])
 app.include_router(exploitability.router, prefix="/reports", tags=["exploitability"])
 app.include_router(webhooks.router, prefix="/projects", tags=["webhooks"])
@@ -112,23 +148,28 @@ app.include_router(notes_websocket.router, tags=["notes-websocket"])
 app.include_router(kanban_ws.router, tags=["kanban-websocket"])
 app.include_router(combined_analysis.router, prefix="/combined-analysis", tags=["combined-analysis"])
 app.include_router(api_collections.router, tags=["api-collections"])
+app.include_router(zap.router, tags=["owasp-zap"])
+app.include_router(coverage.router, tags=["coverage-analysis"])
+app.include_router(dynamic_scan.router, tags=["dynamic-security-scanner"])
+app.include_router(protocol_network.router, tags=["protocol-fuzzer"])
+app.include_router(agentic_binary.router, tags=["agentic-binary-fuzzer"])
+app.include_router(android_fuzzer.router, tags=["android-fuzzer"])
+app.include_router(jwt_security.router, tags=["jwt-security"])
+app.include_router(malware_analysis.router, tags=["malware-analysis"])
+app.include_router(unified_binary_scanner.router, tags=["unified-binary-scanner"])
 
-# Serve uploaded chat files
-from starlette.staticfiles import StaticFiles
+# Secure file download endpoints (with authentication and authorization)
+app.include_router(secure_files.router, tags=["secure-files"])
+
+# Create upload directories (files are served via secure_files router, not StaticFiles)
+# SECURITY: Do NOT use StaticFiles for user uploads - it bypasses authentication!
 import os
 CHAT_UPLOAD_DIR = os.path.join(settings.upload_dir, "chat")
 os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
-app.mount("/api/uploads/chat", StaticFiles(directory=CHAT_UPLOAD_DIR), name="chat-uploads")
-
-# Serve uploaded project files
 PROJECT_FILES_DIR = os.path.join(settings.upload_dir, "project_files")
 os.makedirs(PROJECT_FILES_DIR, exist_ok=True)
-app.mount("/api/uploads/project_files", StaticFiles(directory=PROJECT_FILES_DIR), name="project-files-uploads")
-
-# Serve uploaded project documents (AI-analyzed)
 PROJECT_DOCS_DIR = os.path.join(settings.upload_dir, "project_documents")
 os.makedirs(PROJECT_DOCS_DIR, exist_ok=True)
-app.mount("/api/uploads/project_documents", StaticFiles(directory=PROJECT_DOCS_DIR), name="project-documents-uploads")
 
 
 @app.get("/health")
@@ -190,6 +231,39 @@ def health_detailed():
     else:
         health_status["services"]["semgrep"] = {"status": "not_installed", "message": "Deep static analysis unavailable"}
     
+    # Check OWASP ZAP
+    try:
+        from backend.services.zap_service import zap_health_check
+        import asyncio
+        zap_health = asyncio.get_event_loop().run_until_complete(zap_health_check())
+        if zap_health.get("available"):
+            health_status["services"]["zap"] = {"status": "available", "version": zap_health.get("version")}
+        else:
+            health_status["services"]["zap"] = {"status": "unavailable", "error": zap_health.get("error")}
+    except Exception as e:
+        health_status["services"]["zap"] = {"status": "error", "message": str(e)}
+    
+    # Check Offline Data Availability
+    try:
+        from backend.services.nvd_service import get_local_db_stats
+        from backend.services.exploit_db_service import get_offline_status
+        
+        # NVD local database
+        nvd_stats = get_local_db_stats()
+        health_status["services"]["nvd_offline"] = {
+            "status": "available" if nvd_stats.get("available") else "not_synced",
+            **nvd_stats
+        }
+        
+        # Exploit databases (ExploitDB + Nuclei)
+        exploit_status = get_offline_status()
+        health_status["services"]["exploit_db_offline"] = {
+            "status": "available" if exploit_status.get("exploitdb_available") or exploit_status.get("nuclei_available") else "not_synced",
+            **exploit_status
+        }
+    except Exception as e:
+        health_status["services"]["offline_data"] = {"status": "error", "message": str(e)}
+    
     return health_status
 
 
@@ -227,12 +301,67 @@ def clear_cache_namespace(namespace: str):
 @app.on_event("startup")
 async def startup_event():
     """Log application startup and start background services."""
+    import asyncio
     logger.info(f"VRAgent API starting in {settings.environment} mode")
-    
+
+    # Create default admin user if no users exist
+    try:
+        from backend.core.database import SessionLocal
+        from backend.services.auth_service import count_users, create_user, get_user_by_username
+
+        db = SessionLocal()
+        try:
+            user_count = count_users(db)
+            if user_count == 0:
+                # Create default admin account
+                admin_user = create_user(
+                    db=db,
+                    email="admin@vragent.local",
+                    username="admin",
+                    password="admin",
+                    role="admin",
+                    status="approved",
+                )
+                logger.warning("=" * 60)
+                logger.warning("DEFAULT ADMIN ACCOUNT CREATED")
+                logger.warning("Username: admin")
+                logger.warning("Password: admin")
+                logger.warning("SECURITY WARNING: Change this password immediately!")
+                logger.warning("Create your own admin account and delete this one.")
+                logger.warning("=" * 60)
+            else:
+                # Check if default admin still exists and warn
+                default_admin = get_user_by_username(db, "admin")
+                if default_admin and default_admin.email == "admin@vragent.local":
+                    logger.warning("=" * 60)
+                    logger.warning("DEFAULT ADMIN ACCOUNT STILL EXISTS!")
+                    logger.warning("Please create your own admin account and delete the default one.")
+                    logger.warning("=" * 60)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error checking/creating default admin: {e}")
+
     # Start Redis pub/sub subscriber for WebSocket progress updates
     from backend.services.websocket_service import progress_manager
     await progress_manager.start_subscriber()
     logger.info("Started Redis pub/sub subscriber for scan progress")
+    
+    # Start reverse engineering cleanup background tasks
+    from backend.routers.reverse_engineering import (
+        cleanup_old_jadx_cache,
+        cleanup_old_notes_storage,
+        cleanup_orphaned_temp_dirs,
+        cleanup_stale_scan_sessions,
+    )
+    asyncio.create_task(cleanup_old_jadx_cache())
+    asyncio.create_task(cleanup_old_notes_storage())
+    asyncio.create_task(cleanup_stale_scan_sessions())
+    logger.info("Started reverse engineering cleanup background tasks")
+    
+    # Clean orphaned temp directories from previous sessions on startup
+    await cleanup_orphaned_temp_dirs()
+    logger.info("Cleaned up orphaned temp directories from previous sessions")
 
 
 @app.on_event("shutdown")

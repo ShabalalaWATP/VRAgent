@@ -73,6 +73,8 @@ import HistoryIcon from "@mui/icons-material/History";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import HttpsIcon from "@mui/icons-material/Https";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ReactMarkdown from "react-markdown";
 import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import { apiClient } from "../api/client";
@@ -347,6 +349,71 @@ interface ALPNAnalysis {
   recommendations: string[];
 }
 
+// === NEW ENHANCED ANALYSIS INTERFACES ===
+
+// SSL Grade (like SSL Labs A+ to F)
+interface SSLGrade {
+  grade: string;
+  numeric_score: number;
+  grade_cap: string | null;
+  cap_reasons: string[];
+  deductions: Array<{ item: string; points: number; cap?: string; reason?: string; }>;
+  grade_details: string;
+  protocol_score: number;
+  cipher_score: number;
+  certificate_score: number;
+  key_exchange_score: number;
+}
+
+// Mozilla TLS Compliance
+interface MozillaComplianceResult {
+  profile_tested: string;
+  is_compliant: boolean;
+  compliance_score: number;
+  violations: Array<{ type: string; severity: string; issue: string; expected?: string; }>;
+  recommendations: string[];
+  protocol_compliance: boolean;
+  cipher_compliance: boolean;
+  certificate_compliance: boolean;
+  hsts_compliance: boolean;
+}
+
+// Client Browser Compatibility
+interface ClientCompatibilityResult {
+  clients_tested: number;
+  compatible_clients: Array<{ client: string; protocol: string | null; cipher: string | null; }>;
+  incompatible_clients: Array<{ client: string; reason: string; }>;
+  handshake_simulations: Array<{
+    client_id: string;
+    client_name: string;
+    compatible: boolean;
+    protocol_matched: string | null;
+    cipher_matched: string | null;
+    pq_support: boolean;
+  }>;
+}
+
+// Post-Quantum Cryptography Analysis
+interface PostQuantumAnalysis {
+  pq_ready: boolean;
+  hybrid_support: boolean;
+  supported_kems: string[];
+  supported_signatures: string[];
+  nist_compliant: boolean;
+  future_proof_score: number;
+  recommendations: string[];
+}
+
+// STARTTLS Information
+interface STARTTLSInfo {
+  protocol: string;
+  starttls_supported: boolean;
+  starttls_required: boolean;
+  plain_auth_before_tls: boolean;
+  implicit_tls_supported: boolean;
+  stripping_possible: boolean;
+}
+
 interface SSLScanResult {
   host: string;
   port: number;
@@ -375,6 +442,12 @@ interface SSLScanResult {
   sweet32_analysis: Sweet32Analysis | null;
   compression_attacks: CompressionAttackAnalysis | null;
   alpn_analysis: ALPNAnalysis | null;
+  // NEW: Enhanced Analysis Features
+  ssl_grade: SSLGrade | null;
+  mozilla_compliance: MozillaComplianceResult | null;
+  client_compatibility: ClientCompatibilityResult | null;
+  post_quantum_analysis: PostQuantumAnalysis | null;
+  starttls_info: STARTTLSInfo | null;
 }
 
 interface SSLScanSummary {
@@ -609,6 +682,9 @@ const SSLScannerPage: React.FC = () => {
   // JARM Database state
   const [jarmSearchOpen, setJarmSearchOpen] = useState(false);
   const [jarmSearchQuery, setJarmSearchQuery] = useState("");
+
+  // User Guide state
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const theme = useTheme();
 
@@ -1636,7 +1712,7 @@ ${results.ai_analysis?.structured_report?.executive_summary || results.ai_analys
       <Box sx={{ mb: 4 }}>
         <Button
           component={Link}
-          to="/network"
+          to="/dynamic"
           startIcon={<ArrowBackIcon />}
           sx={{ mb: 2 }}
         >
@@ -1665,23 +1741,41 @@ ${results.ai_analysis?.structured_report?.executive_summary || results.ai_analys
             </Typography>
           </Box>
         </Box>
-        <Chip
-          component={Link}
-          to="/learn/ssl-tls"
-          icon={<MenuBookIcon sx={{ fontSize: 16 }} />}
-          label="Learn About SSL/TLS Security →"
-          clickable
-          size="small"
-          sx={{
-            background: alpha("#10b981", 0.1),
-            border: `1px solid ${alpha("#10b981", 0.3)}`,
-            color: "#34d399",
-            fontWeight: 500,
-            "&:hover": {
-              background: alpha("#10b981", 0.2),
-            },
-          }}
-        />
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Chip
+            icon={<HelpOutlineIcon sx={{ fontSize: 16 }} />}
+            label="User Guide"
+            clickable
+            size="small"
+            onClick={() => setGuideOpen(true)}
+            sx={{
+              background: alpha("#0891b2", 0.1),
+              border: `1px solid ${alpha("#0891b2", 0.3)}`,
+              color: "#22d3ee",
+              fontWeight: 500,
+              "&:hover": {
+                background: alpha("#0891b2", 0.2),
+              },
+            }}
+          />
+          <Chip
+            component={Link}
+            to="/learn/ssl-tls"
+            icon={<MenuBookIcon sx={{ fontSize: 16 }} />}
+            label="Learn About SSL/TLS Security →"
+            clickable
+            size="small"
+            sx={{
+              background: alpha("#10b981", 0.1),
+              border: `1px solid ${alpha("#10b981", 0.3)}`,
+              color: "#34d399",
+              fontWeight: 500,
+              "&:hover": {
+                background: alpha("#10b981", 0.2),
+              },
+            }}
+          />
+        </Box>
       </Box>
 
       {/* Main Page Tabs */}
@@ -1878,6 +1972,203 @@ ${results.ai_analysis?.structured_report?.executive_summary || results.ai_analys
             disabled={!bulkImportText.trim()}
           >
             Import {parseBulkImport(bulkImportText).length} Targets
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Guide Dialog */}
+      <Dialog open={guideOpen} onClose={() => setGuideOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, borderBottom: 1, borderColor: "divider" }}>
+          <HelpOutlineIcon sx={{ color: "#0891b2" }} />
+          SSL/TLS Scanner User Guide
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ p: 3 }}>
+            {/* Quick Start */}
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2, color: "#0891b2" }}>
+              🚀 Quick Start
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Enter a hostname and port, then click <strong>Start Scan</strong>. The scanner will analyze
+              SSL/TLS configuration, certificate validity, cipher strength, and check for vulnerabilities.
+            </Typography>
+
+            {/* Test Targets */}
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: alpha("#0891b2", 0.05) }}>
+              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                📋 Ready-to-Use Test Targets (Legal)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+                These are public test servers specifically designed for SSL testing. Copy and paste into the scan form:
+              </Typography>
+              <Box 
+                sx={{ 
+                  fontFamily: "monospace", 
+                  fontSize: "0.75rem", 
+                  bgcolor: "background.paper", 
+                  p: 1.5, 
+                  borderRadius: 1,
+                  border: 1,
+                  borderColor: "divider",
+                  whiteSpace: "pre-wrap",
+                  position: "relative",
+                }}
+              >
+                {`badssl.com:443
+expired.badssl.com:443
+self-signed.badssl.com:443
+wrong.host.badssl.com:443
+untrusted-root.badssl.com:443
+sha1-intermediate.badssl.com:443
+rc4.badssl.com:443
+3des.badssl.com:443
+tls-v1-0.badssl.com:1010
+tls-v1-1.badssl.com:1011`}
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`badssl.com:443
+expired.badssl.com:443
+self-signed.badssl.com:443
+wrong.host.badssl.com:443
+untrusted-root.badssl.com:443
+sha1-intermediate.badssl.com:443
+rc4.badssl.com:443
+3des.badssl.com:443
+tls-v1-0.badssl.com:1010
+tls-v1-1.badssl.com:1011`);
+                  }}
+                  sx={{ position: "absolute", top: 4, right: 4 }}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                💡 Use <strong>Bulk Import</strong> button to add all at once
+              </Typography>
+            </Paper>
+
+            {/* What Gets Analyzed */}
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2, color: "#0891b2" }}>
+              🔍 What Gets Analyzed
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    <VerifiedUserIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "text-bottom" }} />
+                    Certificate Security
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, fontSize: "0.8rem" }}>
+                    <li>Validity period & expiration</li>
+                    <li>Certificate chain validation</li>
+                    <li>Self-signed detection</li>
+                    <li>Hostname matching</li>
+                    <li>Key strength (RSA/ECDSA)</li>
+                    <li>Signature algorithm</li>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    <HttpsIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "text-bottom" }} />
+                    Protocol & Ciphers
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, fontSize: "0.8rem" }}>
+                    <li>TLS 1.0, 1.1, 1.2, 1.3 support</li>
+                    <li>SSLv2/v3 detection (bad)</li>
+                    <li>Weak cipher suites</li>
+                    <li>Forward secrecy support</li>
+                    <li>Cipher preference order</li>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    <BugReportIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "text-bottom" }} />
+                    Vulnerability Detection
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, fontSize: "0.8rem" }}>
+                    <li>Heartbleed (CVE-2014-0160)</li>
+                    <li>ROBOT attack</li>
+                    <li>POODLE, FREAK, Logjam</li>
+                    <li>DROWN, Sweet32</li>
+                    <li>CRIME/BREACH compression</li>
+                    <li>Renegotiation attacks</li>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    <SecurityIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "text-bottom" }} />
+                    Advanced Analysis
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, fontSize: "0.8rem" }}>
+                    <li>SSL Grade (A+ to F)</li>
+                    <li>Mozilla TLS compliance</li>
+                    <li>Client compatibility</li>
+                    <li>Post-quantum readiness</li>
+                    <li>JARM fingerprinting</li>
+                    <li>STARTTLS detection</li>
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Port Guide */}
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2, color: "#0891b2" }}>
+              🔌 Common SSL/TLS Ports
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Port</TableCell>
+                    <TableCell>Service</TableCell>
+                    <TableCell>Notes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow><TableCell>443</TableCell><TableCell>HTTPS</TableCell><TableCell>Standard web TLS</TableCell></TableRow>
+                  <TableRow><TableCell>8443</TableCell><TableCell>HTTPS Alt</TableCell><TableCell>Alternative HTTPS</TableCell></TableRow>
+                  <TableRow><TableCell>465</TableCell><TableCell>SMTPS</TableCell><TableCell>Secure SMTP</TableCell></TableRow>
+                  <TableRow><TableCell>587</TableCell><TableCell>SMTP</TableCell><TableCell>STARTTLS submission</TableCell></TableRow>
+                  <TableRow><TableCell>993</TableCell><TableCell>IMAPS</TableCell><TableCell>Secure IMAP</TableCell></TableRow>
+                  <TableRow><TableCell>995</TableCell><TableCell>POP3S</TableCell><TableCell>Secure POP3</TableCell></TableRow>
+                  <TableRow><TableCell>636</TableCell><TableCell>LDAPS</TableCell><TableCell>Secure LDAP</TableCell></TableRow>
+                  <TableRow><TableCell>3389</TableCell><TableCell>RDP</TableCell><TableCell>Remote Desktop (TLS)</TableCell></TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Tips */}
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight={600}>💡 Pro Tips</Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2, fontSize: "0.85rem" }}>
+                <li>Use <strong>Bulk Import</strong> to scan many targets from a file</li>
+                <li>Port ranges like <code>443-445</code> scan multiple ports per host</li>
+                <li>Enable <strong>AI Analysis</strong> for exploitation recommendations</li>
+                <li>Use the <strong>JARM Database</strong> to identify C2 frameworks</li>
+                <li>Export reports as Markdown/PDF for documentation</li>
+              </Box>
+            </Alert>
+
+            <Alert severity="warning">
+              <Typography variant="subtitle2" fontWeight={600}>⚠️ Legal Notice</Typography>
+              <Typography variant="body2">
+                Only scan systems you own or have explicit written authorization to test. 
+                Unauthorized scanning may violate computer crime laws. The badssl.com endpoints 
+                are explicitly provided for testing and are safe to scan.
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGuideOpen(false)} variant="contained">
+            Got it!
           </Button>
         </DialogActions>
       </Dialog>
@@ -3326,6 +3617,387 @@ ${results.ai_analysis?.structured_report?.executive_summary || results.ai_analys
                                   </>
                                 ) : (
                                   <Typography variant="body2" color="text.secondary">ALPN not supported</Typography>
+                                )}
+                              </Paper>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Grid>
+                    )}
+
+                    {/* === NEW: Enhanced Analysis Features === */}
+                    
+                    {/* SSL Grade Display */}
+                    {result.ssl_grade && (
+                      <Grid item xs={12}>
+                        <Divider sx={{ my: 2 }} />
+                        <Paper 
+                          sx={{ 
+                            p: 3, 
+                            background: `linear-gradient(135deg, ${
+                              result.ssl_grade.grade === "A+" || result.ssl_grade.grade === "A" ? "#10b981" :
+                              result.ssl_grade.grade === "B" ? "#0891b2" :
+                              result.ssl_grade.grade === "C" ? "#ca8a04" :
+                              result.ssl_grade.grade === "D" || result.ssl_grade.grade === "E" ? "#ea580c" :
+                              "#dc2626"
+                            } 0%, ${
+                              result.ssl_grade.grade === "A+" || result.ssl_grade.grade === "A" ? "#059669" :
+                              result.ssl_grade.grade === "B" ? "#0e7490" :
+                              result.ssl_grade.grade === "C" ? "#a16207" :
+                              result.ssl_grade.grade === "D" || result.ssl_grade.grade === "E" ? "#c2410c" :
+                              "#b91c1c"
+                            } 100%)`,
+                            color: "white",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 3,
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Box 
+                            sx={{ 
+                              width: 80, 
+                              height: 80, 
+                              borderRadius: "50%", 
+                              bgcolor: "rgba(255,255,255,0.2)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Typography variant="h3" fontWeight={700}>
+                              {result.ssl_grade.grade}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="h6" fontWeight={600}>
+                              SSL/TLS Grade: {result.ssl_grade.grade}
+                            </Typography>
+                            <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                              {result.ssl_grade.grade_details || (result.ssl_grade.grade_cap ? `Capped at ${result.ssl_grade.grade_cap}` : `Score: ${result.ssl_grade.numeric_score}/100`)}
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                              <Box>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>Protocol</Typography>
+                                <Typography fontWeight={600}>{result.ssl_grade.protocol_score}/100</Typography>
+                              </Box>
+                              <Box>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>Key Exchange</Typography>
+                                <Typography fontWeight={600}>{result.ssl_grade.key_exchange_score}/100</Typography>
+                              </Box>
+                              <Box>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>Cipher</Typography>
+                                <Typography fontWeight={600}>{result.ssl_grade.cipher_score}/100</Typography>
+                              </Box>
+                              <Box>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>Certificate</Typography>
+                                <Typography fontWeight={600}>{result.ssl_grade.certificate_score}/100</Typography>
+                              </Box>
+                              <Box>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>Overall</Typography>
+                                <Typography fontWeight={600}>{result.ssl_grade.numeric_score}/100</Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Paper>
+                        
+                        {result.ssl_grade.deductions && result.ssl_grade.deductions.length > 0 && (
+                          <Box sx={{ mt: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                              Score Deductions
+                            </Typography>
+                            {result.ssl_grade.deductions.map((ded, i) => (
+                              <Chip 
+                                key={i}
+                                label={`${ded.item}${ded.reason ? ` - ${ded.reason}` : ''} (${ded.points > 0 ? '+' : ''}${ded.points})${ded.cap ? ` [cap: ${ded.cap}]` : ''}`}
+                                size="small"
+                                sx={{ m: 0.5, bgcolor: alpha("#dc2626", 0.1), color: "#dc2626" }}
+                              />
+                            ))}
+                          </Box>
+                        )}
+                        
+                        {result.ssl_grade.cap_reasons && result.ssl_grade.cap_reasons.length > 0 && (
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="caption" color="error.main" fontWeight={600}>
+                              Grade capped due to: {result.ssl_grade.cap_reasons.join(", ")}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Grid>
+                    )}
+
+                    {/* Mozilla Compliance & Client Compatibility */}
+                    {(result.mozilla_compliance || result.client_compatibility) && (
+                      <Grid item xs={12}>
+                        <Grid container spacing={2}>
+                          {/* Mozilla Compliance */}
+                          {result.mozilla_compliance && (
+                            <Grid item xs={12} md={6}>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ 
+                                  p: 2,
+                                  borderColor: result.mozilla_compliance.is_compliant ? "#10b981" : "#ea580c",
+                                  bgcolor: alpha(result.mozilla_compliance.is_compliant ? "#10b981" : "#ea580c", 0.05)
+                                }}
+                              >
+                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                                  {result.mozilla_compliance.is_compliant ? (
+                                    <VerifiedUserIcon fontSize="small" color="success" />
+                                  ) : (
+                                    <WarningIcon fontSize="small" color="warning" />
+                                  )}
+                                  Mozilla TLS Compliance
+                                  <Chip 
+                                    label={result.mozilla_compliance.profile_tested.toUpperCase()} 
+                                    size="small" 
+                                    sx={{ 
+                                      bgcolor: alpha("#6366f1", 0.15), 
+                                      color: "#6366f1",
+                                      fontWeight: 600,
+                                    }} 
+                                  />
+                                  <Chip
+                                    label={`${Math.round(result.mozilla_compliance.compliance_score * 100)}%`}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: alpha(result.mozilla_compliance.is_compliant ? "#10b981" : "#ea580c", 0.15),
+                                      color: result.mozilla_compliance.is_compliant ? "#10b981" : "#ea580c",
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                </Typography>
+                                
+                                {result.mozilla_compliance.is_compliant ? (
+                                  <Typography variant="body2" color="success.main">
+                                    ✓ Configuration meets Mozilla's {result.mozilla_compliance.profile_tested} profile requirements
+                                  </Typography>
+                                ) : (
+                                  <>
+                                    <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
+                                      {result.mozilla_compliance.violations.length} violation(s) found
+                                    </Typography>
+                                    <Box sx={{ maxHeight: 100, overflow: "auto" }}>
+                                      {result.mozilla_compliance.violations.slice(0, 5).map((v, i) => (
+                                        <Typography key={i} variant="caption" color="text.secondary" display="block">
+                                          • [{v.severity}] {v.issue}
+                                        </Typography>
+                                      ))}
+                                    </Box>
+                                  </>
+                                )}
+                              </Paper>
+                            </Grid>
+                          )}
+
+                          {/* Client Compatibility */}
+                          {result.client_compatibility && (
+                            <Grid item xs={12} md={6}>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ 
+                                  p: 2,
+                                  borderColor: "#6366f1",
+                                  bgcolor: alpha("#6366f1", 0.05)
+                                }}
+                              >
+                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                                  <SecurityIcon fontSize="small" sx={{ color: "#6366f1" }} />
+                                  Client Compatibility ({result.client_compatibility.clients_tested} tested)
+                                  <Chip 
+                                    label={`${result.client_compatibility.compatible_clients.length}/${result.client_compatibility.clients_tested}`}
+                                    size="small"
+                                    sx={{ 
+                                      bgcolor: alpha(result.client_compatibility.incompatible_clients.length === 0 ? "#10b981" : "#ea580c", 0.15),
+                                      color: result.client_compatibility.incompatible_clients.length === 0 ? "#10b981" : "#ea580c",
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                </Typography>
+                                
+                                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                                  {result.client_compatibility.handshake_simulations.map((sim) => (
+                                    <Tooltip
+                                      key={sim.client_id}
+                                      title={sim.compatible 
+                                        ? `Protocol: ${sim.protocol_matched || 'N/A'}, Cipher: ${sim.cipher_matched || 'N/A'}${sim.pq_support ? ' [PQ Ready]' : ''}`
+                                        : "Incompatible - no protocol/cipher overlap"
+                                      }
+                                    >
+                                      <Chip
+                                        label={sim.client_name}
+                                        size="small"
+                                        sx={{
+                                          bgcolor: alpha(sim.compatible ? "#10b981" : "#dc2626", 0.15),
+                                          color: sim.compatible ? "#10b981" : "#dc2626",
+                                          fontSize: "0.65rem",
+                                        }}
+                                        icon={sim.compatible ? 
+                                          <CheckCircleIcon sx={{ fontSize: 14, color: "#10b981" }} /> : 
+                                          <ErrorIcon sx={{ fontSize: 14, color: "#dc2626" }} />
+                                        }
+                                      />
+                                    </Tooltip>
+                                  ))}
+                                </Box>
+                              </Paper>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Grid>
+                    )}
+
+                    {/* Post-Quantum & STARTTLS */}
+                    {(result.post_quantum_analysis || result.starttls_info) && (
+                      <Grid item xs={12}>
+                        <Grid container spacing={2}>
+                          {/* Post-Quantum Crypto */}
+                          {result.post_quantum_analysis && (
+                            <Grid item xs={12} md={6}>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ 
+                                  p: 2,
+                                  borderColor: result.post_quantum_analysis.pq_ready ? "#8b5cf6" : "#6b7280",
+                                  bgcolor: alpha(result.post_quantum_analysis.pq_ready ? "#8b5cf6" : "#6b7280", 0.05)
+                                }}
+                              >
+                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                                  {result.post_quantum_analysis.pq_ready ? (
+                                    <SecurityIcon fontSize="small" sx={{ color: "#8b5cf6" }} />
+                                  ) : (
+                                    <InfoIcon fontSize="small" color="disabled" />
+                                  )}
+                                  Post-Quantum Cryptography
+                                  {result.post_quantum_analysis.pq_ready && (
+                                    <Chip 
+                                      label="PQ READY" 
+                                      size="small" 
+                                      sx={{ bgcolor: alpha("#8b5cf6", 0.15), color: "#8b5cf6", fontWeight: 600 }}
+                                    />
+                                  )}
+                                  {result.post_quantum_analysis.nist_compliant && (
+                                    <Chip 
+                                      label="NIST" 
+                                      size="small" 
+                                      sx={{ bgcolor: alpha("#10b981", 0.15), color: "#10b981", fontWeight: 600 }}
+                                    />
+                                  )}
+                                  <Chip 
+                                    label={`${result.post_quantum_analysis.future_proof_score}%`}
+                                    size="small"
+                                    sx={{ 
+                                      bgcolor: alpha(result.post_quantum_analysis.future_proof_score >= 70 ? "#10b981" : "#6b7280", 0.15),
+                                      color: result.post_quantum_analysis.future_proof_score >= 70 ? "#10b981" : "#6b7280",
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                </Typography>
+                                
+                                {result.post_quantum_analysis.pq_ready ? (
+                                  <>
+                                    {result.post_quantum_analysis.supported_kems.length > 0 && (
+                                      <Box sx={{ mb: 1 }}>
+                                        <Typography variant="caption" color="text.secondary">KEMs:</Typography>
+                                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                                          {result.post_quantum_analysis.supported_kems.map((kem, i) => (
+                                            <Chip key={i} label={kem} size="small" variant="outlined" sx={{ fontSize: "0.65rem" }} />
+                                          ))}
+                                        </Box>
+                                      </Box>
+                                    )}
+                                    {result.post_quantum_analysis.supported_signatures.length > 0 && (
+                                      <Box sx={{ mb: 1 }}>
+                                        <Typography variant="caption" color="text.secondary">Signatures:</Typography>
+                                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                                          {result.post_quantum_analysis.supported_signatures.map((sig, i) => (
+                                            <Chip key={i} label={sig} size="small" variant="outlined" sx={{ fontSize: "0.65rem" }} />
+                                          ))}
+                                        </Box>
+                                      </Box>
+                                    )}
+                                    {result.post_quantum_analysis.hybrid_support && (
+                                      <Typography variant="caption" color="success.main">
+                                        ✓ Hybrid mode enabled (classical + PQ)
+                                      </Typography>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                      Server does not support post-quantum cryptography
+                                    </Typography>
+                                    {result.post_quantum_analysis.recommendations.length > 0 && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        💡 {result.post_quantum_analysis.recommendations[0]}
+                                      </Typography>
+                                    )}
+                                  </>
+                                )}
+                              </Paper>
+                            </Grid>
+                          )}
+
+                          {/* STARTTLS */}
+                          {result.starttls_info && (
+                            <Grid item xs={12} md={6}>
+                              <Paper 
+                                variant="outlined" 
+                                sx={{ 
+                                  p: 2,
+                                  borderColor: result.starttls_info.starttls_supported ? "#0891b2" : "#6b7280",
+                                  bgcolor: alpha(result.starttls_info.starttls_supported ? "#0891b2" : "#6b7280", 0.05)
+                                }}
+                              >
+                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                                  {result.starttls_info.starttls_supported ? (
+                                    <HttpsIcon fontSize="small" sx={{ color: "#0891b2" }} />
+                                  ) : (
+                                    <InfoIcon fontSize="small" color="disabled" />
+                                  )}
+                                  STARTTLS ({result.starttls_info.protocol})
+                                  {result.starttls_info.starttls_supported && (
+                                    <Chip 
+                                      label="SUPPORTED" 
+                                      size="small" 
+                                      sx={{ bgcolor: alpha("#0891b2", 0.15), color: "#0891b2", fontWeight: 600 }}
+                                    />
+                                  )}
+                                  {result.starttls_info.starttls_required && (
+                                    <Chip 
+                                      label="REQUIRED" 
+                                      size="small" 
+                                      sx={{ bgcolor: alpha("#10b981", 0.15), color: "#10b981", fontWeight: 600 }}
+                                    />
+                                  )}
+                                </Typography>
+                                
+                                {result.starttls_info.starttls_supported ? (
+                                  <>
+                                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                                      {result.starttls_info.implicit_tls_supported && (
+                                        <Typography variant="caption" color="success.main">
+                                          ✓ Implicit TLS also supported on this port
+                                        </Typography>
+                                      )}
+                                      {result.starttls_info.plain_auth_before_tls && (
+                                        <Typography variant="caption" color="error.main">
+                                          ⚠️ Plain authentication offered before TLS (security risk)
+                                        </Typography>
+                                      )}
+                                      {result.starttls_info.stripping_possible && (
+                                        <Typography variant="caption" color="warning.main">
+                                          ⚠️ STARTTLS stripping attack possible (not required)
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  </>
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">
+                                    STARTTLS not detected on this port
+                                  </Typography>
                                 )}
                               </Paper>
                             </Grid>

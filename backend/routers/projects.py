@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import shutil
 import tempfile
 import zipfile
@@ -62,7 +63,7 @@ def project_to_response(project, user_id: int, db: Session) -> dict:
         "name": project.name,
         "description": project.description,
         "git_url": project.git_url,
-        "is_shared": project.is_shared == "true",
+        "is_shared": project.is_shared,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
         "owner_id": project.owner_id,
@@ -173,12 +174,12 @@ def delete_project(
     # Delete collaborators
     db.query(models.ProjectCollaborator).filter(models.ProjectCollaborator.project_id == project_id).delete()
     
-    # Delete team chat conversation and all related data (messages, participants, etc.)
+    # Delete project chat conversation and all related data (messages, participants, etc.)
     # The foreign key in DB doesn't have CASCADE, so we need to delete manually
     from backend.models.models import (
         Conversation, ConversationParticipant, Message, PinnedMessage, Poll, MessageReadReceipt,
         ProjectFile, ProjectDocument, DocumentChatMessage, DocumentAnalysisReport, ReportChatMessage,
-        ReverseEngineeringReport, NetworkAnalysisReport, FuzzingSession
+        ReverseEngineeringReport, NetworkAnalysisReport, FuzzingSession, DocumentTranslation
     )
     
     # Delete network analysis reports (Nmap, PCAP, DNS, SSL scans)
@@ -202,6 +203,17 @@ def delete_project(
     for report in reports_to_delete:
         db.query(ReportChatMessage).filter(ReportChatMessage.report_id == report.id).delete()
     db.query(DocumentAnalysisReport).filter(DocumentAnalysisReport.project_id == project_id).delete()
+
+    # Delete document translations and their files
+    translations = db.query(DocumentTranslation).filter(DocumentTranslation.project_id == project_id).all()
+    for tr in translations:
+        for path in [tr.file_path, tr.output_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception as e:
+                    logger.warning(f"Could not delete translation file: {e}")
+    db.query(DocumentTranslation).filter(DocumentTranslation.project_id == project_id).delete()
     
     # Delete reverse engineering reports
     db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.project_id == project_id).delete()
@@ -222,8 +234,8 @@ def delete_project(
         db.delete(conv)
     
     # Delete kanban boards and their columns/cards (cascade handles columns->cards)
-    from backend.models.models import KanbanBoard, KanbanColumn, KanbanCard
-    
+    from backend.models.models import KanbanBoard, KanbanColumn, KanbanCard, Whiteboard, WhiteboardElement, WhiteboardPresence
+
     kanban_boards = db.query(KanbanBoard).filter(KanbanBoard.project_id == project_id).all()
     for board in kanban_boards:
         # Delete cards first
@@ -233,7 +245,17 @@ def delete_project(
         db.query(KanbanColumn).filter(KanbanColumn.board_id == board.id).delete()
         # Delete board
         db.delete(board)
-    
+
+    # Delete whiteboards and their elements/presence records
+    whiteboards = db.query(Whiteboard).filter(Whiteboard.project_id == project_id).all()
+    for whiteboard in whiteboards:
+        # Delete whiteboard elements
+        db.query(WhiteboardElement).filter(WhiteboardElement.whiteboard_id == whiteboard.id).delete()
+        # Delete whiteboard presence records
+        db.query(WhiteboardPresence).filter(WhiteboardPresence.whiteboard_id == whiteboard.id).delete()
+        # Delete whiteboard
+        db.delete(whiteboard)
+
     # Delete the project itself
     db.delete(project)
     db.commit()
@@ -278,7 +300,7 @@ def add_collaborator(
         raise HTTPException(status_code=404, detail="Project not found")
     
     # Check if project is shared
-    if project.is_shared != "true":
+    if not project.is_shared:
         raise HTTPException(status_code=400, detail="Cannot add collaborators to a non-shared project")
     
     # Check access - only owner or admin can add collaborators
@@ -494,7 +516,7 @@ async def clone_repository(
         raise HTTPException(status_code=500, detail=f"Clone failed: {str(e)}")
 
 
-# ----- Project Team Chat Endpoints -----
+# ----- Project Chat Endpoints -----
 
 @router.get("/{project_id}/team-chat")
 def get_project_team_chat(
@@ -502,7 +524,7 @@ def get_project_team_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Get or create the team chat conversation for a shared project."""
+    """Get or create the project chat conversation for a shared project."""
     from backend.models.models import Conversation, ConversationParticipant, ProjectCollaborator as CollabModel
     
     project = project_service.get_project(db, project_id)
@@ -515,20 +537,20 @@ def get_project_team_chat(
         raise HTTPException(status_code=403, detail="Not authorized to access this project")
     
     # Check if project is shared
-    if project.is_shared != "true":
-        raise HTTPException(status_code=400, detail="Team chat is only available for shared projects")
+    if not project.is_shared:
+        raise HTTPException(status_code=400, detail="Project chat is only available for shared projects")
     
-    # Find or create the team chat conversation
+    # Find or create the project chat conversation
     conversation = db.query(Conversation).filter(
         Conversation.project_id == project_id
     ).first()
     
     if not conversation:
-        # Create the team chat conversation
+        # Create the project chat conversation
         conversation = Conversation(
-            name=f"{project.name} Team Chat",
+            name=f"{project.name} Project Chat",
             is_group="true",
-            description=f"Team chat for project: {project.name}",
+            description=f"Project chat for: {project.name}",
             created_by=project.owner_id,
             project_id=project_id,
         )
@@ -586,7 +608,7 @@ def sync_team_chat_participants(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Sync team chat participants with project collaborators (owner/admin only)."""
+    """Sync project chat participants with project collaborators (owner/admin only)."""
     from backend.models.models import Conversation, ConversationParticipant, ProjectCollaborator as CollabModel
     
     project = project_service.get_project(db, project_id)
@@ -598,13 +620,13 @@ def sync_team_chat_participants(
     if not can_access or role not in ["owner", "admin"]:
         raise HTTPException(status_code=403, detail="Only owners and admins can sync participants")
     
-    # Get or create the team chat
+    # Get or create the project chat
     conversation = db.query(Conversation).filter(
         Conversation.project_id == project_id
     ).first()
     
     if not conversation:
-        raise HTTPException(status_code=404, detail="Team chat not found. Access the team chat first to create it.")
+        raise HTTPException(status_code=404, detail="Project chat not found. Access the project chat first to create it.")
     
     # Get all project collaborators + owner
     collab_user_ids = set()
@@ -648,4 +670,3 @@ def sync_team_chat_participants(
         "removed": removed,
         "total_participants": len(collab_user_ids),
     }
-

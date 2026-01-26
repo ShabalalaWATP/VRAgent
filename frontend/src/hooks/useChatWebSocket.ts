@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { socialApi, WSEvent, SocialMessage, ReactionSummary } from '../api/client';
+import logger from '../utils/logger';
+import {
+  MESSAGE_QUEUE_LIMITS,
+  RECONNECTION_LIMITS,
+  getReconnectDelay,
+  shouldRetryConnection,
+  shouldRetryMessage,
+} from '../config/rateLimits';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -23,7 +31,10 @@ export type QueuedMessage = {
 };
 
 const QUEUE_STORAGE_KEY = 'vragent_message_queue';
-const MAX_RETRY_COUNT = 3;
+// Using centralized rate limit config
+const MAX_RETRY_COUNT = MESSAGE_QUEUE_LIMITS.maxRetryCount;
+const MAX_QUEUE_SIZE = MESSAGE_QUEUE_LIMITS.maxQueueSize;
+const MAX_QUEUE_SIZE_BYTES = MESSAGE_QUEUE_LIMITS.maxQueueSizeBytes;
 
 export type ChatWebSocketCallbacks = {
   onNewMessage?: (message: SocialMessage, conversationId: number) => void;
@@ -247,7 +258,7 @@ export function useChatWebSocket(callbacks: ChatWebSocketCallbacks = {}) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('Chat WebSocket connected');
+      logger.debug('Chat WebSocket connected');
       setStatus('connected');
       callbacksRef.current.onConnectionChange?.('connected');
       reconnectAttemptsRef.current = 0;
@@ -262,16 +273,21 @@ export function useChatWebSocket(callbacks: ChatWebSocketCallbacks = {}) {
     };
 
     ws.onclose = (event) => {
-      console.log('Chat WebSocket closed:', event.code, event.reason);
+      logger.debug('Chat WebSocket closed:', event.code, event.reason);
       setStatus('disconnected');
       callbacksRef.current.onConnectionChange?.('disconnected');
       wsRef.current = null;
 
-      // Reconnect with exponential backoff
-      if (reconnectAttemptsRef.current < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+      // Clear all typing timeouts to prevent stale indicators after reconnect
+      typingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      typingTimeoutsRef.current.clear();
+      setTypingUsers(new Map());
+
+      // Reconnect with exponential backoff using centralized config
+      if (shouldRetryConnection(reconnectAttemptsRef.current)) {
+        const delay = getReconnectDelay(reconnectAttemptsRef.current);
         reconnectAttemptsRef.current++;
-        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+        logger.debug(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${RECONNECTION_LIMITS.maxAttempts})`);
         reconnectTimeoutRef.current = setTimeout(connect, delay);
       }
     };
@@ -282,7 +298,7 @@ export function useChatWebSocket(callbacks: ChatWebSocketCallbacks = {}) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    reconnectAttemptsRef.current = 5; // Prevent auto-reconnect
+    reconnectAttemptsRef.current = RECONNECTION_LIMITS.maxAttempts; // Prevent auto-reconnect
     
     if (wsRef.current) {
       wsRef.current.close();
@@ -347,10 +363,10 @@ export function useChatWebSocket(callbacks: ChatWebSocketCallbacks = {}) {
       const pendingMessages = messageQueue.filter(m => m.status === 'pending' || m.status === 'failed');
       
       for (const queuedMsg of pendingMessages) {
-        if (queuedMsg.retryCount >= MAX_RETRY_COUNT) {
-          // Mark as permanently failed
+        if (!shouldRetryMessage(queuedMsg.retryCount)) {
+          // Mark as permanently failed - exceeded max retries
           setMessageQueue(prev => prev.filter(m => m.id !== queuedMsg.id));
-          callbacksRef.current.onQueuedMessageFailed?.(queuedMsg.id, 'Max retries exceeded');
+          callbacksRef.current.onQueuedMessageFailed?.(queuedMsg.id, `Max retries exceeded (${MESSAGE_QUEUE_LIMITS.maxRetryCount})`);
           continue;
         }
 
@@ -405,7 +421,21 @@ export function useChatWebSocket(callbacks: ChatWebSocketCallbacks = {}) {
     messageType: string = 'text',
     attachmentData?: Record<string, any>,
     replyToId?: number
-  ): QueuedMessage => {
+  ): QueuedMessage | null => {
+    // Check queue size limit (count)
+    if (messageQueue.length >= MAX_QUEUE_SIZE) {
+      console.warn('Message queue full, removing oldest message');
+      setMessageQueue(prev => prev.slice(1)); // Remove oldest
+    }
+    
+    // Check queue size limit (bytes) - estimate current size
+    const estimatedQueueSize = JSON.stringify(messageQueue).length;
+    const estimatedNewMsgSize = JSON.stringify({ content, attachmentData }).length;
+    if (estimatedQueueSize + estimatedNewMsgSize > MAX_QUEUE_SIZE_BYTES) {
+      console.error('Message queue size limit exceeded, cannot queue message');
+      return null;
+    }
+    
     const queuedMsg: QueuedMessage = {
       id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       conversationId,

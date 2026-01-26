@@ -348,7 +348,7 @@ class PayloadVariationValidator:
             )
         
         results = []
-        async with httpx.AsyncClient(verify=False, timeout=timeout) as client:
+        async with httpx.AsyncClient(verify=True, timeout=timeout) as client:
             for payload, description in variations:
                 try:
                     # Build request
@@ -486,8 +486,8 @@ class TimeBasedValidator:
         
         baseline_times = []
         sleep_results = []
-        
-        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+
+        async with httpx.AsyncClient(verify=True, timeout=30.0) as client:
             # Collect baseline samples
             for _ in range(baseline_samples):
                 try:
@@ -662,8 +662,8 @@ class OOBValidator:
         }
         
         payloads = oob_payloads.get(vuln_type, [callback_url])
-        
-        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+
+        async with httpx.AsyncClient(verify=True, timeout=30.0) as client:
             for payload in payloads:
                 try:
                     if method.upper() == "GET":

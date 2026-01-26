@@ -812,7 +812,7 @@ Consider:
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.2,
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                     max_output_tokens=1000
                 )
             )

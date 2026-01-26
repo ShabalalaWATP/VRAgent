@@ -393,7 +393,12 @@ async def verify_ws_token_and_access(websocket: WebSocket, project_id: int, toke
     Returns (user_id, username) if valid, None otherwise.
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+
+        # Verify this is an access token, not a refresh token
+        if payload.get("type") != "access":
+            return None
+
         user_id = payload.get("sub")
         if user_id is None:
             return None

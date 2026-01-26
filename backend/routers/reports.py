@@ -45,7 +45,86 @@ class ReportChatResponse(BaseModel):
     response: str
     error: Optional[str] = None
 
+
+class RecentReport(BaseModel):
+    """Report with project info for the recent reports list"""
+    id: int
+    project_id: int
+    project_name: str
+    scan_run_id: int
+    created_at: str
+    title: str
+    summary: Optional[str] = None
+    overall_risk_score: Optional[float] = None
+    finding_count: int = 0
+    severity_counts: Dict[str, int] = {}
+    
+    class Config:
+        from_attributes = True
+
+
 router = APIRouter()
+global_router = APIRouter()  # Separate router for global /reports endpoints
+
+
+@global_router.get("/recent", response_model=List[RecentReport])
+def get_recent_reports(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get recent reports across all projects the user has access to."""
+    from sqlalchemy import func, or_
+    
+    # Get all project IDs user has access to (owned or collaborating)
+    owned_projects = db.query(models.Project.id).filter(
+        models.Project.owner_id == current_user.id
+    ).subquery()
+    
+    collab_projects = db.query(models.ProjectCollaborator.project_id).filter(
+        models.ProjectCollaborator.user_id == current_user.id
+    ).subquery()
+    
+    # Query reports from accessible projects
+    reports = db.query(
+        models.Report,
+        models.Project.name.label('project_name'),
+        func.count(models.Finding.id).label('finding_count')
+    ).join(
+        models.Project, models.Report.project_id == models.Project.id
+    ).outerjoin(
+        models.Finding, models.Finding.scan_run_id == models.Report.scan_run_id
+    ).filter(
+        or_(
+            models.Report.project_id.in_(owned_projects),
+            models.Report.project_id.in_(collab_projects)
+        )
+    ).group_by(
+        models.Report.id, models.Project.name
+    ).order_by(
+        models.Report.created_at.desc()
+    ).limit(limit).all()
+    
+    result = []
+    for report, project_name, finding_count in reports:
+        severity_counts = {}
+        if report.data and isinstance(report.data, dict):
+            severity_counts = report.data.get('severity_counts', {})
+        
+        result.append(RecentReport(
+            id=report.id,
+            project_id=report.project_id,
+            project_name=project_name,
+            scan_run_id=report.scan_run_id,
+            created_at=report.created_at.isoformat() if report.created_at else "",
+            title=report.title or f"Scan Report #{report.id}",
+            summary=report.summary,
+            overall_risk_score=report.overall_risk_score,
+            finding_count=finding_count,
+            severity_counts=severity_counts
+        ))
+    
+    return result
 
 
 @router.get("", response_model=list[Report])
@@ -294,7 +373,7 @@ Answer the user's question based on this security scan report. Be helpful, speci
             model=settings.gemini_model_id,
             contents=conversation,
             config=types.GenerateContentConfig(
-                temperature=0.7,
+                thinking_config=types.ThinkingConfig(thinking_level="high"),
                 max_output_tokens=2048,
             )
         )

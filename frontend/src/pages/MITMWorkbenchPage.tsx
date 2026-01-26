@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import MitmChatPanel from '../components/MitmChatPanel';
+import MitmAttackPhaseIndicator from '../components/MitmAttackPhaseIndicator';
 import {
   Box,
   Typography,
@@ -19,6 +21,7 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
+  FormGroup,
   InputAdornment,
   Table,
   TableBody,
@@ -68,6 +71,7 @@ import {
   Add as AddIcon,
   Refresh as RefreshIcon,
   ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
   FilterList as FilterIcon,
   Security as SecurityIcon,
   Speed as SpeedIcon,
@@ -91,6 +95,7 @@ import {
   School as TutorialIcon,
   Psychology as AIIcon,
   Description as MarkdownIcon,
+  Description as DescriptionIcon,
   PictureAsPdf as PdfIcon,
   Article as WordIcon,
   TipsAndUpdates as TipIcon,
@@ -118,17 +123,20 @@ import {
   MoreVert as MoreIcon,
   Replay as ReplayIcon,
   History as HistoryIcon,
+  Route as RouteIcon,
+  Link as LinkIcon,
 } from '@mui/icons-material';
-import { 
-  mitmClient, 
-  MITMAnalysisResult, 
-  MITMGuidedSetup, 
-  MITMTestScenario, 
-  MITMProxyHealth, 
-  NaturalLanguageRuleResponse, 
-  AISuggestion, 
-  AISuggestionsResponse, 
+import {
+  mitmClient,
+  MITMAnalysisResult,
+  MITMGuidedSetup,
+  MITMTestScenario,
+  MITMProxyHealth,
+  NaturalLanguageRuleResponse,
+  AISuggestion,
+  AISuggestionsResponse,
   MITMSession,
+  MITMSavedScan,
   WebSocketConnection,
   WebSocketFrame,
   WebSocketRule,
@@ -136,7 +144,12 @@ import {
   CACertificate,
   HostCertificate,
   CertificateInstallationInstructions,
+  MITMAttackTool,
+  MITMToolRecommendation,
+  MITMToolExecutionResult,
+  MITMAgenticSessionResult,
 } from '../api/client';
+import { formatMarkdownSafe } from '../utils/sanitizeHtml';
 
 // Types
 interface ProxyInstance {
@@ -222,6 +235,397 @@ interface PresetRule {
 const API_TESTER_HANDOFF_KEY = 'vragent-api-tester-handoff';
 const FUZZER_HANDOFF_KEY = 'vragent-fuzzer-handoff';
 
+// Fallback guided setup data when API fails
+const FALLBACK_GUIDED_SETUP: MITMGuidedSetup = {
+  title: "Man-in-the-Middle Workbench Setup Guide",
+  description: "Learn to intercept, analyze, and modify HTTP/HTTPS/WebSocket traffic",
+  difficulty: "Beginner",
+  estimated_time: "10-15 minutes",
+  steps: [
+    {
+      step: 1,
+      title: "Understand What MITM Does",
+      description: "A Man-in-the-Middle proxy sits between a client and server, allowing you to observe, modify, or inject traffic. This is essential for security testing, debugging APIs, and understanding application behavior.",
+      tips: [
+        "VRAgent runs in Docker - use 0.0.0.0 as listen host to accept external connections",
+        "Traffic from Docker containers uses container names (e.g., 'juice-shop') as targets",
+        "MITM ports 8080-8089 are exposed from the Docker container",
+        "You can intercept HTTP, HTTPS (with certificate), and WebSocket traffic"
+      ],
+    },
+    {
+      step: 2,
+      title: "Create Your First Proxy",
+      description: "Click 'New Proxy' and configure the proxy settings. Understanding what each field means is critical for success.",
+      fields: {
+        "proxy_id": "A unique name for your proxy (e.g., 'juiceshop-proxy', 'api-test')",
+        "listen_host": "ALWAYS use 0.0.0.0 for Docker deployments (allows connections from host machine)",
+        "listen_port": "The port YOUR BROWSER connects to (8080-8089 available). Access via http://localhost:PORT",
+        "target_host": "WHERE the proxy forwards traffic TO - see examples below",
+        "target_port": "The port on the TARGET server (80 for HTTP, 443 for HTTPS, 3000 for Node apps, etc.)"
+      },
+    },
+    {
+      step: 3,
+      title: "Choose Interception Mode",
+      description: "Select how the proxy handles traffic based on your testing needs:",
+      modes: [
+        {
+          name: "Passthrough",
+          description: "Observe traffic without modification - best for initial analysis.",
+          use_case: "Start here to understand normal traffic patterns"
+        },
+        {
+          name: "Auto Modify",
+          description: "Automatically apply rules to modify matching requests/responses.",
+          use_case: "Use for automated security testing with rules"
+        },
+        {
+          name: "Intercept",
+          description: "Hold each request for manual review before forwarding.",
+          use_case: "For detailed inspection and manual modification"
+        }
+      ],
+    },
+    {
+      step: 4,
+      title: "Configure Your Application",
+      description: "Point your application to use the MITM proxy. Replace PORT with your listen port (e.g., 8080).",
+      examples: [
+        {
+          type: "Direct Access",
+          instructions: "Access http://localhost:PORT directly - traffic flows to your target"
+        },
+        {
+          type: "Browser Proxy",
+          instructions: "Set HTTP proxy to localhost:PORT in browser settings or use FoxyProxy"
+        },
+        {
+          type: "curl",
+          instructions: "curl -x http://localhost:PORT http://target.com/api"
+        },
+        {
+          type: "Python requests",
+          instructions: "requests.get(url, proxies={'http': 'http://localhost:PORT'})"
+        },
+        {
+          type: "Environment Variable",
+          instructions: "export HTTP_PROXY=http://localhost:PORT && export HTTPS_PROXY=http://localhost:PORT"
+        }
+      ],
+    },
+    {
+      step: 5,
+      title: "Start the Proxy and Capture Traffic",
+      description: "Click 'Start' to activate the proxy. Traffic will appear in real-time via WebSocket streaming.",
+      tips: [
+        "Watch the 'Live Stream' indicator - green means connected",
+        "Click any traffic entry to see full request/response details",
+        "Use filters to find specific requests by method, status, or host",
+        "Add tags and notes to annotate interesting traffic"
+      ],
+    },
+    {
+      step: 6,
+      title: "Apply Security Test Rules",
+      description: "Use preset rules for quick security testing or create custom rules:",
+      presets: [
+        { name: "Strip Security Headers", description: "Remove CSP, X-Frame-Options, etc." },
+        { name: "Downgrade HTTPS", description: "Change HTTPS links to HTTP" },
+        { name: "Add Debug Headers", description: "Inject X-Debug headers into requests" },
+        { name: "Slow Response", description: "Add delays to test timeout handling" },
+        { name: "Cookie Tampering", description: "Remove Secure/HttpOnly cookie flags" },
+        { name: "Corrupt JSON", description: "Introduce JSON syntax errors" }
+      ],
+    },
+    {
+      step: 7,
+      title: "Use AI-Powered Analysis",
+      description: "Click 'Analyze' for AI-powered security analysis, or use natural language to create rules:",
+      tips: [
+        "AI Analysis detects sensitive data, missing headers, and vulnerabilities",
+        "Natural Language Rules: Type 'Block requests to analytics.google.com'",
+        "AI Suggestions: Get automatic testing recommendations based on your traffic",
+        "AI works even offline with smart fallback patterns"
+      ],
+    },
+    {
+      step: 8,
+      title: "Save Sessions & Export",
+      description: "Save your work and export findings for documentation:",
+      formats: [
+        { format: "Sessions", description: "Save traffic snapshots to load later" },
+        { format: "JSON Export", description: "Export all traffic as structured JSON" },
+        { format: "PCAP Export", description: "Export for Wireshark analysis" },
+        { format: "Markdown/PDF/Word", description: "Generate professional security reports" }
+      ],
+    }
+  ],
+  deployment_scenarios: [
+    {
+      title: "📍 Understanding Your Setup",
+      description: "IMPORTANT: VRAgent runs INSIDE a Docker container. This affects how you specify target hosts. The key question is: WHERE is your target application running?",
+      diagram: "Your Browser → localhost:PORT → VRAgent Container (proxy) → Target Application",
+      key_concept: "The 'Target Host' must be reachable FROM INSIDE the VRAgent Docker container, not from your host machine."
+    },
+    {
+      title: "🐳 Scenario 1: Target in SEPARATE Docker Container (Same Host)",
+      subtitle: "Example: OWASP Juice Shop in its own container alongside VRAgent",
+      description: "This is the most common setup. Juice Shop runs in its OWN container (not inside VRAgent). Both containers are on the same Docker network ('vragent-network'), so they can communicate using container names as hostnames.",
+      why_it_works: "Docker provides automatic DNS resolution within a network. Container names become hostnames. When VRAgent looks for 'juice-shop', Docker's internal DNS resolves it to the container's IP (e.g., 172.18.0.5).",
+      config: {
+        listen_host: "0.0.0.0",
+        listen_port: "8081",
+        target_host: "juice-shop",
+        target_port: "3000"
+      },
+      explanation: [
+        "Listen Host: 0.0.0.0 = accept connections from outside the container (your browser)",
+        "Listen Port: 8081 = you'll access http://localhost:8081 in your browser",
+        "Target Host: juice-shop = the CONTAINER NAME (not IP, not localhost)",
+        "Target Port: 3000 = the INTERNAL port (not the exposed 3001)"
+      ],
+      traffic_flow: "Browser → localhost:8081 → VRAgent proxy → juice-shop:3000 → Response back",
+      verify_command: "docker ps (shows both containers running)",
+      common_mistake: "Using 'localhost:3001' - this fails because localhost inside VRAgent refers to the VRAgent container itself, not your host machine"
+    },
+    {
+      title: "💻 Scenario 2: Target on HOST Machine (Outside Docker)",
+      subtitle: "Example: A local dev server running on your computer (npm start, python manage.py runserver, etc.)",
+      description: "Your target app runs directly on your host machine (Windows/Mac/Linux), not in any container. You need to use a special Docker hostname to reach back to the host.",
+      why_it_works: "Docker Desktop provides 'host.docker.internal' as a special DNS name that resolves to your host machine's IP from inside any container.",
+      config: {
+        listen_host: "0.0.0.0",
+        listen_port: "8082",
+        target_host: "host.docker.internal",
+        target_port: "3000"
+      },
+      explanation: [
+        "Target Host: host.docker.internal = Docker's special hostname for 'the machine running Docker'",
+        "Target Port: 3000 = whatever port your local app runs on",
+        "Works on Docker Desktop (Windows/Mac). On Linux, may need --add-host=host.docker.internal:host-gateway"
+      ],
+      traffic_flow: "Browser → localhost:8082 → VRAgent proxy → host.docker.internal:3000 → Your local app",
+      verify_command: "curl http://localhost:3000 (from your host machine, should work)"
+    },
+    {
+      title: "🖥️ Scenario 3: Target on DIFFERENT Machine (VM, Server, LAN)",
+      subtitle: "Example: Web server on another VM, server, or computer on your network",
+      description: "Your target is a completely separate machine - could be a VM, a server in your lab, or another computer on your WiFi/LAN.",
+      why_it_works: "Docker containers can reach external IPs and hostnames just like your host machine can. Use the target's IP address or DNS hostname.",
+      config: {
+        listen_host: "0.0.0.0",
+        listen_port: "8083",
+        target_host: "192.168.1.100",
+        target_port: "80"
+      },
+      explanation: [
+        "Target Host: Use the IP address (192.168.1.100) or hostname (webserver.local) of the target machine",
+        "Target Port: The port the web server listens on (80, 443, 8080, etc.)",
+        "Make sure the target machine's firewall allows incoming connections"
+      ],
+      traffic_flow: "Browser → localhost:8083 → VRAgent proxy → 192.168.1.100:80 → Remote server",
+      verify_command: "ping 192.168.1.100 (from your host to verify connectivity)"
+    },
+    {
+      title: "🌐 Scenario 4: Target on the INTERNET",
+      subtitle: "Example: Testing a public website or API (with authorization!)",
+      description: "Your target is a public website or API endpoint on the internet. Only test sites you have permission to test!",
+      why_it_works: "Docker containers have internet access by default. Public domain names resolve via normal DNS.",
+      config: {
+        listen_host: "0.0.0.0",
+        listen_port: "8084",
+        target_host: "testphp.vulnweb.com",
+        target_port: "80"
+      },
+      explanation: [
+        "Target Host: The domain name (no http://). Docker resolves public DNS automatically.",
+        "Target Port: 80 for HTTP, 443 for HTTPS (enable TLS option for HTTPS)",
+        "For HTTPS sites, you'll need to install the MITM CA certificate in your browser"
+      ],
+      traffic_flow: "Browser → localhost:8084 → VRAgent proxy → testphp.vulnweb.com:80 → Internet",
+      verify_command: "curl http://testphp.vulnweb.com (from host to verify the site is up)",
+      warning: "Only test websites you own or have explicit written permission to test!"
+    }
+  ],
+  juice_shop_setup: {
+    title: "🧃 Setting Up OWASP Juice Shop",
+    description: "OWASP Juice Shop is a deliberately vulnerable web application perfect for security testing practice.",
+    methods: [
+      {
+        name: "Option A: Add to VRAgent's docker-compose (Recommended)",
+        description: "Edit docker-compose.yml to include Juice Shop on the same network as VRAgent",
+        steps: [
+          "Open docker-compose.yml in your VRAgent folder",
+          "Add the following service under 'services:'",
+          "juice-shop:",
+          "  image: bkimminich/juice-shop",
+          "  container_name: juice-shop",
+          "  ports:",
+          "    - '3001:3000'",
+          "  networks:",
+          "    - vragent-network",
+          "Run: docker-compose up -d juice-shop",
+          "Verify: docker ps (should show juice-shop running)",
+          "Direct access: http://localhost:3001",
+          "Through MITM: Target Host = juice-shop, Target Port = 3000"
+        ]
+      },
+      {
+        name: "Option B: Run Juice Shop Standalone (Same Docker Host)",
+        description: "Run Juice Shop as a separate docker run command, but connect it to VRAgent's network",
+        steps: [
+          "First, find VRAgent's network: docker network ls | grep vragent",
+          "Run Juice Shop connected to that network:",
+          "docker run -d --name juice-shop --network vragent-network -p 3001:3000 bkimminich/juice-shop",
+          "Verify it's on the same network: docker network inspect vragent-network",
+          "You should see both vragent-backend and juice-shop listed",
+          "MITM Config: Target Host = juice-shop, Target Port = 3000"
+        ]
+      },
+      {
+        name: "Option C: Run Juice Shop on Host Machine (Not in Docker)",
+        description: "Run Juice Shop directly on your machine using Node.js",
+        steps: [
+          "Install Node.js 18+ from https://nodejs.org/",
+          "Clone the repo: git clone https://github.com/juice-shop/juice-shop.git",
+          "cd juice-shop",
+          "npm install",
+          "npm start",
+          "Juice Shop will run on http://localhost:3000",
+          "MITM Config: Target Host = host.docker.internal, Target Port = 3000"
+        ]
+      },
+      {
+        name: "Option D: Juice Shop on Different VM/Machine",
+        description: "Run Juice Shop on a separate VM or server",
+        steps: [
+          "On the target VM, run: docker run -d -p 3000:3000 bkimminich/juice-shop",
+          "Note the VM's IP address (e.g., 192.168.1.50)",
+          "Ensure port 3000 is open in the VM's firewall",
+          "Verify from your machine: curl http://192.168.1.50:3000",
+          "MITM Config: Target Host = 192.168.1.50, Target Port = 3000"
+        ]
+      }
+    ],
+    port_explanation: {
+      title: "Understanding Port Mapping (3001:3000)",
+      details: [
+        "Docker port mapping format: HOST_PORT:CONTAINER_PORT",
+        "3001:3000 means: Access via localhost:3001, but internal port is 3000",
+        "From YOUR BROWSER (outside Docker): use localhost:3001",
+        "From MITM PROXY (inside Docker): use container_name:3000",
+        "The proxy is INSIDE Docker, so it uses the internal/right port (3000)"
+      ]
+    }
+  },
+  common_use_cases: [
+    {
+      title: "🔌 API Security Testing",
+      description: "Test REST/GraphQL APIs for authentication and injection vulnerabilities",
+      steps: [
+        "Create proxy pointing to your API server (use appropriate scenario above)",
+        "Capture normal API traffic in Passthrough mode first",
+        "Switch to Intercept mode to modify individual requests",
+        "Use AI Analysis to automatically identify security issues",
+        "Create rules to test parameter tampering, auth bypass, etc."
+      ]
+    },
+    {
+      title: "📡 WebSocket Inspection",
+      description: "Analyze real-time communication protocols",
+      steps: [
+        "Set up proxy for WebSocket-enabled application",
+        "Go to WebSocket tab to see connections and frames",
+        "Create WebSocket rules for frame modification",
+        "Monitor connection state and statistics"
+      ]
+    }
+  ],
+  troubleshooting: [
+    {
+      issue: "No traffic appearing",
+      solutions: [
+        "Verify proxy is started (green status indicator)",
+        "Make sure you're accessing localhost:PORT in your browser (not the target directly)",
+        "For Docker: Listen Host MUST be 0.0.0.0, not 127.0.0.1",
+        "Ensure firewall allows traffic on the proxy port"
+      ]
+    },
+    {
+      issue: "Can't connect / ERR_EMPTY_RESPONSE",
+      solutions: [
+        "Check Target Host is correct (container name, IP, or hostname)",
+        "For Docker containers: use container NAME (e.g., 'juice-shop'), not 'localhost'",
+        "Verify target is actually running (docker ps, or curl the target directly)",
+        "Check Target Port matches the INTERNAL port, not the exposed/mapped port"
+      ]
+    },
+    {
+      issue: "Why use container name instead of localhost?",
+      solutions: [
+        "VRAgent runs INSIDE a Docker container, not on your host",
+        "'localhost' inside the container refers to the container itself, not your machine",
+        "Docker provides DNS: container names resolve to container IPs on the same network",
+        "Use 'docker network inspect vragent-network' to see container IPs and names"
+      ]
+    },
+    {
+      issue: "HTTPS traffic not visible",
+      solutions: [
+        "Enable TLS in proxy settings",
+        "Download and install the CA certificate (Certificates tab)",
+        "Some apps use certificate pinning - may need bypass"
+      ]
+    },
+    {
+      issue: "Target port confusion",
+      solutions: [
+        "docker-compose exposes ports as HOST:CONTAINER (e.g., 3001:3000)",
+        "From HOST machine: use the LEFT port (3001) to access directly",
+        "From MITM proxy: use the RIGHT port (3000) - it's inside Docker network",
+        "Run 'docker ps' to see port mappings"
+      ]
+    }
+  ]
+};
+
+// Enhanced preset descriptions for better UX
+const PRESET_DESCRIPTIONS: Record<string, { description: string; use_case: string; icon?: string }> = {
+  remove_csp: {
+    description: "Removes Content-Security-Policy headers to allow inline scripts and external resources",
+    use_case: "Test XSS vulnerabilities that are blocked by CSP"
+  },
+  remove_cors: {
+    description: "Sets permissive CORS headers (Access-Control-Allow-Origin: *) on all responses",
+    use_case: "Test cross-origin attacks or bypass CORS restrictions"
+  },
+  downgrade_https: {
+    description: "Removes Strict-Transport-Security (HSTS) headers from responses",
+    use_case: "Test for insecure transport fallback vulnerabilities"
+  },
+  add_debug_header: {
+    description: "Adds X-Debug: true and X-Forwarded-For: 127.0.0.1 to all requests",
+    use_case: "Trigger debug modes or bypass IP-based restrictions"
+  },
+  slow_response: {
+    description: "Adds a 2 second delay to all responses",
+    use_case: "Test timeout handling and race conditions"
+  },
+  inject_script: {
+    description: "Injects a console.log script tag before </body> in HTML responses",
+    use_case: "Demonstrate XSS injection or test script execution"
+  },
+  modify_json_response: {
+    description: "Changes success:false to success:true and authorized:false to authorized:true",
+    use_case: "Bypass client-side authorization checks"
+  },
+  block_analytics: {
+    description: "Drops all requests to Google Analytics, Facebook, and other tracking domains",
+    use_case: "Clean traffic logs or test app behavior without analytics"
+  }
+};
+
 // Tab panel component
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return (
@@ -231,11 +635,29 @@ function TabPanel({ children, value, index }: { children: React.ReactNode; value
   );
 }
 
+interface SavedReport {
+  id: number;
+  title: string;
+  description: string;
+  proxy_id: string;
+  traffic_analyzed: number;
+  findings_count: number;
+  risk_level: string;
+  risk_score: number;
+  created_at: string;
+}
+
 const MITMWorkbenchPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
   const projectName = searchParams.get('projectName');
+
+  // Saved Reports State (for loading historical data)
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const [selectedReport, setSelectedReport] = useState<SavedReport | null>(null);
+  const [loadingSavedReports, setLoadingSavedReports] = useState(false);
+  const [viewingHistoricalData, setViewingHistoricalData] = useState(false);
 
   // State
   const [proxies, setProxies] = useState<ProxyInstance[]>([]);
@@ -259,11 +681,11 @@ const MITMWorkbenchPage: React.FC = () => {
   const [newProxyOpen, setNewProxyOpen] = useState(false);
   const [newProxy, setNewProxy] = useState({
     proxy_id: '',
-    listen_host: '127.0.0.1',
+    listen_host: '0.0.0.0',
     listen_port: 8080,
-    target_host: 'localhost',
+    target_host: '',
     target_port: 80,
-    mode: 'passthrough',
+    mode: 'auto_modify',
     tls_enabled: false,
   });
 
@@ -302,6 +724,14 @@ const MITMWorkbenchPage: React.FC = () => {
   const [sessions, setSessions] = useState<MITMSession[]>([]);
   const [activeSession, setActiveSession] = useState<MITMSession | null>(null);
   const [sessionName, setSessionName] = useState('');
+  
+  // Saved Sessions with Analysis (sidebar panel)
+  const [savedSessions, setSavedSessions] = useState<MITMSavedScan[]>([]);
+  const [savedSessionsExpanded, setSavedSessionsExpanded] = useState(true);
+  const [loadingSavedSessions, setLoadingSavedSessions] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [viewingSavedScan, setViewingSavedScan] = useState<MITMSavedScan | null>(null);
+  const [savedScanDialogOpen, setSavedScanDialogOpen] = useState(false);
 
   // Traffic export menu state
   const [trafficExportAnchorEl, setTrafficExportAnchorEl] = useState<null | HTMLElement>(null);
@@ -332,7 +762,7 @@ const MITMWorkbenchPage: React.FC = () => {
   const [loadingGuide, setLoadingGuide] = useState(false);
 
   // AI Analysis state
-  const [analysisResult, setAnalysisResult] = useState<MITMAnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<(MITMAnalysisResult & { agent_activity?: any }) | null>(null);
   const [analyzingTraffic, setAnalyzingTraffic] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
 
@@ -367,6 +797,58 @@ const MITMWorkbenchPage: React.FC = () => {
   const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
   const [showAiSuggestions, setShowAiSuggestions] = useState(false);
   const [aiSuggestionsResponse, setAiSuggestionsResponse] = useState<AISuggestionsResponse | null>(null);
+
+  // Attack Phase State (Agentic MITM)
+  interface PhaseData {
+    phase: string;
+    name: string;
+    description: string;
+    is_current: boolean;
+    is_complete: boolean;
+    goals: string[];
+    goals_achieved: string[];
+    entered_at: string | null;
+    completed_at: string | null;
+  }
+  interface PhaseProgress {
+    phase: string;
+    goals_total: number;
+    goals_achieved: number;
+    goals_achieved_list: string[];
+    tools_executed: number;
+    credentials_captured: number;
+    sessions_hijacked: number;
+    injections_successful: number;
+    findings_generated: number;
+    is_complete: boolean;
+  }
+  const [attackPhases, setAttackPhases] = useState<PhaseData[]>([]);
+  const [currentPhase, setCurrentPhase] = useState<PhaseData | null>(null);
+  const [phaseProgress, setPhaseProgress] = useState<PhaseProgress | null>(null);
+  const [showPhaseIndicator, setShowPhaseIndicator] = useState(true);
+  const [phaseLoading, setPhaseLoading] = useState(false);
+
+  // Attack Chains State
+  interface AttackChain {
+    chain_id: string;
+    name: string;
+    description: string;
+    triggers: string[];
+    steps: Array<{ step_number: number; tool_id: string; description: string }>;
+    expected_outcome: string;
+    risk_level: string;
+  }
+  const [attackChains, setAttackChains] = useState<AttackChain[]>([]);
+  const [chainExecutionHistory, setChainExecutionHistory] = useState<any[]>([]);
+  const [chainStats, setChainStats] = useState<any>(null);
+
+  // MITRE Mapping State
+  const [mitreMapping, setMitreMapping] = useState<any>(null);
+  const [mitreNarrative, setMitreNarrative] = useState<any>(null);
+
+  // Memory/Reasoning State
+  const [agentMemory, setAgentMemory] = useState<any>(null);
+  const [reasoningChains, setReasoningChains] = useState<any[]>([]);
 
   // WebSocket Deep Inspection State
   const [wsConnections, setWsConnections] = useState<WebSocketConnection[]>([]);
@@ -437,6 +919,33 @@ const MITMWorkbenchPage: React.FC = () => {
   const [http2Loading, setHttp2Loading] = useState(false);
   const [selectedHttp2Stream, setSelectedHttp2Stream] = useState<number | null>(null);
   const [grpcServiceFilter, setGrpcServiceFilter] = useState('');
+
+  // Agentic Tools Visibility
+  const [showAgenticTools, setShowAgenticTools] = useState(true);
+
+  // Attack Tools State - Agentic Execution
+  const [attackTools, setAttackTools] = useState<any[]>([]);
+  const [attackToolCategories, setAttackToolCategories] = useState<string[]>([]);
+  const [attackToolsLoading, setAttackToolsLoading] = useState(false);
+  const [selectedAttackCategory, setSelectedAttackCategory] = useState<string>('');
+  const [attackRecommendations, setAttackRecommendations] = useState<any[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [executingTool, setExecutingTool] = useState<string | null>(null);
+  const [toolExecutionResults, setToolExecutionResults] = useState<any[]>([]);
+  const [agenticSessionRunning, setAgenticSessionRunning] = useState(false);
+  const [agenticSessionResult, setAgenticSessionResult] = useState<any | null>(null);
+  const [showAgenticResultDialog, setShowAgenticResultDialog] = useState(false);
+  const [attackToolExecutionLog, setAttackToolExecutionLog] = useState<any[]>([]);
+  const [phaseStrategy, setPhaseStrategy] = useState<string>('progressive');
+  const [maxAgenticTools, setMaxAgenticTools] = useState<number>(15);
+
+  // Enhanced Agentic State
+  const [agentMonitoringActive, setAgentMonitoringActive] = useState(false);
+  const [agentGoals, setAgentGoals] = useState<string[]>([]);
+  const [agentGoalProgress, setAgentGoalProgress] = useState<any>(null);
+  const [agentStatus, setAgentStatus] = useState<any>(null);
+  const [showGoalDialog, setShowGoalDialog] = useState(false);
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
 
   // Theme for animations
   const theme = useTheme();
@@ -619,12 +1128,142 @@ const MITMWorkbenchPage: React.FC = () => {
     loadTraffic();
   };
 
+  // Load all saved scans from database
+  const loadSavedSessions = useCallback(async () => {
+    try {
+      setLoadingSavedSessions(true);
+      const data = await mitmClient.listSavedScans();
+      // Already sorted by backend, but ensure newest first
+      const sorted = (data || []).sort((a, b) =>
+        (Date.parse(b.created_at ?? "") || 0) - (Date.parse(a.created_at ?? "") || 0)
+      );
+      setSavedSessions(sorted);
+    } catch (err: any) {
+      console.error('Failed to load saved sessions:', err);
+    } finally {
+      setLoadingSavedSessions(false);
+    }
+  }, []);
+
+  // Load and view a saved scan
+  const handleViewSavedScan = useCallback(async (scan: MITMSavedScan) => {
+    try {
+      setLoadingSavedSessions(true);
+      const fullScan = await mitmClient.getSavedScan(scan.id);
+      setViewingSavedScan(fullScan);
+      setSavedScanDialogOpen(true);
+    } catch (err: any) {
+      console.error('Failed to load saved scan:', err);
+      setError('Failed to load saved scan');
+    } finally {
+      setLoadingSavedSessions(false);
+    }
+  }, []);
+
+  // Delete a saved scan
+  const handleDeleteSavedScan = useCallback(async (scanId: number) => {
+    try {
+      await mitmClient.deleteSavedScan(scanId);
+      setSavedSessions(prev => prev.filter(s => s.id !== scanId));
+      setSuccess('Saved scan deleted');
+    } catch (err: any) {
+      console.error('Failed to delete saved scan:', err);
+      setError('Failed to delete saved scan');
+    }
+  }, []);
+
+  // Auto-save session with analysis
+  const handleAutoSaveSession = useCallback(async (analysis: MITMAnalysisResult) => {
+    if (!selectedProxy || !autoSaveEnabled) return;
+    
+    const currentProxy = proxies.find(p => p.id === selectedProxy);
+    if (!currentProxy) return;
+    
+    try {
+      const sessionName = `Analysis-${new Date().toISOString().split('T')[0]}-${Date.now()}`;
+      await mitmClient.saveSessionWithAnalysis(selectedProxy, sessionName, analysis);
+      await loadSavedSessions();
+      setSuccess('Session auto-saved with analysis');
+    } catch (err: any) {
+      console.error('Failed to auto-save session:', err);
+    }
+  }, [selectedProxy, autoSaveEnabled, proxies, loadSavedSessions]);
+
+  // Load saved session into workspace
+  const handleLoadSavedSession = async (session: MITMSession) => {
+    if (!session.proxy_id) {
+      setError('Session missing proxy ID');
+      return;
+    }
+    try {
+      setLoadingSavedSessions(true);
+      const response = await mitmClient.getSession(session.proxy_id, session.id, 200, 0);
+      const entries = response?.entries || [];
+      setTraffic(entries.map((entry: any) => normalizeTrafficEntry(entry)));
+      setActiveSession(session);
+      setSelectedProxy(session.proxy_id);
+      setSelectedTraffic(null);
+      
+      // If session has analysis, also load it
+      if (session.analysis) {
+        // Reconstruct a basic analysis result to display
+        // Map simplified findings to full format
+        const mappedFindings = (session.analysis.findings || []).map(f => ({
+          severity: f.severity,
+          category: 'Security',
+          title: f.title,
+          description: f.description || '',
+          evidence: '',
+          recommendation: '',
+        }));
+        
+        const riskScore = session.analysis.risk_score || 0;
+        setAnalysisResult({
+          summary: session.analysis.summary || '',
+          risk_score: riskScore,
+          risk_level: riskScore >= 80 ? 'critical' : 
+                      riskScore >= 60 ? 'high' :
+                      riskScore >= 40 ? 'medium' : 'low',
+          findings: mappedFindings,
+          recommendations: [],
+          ai_writeup: session.analysis.ai_writeup || '',
+          attack_paths: [],
+          agent_activity: (session.analysis as any)?.agent_activity || {},
+          traffic_analyzed: session.entries || 0,
+          rules_active: 0,
+        });
+        setShowAnalysis(true);
+      }
+      
+      setSuccess(`Loaded session: ${session.name}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load session');
+    } finally {
+      setLoadingSavedSessions(false);
+    }
+  };
+
+  // Delete saved session
+  const handleDeleteSavedSession = async (session: MITMSession, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!session.proxy_id) return;
+    
+    try {
+      await mitmClient.deleteSession(session.proxy_id, session.id);
+      await loadSavedSessions();
+      setSuccess('Session deleted');
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete session');
+    }
+  };
+
   // Initial load
   useEffect(() => {
     loadProxies();
     loadPresets();
     loadTestScenarios();
-  }, [loadProxies, loadPresets]);
+    loadSavedSessions();
+  }, [loadProxies, loadPresets, loadSavedSessions]);
 
   // Load test scenarios
   const loadTestScenarios = async () => {
@@ -971,6 +1610,407 @@ const MITMWorkbenchPage: React.FC = () => {
     }
   }, []);
 
+  // Attack Tools Functions - Agentic Execution
+  const loadAttackTools = useCallback(async (category?: string) => {
+    try {
+      setAttackToolsLoading(true);
+      const data = await mitmClient.listAttackTools(category);
+      setAttackTools(data.tools || []);
+      setAttackToolCategories(data.categories || []);
+    } catch (err: any) {
+      console.error('Failed to load attack tools:', err);
+      setError(err.message || 'Failed to load attack tools');
+    } finally {
+      setAttackToolsLoading(false);
+    }
+  }, []);
+
+  const loadAttackRecommendations = useCallback(async (proxyId: string) => {
+    try {
+      setRecommendationsLoading(true);
+      const data = await mitmClient.getAttackToolRecommendations(proxyId);
+      setAttackRecommendations(data.recommendations || []);
+    } catch (err: any) {
+      console.error('Failed to load attack recommendations:', err);
+      setError(err.message || 'Failed to get AI recommendations');
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }, []);
+
+  const executeAttackTool = useCallback(async (proxyId: string, toolId: string, options?: Record<string, any>) => {
+    try {
+      setExecutingTool(toolId);
+      const result = await mitmClient.executeAttackTool(proxyId, toolId, options);
+      setToolExecutionResults(prev => [...prev, result]);
+      if (result.success) {
+        setSuccess(`Tool "${toolId}" executed successfully! Found ${result.findings?.length || 0} findings.`);
+        // Refresh analysis to show new findings
+        if (analysisResult) {
+          handleAnalyzeTraffic();
+        }
+      } else {
+        setError(`Tool execution had issues: ${result.errors?.join(', ') || 'Unknown error'}`);
+      }
+      return result;
+    } catch (err: any) {
+      console.error('Failed to execute attack tool:', err);
+      setError(err.message || 'Failed to execute attack tool');
+      return null;
+    } finally {
+      setExecutingTool(null);
+    }
+  }, [analysisResult]);
+
+  const runAgenticSession = useCallback(async (proxyId: string, maxTools: number = 15, strategy: string = 'progressive') => {
+    try {
+      setAgenticSessionRunning(true);
+      setAgenticSessionResult(null);
+      const result = await mitmClient.runAgenticSession(proxyId, maxTools, true);
+      setAgenticSessionResult(result);
+      setShowAgenticResultDialog(true);
+      if (result.status === 'completed' || result.status === 'partial') {
+        setSuccess(`Agentic session completed! Executed ${result.tools_executed} tools, found ${result.total_findings} findings.`);
+        // Refresh analysis to show new findings
+        handleAnalyzeTraffic();
+        // Refresh agent status
+        loadAgentStatus(proxyId);
+      }
+      return result;
+    } catch (err: any) {
+      console.error('Failed to run agentic session:', err);
+      setError(err.message || 'Failed to run agentic attack session');
+      return null;
+    } finally {
+      setAgenticSessionRunning(false);
+    }
+  }, []);
+
+  const loadAttackExecutionLog = useCallback(async (proxyId: string) => {
+    try {
+      const data = await mitmClient.getAttackToolExecutionLog(proxyId);
+      setAttackToolExecutionLog(data.executions || []);
+    } catch (err: any) {
+      console.error('Failed to load execution log:', err);
+    }
+  }, []);
+
+  // ============================================================================
+  // Enhanced Agentic Functions
+  // ============================================================================
+
+  const loadAgentStatus = useCallback(async (proxyId: string) => {
+    try {
+      const status = await mitmClient.getAgentStatus(proxyId);
+      setAgentStatus(status);
+      setAgentMonitoringActive(status.monitoring_active);
+      if (status.goals?.length > 0) {
+        setAgentGoals(status.goals.map((g: any) => g.name));
+      }
+      if (status.goal_progress) {
+        setAgentGoalProgress(status.goal_progress);
+      }
+    } catch (err: any) {
+      console.error('Failed to load agent status:', err);
+    }
+  }, []);
+
+  const handleSetGoals = useCallback(async (proxyId: string, goals: string[]) => {
+    try {
+      await mitmClient.setAttackGoals(proxyId, goals);
+      setAgentGoals(goals);
+      setSuccess(`Attack goals set: ${goals.join(', ')}`);
+      setShowGoalDialog(false);
+      // Load updated progress
+      const progress = await mitmClient.getGoalProgress(proxyId);
+      setAgentGoalProgress(progress);
+    } catch (err: any) {
+      setError(err.message || 'Failed to set attack goals');
+    }
+  }, []);
+
+  const handleStartMonitoring = useCallback(async (proxyId: string) => {
+    try {
+      const result = await mitmClient.startTrafficMonitor(proxyId, {
+        auto_analyze: true,
+        capture_credentials: true,
+        detect_vulnerabilities: true,
+        trigger_attacks: true,
+        interval_seconds: 2
+      });
+      setAgentMonitoringActive(true);
+      setSuccess('Agent monitoring started - attacks will be triggered automatically!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to start monitoring');
+    }
+  }, []);
+
+  const handleStopMonitoring = useCallback(async (proxyId: string) => {
+    try {
+      await mitmClient.stopTrafficMonitor(proxyId);
+      setAgentMonitoringActive(false);
+      setSuccess('Agent monitoring stopped');
+    } catch (err: any) {
+      setError(err.message || 'Failed to stop monitoring');
+    }
+  }, []);
+
+  const handleVerifyAttack = useCallback(async (proxyId: string, toolId: string) => {
+    try {
+      setSuccess(`Verifying attack: ${toolId}...`);
+      const result = await mitmClient.verifyAttackSuccess(proxyId, toolId, 30);
+      if (result.success) {
+        setSuccess(`Attack verified! Indicators: ${result.indicators.join(', ')}`);
+      } else {
+        setError(`Attack unverified after ${result.verification_time_seconds?.toFixed(1)}s`);
+      }
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify attack');
+      return null;
+    }
+  }, []);
+
+  // ============================================================================
+  // Saved Reports Functions (for historical data persistence)
+  // ============================================================================
+
+  const loadSavedReports = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      setLoadingSavedReports(true);
+      const response = await fetch(`/api/mitm/reports/project/${projectId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSavedReports(data || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load saved reports:', err);
+    } finally {
+      setLoadingSavedReports(false);
+    }
+  }, [projectId]);
+
+  // Load saved reports when project is available
+  useEffect(() => {
+    if (projectId) {
+      loadSavedReports();
+    }
+  }, [projectId, loadSavedReports]);
+
+  const loadDataFromSavedReport = useCallback(async (reportId: number) => {
+    try {
+      setViewingHistoricalData(true);
+
+      // Load phases from saved report
+      const phasesResp = await fetch(`/api/mitm/reports/${reportId}/phases`);
+      if (phasesResp.ok) {
+        const data = await phasesResp.json();
+        setAttackPhases(data.all_phases || []);
+        setCurrentPhase(data.current_phase ? { name: data.current_phase, phase_type: data.current_phase } as any : null);
+        setPhaseProgress(data.progress || null);
+      }
+
+      // Load chains from saved report
+      const chainsResp = await fetch(`/api/mitm/reports/${reportId}/chains`);
+      if (chainsResp.ok) {
+        const data = await chainsResp.json();
+        setAttackChains(data.available_chains || []);
+        setChainExecutionHistory(data.execution_history || []);
+        setChainStats(data.stats || null);
+      }
+
+      // Load MITRE mapping from saved report
+      const mitreResp = await fetch(`/api/mitm/reports/${reportId}/mitre`);
+      if (mitreResp.ok) {
+        const data = await mitreResp.json();
+        setMitreMapping(data);
+      }
+
+      // Load reasoning from saved report
+      const reasoningResp = await fetch(`/api/mitm/reports/${reportId}/reasoning`);
+      if (reasoningResp.ok) {
+        const data = await reasoningResp.json();
+        setReasoningChains(data.reasoning_chains || []);
+      }
+
+      // Load memory from saved report
+      const memoryResp = await fetch(`/api/mitm/reports/${reportId}/memory`);
+      if (memoryResp.ok) {
+        const data = await memoryResp.json();
+        setAgentMemory(data);
+      }
+
+      setSuccess(`Loaded historical data from report #${reportId}`);
+    } catch (err: any) {
+      console.error('Failed to load data from saved report:', err);
+      setError('Failed to load historical data');
+    }
+  }, []);
+
+  const handleSelectSavedReport = useCallback((report: SavedReport) => {
+    setSelectedReport(report);
+    loadDataFromSavedReport(report.id);
+  }, [loadDataFromSavedReport]);
+
+  // ============================================================================
+  // Attack Phase Management Functions
+  // ============================================================================
+
+  const loadAttackPhases = useCallback(async (proxyId: string) => {
+    try {
+      setPhaseLoading(true);
+      const response = await fetch(`/api/mitm/attack/${proxyId}/phase`);
+      if (response.ok) {
+        const data = await response.json();
+        setAttackPhases(data.all_phases || []);
+        setCurrentPhase(data.current_phase || null);
+        setPhaseProgress(data.progress || null);
+      }
+    } catch (err: any) {
+      console.error('Failed to load attack phases:', err);
+    } finally {
+      setPhaseLoading(false);
+    }
+  }, []);
+
+  const loadAttackChains = useCallback(async (proxyId: string) => {
+    try {
+      const response = await fetch(`/api/mitm/attack/${proxyId}/chains`);
+      if (response.ok) {
+        const data = await response.json();
+        setAttackChains(data.available_chains || []);
+        setChainExecutionHistory(data.execution_history || []);
+        setChainStats(data.stats || null);
+      }
+    } catch (err: any) {
+      console.error('Failed to load attack chains:', err);
+    }
+  }, []);
+
+  const loadMitreMapping = useCallback(async (proxyId: string) => {
+    try {
+      const response = await fetch(`/api/mitm/attack/${proxyId}/mitre`);
+      if (response.ok) {
+        const data = await response.json();
+        setMitreMapping(data);
+      }
+    } catch (err: any) {
+      console.error('Failed to load MITRE mapping:', err);
+    }
+  }, []);
+
+  const loadAgentMemory = useCallback(async (proxyId: string) => {
+    try {
+      const response = await fetch(`/api/mitm/attack/${proxyId}/memory`);
+      if (response.ok) {
+        const data = await response.json();
+        setAgentMemory(data);
+      }
+    } catch (err: any) {
+      console.error('Failed to load agent memory:', err);
+    }
+  }, []);
+
+  const loadReasoningChains = useCallback(async (proxyId: string) => {
+    try {
+      const response = await fetch(`/api/mitm/attack/${proxyId}/reasoning?limit=10`);
+      if (response.ok) {
+        const data = await response.json();
+        setReasoningChains(data.reasoning_chains || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load reasoning chains:', err);
+    }
+  }, []);
+
+  // Clear historical view and reload live data
+  const clearHistoricalView = useCallback(() => {
+    setSelectedReport(null);
+    setViewingHistoricalData(false);
+    // Reload live data if proxy is selected
+    if (selectedProxy) {
+      loadAttackPhases(selectedProxy);
+      loadAttackChains(selectedProxy);
+      loadMitreMapping(selectedProxy);
+      loadAgentMemory(selectedProxy);
+      loadReasoningChains(selectedProxy);
+    }
+  }, [selectedProxy, loadAttackPhases, loadAttackChains, loadMitreMapping, loadAgentMemory, loadReasoningChains]);
+
+  // Load attack phases when proxy is selected
+  useEffect(() => {
+    if (selectedProxy) {
+      loadAttackPhases(selectedProxy);
+    }
+  }, [selectedProxy, loadAttackPhases]);
+
+  const handleSetPhase = useCallback(async (proxyId: string, phase: string) => {
+    try {
+      const response = await fetch(`/api/mitm/attack/${proxyId}/phase/${phase}`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess(`Transitioned to phase: ${phase}`);
+        loadAttackPhases(proxyId);
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Failed to set phase');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to set phase');
+    }
+  }, [loadAttackPhases]);
+
+  const handleExecuteChain = useCallback(async (proxyId: string, chainId: string) => {
+    try {
+      setSuccess(`Executing attack chain: ${chainId}...`);
+      const response = await fetch(`/api/mitm/attack/${proxyId}/chains/${chainId}`, {
+        method: 'POST',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess(`Chain ${chainId} executed successfully!`);
+        loadAttackChains(proxyId);
+        loadAttackPhases(proxyId);
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Failed to execute chain');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to execute chain');
+    }
+  }, [loadAttackChains, loadAttackPhases]);
+
+  const handleRunAggressiveSession = useCallback(async (proxyId: string) => {
+    try {
+      setSuccess('Starting aggressive attack session...');
+      const response = await fetch(`/api/mitm/attack/${proxyId}/aggressive-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          max_tools: 15,
+          aggressive: true,
+          goals: agentGoals.length > 0 ? agentGoals : ['compromise_authentication', 'inject_payload'],
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAgenticSessionResult(data);
+        setSuccess(`Aggressive session completed! ${data.total_findings} findings, ${data.captured_data?.credentials?.length || 0} credentials captured`);
+        loadAttackPhases(proxyId);
+        loadAttackChains(proxyId);
+        loadAgentMemory(proxyId);
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Failed to run aggressive session');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to run aggressive session');
+    }
+  }, [agentGoals, loadAttackPhases, loadAttackChains, loadAgentMemory]);
+
   // Run test scenario
   const handleRunScenario = async (scenarioId: string) => {
     if (!selectedProxy) {
@@ -1093,6 +2133,14 @@ const MITMWorkbenchPage: React.FC = () => {
   useEffect(() => {
     if (selectedProxy) {
       setActiveSession(null);
+      setSelectedTraffic(null);
+      setTraffic([]);
+      setAttackRecommendations([]);
+      setAttackToolExecutionLog([]);
+      setToolExecutionResults([]);
+      setAgentStatus(null);
+      setAgentGoals([]);
+      setAgentGoalProgress(null);
       loadTraffic();
       loadRules();
       checkProxyHealth();
@@ -1141,6 +2189,19 @@ const MITMWorkbenchPage: React.FC = () => {
     }, 2000);
     return () => clearInterval(interval);
   }, [autoRefresh, selectedProxy, liveStreamEnabled, activeSession, loadTraffic, loadProxies]);
+
+  // Load attack tools when agentic tools are visible
+  useEffect(() => {
+    if (!showAgenticTools) return;
+    if (attackTools.length === 0) {
+      loadAttackTools();
+    }
+    if (selectedProxy) {
+      loadAttackRecommendations(selectedProxy);
+      loadAttackExecutionLog(selectedProxy);
+      loadAgentStatus(selectedProxy);
+    }
+  }, [showAgenticTools, selectedProxy, attackTools.length, loadAttackTools, loadAttackRecommendations, loadAttackExecutionLog, loadAgentStatus]);
 
   // Live stream via WebSocket
   useEffect(() => {
@@ -1272,6 +2333,48 @@ const MITMWorkbenchPage: React.FC = () => {
         }));
       } else if (message.type === 'rules') {
         loadRules();
+      } else if (message.type === 'agent_event') {
+        // Handle real-time agentic session events
+        const eventData = message.data || {};
+        switch (message.event) {
+          case 'agentic_session_started':
+            setAgenticSessionRunning(true);
+            setSuccess(`Agentic session started (max ${eventData.max_tools} tools)`);
+            break;
+          case 'tool_execution_started':
+            setSuccess(`Executing: ${eventData.tool_name} (${eventData.tools_executed + 1}/${eventData.max_tools})`);
+            break;
+          case 'tool_execution_completed':
+            setSuccess(`Completed: ${eventData.tool_name} - ${eventData.findings_count} findings (Total: ${eventData.total_findings})`);
+            // Refresh agent status to show updated findings
+            if (selectedProxy) {
+              loadAgentStatus(selectedProxy);
+            }
+            break;
+          case 'agentic_session_completed':
+            setAgenticSessionRunning(false);
+            setSuccess(`Session complete! ${eventData.tools_executed} tools, ${eventData.total_findings} findings, ${eventData.credentials_captured} credentials`);
+            // Refresh data after session completes
+            if (selectedProxy) {
+              loadAgentStatus(selectedProxy);
+              loadAttackExecutionLog(selectedProxy);
+            }
+            break;
+          case 'agentic_session_failed':
+            setAgenticSessionRunning(false);
+            setError(`Agentic session failed: ${eventData.error}`);
+            break;
+          case 'credential_captured':
+          case 'token_captured':
+            setSuccess(`Captured: ${message.event.replace('_', ' ')}`);
+            if (selectedProxy) {
+              loadAgentStatus(selectedProxy);
+            }
+            break;
+          default:
+            // Log other agent events for debugging
+            console.log('Agent event:', message.event, eventData);
+        }
       }
     };
 
@@ -1296,11 +2399,11 @@ const MITMWorkbenchPage: React.FC = () => {
       setNewProxyOpen(false);
       setNewProxy({
         proxy_id: '',
-        listen_host: '127.0.0.1',
+        listen_host: '0.0.0.0',
         listen_port: 8080,
-        target_host: 'localhost',
+        target_host: '',
         target_port: 80,
-        mode: 'passthrough',
+        mode: 'auto_modify',
         tls_enabled: false,
       });
       loadProxies();
@@ -1315,8 +2418,22 @@ const MITMWorkbenchPage: React.FC = () => {
   const handleToggleProxy = async (proxyId: string, running: boolean) => {
     try {
       if (running) {
-        await mitmClient.stopProxy(proxyId);
-        setSuccess('Proxy stopped');
+        // When stopping, auto-save with project context if available
+        const result = await mitmClient.stopProxy(proxyId, {
+          autoSave: true,
+          projectId: projectId ? parseInt(projectId, 10) : undefined,
+        });
+        if (result.auto_saved && result.saved_report_id) {
+          if (projectId) {
+            setSuccess(`Proxy stopped - scan saved to project`);
+          } else {
+            setSuccess(`Proxy stopped - scan saved to Saved Scans`);
+          }
+          // Refresh saved sessions list
+          loadSavedSessions();
+        } else {
+          setSuccess('Proxy stopped');
+        }
       } else {
         await mitmClient.startProxy(proxyId);
         setSuccess('Proxy started');
@@ -1648,7 +2765,8 @@ const MITMWorkbenchPage: React.FC = () => {
       const data = await mitmClient.getGuidedSetup();
       setGuidedSetup(data);
     } catch (err: any) {
-      setError('Failed to load guided setup');
+      // Fallback to static data if API fails
+      setGuidedSetup(FALLBACK_GUIDED_SETUP);
     } finally {
       setLoadingGuide(false);
     }
@@ -1672,6 +2790,11 @@ const MITMWorkbenchPage: React.FC = () => {
       setAnalysisResult(result);
       setShowAnalysis(true);
       setSuccess('Traffic analysis complete');
+      
+      // Auto-save session with analysis
+      if (autoSaveEnabled && result) {
+        await handleAutoSaveSession(result);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to analyze traffic');
     } finally {
@@ -2307,6 +3430,137 @@ const MITMWorkbenchPage: React.FC = () => {
                 ))
               )}
             </List>
+            
+            {/* Saved Sessions Panel */}
+            <Box sx={{ borderTop: 1, borderColor: 'divider' }}>
+              <Box 
+                sx={{ 
+                  p: 2, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+                onClick={() => setSavedSessionsExpanded(!savedSessionsExpanded)}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HistoryIcon fontSize="small" color="primary" />
+                  <Typography variant="subtitle2">Saved Scans</Typography>
+                  <Badge badgeContent={savedSessions.length} color="primary" max={99}>
+                    <Box />
+                  </Badge>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Tooltip title={autoSaveEnabled ? 'Auto-save enabled' : 'Auto-save disabled'}>
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAutoSaveEnabled(!autoSaveEnabled);
+                      }}
+                    >
+                      {autoSaveEnabled ? <SuccessIcon fontSize="small" color="success" /> : <CancelIcon fontSize="small" color="disabled" />}
+                    </IconButton>
+                  </Tooltip>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      loadSavedSessions();
+                    }}
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                  <ExpandMoreIcon 
+                    fontSize="small" 
+                    sx={{ 
+                      transform: savedSessionsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s'
+                    }} 
+                  />
+                </Box>
+              </Box>
+              
+              <Collapse in={savedSessionsExpanded}>
+                {loadingSavedSessions ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                    <CircularProgress size={20} />
+                  </Box>
+                ) : savedSessions.length === 0 ? (
+                  <Box sx={{ px: 2, pb: 2 }}>
+                    <Alert severity="info" sx={{ fontSize: '0.75rem' }}>
+                      No saved scans yet. Stop a proxy to auto-save.
+                    </Alert>
+                  </Box>
+                ) : (
+                  <List dense sx={{ pt: 0, maxHeight: savedSessions.length > 4 ? 280 : 'none', overflow: savedSessions.length > 4 ? 'auto' : 'visible' }}>
+                    {savedSessions.map((scan) => (
+                      <ListItem
+                        key={scan.id}
+                        button
+                        onClick={() => handleViewSavedScan(scan)}
+                        sx={{
+                          borderLeft: viewingSavedScan?.id === scan.id ? 3 : 0,
+                          borderColor: 'secondary.main',
+                          py: 0.5,
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                              <Typography variant="caption" fontWeight="bold" noWrap sx={{ maxWidth: 120 }}>
+                                {scan.title || `Scan #${scan.id}`}
+                              </Typography>
+                              <Chip
+                                label={scan.risk_level}
+                                size="small"
+                                color={
+                                  scan.risk_level === 'critical' ? 'error' :
+                                  scan.risk_level === 'high' ? 'error' :
+                                  scan.risk_level === 'medium' ? 'warning' : 'success'
+                                }
+                                variant={scan.risk_level === 'critical' ? 'filled' : 'outlined'}
+                                sx={{ height: 16, fontSize: '0.65rem' }}
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Box sx={{ mt: 0.25 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {scan.target_host ? `${scan.target_host}:${scan.target_port}` : 'Unknown target'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {scan.created_at ? new Date(scan.created_at).toLocaleDateString() : 'Unknown date'} • {scan.findings_count} findings
+                              </Typography>
+                              {scan.auto_saved && !scan.project_id && (
+                                <Chip
+                                  label="Unassigned"
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ height: 14, fontSize: '0.6rem', mt: 0.25 }}
+                                />
+                              )}
+                            </Box>
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSavedScan(scan.id);
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Collapse>
+            </Box>
           </Paper>
         </Grid>
 
@@ -2328,6 +3582,20 @@ const MITMWorkbenchPage: React.FC = () => {
                     Natural Language Rule Creation
                   </Typography>
                   <Chip label="AI-Powered" size="small" color="secondary" variant="outlined" />
+                  {currentProxy.mode === 'auto_modify' ? (
+                    <Chip label="Rules Active" size="small" color="success" variant="outlined" />
+                  ) : (
+                    <Tooltip title="Switch to Auto Modify mode for rules to take effect">
+                      <Chip 
+                        label={`Mode: ${currentProxy.mode}`} 
+                        size="small" 
+                        color="warning" 
+                        variant="outlined"
+                        onClick={() => handleChangeMode(selectedProxy, 'auto_modify')}
+                        sx={{ cursor: 'pointer' }}
+                      />
+                    </Tooltip>
+                  )}
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Get AI suggestions based on captured traffic">
@@ -2676,8 +3944,872 @@ const MITMWorkbenchPage: React.FC = () => {
                 </Box>
               </Box>
 
+              {/* AGENTIC TOOLS SECTION */}
+              <Box sx={{ px: 3, mb: 2 }}>
+                <Button 
+                  fullWidth 
+                  variant={showAgenticTools ? "contained" : "outlined"} 
+                  color="error" 
+                  onClick={() => setShowAgenticTools(!showAgenticTools)}
+                  startIcon={<AIIcon />}
+                  endIcon={showAgenticTools ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  sx={{ justifyContent: 'space-between' }}
+                >
+                  Agentic Attack Tools {agenticSessionRunning && "(Running)"}
+                </Button>
+                <Collapse in={showAgenticTools}>
+                  <Paper sx={{ p: 2, mt: 1, border: `1px solid ${theme.palette.error.main}` }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    
+                    {/* Header */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography variant="h6">AI-Powered Attack Tools</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Execute security tools with AI recommendations - findings are automatically added
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={attackToolsLoading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                          onClick={() => {
+                            loadAttackTools(selectedAttackCategory || undefined);
+                            if (selectedProxy) {
+                              loadAttackRecommendations(selectedProxy);
+                              loadAttackExecutionLog(selectedProxy);
+                              loadAgentStatus(selectedProxy);
+                            }
+                          }}
+                          disabled={attackToolsLoading}
+                        >
+                          Refresh
+                        </Button>
+                        <FormControl size="small" sx={{ minWidth: 140 }}>
+                          <InputLabel>Strategy</InputLabel>
+                          <Select
+                            value={phaseStrategy}
+                            label="Strategy"
+                            onChange={(e) => setPhaseStrategy(e.target.value)}
+                            disabled={agenticSessionRunning}
+                          >
+                            <MenuItem value="progressive">Progressive (Recommended)</MenuItem>
+                            <MenuItem value="passive_only">Passive Only</MenuItem>
+                            <MenuItem value="aggressive">Aggressive</MenuItem>
+                          </Select>
+                        </FormControl>
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Max Tools"
+                          value={maxAgenticTools}
+                          onChange={(e) => setMaxAgenticTools(parseInt(e.target.value) || 15)}
+                          sx={{ width: 90 }}
+                          inputProps={{ min: 5, max: 25 }}
+                          disabled={agenticSessionRunning}
+                        />
+                        <Button
+                          variant="contained"
+                          color="error"
+                          startIcon={agenticSessionRunning ? <CircularProgress size={16} color="inherit" /> : <AIIcon />}
+                          onClick={() => selectedProxy && runAgenticSession(selectedProxy, maxAgenticTools, phaseStrategy)}
+                          disabled={!selectedProxy || agenticSessionRunning || !traffic.length}
+                        >
+                          {agenticSessionRunning ? 'Running...' : 'Run Agentic Session'}
+                        </Button>
+                      </Box>
+                    </Box>
+
+                    {/* Agent Control Panel */}
+                    <Paper sx={{ p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <AIIcon color="primary" />
+                          <Typography variant="subtitle1" fontWeight="bold">Agent Control</Typography>
+                          {agentMonitoringActive && (
+                            <Chip 
+                              label="MONITORING ACTIVE" 
+                              size="small" 
+                              color="success" 
+                              sx={{ animation: 'pulse 2s infinite' }}
+                            />
+                          )}
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setShowGoalDialog(true)}
+                            disabled={!selectedProxy}
+                          >
+                            Set Goals
+                          </Button>
+                          {agentMonitoringActive ? (
+                            <Button
+                              variant="contained"
+                              color="warning"
+                              size="small"
+                              onClick={() => selectedProxy && handleStopMonitoring(selectedProxy)}
+                            >
+                              Stop Monitoring
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              onClick={() => selectedProxy && handleStartMonitoring(selectedProxy)}
+                              disabled={!selectedProxy || !traffic.length}
+                            >
+                              Start Auto-Monitor
+                            </Button>
+                          )}
+                        </Box>
+                      </Box>
+
+                      {/* Goals Progress */}
+                      {agentGoals.length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">Active Goals:</Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                            {agentGoals.map((goal, idx) => (
+                              <Chip
+                                key={idx}
+                                label={goal.replace(/_/g, ' ')}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* Agent Status */}
+                      {agentStatus && (
+                        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Findings</Typography>
+                            <Typography variant="h6">{agentStatus.findings_count || 0}</Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Credentials</Typography>
+                            <Typography variant="h6" color="error.main">
+                              {agentStatus.captured_data_summary?.credentials || 0}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Tokens</Typography>
+                            <Typography variant="h6" color="warning.main">
+                              {agentStatus.captured_data_summary?.tokens || 0}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Auto-Execute Threshold</Typography>
+                            <Typography variant="h6">
+                              {((agentStatus.confidence_thresholds?.auto_execute || 0.7) * 100).toFixed(0)}%
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* Goal Progress */}
+                      {agentGoalProgress?.goals?.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="caption" color="text.secondary">Goal Progress:</Typography>
+                          {agentGoalProgress.goals.map((g: any, idx: number) => (
+                            <Box key={idx} sx={{ mt: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">{g.goal}</Typography>
+                                <Typography variant="body2">{g.completion.toFixed(0)}%</Typography>
+                              </Box>
+                              <LinearProgress 
+                                variant="determinate" 
+                                value={g.completion} 
+                                color={g.completion >= 100 ? 'success' : 'primary'}
+                              />
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* Mode Warning */}
+                    {currentProxy && currentProxy.mode !== 'auto_modify' && (
+                      <Alert severity="warning" sx={{ mt: 1 }}>
+                        <AlertTitle>Limited Functionality</AlertTitle>
+                        Current mode is <strong>{currentProxy.mode}</strong>. Some attack tools require 
+                        <strong> auto_modify</strong> mode to actively inject payloads. 
+                        Analysis-only tools will still work.
+                      </Alert>
+                    )}
+
+                    {!traffic.length && (
+                      <Alert severity="info">
+                        <AlertTitle>No Traffic Captured</AlertTitle>
+                        Start capturing traffic first. Attack tools analyze traffic patterns to recommend and execute appropriate attacks.
+                      </Alert>
+                    )}
+
+                    {/* AI Recommendations Section */}
+                    <Accordion defaultExpanded>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <AIIcon color="primary" />
+                          <Typography variant="subtitle1">
+                            AI Recommendations ({attackRecommendations.length})
+                          </Typography>
+                          {recommendationsLoading && <CircularProgress size={16} />}
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {attackRecommendations.length === 0 ? (
+                          <Box sx={{ textAlign: 'center', py: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {recommendationsLoading ? 'Analyzing traffic for recommendations...' : 
+                               'Click "Refresh" to get AI recommendations based on captured traffic'}
+                            </Typography>
+                            {!recommendationsLoading && selectedProxy && traffic.length > 0 && (
+                              <Button
+                                variant="outlined"
+                                startIcon={<AIIcon />}
+                                onClick={() => loadAttackRecommendations(selectedProxy)}
+                                sx={{ mt: 1 }}
+                              >
+                                Get AI Recommendations
+                              </Button>
+                            )}
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            {attackRecommendations.map((rec: MITMToolRecommendation, idx: number) => (
+                              <Paper key={idx} variant="outlined" sx={{ p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                  <Box>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                                      {rec.tool_name}
+                                    </Typography>
+                                    <Chip 
+                                      label={`${Math.round(rec.confidence * 100)}% confidence`}
+                                      size="small"
+                                      color={rec.confidence > 0.8 ? 'success' : rec.confidence > 0.5 ? 'warning' : 'default'}
+                                      sx={{ mt: 0.5 }}
+                                    />
+                                  </Box>
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    color="error"
+                                    startIcon={executingTool === rec.tool_id ? <CircularProgress size={14} color="inherit" /> : <PlayIcon />}
+                                    onClick={() => selectedProxy && executeAttackTool(selectedProxy, rec.tool_id)}
+                                    disabled={!selectedProxy || executingTool === rec.tool_id}
+                                  >
+                                    Execute
+                                  </Button>
+                                </Box>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                  {rec.reason}
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                                  <strong>Expected Impact:</strong> {rec.expected_impact}
+                                </Typography>
+                                {rec.risk_warning && (
+                                  <Alert severity="warning" sx={{ mt: 1, py: 0 }}>
+                                    {rec.risk_warning}
+                                  </Alert>
+                                )}
+                              </Paper>
+                            ))}
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Available Tools Section */}
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <DebugIcon />
+                          <Typography variant="subtitle1">
+                            All Attack Tools ({attackTools.length})
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {/* Category Filter */}
+                        <Box sx={{ mb: 2 }}>
+                          <FormControl size="small" sx={{ minWidth: 200 }}>
+                            <InputLabel>Filter by Category</InputLabel>
+                            <Select
+                              value={selectedAttackCategory}
+                              onChange={(e) => {
+                                setSelectedAttackCategory(e.target.value);
+                                loadAttackTools(e.target.value || undefined);
+                              }}
+                              label="Filter by Category"
+                            >
+                              <MenuItem value="">All Categories</MenuItem>
+                              {attackToolCategories.map((cat) => (
+                                <MenuItem key={cat} value={cat}>{cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+
+                        {attackToolsLoading ? (
+                          <Box sx={{ textAlign: 'center', py: 2 }}>
+                            <CircularProgress size={24} />
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                              Loading tools...
+                            </Typography>
+                          </Box>
+                        ) : attackTools.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No attack tools available. Click Refresh to load.
+                          </Typography>
+                        ) : (
+                          <Grid container spacing={2}>
+                            {attackTools.map((tool: MITMAttackTool) => (
+                              <Grid item xs={12} md={6} key={tool.id}>
+                                <Card variant="outlined">
+                                  <CardContent sx={{ pb: 1 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                                        {tool.name}
+                                      </Typography>
+                                      <Chip 
+                                        label={tool.risk_level} 
+                                        size="small"
+                                        color={
+                                          tool.risk_level === 'critical' ? 'error' :
+                                          tool.risk_level === 'high' ? 'warning' :
+                                          tool.risk_level === 'medium' ? 'info' : 'default'
+                                        }
+                                      />
+                                    </Box>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: 40 }}>
+                                      {tool.description}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                                      <Chip label={tool.category.replace(/_/g, ' ')} size="small" variant="outlined" />
+                                      <Chip label={tool.execution_type} size="small" variant="outlined" color="secondary" />
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">
+                                      <strong>Expected findings:</strong> {tool.expected_findings?.slice(0, 2).join(', ')}
+                                      {tool.expected_findings?.length > 2 && '...'}
+                                    </Typography>
+                                  </CardContent>
+                                  <CardActions sx={{ pt: 0 }}>
+                                    <Button
+                                      size="small"
+                                      color="error"
+                                      startIcon={executingTool === tool.id ? <CircularProgress size={14} /> : <PlayIcon />}
+                                      onClick={() => selectedProxy && executeAttackTool(selectedProxy, tool.id)}
+                                      disabled={!selectedProxy || executingTool === tool.id}
+                                    >
+                                      Execute
+                                    </Button>
+                                    <Tooltip title={`Triggers: ${tool.triggers?.join(', ')}`}>
+                                      <IconButton size="small">
+                                        <InfoIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </CardActions>
+                                </Card>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Execution Results Section */}
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <HistoryIcon />
+                          <Typography variant="subtitle1">
+                            Execution Results ({toolExecutionResults.length})
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {toolExecutionResults.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No tools executed yet. Execute a tool or run an agentic session to see results.
+                          </Typography>
+                        ) : (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {toolExecutionResults.map((result: any, idx: number) => (
+                              <Paper key={idx} variant="outlined" sx={{ p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    {result.success ? (
+                                      <SuccessIcon color="success" />
+                                    ) : (
+                                      <ErrorIcon color="error" />
+                                    )}
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                                      {result.tool_id}
+                                    </Typography>
+                                  </Box>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {result.execution_time?.toFixed(2)}s | {result.findings?.length || 0} findings
+                                  </Typography>
+                                </Box>
+                                <Typography variant="body2" sx={{ mb: 1 }}>
+                                  {result.summary}
+                                </Typography>
+                                {result.captured_data && (
+                                  (result.captured_data.credentials?.length || 0) > 0 ||
+                                  (result.captured_data.tokens?.length || 0) > 0 ||
+                                  (result.captured_data.cookies?.length || 0) > 0
+                                ) && (
+                                  <Alert severity="error" sx={{ mt: 1 }}>
+                                    <AlertTitle>Captured Sensitive Data</AlertTitle>
+                                    {result.captured_data?.credentials?.length > 0 && (
+                                      <Typography variant="body2">• {result.captured_data.credentials.length} credentials captured</Typography>
+                                    )}
+                                    {result.captured_data?.tokens?.length > 0 && (
+                                      <Typography variant="body2">• {result.captured_data.tokens.length} tokens captured</Typography>
+                                    )}
+                                    {result.captured_data?.cookies?.length > 0 && (
+                                      <Typography variant="body2">• {result.captured_data.cookies.length} session cookies captured</Typography>
+                                    )}
+                                  </Alert>
+                                )}
+                                {result.errors && result.errors.length > 0 && (
+                                  <Alert severity="warning" sx={{ mt: 1 }}>
+                                    {result.errors.join(', ')}
+                                  </Alert>
+                                )}
+                              </Paper>
+                            ))}
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+
+                    {/* Execution Log Section */}
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <DescriptionIcon />
+                          <Typography variant="subtitle1">
+                            Execution Log ({attackToolExecutionLog.length})
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {attackToolExecutionLog.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No execution history for this proxy.
+                          </Typography>
+                        ) : (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Time</TableCell>
+                                  <TableCell>Tool</TableCell>
+                                  <TableCell>Status</TableCell>
+                                  <TableCell>Findings</TableCell>
+                                  <TableCell>Duration</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {attackToolExecutionLog.map((log: any, idx: number) => (
+                                  <TableRow key={idx}>
+                                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                      {new Date(log.timestamp).toLocaleTimeString()}
+                                    </TableCell>
+                                    <TableCell>{log.tool_name}</TableCell>
+                                    <TableCell>
+                                      {log.success ? (
+                                        <Chip label="Success" size="small" color="success" />
+                                      ) : (
+                                        <Tooltip title={log.error || 'Failed'}>
+                                          <Chip label="Failed" size="small" color="error" />
+                                        </Tooltip>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>{log.findings_count}</TableCell>
+                                    <TableCell>{log.execution_time?.toFixed(2)}s</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                    
+                  </Box>
+                  </Paper>
+                </Collapse>
+              </Box>
+
+              {/* Attack Phase Indicator */}
+              {showPhaseIndicator && selectedProxy && attackPhases.length > 0 && (
+                <Box sx={{ px: 2, pt: 1 }}>
+                  <MitmAttackPhaseIndicator
+                    phases={attackPhases}
+                    currentPhase={currentPhase}
+                    progress={phaseProgress}
+                    onPhaseClick={(phase) => handleSetPhase(selectedProxy, phase)}
+                  />
+                </Box>
+              )}
+
+              {/* Saved Reports Panel - Shows historical analysis data */}
+              {projectId && savedReports.length > 0 && (
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <Accordion defaultExpanded={!selectedProxy}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <HistoryIcon color="primary" />
+                        <Typography variant="subtitle2">
+                          Saved Analysis Reports ({savedReports.length})
+                        </Typography>
+                        {viewingHistoricalData && selectedReport && (
+                          <Chip
+                            label={`Viewing: ${selectedReport.title}`}
+                            size="small"
+                            color="info"
+                            onDelete={clearHistoricalView}
+                          />
+                        )}
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                        Click a report to load its phases, MITRE mapping, chains, and reasoning data.
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {savedReports.map((report) => (
+                          <Chip
+                            key={report.id}
+                            label={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <span>{report.title || `Report #${report.id}`}</span>
+                                <Chip
+                                  label={report.risk_level}
+                                  size="small"
+                                  color={
+                                    report.risk_level === 'critical' ? 'error' :
+                                    report.risk_level === 'high' ? 'warning' :
+                                    report.risk_level === 'medium' ? 'info' : 'default'
+                                  }
+                                  sx={{ ml: 0.5, height: 16, fontSize: '0.65rem' }}
+                                />
+                              </Box>
+                            }
+                            variant={selectedReport?.id === report.id ? 'filled' : 'outlined'}
+                            color={selectedReport?.id === report.id ? 'primary' : 'default'}
+                            onClick={() => handleSelectSavedReport(report)}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Box>
+                      {viewingHistoricalData && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          Viewing historical data from saved report. The data shown in Phases, Chains, MITRE, and Memory/Reasoning tabs is from this saved analysis.
+                          <Button size="small" onClick={clearHistoricalView} sx={{ ml: 1 }}>
+                            Return to Live Data
+                          </Button>
+                        </Alert>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
+
+              {/* Quick Action Buttons for Aggressive Mode */}
+              {selectedProxy && (
+                <Box sx={{ px: 2, pb: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="small"
+                    startIcon={<SecurityIcon />}
+                    onClick={() => handleRunAggressiveSession(selectedProxy)}
+                    disabled={loading || viewingHistoricalData}
+                  >
+                    Aggressive Attack Session
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (viewingHistoricalData) {
+                        clearHistoricalView();
+                      }
+                      loadAttackPhases(selectedProxy);
+                    }}
+                    disabled={phaseLoading}
+                  >
+                    {phaseLoading ? 'Loading...' : viewingHistoricalData ? 'Load Live Phases' : 'Refresh Phases'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (viewingHistoricalData) {
+                        clearHistoricalView();
+                      }
+                      loadAttackChains(selectedProxy);
+                    }}
+                  >
+                    {viewingHistoricalData ? 'Load Live Chains' : 'Load Chains'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (viewingHistoricalData) {
+                        clearHistoricalView();
+                      }
+                      loadMitreMapping(selectedProxy);
+                    }}
+                  >
+                    {viewingHistoricalData ? 'Load Live MITRE' : 'MITRE Mapping'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      if (viewingHistoricalData) {
+                        clearHistoricalView();
+                      }
+                      loadAgentMemory(selectedProxy);
+                      loadReasoningChains(selectedProxy);
+                    }}
+                  >
+                    {viewingHistoricalData ? 'Load Live Memory' : 'Memory/Reasoning'}
+                  </Button>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={showPhaseIndicator}
+                        onChange={(e) => setShowPhaseIndicator(e.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label="Show Phases"
+                    sx={{ ml: 'auto' }}
+                  />
+                </Box>
+              )}
+
+              {/* Attack Chains Panel */}
+              {selectedProxy && attackChains.length > 0 && (
+                <Accordion sx={{ mx: 2, mb: 1 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <RouteIcon color="warning" />
+                      <Typography variant="subtitle2">Attack Chains</Typography>
+                      <Chip label={attackChains.length} size="small" color="warning" />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={1}>
+                      {attackChains.map((chain) => (
+                        <Grid item xs={12} sm={6} md={4} key={chain.chain_id}>
+                          <Card variant="outlined" sx={{ bgcolor: 'rgba(255,152,0,0.1)' }}>
+                            <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                              <Typography variant="subtitle2" fontWeight="bold">{chain.name}</Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                {chain.description}
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
+                                {chain.triggers.map((trigger, i) => (
+                                  <Chip key={i} label={trigger} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
+                                ))}
+                              </Box>
+                              <Typography variant="caption" sx={{ display: 'block' }}>
+                                {chain.steps.length} steps | Risk: <span style={{ color: chain.risk_level === 'critical' ? '#f44336' : '#ff9800' }}>{chain.risk_level}</span>
+                              </Typography>
+                            </CardContent>
+                            <CardActions sx={{ pt: 0, pb: 1 }}>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="warning"
+                                onClick={() => handleExecuteChain(selectedProxy, chain.chain_id)}
+                                startIcon={<PlayIcon />}
+                              >
+                                Execute
+                              </Button>
+                            </CardActions>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                    {chainStats && (
+                      <Box sx={{ mt: 2, pt: 1, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Stats: {chainStats.total_executed || 0} chains executed | {chainStats.successful || 0} successful
+                        </Typography>
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* MITRE ATT&CK Mapping Panel */}
+              {selectedProxy && mitreMapping && (
+                <Accordion sx={{ mx: 2, mb: 1 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ShieldIcon color="error" />
+                      <Typography variant="subtitle2">MITRE ATT&CK Mapping</Typography>
+                      <Chip label={Object.keys(mitreMapping.techniques_used || {}).length} size="small" color="error" />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={1}>
+                      {Object.entries(mitreMapping.techniques_used || {}).map(([techniqueId, data]: [string, any]) => (
+                        <Grid item xs={12} sm={6} md={4} key={techniqueId}>
+                          <Card variant="outlined" sx={{ bgcolor: 'rgba(244,67,54,0.1)' }}>
+                            <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                              <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#f44336' }}>
+                                {techniqueId}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block' }}>
+                                {data.name || 'Unknown Technique'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Tactic: {data.tactic || 'Unknown'}
+                              </Typography>
+                              {data.tools_used && (
+                                <Box sx={{ mt: 0.5 }}>
+                                  {data.tools_used.map((tool: string, i: number) => (
+                                    <Chip key={i} label={tool} size="small" sx={{ fontSize: '0.6rem', height: 16, mr: 0.5 }} />
+                                  ))}
+                                </Box>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                    {mitreMapping.attack_narrative && (
+                      <Box sx={{ mt: 2, p: 1, bgcolor: 'rgba(244,67,54,0.05)', borderRadius: 1 }}>
+                        <Typography variant="caption" fontWeight="bold" sx={{ display: 'block', mb: 0.5 }}>
+                          Attack Narrative
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {mitreMapping.attack_narrative}
+                        </Typography>
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Agent Memory & Reasoning Panel */}
+              {selectedProxy && (agentMemory || reasoningChains.length > 0) && (
+                <Accordion sx={{ mx: 2, mb: 1 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AIIcon color="info" />
+                      <Typography variant="subtitle2">Agent Memory & Reasoning</Typography>
+                      {agentMemory && (
+                        <Chip label={`${agentMemory.total_memories || 0} memories`} size="small" color="info" />
+                      )}
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {agentMemory && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>Memory Statistics</Typography>
+                        <Grid container spacing={1}>
+                          <Grid item xs={6} sm={3}>
+                            <Paper sx={{ p: 1, textAlign: 'center', bgcolor: 'rgba(33,150,243,0.1)' }}>
+                              <Typography variant="h6">{agentMemory.total_memories || 0}</Typography>
+                              <Typography variant="caption">Memories</Typography>
+                            </Paper>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Paper sx={{ p: 1, textAlign: 'center', bgcolor: 'rgba(76,175,80,0.1)' }}>
+                              <Typography variant="h6">{agentMemory.successful_attacks || 0}</Typography>
+                              <Typography variant="caption">Successful</Typography>
+                            </Paper>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Paper sx={{ p: 1, textAlign: 'center', bgcolor: 'rgba(255,152,0,0.1)' }}>
+                              <Typography variant="h6">{agentMemory.tools_learned || 0}</Typography>
+                              <Typography variant="caption">Tools Learned</Typography>
+                            </Paper>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Paper sx={{ p: 1, textAlign: 'center', bgcolor: 'rgba(156,39,176,0.1)' }}>
+                              <Typography variant="h6">{(agentMemory.avg_effectiveness * 100 || 0).toFixed(0)}%</Typography>
+                              <Typography variant="caption">Avg Effectiveness</Typography>
+                            </Paper>
+                          </Grid>
+                        </Grid>
+                        {agentMemory.top_performing_tools && agentMemory.top_performing_tools.length > 0 && (
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="caption" color="text.secondary">Top Tools:</Typography>
+                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                              {agentMemory.top_performing_tools.map((tool: string, i: number) => (
+                                <Chip key={i} label={tool} size="small" color="success" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+                    {reasoningChains.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom>Recent Reasoning Chains</Typography>
+                        <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                          {reasoningChains.slice(0, 5).map((chain: any, idx: number) => (
+                            <ListItem key={idx} sx={{ py: 0.5 }}>
+                              <ListItemIcon sx={{ minWidth: 32 }}>
+                                <IdeaIcon fontSize="small" color="primary" />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={chain.decision || chain.tool_selected || 'Decision'}
+                                secondary={
+                                  <>
+                                    <Typography variant="caption" component="span">
+                                      Confidence: {((chain.confidence || 0) * 100).toFixed(0)}%
+                                    </Typography>
+                                    {chain.reasoning && (
+                                      <Typography variant="caption" component="div" sx={{ color: 'text.secondary', mt: 0.5 }}>
+                                        {chain.reasoning.slice(0, 100)}...
+                                      </Typography>
+                                    )}
+                                  </>
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                        <Button
+                          size="small"
+                          onClick={() => loadReasoningChains(selectedProxy)}
+                          sx={{ mt: 1 }}
+                        >
+                          Load More
+                        </Button>
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
               {/* Tabs */}
-              <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs
+                value={tabValue}
+                onChange={(_, v) => setTabValue(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
+              >
                 <Tab label="Traffic Log" icon={<HttpIcon />} iconPosition="start" />
                 <Tab label="Interception Rules" icon={<RuleIcon />} iconPosition="start" />
                 <Tab label="Preset Rules" icon={<SecurityIcon />} iconPosition="start" />
@@ -3181,6 +5313,26 @@ const MITMWorkbenchPage: React.FC = () => {
                     </Button>
                   </Box>
 
+                  {/* Mode Warning */}
+                  {rules.length > 0 && currentProxy && currentProxy.mode !== 'auto_modify' && (
+                    <Alert 
+                      severity="warning" 
+                      sx={{ mb: 2 }}
+                      action={
+                        <Button 
+                          color="inherit" 
+                          size="small"
+                          onClick={() => handleChangeMode(selectedProxy!, 'auto_modify')}
+                        >
+                          Switch to Auto Modify
+                        </Button>
+                      }
+                    >
+                      <strong>Rules not active!</strong> The proxy is in "{currentProxy.mode}" mode. 
+                      Switch to "Auto Modify" mode for rules to automatically apply to traffic.
+                    </Alert>
+                  )}
+
                   {ruleGroups.length > 0 && (
                     <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
                       <Typography variant="caption" color="text.secondary">
@@ -3275,29 +5427,57 @@ const MITMWorkbenchPage: React.FC = () => {
                     Preset rules provide common MITM scenarios for security testing. Click to apply them to the current proxy.
                   </Alert>
 
+                  {/* Mode Warning for Presets */}
+                  {currentProxy && currentProxy.mode !== 'auto_modify' && (
+                    <Alert 
+                      severity="info" 
+                      sx={{ mb: 2 }}
+                      action={
+                        <Button 
+                          color="inherit" 
+                          size="small"
+                          onClick={() => handleChangeMode(selectedProxy!, 'auto_modify')}
+                        >
+                          Switch to Auto Modify
+                        </Button>
+                      }
+                    >
+                      Preset rules will be added but won't take effect until you switch to "Auto Modify" mode.
+                    </Alert>
+                  )}
+
                   <Grid container spacing={2}>
-                    {presets.map((preset) => (
-                      <Grid item xs={12} sm={6} md={4} key={preset.id}>
-                        <Card>
-                          <CardContent>
-                            <Typography variant="subtitle1" gutterBottom>
-                              {preset.name}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {preset.id.replace(/_/g, ' ')}
-                            </Typography>
-                          </CardContent>
-                          <CardActions>
-                            <Button
-                              size="small"
-                              onClick={() => handleApplyPreset(preset.id)}
-                            >
-                              Apply
-                            </Button>
-                          </CardActions>
-                        </Card>
-                      </Grid>
-                    ))}
+                    {presets.map((preset) => {
+                      const presetInfo = PRESET_DESCRIPTIONS[preset.id];
+                      return (
+                        <Grid item xs={12} sm={6} md={4} key={preset.id}>
+                          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <CardContent sx={{ flexGrow: 1 }}>
+                              <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                                {preset.name}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                {presetInfo?.description || preset.id.replace(/_/g, ' ')}
+                              </Typography>
+                              {presetInfo?.use_case && (
+                                <Typography variant="caption" color="primary" sx={{ fontStyle: 'italic' }}>
+                                  Use case: {presetInfo.use_case}
+                                </Typography>
+                              )}
+                            </CardContent>
+                            <CardActions>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleApplyPreset(preset.id)}
+                              >
+                                Apply Rule
+                              </Button>
+                            </CardActions>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
                   </Grid>
                 </TabPanel>
 
@@ -3360,7 +5540,7 @@ const MITMWorkbenchPage: React.FC = () => {
                             <Typography variant="body1" color="text.secondary">
                               {analysisResult.summary}
                             </Typography>
-                            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                            <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
                               <Chip 
                                 icon={<HttpIcon />} 
                                 label={`${analysisResult.traffic_analyzed} requests analyzed`} 
@@ -3377,7 +5557,32 @@ const MITMWorkbenchPage: React.FC = () => {
                                 variant="outlined" 
                                 color={analysisResult.findings.length > 0 ? 'warning' : 'default'}
                               />
+                              {analysisResult.analysis_passes && (
+                                <Chip 
+                                  icon={<AIIcon />} 
+                                  label={`${analysisResult.analysis_passes}-pass AI analysis`} 
+                                  variant="outlined" 
+                                  color="secondary"
+                                />
+                              )}
                             </Box>
+                            {/* Analysis Pipeline Stats */}
+                            {analysisResult.analysis_stats && (
+                              <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.900', borderRadius: 1 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                  Analysis Pipeline:
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                  <Chip size="small" label={`Pass 1: ${analysisResult.analysis_stats.pass1_findings} detected`} />
+                                  <Typography variant="caption">→</Typography>
+                                  <Chip size="small" label={`Pass 2: +${analysisResult.analysis_stats.pass2_ai_findings} AI findings`} color="secondary" />
+                                  <Typography variant="caption">→</Typography>
+                                  <Chip size="small" label={`Pass 3: ${analysisResult.analysis_stats.false_positives_removed} FPs removed`} color="success" />
+                                  <Typography variant="caption">→</Typography>
+                                  <Chip size="small" label={`Final: ${analysisResult.analysis_stats.final_count} verified`} color="primary" />
+                                </Box>
+                              </Box>
+                            )}
                           </Grid>
                           <Grid item>
                             <Button
@@ -3392,13 +5597,146 @@ const MITMWorkbenchPage: React.FC = () => {
                         </Grid>
                       </Paper>
 
+                      {/* Attack Paths (NEW) */}
+                      {analysisResult.attack_paths && analysisResult.attack_paths.length > 0 && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <RouteIcon /> Attack Paths
+                          </Typography>
+                          {analysisResult.attack_paths.map((path: any, index: number) => (
+                            <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default', border: '1px solid', borderColor: path.severity === 'critical' ? 'error.main' : 'warning.main' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                                <Chip label={path.severity?.toUpperCase()} size="small" color={path.severity === 'critical' ? 'error' : 'warning'} />
+                                <Typography variant="subtitle1" fontWeight="bold">{path.name}</Typography>
+                              </Box>
+                              <Typography variant="body2" color="text.secondary" paragraph>{path.description}</Typography>
+                              <Typography variant="subtitle2" sx={{ mb: 1 }}>Exploitation Steps:</Typography>
+                              <List dense>
+                                {path.steps?.map((step: string, i: number) => (
+                                  <ListItem key={i} sx={{ py: 0 }}>
+                                    <ListItemIcon sx={{ minWidth: 28 }}>
+                                      <Typography variant="caption" color="primary">{i + 1}.</Typography>
+                                    </ListItemIcon>
+                                    <ListItemText primary={step} primaryTypographyProps={{ variant: 'body2' }} />
+                                  </ListItem>
+                                ))}
+                              </List>
+                              <Alert severity="error" sx={{ mt: 1 }}>
+                                <AlertTitle>Impact</AlertTitle>
+                                {path.impact}
+                              </Alert>
+                            </Paper>
+                          ))}
+                        </Box>
+                      )}
+
+                      {/* Offensive Tool Activity Overview */}
+                      {analysisResult.agent_activity && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DebugIcon /> Offensive Tool Activity
+                          </Typography>
+                          <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Grid container spacing={2} sx={{ mb: 2 }}>
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="caption" color="text.secondary">Monitoring</Typography>
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {analysisResult.agent_activity.monitoring_active ? 'Active' : 'Inactive'}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="caption" color="text.secondary">Captured Data</Typography>
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {`Creds: ${analysisResult.agent_activity.captured_data_summary?.credentials || 0}, `}
+                                  {`Tokens: ${analysisResult.agent_activity.captured_data_summary?.tokens || 0}, `}
+                                  {`Cookies: ${analysisResult.agent_activity.captured_data_summary?.cookies || 0}`}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="caption" color="text.secondary">Goals</Typography>
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {(analysisResult.agent_activity.goal_progress?.goals?.length || 0) > 0
+                                    ? `${analysisResult.agent_activity.goal_progress.goals.filter((g: any) => (g.completion || 0) >= 100).length}/${analysisResult.agent_activity.goal_progress.goals.length} complete`
+                                    : 'Not set'}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+
+                            <Divider sx={{ mb: 2 }} />
+
+                            <Typography variant="subtitle2" gutterBottom>Executed Tools</Typography>
+                            {(analysisResult.agent_activity.execution_log?.length || 0) === 0 ? (
+                              <Typography variant="body2" color="text.secondary">No agentic tools executed in this analysis.</Typography>
+                            ) : (
+                              <TableContainer>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow>
+                                      <TableCell>Tool</TableCell>
+                                      <TableCell>Status</TableCell>
+                                      <TableCell>Findings</TableCell>
+                                      <TableCell>Verified</TableCell>
+                                      <TableCell>Time (s)</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {analysisResult.agent_activity.execution_log.map((log: any, idx: number) => (
+                                      <TableRow key={idx}>
+                                        <TableCell>{log.tool_name || log.tool_id}</TableCell>
+                                        <TableCell>
+                                          {log.success ? (
+                                            <Chip label="Success" size="small" color="success" />
+                                          ) : (
+                                            <Chip label="Failed" size="small" color="error" />
+                                          )}
+                                        </TableCell>
+                                        <TableCell>{log.findings_count ?? 0}</TableCell>
+                                        <TableCell>
+                                          {analysisResult.agent_activity.verification_results?.find((v: any) => v.tool_id === log.tool_id)?.success
+                                            ? 'Yes'
+                                            : 'No'}
+                                        </TableCell>
+                                        <TableCell>{(log.execution_time ?? 0).toFixed(2)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            )}
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Typography variant="subtitle2" gutterBottom>Decision Log</Typography>
+                            {(analysisResult.agent_activity.decision_log?.length || 0) === 0 ? (
+                              <Typography variant="body2" color="text.secondary">No decision log captured yet.</Typography>
+                            ) : (
+                              <List dense>
+                                {analysisResult.agent_activity.decision_log.slice(0, 10).map((entry: any, idx: number) => (
+                                  <ListItem key={idx} sx={{ py: 0.5 }}>
+                                    <ListItemText
+                                      primary={
+                                        <Typography variant="body2">
+                                          <strong>{entry.step || `step_${idx + 1}`}</strong> — {entry.decision}
+                                          {entry.tool ? ` | tool: ${entry.tool}` : ''}
+                                        </Typography>
+                                      }
+                                      secondary={entry.reason ? `Reason: ${entry.reason}` : undefined}
+                                    />
+                                  </ListItem>
+                                ))}
+                              </List>
+                            )}
+                          </Paper>
+                        </Box>
+                      )}
+
                       {/* Findings */}
                       {analysisResult.findings.length > 0 && (
                         <Box sx={{ mb: 3 }}>
                           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ShieldIcon /> Security Findings
+                            <ShieldIcon /> Security Findings ({analysisResult.findings.length})
                           </Typography>
-                          {analysisResult.findings.map((finding, index) => (
+                          {analysisResult.findings.map((finding: any, index: number) => (
                             <Accordion key={index} sx={{ mb: 1 }}>
                               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
@@ -3423,9 +5761,80 @@ const MITMWorkbenchPage: React.FC = () => {
                                     </pre>
                                   </Box>
                                 )}
+                                
+                                {/* Enhanced Intelligence Section */}
+                                {finding.intelligence && (
+                                  <Box sx={{ mb: 2 }}>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                                      🔍 Vulnerability Intelligence
+                                    </Typography>
+                                    
+                                    {finding.intelligence.cwe_id && (
+                                      <Chip label={finding.intelligence.cwe_id} size="small" sx={{ mr: 1, mb: 1 }} />
+                                    )}
+                                    {finding.intelligence.cvss_base && (
+                                      <Chip label={`CVSS: ${finding.intelligence.cvss_base}`} size="small" color="warning" sx={{ mr: 1, mb: 1 }} />
+                                    )}
+                                    
+                                    {finding.intelligence.technical_details && (
+                                      <Box sx={{ bgcolor: 'grey.900', p: 2, borderRadius: 1, mb: 2, mt: 1 }}>
+                                        <Typography variant="caption" color="primary">Technical Details</Typography>
+                                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+                                          {finding.intelligence.technical_details}
+                                        </Typography>
+                                      </Box>
+                                    )}
+                                    
+                                    {finding.intelligence.exploitation_steps && (
+                                      <Box sx={{ mb: 2 }}>
+                                        <Typography variant="subtitle2" color="error.main" gutterBottom>
+                                          ⚔️ Exploitation Steps
+                                        </Typography>
+                                        <List dense>
+                                          {finding.intelligence.exploitation_steps.map((step: string, i: number) => (
+                                            <ListItem key={i} sx={{ py: 0 }}>
+                                              <ListItemText 
+                                                primary={step} 
+                                                primaryTypographyProps={{ variant: 'body2', fontFamily: 'monospace', fontSize: '12px' }} 
+                                              />
+                                            </ListItem>
+                                          ))}
+                                        </List>
+                                      </Box>
+                                    )}
+                                    
+                                    {finding.intelligence.poc_payloads && (
+                                      <Box sx={{ mb: 2 }}>
+                                        <Typography variant="subtitle2" color="warning.main" gutterBottom>
+                                          💣 PoC Payloads
+                                        </Typography>
+                                        <Box sx={{ bgcolor: 'grey.900', p: 2, borderRadius: 1 }}>
+                                          <pre style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', color: '#ff9800' }}>
+                                            {finding.intelligence.poc_payloads.slice(0, 4).join('\n')}
+                                          </pre>
+                                        </Box>
+                                      </Box>
+                                    )}
+                                    
+                                    {finding.intelligence.references && finding.intelligence.references.length > 0 && (
+                                      <Box sx={{ mb: 2 }}>
+                                        <Typography variant="subtitle2" gutterBottom>📚 References</Typography>
+                                        {finding.intelligence.references.slice(0, 3).map((ref: string, i: number) => (
+                                          <Typography key={i} variant="body2" component="div">
+                                            <a href={ref} target="_blank" rel="noopener noreferrer" style={{ color: '#90caf9', fontSize: '12px' }}>
+                                              {ref}
+                                            </a>
+                                          </Typography>
+                                        ))}
+                                      </Box>
+                                    )}
+                                  </Box>
+                                )}
+                                
                                 <Alert severity="info" icon={<IdeaIcon />}>
                                   <AlertTitle>Recommendation</AlertTitle>
-                                  {finding.recommendation}
+                                  {finding.intelligence?.remediation_detailed || finding.recommendation}
                                 </Alert>
                               </AccordionDetails>
                             </Accordion>
@@ -3433,7 +5842,125 @@ const MITMWorkbenchPage: React.FC = () => {
                         </Box>
                       )}
 
-                      {/* AI Analysis (if available) */}
+                      {/* Exploit References (NEW) */}
+                      {analysisResult.exploit_references && analysisResult.exploit_references.length > 0 && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CodeIcon /> Exploit References
+                          </Typography>
+                          <Grid container spacing={2}>
+                            {analysisResult.exploit_references.map((exploit: any, index: number) => (
+                              <Grid item xs={12} md={6} key={index}>
+                                <Paper sx={{ p: 2, height: '100%' }}>
+                                  <Typography variant="subtitle2" fontWeight="bold">{exploit.title}</Typography>
+                                  <Chip label={exploit.type} size="small" sx={{ mr: 1, mt: 1 }} />
+                                  <Chip label={exploit.platform} size="small" variant="outlined" sx={{ mt: 1 }} />
+                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                    {exploit.description}
+                                  </Typography>
+                                  {exploit.url && (
+                                    <Button 
+                                      size="small" 
+                                      startIcon={<LinkIcon />}
+                                      href={exploit.url}
+                                      target="_blank"
+                                      sx={{ mt: 1 }}
+                                    >
+                                      View Resource
+                                    </Button>
+                                  )}
+                                </Paper>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        </Box>
+                      )}
+
+                      {/* CVE References (NEW) */}
+                      {analysisResult.cve_references && analysisResult.cve_references.length > 0 && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <SecurityIcon /> Related CVEs
+                          </Typography>
+                          <TableContainer component={Paper}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>CVE ID</TableCell>
+                                  <TableCell>CVSS</TableCell>
+                                  <TableCell>Description</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {analysisResult.cve_references.map((cve: any, index: number) => (
+                                  <TableRow key={index}>
+                                    <TableCell>
+                                      <a href={cve.url} target="_blank" rel="noopener noreferrer" style={{ color: '#90caf9' }}>
+                                        {cve.cve_id}
+                                      </a>
+                                    </TableCell>
+                                    <TableCell>
+                                      {cve.cvss_score && (
+                                        <Chip 
+                                          label={cve.cvss_score} 
+                                          size="small" 
+                                          color={cve.cvss_score >= 9 ? 'error' : cve.cvss_score >= 7 ? 'warning' : 'default'}
+                                        />
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography variant="body2" sx={{ fontSize: '12px' }}>
+                                        {cve.description?.substring(0, 150)}...
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Box>
+                      )}
+
+                      {/* AI Comprehensive Writeup (NEW) */}
+                      {analysisResult.ai_writeup && (
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DescriptionIcon /> Penetration Test Writeup
+                          </Typography>
+                          <Paper sx={{ p: 3, bgcolor: 'background.default' }}>
+                            <Typography
+                              variant="body2"
+                              component="div"
+                              sx={{
+                                whiteSpace: 'pre-wrap',
+                                fontSize: '15px',
+                                lineHeight: 1.7,
+                                '& h1': { color: 'primary.main', mt: 2.5, mb: 1, fontSize: '22px', fontWeight: 700 },
+                                '& h2': { color: 'primary.main', mt: 2.25, mb: 1, fontSize: '20px', fontWeight: 700 },
+                                '& h3': { color: 'primary.main', mt: 2, mb: 1, fontSize: '18px', fontWeight: 700 },
+                                '& h4': { color: 'primary.main', mt: 1.5, mb: 0.75, fontSize: '16px', fontWeight: 700 },
+                                '& p': { mb: 1 },
+                                '& ul, & ol': { pl: 3, mb: 1 },
+                                '& li': { mb: 0.5 },
+                                '& strong': { fontWeight: 'bold' },
+                                '& em': { fontStyle: 'italic' },
+                                '& code': { fontFamily: 'monospace', fontSize: '13px' },
+                                '& pre': { background: 'rgba(0,0,0,0.25)', padding: 12, borderRadius: 8, overflowX: 'auto' },
+                                '& pre code': { fontSize: '12.5px' },
+                                '& table': { width: '100%', borderCollapse: 'collapse', marginTop: 8, marginBottom: 8 },
+                                '& th, & td': { border: '1px solid rgba(255,255,255,0.12)', padding: '6px 8px' },
+                                '& th': { background: 'rgba(255,255,255,0.06)', fontWeight: 700 },
+                                fontFamily: 'inherit'
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: formatMarkdownSafe(analysisResult.ai_writeup)
+                              }}
+                            />
+                          </Paper>
+                        </Box>
+                      )}
+
+                      {/* AI Quick Analysis */}
                       {analysisResult.ai_analysis && (
                         <Box sx={{ mb: 3 }}>
                           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3447,19 +5974,31 @@ const MITMWorkbenchPage: React.FC = () => {
                         </Box>
                       )}
 
-                      {/* Recommendations */}
-                      {analysisResult.recommendations.length > 0 && (
+                      {/* Recommendations (Enhanced) */}
+                      {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
                         <Box>
                           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TipIcon /> Recommendations
+                            <TipIcon /> Remediation Priorities
                           </Typography>
                           <List>
-                            {analysisResult.recommendations.map((rec, index) => (
-                              <ListItem key={index}>
+                            {analysisResult.recommendations.map((rec: any, index: number) => (
+                              <ListItem key={index} sx={{ bgcolor: 'background.paper', mb: 1, borderRadius: 1 }}>
                                 <ListItemIcon>
-                                  <SuccessIcon color="primary" />
+                                  {rec.priority === 'critical' ? (
+                                    <ErrorIcon color="error" />
+                                  ) : rec.priority === 'high' ? (
+                                    <WarningIcon color="warning" />
+                                  ) : (
+                                    <SuccessIcon color="primary" />
+                                  )}
                                 </ListItemIcon>
-                                <ListItemText primary={rec} />
+                                <ListItemText 
+                                  primary={typeof rec === 'string' ? rec : rec.title}
+                                  secondary={typeof rec === 'object' ? rec.description : undefined}
+                                />
+                                {typeof rec === 'object' && rec.priority && (
+                                  <Chip label={rec.priority} size="small" color={rec.priority === 'critical' ? 'error' : rec.priority === 'high' ? 'warning' : 'default'} />
+                                )}
                               </ListItem>
                             ))}
                           </List>
@@ -4215,6 +6754,7 @@ const MITMWorkbenchPage: React.FC = () => {
                     </Accordion>
                   </Box>
                 </TabPanel>
+
               </Box>
             </Paper>
           ) : (
@@ -4245,13 +6785,22 @@ const MITMWorkbenchPage: React.FC = () => {
       <Dialog open={newProxyOpen} onClose={() => setNewProxyOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create New Proxy</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            <AlertTitle>🎯 Quick Start Tips</AlertTitle>
+            <Typography variant="body2">
+              • <strong>Listen Host:</strong> Use <code>0.0.0.0</code> to allow external connections (other VMs, devices)<br/>
+              • <strong>Target Host:</strong> IP/hostname of target (e.g., <code>192.168.1.20</code> or <code>juiceshop</code> for practice)<br/>
+              • <strong>Ports 8080-8089</strong> are pre-exposed for MITM proxies
+            </Typography>
+          </Alert>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               label="Proxy ID"
               value={newProxy.proxy_id}
               onChange={(e) => setNewProxy({ ...newProxy, proxy_id: e.target.value })}
               fullWidth
               helperText="Unique identifier for this proxy instance"
+              placeholder="e.g., juiceshop-proxy"
             />
             <Grid container spacing={2}>
               <Grid item xs={8}>
@@ -4260,6 +6809,7 @@ const MITMWorkbenchPage: React.FC = () => {
                   value={newProxy.listen_host}
                   onChange={(e) => setNewProxy({ ...newProxy, listen_host: e.target.value })}
                   fullWidth
+                  helperText="0.0.0.0 = accept external connections, 127.0.0.1 = localhost only"
                 />
               </Grid>
               <Grid item xs={4}>
@@ -4269,6 +6819,7 @@ const MITMWorkbenchPage: React.FC = () => {
                   value={newProxy.listen_port}
                   onChange={(e) => setNewProxy({ ...newProxy, listen_port: parseInt(e.target.value) })}
                   fullWidth
+                  helperText="8080-8089 exposed"
                 />
               </Grid>
             </Grid>
@@ -4279,6 +6830,8 @@ const MITMWorkbenchPage: React.FC = () => {
                   value={newProxy.target_host}
                   onChange={(e) => setNewProxy({ ...newProxy, target_host: e.target.value })}
                   fullWidth
+                  helperText="IP address, hostname, or container name (e.g., juiceshop)"
+                  placeholder="e.g., 192.168.1.20 or juiceshop"
                 />
               </Grid>
               <Grid item xs={4}>
@@ -5238,6 +7791,190 @@ const MITMWorkbenchPage: React.FC = () => {
                 ))}
               </Stepper>
 
+              {/* Deployment Scenarios - THE KEY SECTION */}
+              {guidedSetup.deployment_scenarios && guidedSetup.deployment_scenarios.length > 0 && (
+                <Box sx={{ mt: 4 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <RouteIcon color="primary" /> Where is Your Target Application?
+                  </Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <AlertTitle>Key Concept</AlertTitle>
+                    VRAgent runs <strong>inside a Docker container</strong>. The Target Host must be reachable from inside this container, not from your host machine.
+                  </Alert>
+                  {guidedSetup.deployment_scenarios.map((scenario, index) => (
+                    <Accordion key={index} defaultExpanded={index === 1}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                          <Typography fontWeight="bold">{scenario.title}</Typography>
+                          {scenario.subtitle && (
+                            <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', mr: 2 }}>
+                              {scenario.subtitle}
+                            </Typography>
+                          )}
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Typography variant="body2" paragraph>
+                          {scenario.description}
+                        </Typography>
+                        
+                        {scenario.why_it_works && (
+                          <Alert severity="success" sx={{ mb: 2 }}>
+                            <AlertTitle>Why It Works</AlertTitle>
+                            {scenario.why_it_works}
+                          </Alert>
+                        )}
+                        
+                        {scenario.config && (
+                          <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+                            <Typography variant="subtitle2" gutterBottom color="primary">
+                              Proxy Configuration:
+                            </Typography>
+                            <Grid container spacing={1}>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary">Listen Host</Typography>
+                                <Typography variant="body2" fontFamily="monospace" fontWeight="bold">
+                                  {scenario.config.listen_host}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary">Listen Port</Typography>
+                                <Typography variant="body2" fontFamily="monospace" fontWeight="bold">
+                                  {scenario.config.listen_port}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary">Target Host</Typography>
+                                <Typography variant="body2" fontFamily="monospace" fontWeight="bold" color="success.main">
+                                  {scenario.config.target_host}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary">Target Port</Typography>
+                                <Typography variant="body2" fontFamily="monospace" fontWeight="bold">
+                                  {scenario.config.target_port}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        )}
+                        
+                        {scenario.explanation && scenario.explanation.length > 0 && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="caption" color="text.secondary">Explanation:</Typography>
+                            <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                              {scenario.explanation.map((exp, i) => (
+                                <li key={i}><Typography variant="body2">{exp}</Typography></li>
+                              ))}
+                            </ul>
+                          </Box>
+                        )}
+                        
+                        {scenario.traffic_flow && (
+                          <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: 'info.lighter' }}>
+                            <Typography variant="caption" color="text.secondary">Traffic Flow:</Typography>
+                            <Typography variant="body2" fontFamily="monospace" sx={{ mt: 0.5 }}>
+                              {scenario.traffic_flow}
+                            </Typography>
+                          </Paper>
+                        )}
+                        
+                        {scenario.verify_command && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary">Verify with:</Typography>
+                            <Typography variant="body2" fontFamily="monospace" sx={{ bgcolor: 'grey.100', p: 0.5, borderRadius: 1 }}>
+                              {scenario.verify_command}
+                            </Typography>
+                          </Box>
+                        )}
+                        
+                        {scenario.common_mistake && (
+                          <Alert severity="warning" sx={{ mt: 1 }}>
+                            <AlertTitle>Common Mistake</AlertTitle>
+                            {scenario.common_mistake}
+                          </Alert>
+                        )}
+                        
+                        {scenario.warning && (
+                          <Alert severity="error" sx={{ mt: 1 }}>
+                            {scenario.warning}
+                          </Alert>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Box>
+              )}
+
+              {/* Juice Shop Setup Guide - Collapsed by default */}
+              {guidedSetup.juice_shop_setup && (
+                <Box sx={{ mt: 3 }}>
+                  <Accordion sx={{ bgcolor: 'grey.50' }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span role="img" aria-label="juice">🧃</span>
+                        <Typography variant="subtitle2">
+                          Need to set up OWASP Juice Shop? Click to expand setup instructions
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" paragraph color="text.secondary">
+                        {guidedSetup.juice_shop_setup.description}
+                      </Typography>
+                      
+                      {guidedSetup.juice_shop_setup.methods.map((method, index) => (
+                        <Accordion key={index} defaultExpanded={index === 0}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Box>
+                              <Typography fontWeight="bold" variant="body2">{method.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {method.description}
+                              </Typography>
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            <ol style={{ margin: 0, paddingLeft: 20 }}>
+                              {method.steps.map((step, i) => (
+                                <li key={i} style={{ marginBottom: 4 }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    fontFamily={step.includes(':') && !step.includes('http') ? 'inherit' : 'monospace'}
+                                    sx={{ 
+                                      bgcolor: step.startsWith('docker') || step.startsWith('npm') || step.startsWith('git') || step.startsWith('cd ') || step.startsWith('curl')
+                                        ? 'grey.100' 
+                                        : 'transparent',
+                                      p: step.startsWith('docker') || step.startsWith('npm') || step.startsWith('git') || step.startsWith('cd ') || step.startsWith('curl')
+                                        ? 0.5 
+                                        : 0,
+                                      borderRadius: 1,
+                                    }}
+                                  >
+                                    {step}
+                                  </Typography>
+                                </li>
+                              ))}
+                            </ol>
+                          </AccordionDetails>
+                        </Accordion>
+                      ))}
+                      
+                      {guidedSetup.juice_shop_setup.port_explanation && (
+                        <Alert severity="info" sx={{ mt: 2 }}>
+                          <AlertTitle>{guidedSetup.juice_shop_setup.port_explanation.title}</AlertTitle>
+                          <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                            {guidedSetup.juice_shop_setup.port_explanation.details.map((detail, i) => (
+                              <li key={i}><Typography variant="body2">{detail}</Typography></li>
+                            ))}
+                          </ul>
+                        </Alert>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
+
               {/* Common Use Cases */}
               {guidedSetup.common_use_cases && guidedSetup.common_use_cases.length > 0 && (
                 <Box sx={{ mt: 4 }}>
@@ -5962,6 +8699,521 @@ const MITMWorkbenchPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Attack Goal Selection Dialog */}
+      <Dialog
+        open={showGoalDialog}
+        onClose={() => setShowGoalDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AIIcon color="primary" />
+            Set Attack Goals
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select attack goals for the agent to prioritize. The agent will choose tools and actions
+            that help achieve these goals.
+          </Typography>
+          <FormGroup>
+            {[
+              { id: 'compromise_authentication', label: 'Compromise Authentication', desc: 'Capture or bypass authentication mechanisms' },
+              { id: 'exfiltrate_data', label: 'Exfiltrate Data', desc: 'Capture sensitive data from traffic' },
+              { id: 'inject_payload', label: 'Inject Payloads', desc: 'Successfully inject scripts or content' },
+              { id: 'downgrade_security', label: 'Downgrade Security', desc: 'Remove or bypass security mechanisms' },
+              { id: 'map_attack_surface', label: 'Map Attack Surface', desc: 'Discover vulnerabilities and attack vectors' },
+            ].map((goal) => (
+              <FormControlLabel
+                key={goal.id}
+                control={
+                  <Checkbox
+                    checked={selectedGoals.includes(goal.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedGoals([...selectedGoals, goal.id]);
+                      } else {
+                        setSelectedGoals(selectedGoals.filter(g => g !== goal.id));
+                      }
+                    }}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">{goal.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">{goal.desc}</Typography>
+                  </Box>
+                }
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowGoalDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={selectedGoals.length === 0 || !selectedProxy}
+            onClick={() => selectedProxy && handleSetGoals(selectedProxy, selectedGoals)}
+          >
+            Set Goals ({selectedGoals.length})
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Agentic Session Results Dialog */}
+      <Dialog 
+        open={showAgenticResultDialog} 
+        onClose={() => setShowAgenticResultDialog(false)} 
+        maxWidth="lg" 
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AIIcon color="primary" />
+            Agentic Attack Session Results
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {agenticSessionResult && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              {/* Summary Stats */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Paper sx={{ p: 2, flex: 1, minWidth: 150 }}>
+                  <Typography variant="caption" color="text.secondary">Status</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {agenticSessionResult.status === 'completed' ? (
+                      <SuccessIcon color="success" />
+                    ) : agenticSessionResult.status === 'partial' ? (
+                      <WarningIcon color="warning" />
+                    ) : (
+                      <ErrorIcon color="error" />
+                    )}
+                    <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
+                      {agenticSessionResult.status}
+                    </Typography>
+                  </Box>
+                </Paper>
+                <Paper sx={{ p: 2, flex: 1, minWidth: 150 }}>
+                  <Typography variant="caption" color="text.secondary">Tools Executed</Typography>
+                  <Typography variant="h6">
+                    {agenticSessionResult.tools_executed} / {agenticSessionResult.tools_recommended}
+                  </Typography>
+                </Paper>
+                <Paper sx={{ p: 2, flex: 1, minWidth: 150 }}>
+                  <Typography variant="caption" color="text.secondary">Findings</Typography>
+                  <Typography variant="h6" color="error.main">
+                    {agenticSessionResult.total_findings}
+                  </Typography>
+                </Paper>
+                <Paper sx={{ p: 2, flex: 1, minWidth: 150 }}>
+                  <Typography variant="caption" color="text.secondary">Duration</Typography>
+                  <Typography variant="h6">
+                    {agenticSessionResult.duration_seconds?.toFixed(1)}s
+                  </Typography>
+                </Paper>
+              </Box>
+
+              {/* AI Summary */}
+              {agenticSessionResult.ai_summary && (
+                <Alert severity="info" icon={<AIIcon />}>
+                  <AlertTitle>AI Analysis Summary</AlertTitle>
+                  <Typography variant="body2">{agenticSessionResult.ai_summary}</Typography>
+                </Alert>
+              )}
+
+              {/* Agent Decision Log - Shows reasoning and feedback */}
+              {agenticSessionResult.decision_log && agenticSessionResult.decision_log.length > 0 && (
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle1">
+                        Agent Decision Log ({agenticSessionResult.decision_log.length} steps)
+                      </Typography>
+                      <Chip 
+                        label="AI Reasoning" 
+                        size="small" 
+                        color="secondary" 
+                        variant="outlined"
+                      />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {agenticSessionResult.decision_log.map((log: any, idx: number) => (
+                        <Paper 
+                          key={idx} 
+                          variant="outlined" 
+                          sx={{ 
+                            p: 1.5, 
+                            borderLeft: 3, 
+                            borderColor: log.decision === 'execute' ? 'success.main' : 
+                                        log.decision === 'stop' ? 'warning.main' : 'info.main'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
+                              {log.step}
+                            </Typography>
+                            {log.decision && (
+                              <Chip 
+                                label={log.decision.toUpperCase()} 
+                                size="small" 
+                                color={log.decision === 'execute' ? 'success' : 'warning'}
+                              />
+                            )}
+                          </Box>
+                          {log.tool && (
+                            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                              Tool: {log.tool} (confidence: {(log.confidence * 100).toFixed(0)}%)
+                            </Typography>
+                          )}
+                          {log.reason && (
+                            <Typography variant="body2" color="text.secondary">
+                              {log.reason}
+                            </Typography>
+                          )}
+                          {log.analysis && (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                              {log.analysis}
+                            </Typography>
+                          )}
+                          {log.feedback && (
+                            <Typography variant="body2" color="success.main" sx={{ mt: 0.5 }}>
+                              📊 {log.feedback}
+                            </Typography>
+                          )}
+                          {log.suggested_follow_up && log.suggested_follow_up.length > 0 && (
+                            <Box sx={{ mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Suggested follow-ups: {log.suggested_follow_up.slice(0, 3).join(', ')}
+                              </Typography>
+                            </Box>
+                          )}
+                          {log.based_on && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {log.based_on}
+                            </Typography>
+                          )}
+                        </Paper>
+                      ))}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Captured Data */}
+              {agenticSessionResult.captured_data && 
+               (agenticSessionResult.captured_data.credentials?.length > 0 || 
+                agenticSessionResult.captured_data.tokens?.length > 0) && (
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle1" color="error">
+                        Captured Credentials/Tokens
+                      </Typography>
+                      <Chip 
+                        label={`${(agenticSessionResult.captured_data.credentials?.length || 0) + (agenticSessionResult.captured_data.tokens?.length || 0)} items`} 
+                        size="small" 
+                        color="error"
+                      />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      The following sensitive data was captured during the attack simulation. 
+                      This demonstrates real security vulnerabilities!
+                    </Alert>
+                    {agenticSessionResult.captured_data.credentials?.map((cred: any, idx: number) => (
+                      <Paper key={idx} variant="outlined" sx={{ p: 1, mb: 1, bgcolor: 'error.dark', opacity: 0.9 }}>
+                        <Typography variant="caption">Type: {cred.type}</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {cred.username && `User: ${cred.username}`}
+                          {cred.value && ` | Value: ${cred.value.substring(0, 20)}...`}
+                        </Typography>
+                      </Paper>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Findings */}
+              {agenticSessionResult.findings && agenticSessionResult.findings.length > 0 && (
+                <Accordion defaultExpanded>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="subtitle1">
+                      Findings ({agenticSessionResult.findings.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {agenticSessionResult.findings.map((finding: any, idx: number) => (
+                        <Paper key={idx} variant="outlined" sx={{ p: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                              {finding.title}
+                            </Typography>
+                            <Chip 
+                              label={finding.severity} 
+                              size="small"
+                              color={
+                                finding.severity?.toLowerCase() === 'critical' ? 'error' :
+                                finding.severity?.toLowerCase() === 'high' ? 'warning' :
+                                finding.severity?.toLowerCase() === 'medium' ? 'info' : 'default'
+                              }
+                            />
+                          </Box>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            {finding.description}
+                          </Typography>
+                          {finding.evidence && (
+                            <Box sx={{ bgcolor: 'grey.900', p: 1, borderRadius: 1, mt: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Evidence:</Typography>
+                              <pre style={{ margin: 0, fontSize: '11px', overflow: 'auto', maxHeight: 80 }}>
+                                {finding.evidence}
+                              </pre>
+                            </Box>
+                          )}
+                        </Paper>
+                      ))}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Execution Details */}
+              {agenticSessionResult.execution_results && agenticSessionResult.execution_results.length > 0 && (
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="subtitle1">
+                      Tool Execution Details ({agenticSessionResult.execution_results.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Tool</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Findings</TableCell>
+                            <TableCell>Duration</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {agenticSessionResult.execution_results.map((result: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell>{result.tool_id}</TableCell>
+                              <TableCell>
+                                {result.success ? (
+                                  <Chip label="Success" size="small" color="success" />
+                                ) : (
+                                  <Chip label="Failed" size="small" color="error" />
+                                )}
+                              </TableCell>
+                              <TableCell>{result.findings?.length || 0}</TableCell>
+                              <TableCell>{result.execution_time?.toFixed(2)}s</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowAgenticResultDialog(false)}>Close</Button>
+          <Button 
+            variant="contained" 
+            onClick={() => {
+              setShowAgenticResultDialog(false);
+              setTabValue(3); // Switch to AI Analysis tab
+            }}
+          >
+            View Full Analysis
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Saved Scan Detail Dialog */}
+      <Dialog
+        open={savedScanDialogOpen}
+        onClose={() => {
+          setSavedScanDialogOpen(false);
+          setViewingSavedScan(null);
+        }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <HistoryIcon color="primary" />
+            <Box>
+              <Typography variant="h6">
+                {viewingSavedScan?.title || 'Saved Scan'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {viewingSavedScan?.target_host}:{viewingSavedScan?.target_port} •{' '}
+                {viewingSavedScan?.created_at ? new Date(viewingSavedScan.created_at).toLocaleString() : ''}
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            label={viewingSavedScan?.risk_level || 'info'}
+            color={
+              viewingSavedScan?.risk_level === 'critical' ? 'error' :
+              viewingSavedScan?.risk_level === 'high' ? 'error' :
+              viewingSavedScan?.risk_level === 'medium' ? 'warning' : 'success'
+            }
+          />
+        </DialogTitle>
+        <DialogContent dividers sx={{ maxHeight: '70vh' }}>
+          {viewingSavedScan ? (
+            <Box>
+              {/* Summary */}
+              {viewingSavedScan.summary && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>Summary</Typography>
+                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                    <Typography variant="body2">{viewingSavedScan.summary}</Typography>
+                  </Paper>
+                </Box>
+              )}
+
+              {/* Findings */}
+              {viewingSavedScan.findings && viewingSavedScan.findings.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Findings ({viewingSavedScan.findings.length})
+                  </Typography>
+                  <List dense>
+                    {viewingSavedScan.findings.slice(0, 20).map((finding: any, idx: number) => (
+                      <ListItem key={idx} sx={{ py: 0.5 }}>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip
+                                label={finding.severity || 'info'}
+                                size="small"
+                                color={
+                                  finding.severity === 'critical' ? 'error' :
+                                  finding.severity === 'high' ? 'error' :
+                                  finding.severity === 'medium' ? 'warning' : 'default'
+                                }
+                                sx={{ minWidth: 60 }}
+                              />
+                              <Typography variant="body2">{finding.title || finding.type}</Typography>
+                            </Box>
+                          }
+                          secondary={finding.description}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+
+              {/* Attack Chains */}
+              {viewingSavedScan.attack_chains && viewingSavedScan.attack_chains.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>Attack Chains</Typography>
+                  {viewingSavedScan.attack_chains.map((chain: any, idx: number) => (
+                    <Accordion key={idx} defaultExpanded={idx === 0}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <RouteIcon fontSize="small" color="primary" />
+                          <Typography variant="subtitle2">{chain.name || `Chain ${idx + 1}`}</Typography>
+                          {chain.severity && (
+                            <Chip label={chain.severity} size="small" color="warning" />
+                          )}
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          {chain.description}
+                        </Typography>
+                        {chain.steps && (
+                          <List dense>
+                            {chain.steps.map((step: any, stepIdx: number) => (
+                              <ListItem key={stepIdx}>
+                                <ListItemText
+                                  primary={`${stepIdx + 1}. ${step.tool || step.action || 'Step'}`}
+                                  secondary={step.result || step.description}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Box>
+              )}
+
+              {/* Decision Log */}
+              {viewingSavedScan.decision_log && viewingSavedScan.decision_log.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>Decision Log</Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Step</TableCell>
+                          <TableCell>Decision</TableCell>
+                          <TableCell>Tool</TableCell>
+                          <TableCell>Reason</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {viewingSavedScan.decision_log.slice(0, 30).map((log: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell>{log.step}</TableCell>
+                            <TableCell>{log.decision}</TableCell>
+                            <TableCell>
+                              {log.tool && <Chip label={log.tool} size="small" />}
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption">{log.reason}</Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Tools Used */}
+              {viewingSavedScan.tools_used && viewingSavedScan.tools_used.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>Tools Used</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {viewingSavedScan.tools_used.map((tool: string, idx: number) => (
+                      <Chip key={idx} label={tool} size="small" variant="outlined" />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setSavedScanDialogOpen(false);
+            setViewingSavedScan(null);
+          }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Notifications */}
       <Snackbar
         open={!!error}
@@ -5984,6 +9236,14 @@ const MITMWorkbenchPage: React.FC = () => {
           {success}
         </Alert>
       </Snackbar>
+
+      {/* AI Chat Panel - only show after analysis completed */}
+      <MitmChatPanel
+        analysisResult={analysisResult}
+        trafficLog={traffic}
+        proxyConfig={currentProxy || null}
+        rules={rules}
+      />
     </Box>
   );
 };

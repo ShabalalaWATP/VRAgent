@@ -19,6 +19,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import MessageIcon from "@mui/icons-material/Message";
 import { socialApi, MessageSearchResult } from "../../api/client";
+import { sanitizeSearchHighlight } from "../../utils/sanitizeHtml";
 
 // Simple relative time formatter
 const formatRelativeTime = (dateStr: string): string => {
@@ -126,9 +127,11 @@ export const MessageSearchDialog: React.FC<MessageSearchDialogProps> = ({
     onClose();
   };
 
-  // Render highlighted content
+  // Render highlighted content with XSS sanitization
   const renderHighlightedContent = (content: string) => {
     // The backend returns content with <mark> tags for highlighting
+    // Sanitize to only allow <mark> tags, preventing XSS attacks
+    const sanitizedContent = sanitizeSearchHighlight(content);
     return (
       <Typography
         variant="body2"
@@ -141,7 +144,7 @@ export const MessageSearchDialog: React.FC<MessageSearchDialogProps> = ({
             borderRadius: 0.5,
           },
         }}
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       />
     );
   };

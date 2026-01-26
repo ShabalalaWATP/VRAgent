@@ -563,7 +563,7 @@ class GraphQLFuzzer:
         self.headers = headers or {}
         self.timeout = timeout
         self.session = GraphQLFuzzingSession(endpoint=endpoint)
-        self.client = httpx.AsyncClient(timeout=timeout, verify=False)
+        self.client = httpx.AsyncClient(timeout=timeout, verify=True)  # SSL verification enabled
         
         # Ensure Content-Type is set
         if "Content-Type" not in self.headers:
