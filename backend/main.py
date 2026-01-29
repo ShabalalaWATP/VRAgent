@@ -17,8 +17,9 @@ logger = get_logger(__name__)
 if settings.environment == "development":
     Base.metadata.create_all(bind=engine)
 
-# Enable rate limiting in production
-ENABLE_RATE_LIMITING = os.getenv("ENABLE_RATE_LIMITING", "false").lower() == "true"
+# Enable rate limiting (defaults to true in production, false in development)
+_rate_limit_default = "false" if settings.environment == "development" else "true"
+ENABLE_RATE_LIMITING = os.getenv("ENABLE_RATE_LIMITING", _rate_limit_default).lower() == "true"
 
 app = FastAPI(
     title="AI Agent Vulnerability Research API",
@@ -44,14 +45,20 @@ if cors_origins_env:
         allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 elif settings.environment == "development":
-    # Development: allow all origins for flexibility (LAN access, etc.)
-    # Note: allow_credentials=False is required when using wildcard origins
+    # Development: allow localhost origins only (use CORS_ORIGINS for LAN access)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 else:
     # Production without CORS_ORIGINS: restrict to common localhost ports

@@ -105,8 +105,10 @@ class OriginValidationMiddleware(BaseHTTPMiddleware):
     ALLOWED_ORIGINS = {
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost:8080",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
     }
 
     # Methods that modify state and should be validated
@@ -124,14 +126,16 @@ class OriginValidationMiddleware(BaseHTTPMiddleware):
         if additional_origins:
             self.allowed_origins.update(additional_origins)
 
-        # In development, allow all origins
-        self.skip_validation = settings.environment == "development"
+        # Add origins from CORS_ORIGINS env var (for LAN/custom development setups)
+        import os
+        cors_origins = os.getenv("CORS_ORIGINS", "")
+        if cors_origins:
+            for origin in cors_origins.split(","):
+                origin = origin.strip()
+                if origin:
+                    self.allowed_origins.add(origin)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip validation in development mode
-        if self.skip_validation:
-            return await call_next(request)
-
         # Only validate state-changing methods
         if request.method not in self.STATE_CHANGING_METHODS:
             return await call_next(request)

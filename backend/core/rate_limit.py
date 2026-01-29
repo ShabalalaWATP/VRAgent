@@ -149,5 +149,8 @@ class ConcurrentScanLimitMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
         finally:
-            # Note: This is simplified. In production, track via scan completion webhooks
-            pass
+            # Decrement active scan count when request completes
+            # Note: This tracks request completion, not scan completion.
+            # For long-running scans, consider Redis-based tracking with TTL.
+            async with self.lock:
+                self.active_scans[user_id] = max(0, self.active_scans[user_id] - 1)
