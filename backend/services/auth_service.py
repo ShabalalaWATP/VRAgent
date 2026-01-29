@@ -1,8 +1,10 @@
 """Authentication service for password hashing and JWT token management."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
 
 import bcrypt
+import redis
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,86 @@ SECRET_KEY = settings.secret_key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 REFRESH_TOKEN_EXPIRE_DAYS = settings.refresh_token_expire_days
+
+# Token blacklist prefix
+TOKEN_BLACKLIST_PREFIX = "vragent:token_blacklist:"
+
+# Redis client for token blacklist (lazy initialization)
+_redis_client: Optional[redis.Redis] = None
+
+
+def _get_redis_client() -> Optional[redis.Redis]:
+    """Get Redis client for token blacklist (lazy initialization)."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+            _redis_client.ping()
+        except Exception as e:
+            logger.warning(f"Redis not available for token blacklist: {e}")
+            _redis_client = None
+    return _redis_client
+
+
+def _get_token_hash(token: str) -> str:
+    """Get a short hash of the token for storage (don't store full tokens)."""
+    return hashlib.sha256(token.encode()).hexdigest()[:32]
+
+
+def blacklist_token(token: str, expires_in_seconds: int = None) -> bool:
+    """
+    Add a token to the blacklist.
+
+    Args:
+        token: The JWT token to blacklist
+        expires_in_seconds: TTL for blacklist entry (defaults to token expiry)
+
+    Returns:
+        True if successfully blacklisted, False if Redis unavailable
+    """
+    client = _get_redis_client()
+    if not client:
+        logger.warning("Cannot blacklist token: Redis unavailable")
+        return False
+
+    try:
+        token_hash = _get_token_hash(token)
+        # Default TTL: max of access and refresh token expiry
+        if expires_in_seconds is None:
+            expires_in_seconds = max(
+                ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+            )
+
+        client.setex(f"{TOKEN_BLACKLIST_PREFIX}{token_hash}", expires_in_seconds, "1")
+        logger.info(f"Token blacklisted: {token_hash[:8]}...")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to blacklist token: {e}")
+        return False
+
+
+def is_token_blacklisted(token: str) -> bool:
+    """
+    Check if a token is blacklisted.
+
+    Args:
+        token: The JWT token to check
+
+    Returns:
+        True if blacklisted, False otherwise (including Redis unavailable)
+    """
+    client = _get_redis_client()
+    if not client:
+        # If Redis is unavailable, allow token (fail open for availability)
+        return False
+
+    try:
+        token_hash = _get_token_hash(token)
+        return client.exists(f"{TOKEN_BLACKLIST_PREFIX}{token_hash}") > 0
+    except Exception as e:
+        logger.error(f"Failed to check token blacklist: {e}")
+        return False
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -53,6 +135,11 @@ def create_refresh_token(data: dict) -> str:
 def decode_token(token: str) -> Optional[dict]:
     """Decode and verify a JWT token."""
     try:
+        # Check if token is blacklisted first
+        if is_token_blacklisted(token):
+            logger.warning("Token is blacklisted")
+            return None
+
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except JWTError as e:

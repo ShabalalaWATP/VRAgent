@@ -64,14 +64,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "usb=()"
         )
 
-        # Content Security Policy - only in production to avoid breaking dev tools
-        if self.is_production:
-            # Strict CSP for API responses
-            if request.url.path.startswith("/api/") or request.url.path.startswith("/auth/"):
-                response.headers["Content-Security-Policy"] = (
-                    "default-src 'none'; "
-                    "frame-ancestors 'none'"
-                )
+        # Content Security Policy - apply to all routes
+        # API routes get strict CSP, other routes get standard CSP
+        if request.url.path.startswith("/api/") or request.url.path.startswith("/auth/"):
+            # Strict CSP for API responses (no resources needed)
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; "
+                "frame-ancestors 'none'"
+            )
+        elif self.is_production:
+            # Standard CSP for other routes in production
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self'; "
+                "frame-ancestors 'none'"
+            )
 
         # Strict Transport Security (HSTS) - only in production with HTTPS
         if self.is_production:

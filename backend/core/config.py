@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     # Authentication settings
     # SECURITY: Generate a strong secret with: python -c "import secrets; print(secrets.token_urlsafe(64))"
     secret_key: str = Field(..., validation_alias="SECRET_KEY")  # Required - no default for security
-    access_token_expire_minutes: int = Field(240, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
-    refresh_token_expire_days: int = Field(7, validation_alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    access_token_expire_minutes: int = Field(30, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")  # Short-lived access token
+    refresh_token_expire_days: int = Field(1, validation_alias="REFRESH_TOKEN_EXPIRE_DAYS")  # 1 day refresh token
     
     # Ollama settings for air-gapped environments
     ollama_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_URL")

@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import List, Optional
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any
@@ -296,13 +296,22 @@ async def upload_project_file(
 @router.get("/{project_id}/files", response_model=List[ProjectFileResponse])
 def list_project_files(
     project_id: int,
-    folder: Optional[str] = None,
+    folder: Optional[str] = Query(
+        None,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9_\-/]+$",
+        description="Folder name (alphanumeric, underscore, hyphen, slash only)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """List all files in a project's file storage."""
     check_project_access(db, project_id, current_user.id)
-    
+
+    # Additional path traversal check
+    if folder and (".." in folder or folder.startswith("/")):
+        raise HTTPException(status_code=400, detail="Invalid folder name")
+
     query = db.query(ProjectFile).filter(ProjectFile.project_id == project_id)
     if folder is not None:
         query = query.filter(ProjectFile.folder == folder)
@@ -365,14 +374,11 @@ def delete_project_file(
 # Document AI Endpoints
 # ============================================================================
 
-def process_document_sync(document_id: int, db_url: str):
+def process_document_sync(document_id: int):
     """Background task to process document and generate summary."""
     import asyncio
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    
-    engine = create_engine(db_url)
-    SessionLocal = sessionmaker(bind=engine)
+    from backend.core.database import SessionLocal
+
     db = SessionLocal()
     
     try:
@@ -472,8 +478,7 @@ async def upload_document_for_analysis(
     db.refresh(document)
     
     # Start background processing
-    db_url = str(settings.database_url)
-    background_tasks.add_task(process_document_sync, document.id, db_url)
+    background_tasks.add_task(process_document_sync, document.id)
     
     logger.info(f"User {current_user.id} uploaded document {file.filename} for analysis in project {project_id}")
     
@@ -631,8 +636,7 @@ async def reprocess_document(
     db.commit()
     
     # Start background processing
-    db_url = str(settings.database_url)
-    background_tasks.add_task(process_document_sync, document.id, db_url)
+    background_tasks.add_task(process_document_sync, document.id)
     
     return {"status": "reprocessing", "document_id": document_id}
 

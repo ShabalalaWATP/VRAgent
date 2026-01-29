@@ -1,5 +1,5 @@
 """Authentication routes for login, register, and token management."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from backend.schemas.auth import (
 )
 from backend.services.auth_service import (
     authenticate_user,
+    blacklist_token,
     create_access_token,
     create_refresh_token,
     create_user,
@@ -170,6 +171,27 @@ async def refresh_token(
         access_token=access_token,
         refresh_token=refresh_token,
     )
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Logout user by blacklisting their current access token.
+
+    The token is added to a Redis blacklist and will be rejected
+    on subsequent requests until it expires naturally.
+    """
+    # Get the token from the Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        blacklist_token(token)
+        logger.info(f"User logged out: {current_user.email}")
+
+    return MessageResponse(message="Successfully logged out")
 
 
 @router.get("/me", response_model=UserResponse)
