@@ -304,43 +304,20 @@ async def startup_event():
     import asyncio
     logger.info(f"VRAgent API starting in {settings.environment} mode")
 
-    # Create default admin user if no users exist
+    # Check database connectivity on startup
     try:
         from backend.core.database import SessionLocal
-        from backend.services.auth_service import count_users, create_user, get_user_by_username
+        from backend.services.auth_service import count_users
 
         db = SessionLocal()
         try:
             user_count = count_users(db)
             if user_count == 0:
-                # Create default admin account
-                admin_user = create_user(
-                    db=db,
-                    email="admin@vragent.local",
-                    username="admin",
-                    password="admin",
-                    role="admin",
-                    status="approved",
-                )
-                logger.warning("=" * 60)
-                logger.warning("DEFAULT ADMIN ACCOUNT CREATED")
-                logger.warning("Username: admin")
-                logger.warning("Password: admin")
-                logger.warning("SECURITY WARNING: Change this password immediately!")
-                logger.warning("Create your own admin account and delete this one.")
-                logger.warning("=" * 60)
-            else:
-                # Check if default admin still exists and warn
-                default_admin = get_user_by_username(db, "admin")
-                if default_admin and default_admin.email == "admin@vragent.local":
-                    logger.warning("=" * 60)
-                    logger.warning("DEFAULT ADMIN ACCOUNT STILL EXISTS!")
-                    logger.warning("Please create your own admin account and delete the default one.")
-                    logger.warning("=" * 60)
+                logger.info("No users found. Register your first admin account via the UI.")
         finally:
             db.close()
     except Exception as e:
-        logger.error(f"Error checking/creating default admin: {e}")
+        logger.error(f"Database connectivity check failed: {e}")
 
     # Start Redis pub/sub subscriber for WebSocket progress updates
     from backend.services.websocket_service import progress_manager

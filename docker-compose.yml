@@ -53,8 +53,8 @@ services:
       ZAP_API_KEY: ${ZAP_API_KEY:-}
       SCANNER_URL: http://scanner:9999
       OPENVAS_URL: https://openvas:9392
-      OPENVAS_USER: ${OPENVAS_USER:-admin}
-      OPENVAS_PASSWORD: ${OPENVAS_PASSWORD:-admin}
+      OPENVAS_USER: ${OPENVAS_USER:-vragent_openvas}
+      OPENVAS_PASSWORD: ${OPENVAS_PASSWORD:?Set OPENVAS_PASSWORD in .env}
       # Juice Shop URL for practice scanning
       JUICESHOP_URL: http://juiceshop:3000
     ports:
@@ -215,8 +215,8 @@ services:
       - openvas_data:/var/lib/gvm
       - openvas_scans:/var/lib/openvas
     environment:
-      - PASSWORD=${OPENVAS_PASSWORD:-admin}
-      - USERNAME=${OPENVAS_USER:-admin}
+      - PASSWORD=${OPENVAS_PASSWORD:?Set OPENVAS_PASSWORD in .env}
+      - USERNAME=${OPENVAS_USER:-vragent_openvas}
       - AUTO_SYNC=true
     # OpenVAS needs significant resources
     deploy:
@@ -270,8 +270,8 @@ services:
       - ./backend/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./backend/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-vragent_grafana}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
       - GF_INSTALL_PLUGINS=
