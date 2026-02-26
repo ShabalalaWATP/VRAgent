@@ -173,13 +173,22 @@ except ImportError:
     logger.warning("unicorn not installed - CPU emulation not available")
 
 # Try to import angr for symbolic execution
+# angr is OPTIONAL - without it, lightweight pattern-based symbolic analysis is used.
+# See requirements.txt for installation notes if cffi version conflicts occur.
 try:
     import angr
     import claripy
     ANGR_AVAILABLE = True
-except (ImportError, AttributeError, Exception) as e:
+    logger.info("angr loaded - full symbolic execution available")
+except ImportError:
     ANGR_AVAILABLE = False
-    logger.warning(f"angr not available - symbolic execution disabled: {e}")
+    logger.info(
+        "angr not installed - using lightweight pattern-based symbolic analysis. "
+        "Install angr for full constraint-solving symbolic execution."
+    )
+except (AttributeError, Exception) as e:
+    ANGR_AVAILABLE = False
+    logger.warning(f"angr import failed (may be a version conflict): {e}")
 
 # Try to import ropper for ROP gadget finding
 try:
@@ -935,6 +944,8 @@ class BinaryAnalysisResult:
     # Symbolic execution, diffing, ROP analysis
     symbolic_execution: Optional[SymbolicExecutionResult] = None
     rop_gadgets: Optional[ROPGadgetResult] = None
+    # Entropy analysis
+    entropy_analysis: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -5500,6 +5511,293 @@ def perform_symbolic_execution(file_path: Path,
 
 
 # ============================================================================
+# Lightweight Symbolic Analysis (no angr required)
+# ============================================================================
+
+def perform_lightweight_symbolic_analysis(
+    file_path: Path,
+    result: Optional['DisassemblyResult'] = None,
+    imports: Optional[List] = None,
+) -> SymbolicExecutionResult:
+    """
+    Perform lightweight pattern-based symbolic analysis without angr.
+
+    Uses static heuristics to approximate symbolic execution results:
+    - Maps call graphs from imports to dangerous sinks
+    - Detects taint-like flows from input functions to unsafe operations
+    - Identifies constraint patterns (bounds checks, null checks) or lack thereof
+    - Finds paths from user input to dangerous functions via disassembly
+
+    This provides useful results even when angr can't be installed.
+    """
+    import time
+    start_time = time.time()
+
+    vulnerabilities = []
+    target_reaches = []
+    interesting_paths = []
+    crash_inputs = []
+
+    # Define input sources and dangerous sinks
+    INPUT_SOURCES = {
+        'recv', 'recvfrom', 'read', 'fread', 'fgets', 'gets', 'scanf',
+        'fscanf', 'sscanf', 'getenv', 'getchar', 'fgetc', 'recv',
+        'WSARecv', 'ReadFile', 'InternetReadFile', 'accept',
+        'recvmsg', 'readv', 'pread', 'pread64', 'getline',
+    }
+
+    DANGEROUS_SINKS = {
+        # Buffer overflow
+        'strcpy': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'strcat': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'sprintf': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'gets': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'critical'},
+        'vsprintf': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'wcscpy': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'lstrcpyA': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        'lstrcpyW': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'high'},
+        # Command injection
+        'system': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'execve': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'execl': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'execlp': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'popen': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'WinExec': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
+        'ShellExecuteA': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
+        'ShellExecuteW': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
+        'CreateProcessA': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
+        'CreateProcessW': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
+        # Format string
+        'printf': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
+        'fprintf': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
+        'syslog': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
+        'vprintf': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
+        # Memory corruption
+        'memcpy': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'medium'},
+        'memmove': {'cwe': 'CWE-120', 'type': 'buffer_overflow', 'severity': 'medium'},
+        'free': {'cwe': 'CWE-416', 'type': 'use_after_free', 'severity': 'high'},
+        'realloc': {'cwe': 'CWE-416', 'type': 'use_after_free', 'severity': 'medium'},
+        # Path traversal
+        'fopen': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
+        'open': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
+        'CreateFileA': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
+        'CreateFileW': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
+    }
+
+    SAFE_ALTERNATIVES = {
+        'strcpy': 'strncpy/strlcpy',
+        'strcat': 'strncat/strlcat',
+        'sprintf': 'snprintf',
+        'gets': 'fgets',
+        'vsprintf': 'vsnprintf',
+    }
+
+    # Bounds-checking functions that indicate safer patterns
+    BOUNDS_CHECKS = {'strlen', 'sizeof', 'strnlen', 'wcslen', 'min', 'max'}
+
+    # ---- Phase 1: Import-based taint analysis ----
+    imported_names = set()
+    if imports:
+        for imp in imports:
+            name = getattr(imp, 'name', None) or (imp.get('name') if isinstance(imp, dict) else str(imp))
+            if name:
+                imported_names.add(name)
+
+    has_input_sources = imported_names & INPUT_SOURCES
+    has_dangerous_sinks = {name: info for name, info in DANGEROUS_SINKS.items() if name in imported_names}
+    has_bounds_checks = imported_names & BOUNDS_CHECKS
+
+    # If both input sources and dangerous sinks exist, there's a potential taint flow
+    if has_input_sources and has_dangerous_sinks:
+        for sink_name, sink_info in has_dangerous_sinks.items():
+            # Check if bounds-checking mitigates the risk
+            mitigated = False
+            safe_alt = SAFE_ALTERNATIVES.get(sink_name)
+            if safe_alt and any(alt in imported_names for alt in safe_alt.split('/')):
+                mitigated = True  # Safe alternative is also imported
+
+            confidence = "high" if not has_bounds_checks and not mitigated else "medium"
+            severity = sink_info['severity'] if confidence == "high" else "medium"
+
+            input_list = sorted(has_input_sources)[:3]
+            description = (
+                f"Data from {', '.join(input_list)} may reach {sink_name}() without "
+                f"{'adequate ' if has_bounds_checks else ''}bounds checking"
+            )
+            if mitigated:
+                description += f" (safe alternative {safe_alt} also imported, reducing risk)"
+
+            vulnerabilities.append({
+                "type": sink_info['type'],
+                "function": sink_name,
+                "address": 0,
+                "cwe": sink_info['cwe'],
+                "description": description,
+                "severity": severity,
+                "details": {
+                    "analysis_type": "import_taint_flow",
+                    "input_sources": input_list,
+                    "sink": sink_name,
+                    "bounds_checks_present": bool(has_bounds_checks),
+                    "safe_alternative_present": mitigated,
+                    "confidence": confidence,
+                },
+            })
+
+            target_reaches.append(TargetReach(
+                target_address=0,
+                target_name=sink_name,
+                reached=True,
+                input_to_reach=None,
+                path_length=-1,  # Unknown from static analysis
+                constraints_solved=0,
+            ))
+
+    # ---- Phase 2: Disassembly-based call flow analysis ----
+    functions_with_calls = {}  # func_name -> set of called functions
+    source_functions = []  # Functions that call input sources
+    sink_functions = []  # Functions that call dangerous sinks
+
+    if result and hasattr(result, 'functions') and result.functions:
+        for func in result.functions:
+            func_name = getattr(func, 'name', f'sub_{getattr(func, "address", 0):x}')
+            called = set()
+
+            if hasattr(func, 'instructions') and func.instructions:
+                for instr in func.instructions:
+                    mnemonic = getattr(instr, 'mnemonic', '')
+                    op_str = getattr(instr, 'op_str', '')
+
+                    if mnemonic in ('call', 'bl', 'blx', 'jal'):
+                        # Extract called function name from operand
+                        for name in INPUT_SOURCES | set(DANGEROUS_SINKS.keys()):
+                            if name in op_str:
+                                called.add(name)
+                                break
+
+            functions_with_calls[func_name] = called
+
+            if called & INPUT_SOURCES:
+                source_functions.append(func_name)
+            if called & set(DANGEROUS_SINKS.keys()):
+                sink_functions.append(func_name)
+
+        # Find functions that call both sources and sinks (direct taint in same function)
+        for func_name, called in functions_with_calls.items():
+            sources_in_func = called & INPUT_SOURCES
+            sinks_in_func = called & set(DANGEROUS_SINKS.keys())
+
+            if sources_in_func and sinks_in_func:
+                for sink in sinks_in_func:
+                    sink_info = DANGEROUS_SINKS[sink]
+                    vulnerabilities.append({
+                        "type": sink_info['type'],
+                        "function": sink,
+                        "address": 0,
+                        "cwe": sink_info['cwe'],
+                        "description": (
+                            f"Function {func_name}() reads input via "
+                            f"{', '.join(sorted(sources_in_func))} and passes it to "
+                            f"{sink}() within the same function - direct taint flow"
+                        ),
+                        "severity": sink_info['severity'],
+                        "details": {
+                            "analysis_type": "intra_function_taint",
+                            "containing_function": func_name,
+                            "input_sources": sorted(sources_in_func),
+                            "sink": sink,
+                            "confidence": "high",
+                        },
+                    })
+
+                interesting_paths.append(SymbolicPath(
+                    path_id=len(interesting_paths),
+                    depth=1,
+                    constraints_count=0,
+                    is_feasible=True,
+                    termination_reason='reached_target',
+                    addresses_visited=[],
+                    branches_taken=[],
+                ))
+
+    # ---- Phase 3: Dangerous function use without safe guards ----
+    if has_dangerous_sinks and not has_bounds_checks:
+        # Gets is ALWAYS dangerous
+        if 'gets' in imported_names:
+            vulnerabilities.append({
+                "type": "buffer_overflow",
+                "function": "gets",
+                "address": 0,
+                "cwe": "CWE-120",
+                "description": "gets() is used - this function CANNOT be used safely and always causes buffer overflow vulnerability",
+                "severity": "critical",
+                "details": {
+                    "analysis_type": "inherently_unsafe_function",
+                    "remediation": "Replace gets() with fgets() which accepts a buffer size parameter",
+                    "confidence": "certain",
+                },
+            })
+
+    # ---- Phase 4: Check for missing security mitigations ----
+    try:
+        binary_bytes = file_path.read_bytes()[:4096]
+
+        # Check for stack canary usage (__stack_chk_fail)
+        has_stack_canary = b'__stack_chk_fail' in binary_bytes or b'__stack_chk_guard' in binary_bytes
+
+        if not has_stack_canary and has_dangerous_sinks:
+            vulnerabilities.append({
+                "type": "missing_mitigation",
+                "function": "stack_canary",
+                "address": 0,
+                "cwe": "CWE-693",
+                "description": "Binary uses dangerous functions but appears to lack stack canary protection (__stack_chk_fail not found)",
+                "severity": "medium",
+                "details": {
+                    "analysis_type": "mitigation_check",
+                    "missing": "stack_canary",
+                    "dangerous_functions": sorted(has_dangerous_sinks.keys()),
+                    "confidence": "medium",
+                },
+            })
+    except Exception:
+        pass
+
+    # ---- Build result ----
+    end_time = time.time()
+    paths_explored = len(functions_with_calls) if functions_with_calls else len(imported_names)
+
+    symbolic_inputs = []
+    if has_input_sources:
+        symbolic_inputs.append(SymbolicInput(
+            name='detected_inputs',
+            type='mixed',
+            size_bits=0,
+            constraints=[f"Input via {src}" for src in sorted(has_input_sources)],
+            concrete_examples=[],
+        ))
+
+    return SymbolicExecutionResult(
+        paths_explored=paths_explored,
+        paths_deadended=0,
+        paths_errored=0,
+        max_depth_reached=max(len(p.addresses_visited) for p in interesting_paths) if interesting_paths else 0,
+        symbolic_inputs=symbolic_inputs,
+        crash_inputs=crash_inputs,
+        target_reaches=target_reaches,
+        interesting_paths=interesting_paths,
+        vulnerabilities_found=vulnerabilities,
+        execution_time_seconds=round(end_time - start_time, 3),
+        memory_used_mb=0,
+        timeout_reached=False,
+        error=None if vulnerabilities or target_reaches else (
+            "Lightweight analysis mode (angr not installed). "
+            "Install angr for full symbolic execution with constraint solving."
+        ),
+    )
+
+
+# ============================================================================
 # Binary Diffing
 # ============================================================================
 
@@ -6675,34 +6973,41 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                     # Perform advanced analysis if disassembly succeeded
                     if disassembly and disassembly.functions:
                         # Build instruction map from all functions
+                        # Use a local scope to ensure cleanup after analysis
                         all_instructions: Dict[int, DisassemblyInstruction] = {}
-                        for func in disassembly.functions:
-                            for instr in func.instructions:
-                                all_instructions[instr.address] = instr
-                        
-                        # Data flow analysis
                         try:
-                            data_flow_result = analyze_data_flow(
-                                all_instructions, 
-                                disassembly.control_flow_graph,
-                                imports,
-                                disassembly.architecture
-                            )
-                        except Exception as e:
-                            logger.warning(f"Data flow analysis failed: {e}")
-                            data_flow_result = None
-                        
-                        # Type recovery
-                        try:
-                            type_recovery_result = recover_types(
-                                all_instructions,
-                                disassembly.control_flow_graph,
-                                disassembly.architecture
-                            )
-                        except Exception as e:
-                            logger.warning(f"Type recovery failed: {e}")
-                            type_recovery_result = None
-                        
+                            for func in disassembly.functions:
+                                for instr in func.instructions:
+                                    all_instructions[instr.address] = instr
+
+                            # Data flow analysis
+                            try:
+                                data_flow_result = analyze_data_flow(
+                                    all_instructions,
+                                    disassembly.control_flow_graph,
+                                    imports,
+                                    disassembly.architecture
+                                )
+                            except Exception as e:
+                                logger.warning(f"Data flow analysis failed: {e}")
+                                data_flow_result = None
+
+                            # Type recovery
+                            try:
+                                type_recovery_result = recover_types(
+                                    all_instructions,
+                                    disassembly.control_flow_graph,
+                                    disassembly.architecture
+                                )
+                            except Exception as e:
+                                logger.warning(f"Type recovery failed: {e}")
+                                type_recovery_result = None
+                        finally:
+                            # Explicitly clear the instruction map to free memory
+                            # This can be very large for big binaries (millions of entries)
+                            all_instructions.clear()
+                            del all_instructions
+
                         # Emulation analysis (if Unicorn available)
                         try:
                             emulation_result = emulate_binary(file_path, metadata)
@@ -7030,7 +7335,55 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
         # Perform ROP gadget analysis for vulnerability assessment
         rop_result = None
         symbolic_result = None
-        
+
+        # Symbolic execution - discover inputs that trigger vulnerabilities
+        try:
+            if ANGR_AVAILABLE:
+                # Full angr-based symbolic execution
+                logger.info("Running angr symbolic execution...")
+                symbolic_result = perform_symbolic_execution(
+                    file_path, max_time_seconds=60, max_paths=500
+                )
+                if symbolic_result and symbolic_result.vulnerabilities_found:
+                    for vuln in symbolic_result.vulnerabilities_found:
+                        suspicious.append({
+                            "category": f"🔴 Symbolic: {vuln.get('type', 'vulnerability').replace('_', ' ').title()}",
+                            "severity": "high",
+                            "description": vuln.get("description", "Symbolic execution found reachable dangerous function"),
+                            "details": {
+                                "function": vuln.get("function"),
+                                "address": hex(vuln.get("address", 0)),
+                                "cwe": vuln.get("cwe"),
+                                "input_sample": vuln.get("input_sample", "")[:32],
+                            },
+                        })
+                if symbolic_result and symbolic_result.crash_inputs:
+                    suspicious.append({
+                        "category": "🔴 Crash Inputs Discovered",
+                        "severity": "high",
+                        "description": f"Symbolic execution found {len(symbolic_result.crash_inputs)} inputs that crash the binary",
+                        "details": {
+                            "crash_count": len(symbolic_result.crash_inputs),
+                            "types": list(set(c.crash_type for c in symbolic_result.crash_inputs[:10])),
+                        },
+                    })
+            else:
+                # Lightweight pattern-based symbolic analysis (no angr required)
+                logger.info("Running lightweight symbolic analysis (angr not available)...")
+                symbolic_result = perform_lightweight_symbolic_analysis(
+                    file_path, result=disassembly, imports=imports
+                )
+                if symbolic_result and symbolic_result.vulnerabilities_found:
+                    for vuln in symbolic_result.vulnerabilities_found:
+                        suspicious.append({
+                            "category": f"⚠️ Symbolic: {vuln.get('type', 'vulnerability').replace('_', ' ').title()}",
+                            "severity": vuln.get("severity", "medium"),
+                            "description": vuln.get("description", "Pattern analysis found potential vulnerability path"),
+                            "details": vuln.get("details"),
+                        })
+        except Exception as e:
+            logger.debug(f"Symbolic execution skipped: {e}")
+
         # ROP analysis - quick, helps assess exploitability
         try:
             rop_result = find_rop_gadgets(file_path, max_gadgets=500, max_gadget_length=6)
@@ -7081,6 +7434,45 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
         except Exception as e:
             logger.debug(f"ROP gadget analysis skipped: {e}")
 
+        # Entropy analysis for visualization
+        entropy_dict = None
+        try:
+            entropy_result = analyze_binary_entropy(file_path, window_size=512, step_size=256)
+            if entropy_result:
+                # Downsample entropy_data for API response (max 200 points)
+                raw_points = entropy_result.entropy_data
+                if len(raw_points) > 200:
+                    step = max(1, len(raw_points) // 200)
+                    sampled = raw_points[::step]
+                else:
+                    sampled = raw_points
+                entropy_dict = {
+                    "overall_entropy": round(entropy_result.overall_entropy, 3),
+                    "is_likely_packed": entropy_result.is_likely_packed,
+                    "packing_confidence": round(entropy_result.packing_confidence, 2),
+                    "detected_packers": entropy_result.detected_packers,
+                    "section_entropy": entropy_result.section_entropy,
+                    "analysis_notes": entropy_result.analysis_notes,
+                    "entropy_data": [
+                        {"offset": p.offset, "entropy": round(p.entropy, 3)}
+                        for p in sampled
+                    ],
+                    "regions": [
+                        {
+                            "start": r.start_offset,
+                            "end": r.end_offset,
+                            "avg_entropy": round(r.avg_entropy, 3),
+                            "max_entropy": round(r.max_entropy, 3),
+                            "classification": r.classification,
+                            "section_name": r.section_name,
+                            "description": r.description,
+                        }
+                        for r in entropy_result.regions
+                    ],
+                }
+        except Exception as e:
+            logger.debug(f"Entropy analysis skipped: {e}")
+
         return BinaryAnalysisResult(
             filename=filename,
             metadata=metadata,
@@ -7101,6 +7493,7 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
             emulation_analysis=emulation_result,
             symbolic_execution=symbolic_result,
             rop_gadgets=rop_result,
+            entropy_analysis=entropy_dict,
         )
         
     except Exception as e:
@@ -15105,7 +15498,8 @@ async def analyze_ghidra_functions_with_ai(
 ) -> Optional[List[Dict[str, Any]]]:
     """Use Gemini to summarize decompiled functions from Ghidra output."""
     if not settings.gemini_api_key:
-        return None
+        logger.info("Ghidra AI function summaries skipped: GEMINI_API_KEY not configured")
+        return [{"skipped": True, "reason": "Gemini API key not configured. Set GEMINI_API_KEY to enable AI function summaries."}]
 
     functions = ghidra_analysis.get("functions") or []
     if not functions:
@@ -15175,7 +15569,8 @@ async def analyze_ghidra_functions_with_ai(
 async def analyze_binary_with_ai(result: BinaryAnalysisResult) -> Optional[str]:
     """Use Gemini to provide comprehensive security analysis of binary."""
     if not settings.gemini_api_key:
-        return None
+        logger.info("AI binary analysis skipped: GEMINI_API_KEY not configured")
+        return "[AI analysis skipped] Gemini API key is not configured. Set the GEMINI_API_KEY environment variable to enable AI-powered security analysis."
     
     try:
         from google import genai
@@ -24672,6 +25067,7 @@ def _detect_packing(
         b'ASPack': 'ASPack',
         b'.aspack': 'ASPack',
         b'.adata': 'ASProtect',
+        b'ASProtect': 'ASProtect',
         b'FSG!': 'FSG',
         b'MPRESS': 'MPRESS',
         b'.nsp0': 'NsPack',
@@ -24681,11 +25077,36 @@ def _detect_packing(
         b'PEtite': 'Petite',
         b'Themida': 'Themida',
         b'.themida': 'Themida',
+        b'WinLicense': 'Themida/WinLicense',
+        b'Oreans': 'Themida/Oreans',
         b'VMProtect': 'VMProtect',
         b'.vmp0': 'VMProtect',
         b'.vmp1': 'VMProtect',
+        b'.vmp2': 'VMProtect',
         b'Obsidium': 'Obsidium',
+        b'.obsidium': 'Obsidium',
         b'.enigma': 'Enigma Protector',
+        # New additions
+        b'CodeVirtualizer': 'CodeVirtualizer',
+        b'SafeEngine': 'SafeEngine',
+        b'Safengine': 'SafeEngine',
+        b'Armadillo': 'Armadillo',
+        b'Silicon Realms': 'Armadillo',
+        b'ExeStealth': 'ExeStealth',
+        b'tElock': 'tElock',
+        b'MoleBox': 'MoleBox',
+        b'.mole': 'MoleBox',
+        b'BoxedApp': 'BoxedApp',
+        b"yoda\x27s Protector": 'Yoda Protector',
+        b'.yP': 'Yoda Protector',
+        # .NET protectors
+        b'.NET Reactor': '.NET Reactor',
+        b'Eziriz': '.NET Reactor',
+        b'ConfusedByAttribute': 'ConfuserEx',
+        b'DotfuscatorAttribute': 'Dotfuscator',
+        b'SmartAssembly': 'SmartAssembly',
+        b'BabelObfuscatorAttribute': 'Babel Obfuscator',
+        b'CryptoObfuscator': 'Crypto Obfuscator',
     }
     
     for sig, name in packer_signatures.items():
@@ -38236,52 +38657,150 @@ KNOWN_PACKERS = {
     "UPX": {
         "signatures": ["UPX!", "UPX0", "UPX1", "UPX2"],
         "sections": [".UPX0", ".UPX1", ".UPX2"],
-        "description": "Ultimate Packer for eXecutables - open source packer"
+        "description": "Ultimate Packer for eXecutables - open source packer",
     },
     "ASPack": {
         "signatures": [".aspack", "ASPack"],
         "sections": [".aspack", ".adata"],
-        "description": "Commercial packer for Win32 executables"
+        "description": "Commercial packer for Win32 executables",
     },
     "Themida": {
-        "signatures": ["Themida", ".themida"],
+        "signatures": ["Themida", ".themida", "Oreans", "WinLicense"],
         "sections": [".themida"],
-        "description": "Advanced commercial protector with VM and anti-debug"
+        "description": "Advanced commercial protector with VM and anti-debug",
     },
     "VMProtect": {
         "signatures": ["VMProtect", ".vmp0", ".vmp1"],
         "sections": [".vmp0", ".vmp1", ".vmp2"],
-        "description": "Advanced VM-based protection"
+        "description": "Advanced VM-based protection",
     },
     "Enigma": {
         "signatures": ["Enigma protector", ".enigma"],
         "sections": [".enigma1", ".enigma2"],
-        "description": "Enigma Protector with licensing"
+        "description": "Enigma Protector with licensing",
     },
     "PECompact": {
         "signatures": ["PEC2", "PECompact2"],
         "sections": ["PEC2"],
-        "description": "PE executable compressor"
+        "description": "PE executable compressor",
     },
     "MPRESS": {
         "signatures": ["MPRESS1", "MPRESS2"],
         "sections": [".MPRESS1", ".MPRESS2"],
-        "description": "Free high-ratio executable packer"
+        "description": "Free high-ratio executable packer",
     },
     "Petite": {
         "signatures": ["petite", ".petite"],
         "sections": [".petite"],
-        "description": "Win32 executable compressor"
+        "description": "Win32 executable compressor",
     },
     "NSPack": {
         "signatures": ["nsp0", "nsp1", "NSPack"],
         "sections": [".nsp0", ".nsp1"],
-        "description": "North Star packer"
+        "description": "North Star packer",
     },
     "PELock": {
         "signatures": ["PELock"],
         "sections": [],
-        "description": "Software protection system"
+        "description": "Software protection system",
+    },
+    # --- New packers/protectors ---
+    "CodeVirtualizer": {
+        "signatures": ["CodeVirtualizer", "Oreans"],
+        "sections": [".cv0", ".cv1"],
+        "description": "Code virtualization protector by Oreans (same vendor as Themida)",
+    },
+    "SafeEngine": {
+        "signatures": ["SafeEngine", "Safengine"],
+        "sections": [".sedata", ".secode"],
+        "description": "SafeEngine Shielden - anti-crack protection",
+    },
+    "Armadillo": {
+        "signatures": ["Armadillo", "Silicon Realms"],
+        "sections": [],
+        "description": "Armadillo software protection system",
+    },
+    "Obsidium": {
+        "signatures": ["Obsidium"],
+        "sections": [".obsidium"],
+        "description": "Obsidium software protector",
+    },
+    "FSG": {
+        "signatures": ["FSG!"],
+        "sections": [],
+        "description": "Fast Small Good packer",
+    },
+    "MEW": {
+        "signatures": ["MEW"],
+        "sections": [],
+        "description": "MEW packer - small executable compressor",
+    },
+    "ASProtect": {
+        "signatures": ["ASProtect"],
+        "sections": [".adata"],
+        "description": "ASProtect software protection",
+    },
+    "ExeStealth": {
+        "signatures": ["ExeStealth", "WebToolMaster"],
+        "sections": [],
+        "description": "ExeStealth anti-crack protector",
+    },
+    "Yoda's Protector": {
+        "signatures": ["yoda's Protector", "yP", "Yoda"],
+        "sections": [".yP"],
+        "description": "Yoda's Protector / yoda's Crypter",
+    },
+    "tElock": {
+        "signatures": ["tElock"],
+        "sections": [],
+        "description": "tElock PE protector",
+    },
+    "MoleBox": {
+        "signatures": ["MoleBox", ".mole"],
+        "sections": [".mole"],
+        "description": "MoleBox application virtualizer",
+    },
+    "BoxedApp": {
+        "signatures": ["BoxedApp"],
+        "sections": [],
+        "description": "BoxedApp Packer - application virtualization",
+    },
+    # .NET protectors
+    ".NET Reactor": {
+        "signatures": [".NET Reactor", "Eziriz"],
+        "sections": [],
+        "description": ".NET Reactor - code protection and obfuscation for .NET",
+    },
+    "ConfuserEx": {
+        "signatures": ["ConfusedByAttribute", "ConfuserEx", "Confuser.Core"],
+        "sections": [],
+        "description": "ConfuserEx - open source .NET obfuscator",
+    },
+    "Dotfuscator": {
+        "signatures": ["DotfuscatorAttribute", "PreEmptive"],
+        "sections": [],
+        "description": "Dotfuscator - commercial .NET obfuscator by PreEmptive",
+    },
+    "SmartAssembly": {
+        "signatures": ["SmartAssembly", "PoweredByAttribute"],
+        "sections": [],
+        "description": "SmartAssembly - .NET obfuscator and optimizer",
+    },
+    "Babel Obfuscator": {
+        "signatures": ["BabelObfuscatorAttribute", "babelfor.NET"],
+        "sections": [],
+        "description": "Babel Obfuscator for .NET",
+    },
+    "Crypto Obfuscator": {
+        "signatures": ["CryptoObfuscator", "LogicNP"],
+        "sections": [],
+        "description": "Crypto Obfuscator for .NET",
+    },
+    # Linux packers
+    "UPX (Linux)": {
+        "signatures": ["UPX!", "$Info: This file is packed"],
+        "sections": ["UPX!"],
+        "description": "UPX packer for Linux ELF binaries",
     },
 }
 
