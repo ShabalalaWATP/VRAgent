@@ -35,7 +35,7 @@ VRAgent combines **14+ static analysis scanners**, **AI-orchestrated dynamic tes
 | **[Projects](docs/PROJECT_README.md)** | Project management and collaboration | Kanban boards, whiteboards, team chat, combined analysis reports |
 | **[Static Analysis](docs/STATIC_ANALYSIS_README.md)** | Source code security scanning | 14 SAST scanners, dependency analysis, secret detection, AI vulnerability hunting |
 | **[Dynamic Analysis](docs/DYNAMIC_ANALYSIS_README.md)** | Runtime and network security testing | ZAP, Nuclei, Nmap, MITM proxy, API testing, fuzzing tools |
-| **[Reverse Engineering](docs/REVERSE_ENGINEERING_README.md)** | Binary and application analysis | PE/ELF analysis, APK decompilation, Docker inspection, AI-powered analysis |
+| **[Reverse Engineering](docs/REVERSE_ENGINEERING_README.md)** | Binary and application analysis | PE/ELF analysis, APK decompilation, Docker inspection, named scans, project-aware saved reports, AI-powered analysis |
 | **[Learning Hub](docs/LEARNING_HUB_README.md)** | Security education and training | 105 topics, AI chat assistant, interactive guides |
 | **[Social Hub](docs/SOCIAL_HUB_README.md)** | Collaboration and community | Friends, messaging, groups, real-time presence |
 

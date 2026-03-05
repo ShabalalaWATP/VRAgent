@@ -9,6 +9,16 @@ The Reverse Engineering Hub provides comprehensive tools for analyzing binaries 
 - **URL:** `/reverse` (standalone tools) or within a project's Reverse Engineering tab
 - **Navigation:** Click "Reverse Engineering" button in the top navigation bar
 - **Authentication:** Required (login to access)
+- **Shared Engine:** Project and standalone flows use the same analyzer implementation and feature set
+
+---
+
+## Saved Reports, Naming, and Project Scope
+
+- **Optional Scan Name:** Binary scans support an optional scan name used for saved report title and export heading/filename.
+- **Standalone Runs:** Scans launched from `/reverse` (without `projectId`) are saved to Reverse Engineering Hub Saved Reports.
+- **Project Runs:** Scans launched from a project are saved with `project_id` and listed in that project's Reverse Engineering reports.
+- **Project Combined Analysis:** Project-scoped reverse engineering reports (Binary/APK/Docker) are available as `re_report` sources in Project Combined Analysis.
 
 ---
 
@@ -746,20 +756,26 @@ Interactive hex viewer for binary files:
 
 | Format | Description |
 |--------|-------------|
-| **Markdown** | Clean text report |
-| **PDF** | Professional formatted report |
-| **JSON** | Machine-readable data |
-| **HTML** | Interactive web report |
+| **Markdown (`.md`)** | Text report with full section structure |
+| **PDF (`.pdf`)** | Stakeholder-ready formatted report |
+| **Word (`.docx`)** | Editable report for handoff workflows |
 
 ### Data Exports
 
 | Export | Description |
 |--------|-------------|
-| **Strings** | All extracted strings (CSV) |
-| **Functions** | Decompiled functions (C/Java) |
-| **Vulnerabilities** | Findings list (JSON) |
-| **FRIDA Scripts** | Generated scripts (JS) |
-| **IOCs** | Indicators of Compromise |
+| **Full Binary Report** | Includes summary sections from *What Does This Binary Do?* and *Security Findings* |
+| **Architecture Diagram** | Included in report output and rendered as an image in PDF/Word exports |
+| **Attack Surface Map** | Included in report output and rendered as an image in PDF/Word exports |
+| **FRIDA Scripts** | Exportable dynamic-analysis script bundle |
+
+---
+
+## AI Chat Behavior
+
+- **Analyzer-aware:** Chat supports Binary Analyzer, APK Analyzer, and Docker Inspector.
+- **Saved-report-aware:** Opening chat from a saved scan loads context for that specific analyzer/report.
+- **Project-safe context:** Project reports keep project scope while preserving full analyzer context.
 
 ---
 
@@ -809,7 +825,8 @@ Interactive hex viewer for binary files:
 1. **Verify exploitability** - Confirm vulnerabilities manually
 2. **Document attack paths** - Record exploitation steps
 3. **Generate reports** - Export for stakeholders
-4. **Save to project** - Link results to project for tracking
+4. **Name scans consistently** - Use clear scan names for easier saved-report identification
+5. **Save to project** - Link results to project for tracking and combined-analysis correlation
 
 ---
 

@@ -169,6 +169,7 @@ const BinaryAnalysisGuidePage: React.FC = () => {
   const vrAgentFeatures = [
     { feature: "Unified Binary Scan (11 Phases)", description: "Complete analysis with real-time streaming progress: static analysis, Ghidra decompilation, AI summaries, pattern scanning, CVE lookup, sensitive data scan, vulnerability hunting, AI verification, attack surface mapping, emulation, and report generation", icon: <PlayArrowIcon />, color: "#22c55e" },
     { feature: "4-Tab Results View", description: "AI-generated reports: What Does This Binary Do?, Security Findings with CWE references, Architecture Diagram (Mermaid), and Attack Surface Map (exploitable entry points)", icon: <VisibilityIcon />, color: "#3b82f6" },
+    { feature: "Named Scans + Project Routing", description: "Set an optional scan name that becomes the saved report title and export heading. Standalone scans save to Reverse Engineering Hub history; project-launched scans save to that project and appear in Project Combined Analysis.", icon: <BuildIcon />, color: "#f97316" },
     { feature: "Agentic Malware Analysis (6 AI Agents)", description: "Autonomous multi-agent system: Orchestrator (workflow coordination), Static Analysis (binary structure), Dynamic Analysis (runtime monitoring), Behavioral (pattern recognition), Unpacking (packer/crypter handling), Evasion Detection (anti-analysis techniques). MITRE ATT&CK mapping included", icon: <AutoAwesomeIcon />, color: "#dc2626" },
     { feature: "Malware Detection Engine", description: "YARA rules (Ransomware, RAT, Backdoor, Infostealer, Cryptominer), packer/crypter detection, C2 beacon detection (HTTP/DNS/TCP), persistence mechanisms (Registry/Services/Tasks), privilege escalation (DLL hijacking, token manipulation), lateral movement (Pass-the-Hash, RDP, WMI)", icon: <SecurityIcon />, color: "#ea580c" },
     { feature: "Frida Dynamic Instrumentation", description: "Runtime binary hooking with API call tracing, network/filesystem/registry monitoring, crypto operation detection, anti-evasion capabilities, sandboxed execution with artifact collection", icon: <BugReportIcon />, color: "#f97316" },
@@ -178,12 +179,12 @@ const BinaryAnalysisGuidePage: React.FC = () => {
     { feature: "Symbolic Execution & Taint Analysis", description: "Track user input through execution paths: identify taint sources (argv, stdin, recv), propagate through transformations, detect when tainted data reaches dangerous sinks (strcpy, system, eval)", icon: <AccountTreeIcon />, color: "#f59e0b" },
     { feature: "Natural Language Search", description: "Semantic search across decompiled code: 'Find authentication code', 'Show network functions', 'Where is the encryption key derived?' - AI understands intent, not just keywords", icon: <SearchIcon />, color: "#06b6d4" },
     { feature: "PoC Exploit Generation", description: "Generate working exploit code in Python/C with shellcode support. Includes prerequisites, usage instructions, expected outcomes, safety notes, and evasion techniques", icon: <CodeIcon />, color: "#ec4899" },
-    { feature: "AI Chat", description: "Interactive Q&A about vulnerabilities, exploitation techniques, remediation strategies. Full context awareness of the analysis results", icon: <AutoAwesomeIcon />, color: "#a855f7" },
+    { feature: "AI Chat", description: "Interactive Q&A for Binary Analyzer, APK Analyzer, and Docker Inspector. Chat context follows the active analyzer and the currently opened saved report.", icon: <AutoAwesomeIcon />, color: "#a855f7" },
     { feature: "Attack Simulation Mode", description: "Step-by-step visualization of how an exploit works: register/memory state at each phase, attacker-controlled values highlighted, mitigation bypass analysis", icon: <BugReportIcon />, color: "#f43f5e" },
     { feature: "Emulation Analysis (Unicorn)", description: "Lightweight CPU emulation to detect runtime behaviors: anti-debug techniques, self-modifying code, unpacking routines, evasion detection", icon: <MemoryIcon />, color: "#14b8a6" },
     { feature: "ROP Gadget Finder", description: "Automatic discovery of Return-Oriented Programming gadgets for exploit development: pop/ret chains, stack pivots, syscall gadgets", icon: <BuildIcon />, color: "#f97316" },
     { feature: "Binary Diff", description: "Compare two binaries to identify patched vulnerabilities, added security features, or code changes between versions", icon: <SearchIcon />, color: "#6366f1" },
-    { feature: "Report Export", description: "Generate comprehensive reports in Markdown, PDF, or DOCX format with executive summary, all findings, and remediation guidance", icon: <CodeIcon />, color: "#84cc16" },
+    { feature: "Report Export", description: "Generate Markdown, PDF, or DOCX reports with What Does This Binary Do?, Security Findings summaries, and both AI diagrams (Architecture + Attack Surface) rendered in the output.", icon: <CodeIcon />, color: "#84cc16" },
     { feature: "Notes & Annotations", description: "Take notes linked to specific vulnerabilities, export analysis documentation, collaborate with team members", icon: <CodeIcon />, color: "#a78bfa" },
     { feature: "Entropy Analysis", description: "Detect packed/encrypted sections by analyzing byte distribution. High entropy (>7.0) indicates encryption or compression", icon: <StorageIcon />, color: "#0ea5e9" },
     { feature: "Legitimacy Detection", description: "Reduces false positives for known software: checks Authenticode signatures, version info, publisher names, security mitigations", icon: <CheckCircleIcon />, color: "#10b981" },
@@ -191,8 +192,8 @@ const BinaryAnalysisGuidePage: React.FC = () => {
 
   const quickStartSteps = [
     {
-      label: "Upload Your Binary",
-      description: "Navigate to the Reverse Engineering Hub and select 'Binary Analysis'. Upload a PE (.exe, .dll) or ELF binary file. Maximum file size is 500MB.",
+      label: "Upload and Name Your Binary Scan",
+      description: "Navigate to Reverse Engineering Hub (standalone) or open Binary Analyzer from a Project. Upload a PE (.exe, .dll) or ELF binary file and set an optional Scan Name. The Scan Name is used for saved report titles and export headings.",
     },
     {
       label: "Run Unified Scan (11 Phases)",
@@ -216,7 +217,7 @@ const BinaryAnalysisGuidePage: React.FC = () => {
     },
     {
       label: "Export Report & Notes",
-      description: "Generate comprehensive reports in Markdown, PDF, or DOCX format. Take notes linked to specific findings and export full documentation for your team.",
+      description: "Generate Markdown, PDF, or DOCX reports containing the functionality summary, security findings summary, and both AI diagrams (Architecture + Attack Surface). Take notes linked to specific findings for team handoff.",
     },
   ];
 
@@ -243,7 +244,10 @@ const BinaryAnalysisGuidePage: React.FC = () => {
 - Binary diff for patch analysis
 - Report export in Markdown, PDF, DOCX formats
 - Notes and annotation management
-- Legitimacy detection for known software`;
+- Legitimacy detection for known software
+- Optional scan naming for saved reports and exports
+- Project-aware save routing and Project Combined Analysis inclusion
+- Analyzer-specific AI chat context for live and saved scans`;
 
   return (
     <LearnPageLayout pageTitle="Binary Analysis Guide" pageContext={pageContext}>
@@ -1235,11 +1239,12 @@ void copy_user_input(char *input) {
                 <Grid container spacing={2}>
                   {[
                     { tip: "AI Chat Deep Dive", desc: "Ask 'What are the most critical vulnerabilities?' or 'How would an attacker exploit the buffer overflow in process_input?' for contextual AI analysis" },
+                    { tip: "Name Your Scan", desc: "Set Scan Name before running analysis so saved reports and exported files use a clear title instead of raw file designators" },
                     { tip: "Natural Language Search", desc: "Search semantically: 'find authentication bypass', 'show encryption routines', 'where is user data parsed' - AI understands intent" },
                     { tip: "Combine Tools", desc: "Pattern Scan → AI Verification → Symbolic Trace → PoC Generation: verify findings are real, then prove exploitability" },
                     { tip: "Attack Simulation", desc: "Use Attack Simulation to visualize the complete exploitation chain before writing your own exploit" },
                     { tip: "Smart Rename", desc: "Use AI Smart Rename to automatically suggest meaningful function names based on behavior analysis" },
-                    { tip: "Export Everything", desc: "Generate PDF/DOCX reports with executive summary, all findings, architecture diagrams, and remediation guidance" },
+                    { tip: "Export Everything", desc: "Generate PDF/DOCX reports with summaries, key findings, and both diagrams (Architecture + Attack Surface) for stakeholder-ready outputs" },
                     { tip: "Legitimacy Detection", desc: "For signed software, VRAgent auto-filters false positives using Authenticode, version info, and publisher data" },
                     { tip: "Emulation for Packed Binaries", desc: "Use Emulation Analysis to trace unpacking routines and extract decrypted strings/payloads" },
                     { tip: "Binary Diff", desc: "Compare two versions of a binary to identify security patches and understand what changed" },
