@@ -47,6 +47,71 @@ _unified_scan_sessions: Dict[str, Dict[str, Any]] = {}
 _unified_binary_scan_sessions: Dict[str, Dict[str, Any]] = {}
 
 
+def _serialize_symbolic_result(sym_result) -> Optional[Dict[str, Any]]:
+    """Serialize a SymbolicExecutionResult dataclass to a JSON-compatible dict."""
+    if sym_result is None:
+        return None
+    try:
+        return {
+            "paths_explored": sym_result.paths_explored,
+            "paths_deadended": sym_result.paths_deadended,
+            "paths_errored": sym_result.paths_errored,
+            "max_depth_reached": sym_result.max_depth_reached,
+            "symbolic_inputs": [
+                {
+                    "name": si.name,
+                    "type": si.type,
+                    "size_bits": si.size_bits,
+                    "constraints": si.constraints[:10],
+                    "concrete_examples": si.concrete_examples[:5],
+                }
+                for si in (sym_result.symbolic_inputs or [])
+            ],
+            "crash_inputs": [
+                {
+                    "input_type": ci.input_type,
+                    "input_value": ci.input_value.hex() if isinstance(ci.input_value, bytes) else str(ci.input_value),
+                    "crash_address": hex(ci.crash_address) if ci.crash_address else "0x0",
+                    "crash_type": ci.crash_type,
+                    "vulnerability_type": ci.vulnerability_type,
+                    "cwe_id": ci.cwe_id,
+                    "exploitability": ci.exploitability,
+                }
+                for ci in (sym_result.crash_inputs or [])[:20]
+            ],
+            "target_reaches": [
+                {
+                    "target_address": hex(tr.target_address) if tr.target_address else "0x0",
+                    "target_name": tr.target_name,
+                    "reached": tr.reached,
+                    "input_to_reach": tr.input_to_reach.hex() if isinstance(tr.input_to_reach, bytes) else str(tr.input_to_reach) if tr.input_to_reach else None,
+                    "path_length": tr.path_length,
+                    "constraints_solved": tr.constraints_solved,
+                }
+                for tr in (sym_result.target_reaches or [])[:20]
+            ],
+            "interesting_paths": [
+                {
+                    "path_id": ip.path_id,
+                    "depth": ip.depth,
+                    "constraints_count": ip.constraints_count,
+                    "is_feasible": ip.is_feasible,
+                    "termination_reason": ip.termination_reason,
+                    "addresses_visited": [hex(a) for a in (ip.addresses_visited or [])[:50]],
+                }
+                for ip in (sym_result.interesting_paths or [])[:20]
+            ],
+            "vulnerabilities_found": sym_result.vulnerabilities_found or [],
+            "execution_time_seconds": sym_result.execution_time_seconds,
+            "memory_used_mb": sym_result.memory_used_mb,
+            "timeout_reached": sym_result.timeout_reached,
+            "error": sym_result.error,
+        }
+    except Exception as e:
+        logger.error(f"Failed to serialize symbolic result: {e}")
+        return {"error": str(e), "paths_explored": 0, "vulnerabilities_found": []}
+
+
 # ============================================================================
 # Response Models
 # ============================================================================
@@ -177,6 +242,10 @@ class BinaryAnalysisResponse(BaseModel):
     ai_security_report: Optional[str] = None  # AI report: Security assessment
     ai_architecture_diagram: Optional[str] = None  # AI-generated Mermaid architecture diagram
     ai_attack_surface_map: Optional[str] = None  # AI-generated Mermaid attack tree
+    # Entropy analysis (per-section heatmap visualization)
+    entropy_analysis: Optional[Dict[str, Any]] = None
+    # Symbolic execution results
+    symbolic_execution: Optional[Dict[str, Any]] = None
     # Legitimacy detection (reduces false positives)
     is_legitimate_software: Optional[bool] = None  # Whether binary appears to be from known publisher
     legitimacy_indicators: Optional[List[str]] = None  # Reasons why it appears legitimate
@@ -398,6 +467,15 @@ class StatusResponse(BaseModel):
     ghidra_available: bool
     docker_available: bool
     message: str
+    # Ghidra diagnostics (optional, included when Ghidra is not available)
+    ghidra_path: Optional[str] = None
+    ghidra_setup_instructions: Optional[str] = None
+    # AI availability
+    ai_available: bool = False
+    ai_status: Optional[str] = None
+    # Symbolic execution availability
+    symbolic_execution_available: bool = False
+    symbolic_execution_mode: Optional[str] = None  # "angr" or "lightweight"
 
 
 # ============================================================================
@@ -450,12 +528,30 @@ def get_status(
     """
     docker_available = check_docker_available()
     jadx_available = check_jadx_available()
+
+    # Ghidra detection with diagnostics
+    ghidra_ok = False
+    ghidra_path = None
+    ghidra_setup = None
     try:
-        from backend.services.ghidra_service import ghidra_available
-        ghidra_ok = ghidra_available()
+        from backend.services.ghidra_service import ghidra_status
+        gstatus = ghidra_status()
+        ghidra_ok = gstatus["available"]
+        ghidra_path = gstatus.get("path")
+        ghidra_setup = gstatus.get("setup_instructions")
     except Exception:
         ghidra_ok = False
-    
+
+    # AI availability check
+    ai_ok = bool(settings.gemini_api_key)
+    ai_status_msg = None
+    if not ai_ok:
+        ai_status_msg = "GEMINI_API_KEY not configured. AI analysis features will be skipped."
+
+    # Symbolic execution availability
+    angr_available = getattr(re_service, 'ANGR_AVAILABLE', False)
+    sym_mode = "angr" if angr_available else "lightweight"
+
     return StatusResponse(
         binary_analysis=True,  # Always available (pure Python)
         apk_analysis=True,     # Basic analysis always available
@@ -464,6 +560,12 @@ def get_status(
         ghidra_available=ghidra_ok,
         docker_available=docker_available,
         message="Reverse engineering tools ready" if docker_available else "Docker not available - Docker analysis disabled",
+        ghidra_path=ghidra_path,
+        ghidra_setup_instructions=ghidra_setup,
+        ai_available=ai_ok,
+        ai_status=ai_status_msg,
+        symbolic_execution_available=True,  # Always available (lightweight fallback)
+        symbolic_execution_mode=sym_mode,
     )
 
 
@@ -653,9 +755,10 @@ async def analyze_binary(
             ai_analysis=result.ai_analysis,
             ghidra_analysis=result.ghidra_analysis,
             ghidra_ai_summaries=result.ghidra_ai_summaries,
+            entropy_analysis=result.entropy_analysis,
             error=result.error,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -683,23 +786,25 @@ async def unified_binary_scan(
     include_cve_lookup: bool = Query(True, description="Include CVE lookup for libraries"),
     include_sensitive_scan: bool = Query(True, description="Include sensitive data discovery"),
     include_unified_verification: bool = Query(True, description="Include unified AI verification of all findings"),
+    include_symbolic: bool = Query(True, description="Include symbolic execution analysis (uses angr if available, otherwise lightweight pattern analysis)"),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Perform a complete binary analysis with streaming progress updates.
-    This unified scan combines 11 phases (matching APK analyzer capabilities):
-    
+    This unified scan combines up to 12 phases (matching APK analyzer capabilities):
+
     Phase 1: Static metadata, strings, imports, secrets
     Phase 2: Optional Ghidra decompilation
-    Phase 3: Optional Gemini function summaries  
+    Phase 3: Optional Gemini function summaries
     Phase 4: Optional Gemini overall analysis
     Phase 5: Pattern-based vulnerability scanning (80+ patterns)
     Phase 6: CVE lookup for libraries (OSV.dev + NVD)
     Phase 7: Sensitive data discovery (40+ patterns)
     Phase 8: Unified AI verification of all findings
     Phase 9: Multi-pass AI vulnerability hunting
-    Phase 10: Final risk assessment
-    Phase 11: Report generation
+    Phase 10: Symbolic execution / path analysis
+    Phase 11: Final risk assessment
+    Phase 12: Report generation
     """
     filename = file.filename or "unknown"
     suffix = Path(filename).suffix.lower()
@@ -820,6 +925,13 @@ async def unified_binary_scan(
             description="Emulate code with Unicorn for runtime behavior analysis",
             status="pending",
         ))
+        if include_symbolic:
+            phases.append(UnifiedBinaryScanPhase(
+                id="symbolic_execution",
+                label="Symbolic Execution",
+                description="Discover vulnerability-triggering inputs via symbolic/pattern analysis",
+                status="pending",
+            ))
         phases.append(UnifiedBinaryScanPhase(
             id="ai_reports",
             label="AI Report Generation",
@@ -839,6 +951,7 @@ async def unified_binary_scan(
         attack_surface_result = None
         dynamic_analysis_result = None
         emulation_result = None  # Unicorn emulation results
+        symbolic_execution_result = None  # Symbolic execution results
         ai_reports_result = None
         
         # Time tracking for estimates
@@ -860,6 +973,7 @@ async def unified_binary_scan(
             "attack_surface": 10,
             "dynamic_scripts": 5,
             "emulation": 25,
+            "symbolic_execution": 15,
             "ai_reports": 30,
         }
 
@@ -1664,6 +1778,66 @@ async def unified_binary_scan(
                     return
 
                 # ================================================================
+                # NEW PHASE: Symbolic Execution / Path Analysis
+                # ================================================================
+                if include_symbolic:
+                    current_phase_idx = get_phase_idx("symbolic_execution")
+                    update_phase("symbolic_execution", "in_progress", progress=5)
+
+                    angr_available = getattr(re_service, 'ANGR_AVAILABLE', False)
+                    mode_label = "angr symbolic execution" if angr_available else "lightweight path analysis"
+                    yield make_progress(f"Running {mode_label}...", 10)
+
+                    try:
+                        if angr_available:
+                            yield make_progress("Exploring paths with angr constraint solver...", 20)
+                            symbolic_execution_result = re_service.perform_symbolic_execution(
+                                tmp_path, max_time_seconds=60, max_paths=500
+                            )
+                        else:
+                            yield make_progress("Analyzing taint flows and dangerous sink reachability...", 20)
+                            symbolic_execution_result = re_service.perform_lightweight_symbolic_analysis(
+                                tmp_path,
+                                result=result.disassembly if result else None,
+                                imports=list(result.imports) if result else None,
+                            )
+
+                        yield make_progress("Analyzing symbolic execution results...", 70)
+
+                        if symbolic_execution_result:
+                            vulns = symbolic_execution_result.vulnerabilities_found
+                            reaches = symbolic_execution_result.target_reaches
+                            crashes = symbolic_execution_result.crash_inputs
+                            paths = symbolic_execution_result.paths_explored
+
+                            detail_parts = [f"{paths} paths explored"]
+                            if vulns:
+                                detail_parts.append(f"{len(vulns)} vulnerabilities")
+                            if reaches:
+                                detail_parts.append(f"{len(reaches)} targets reached")
+                            if crashes:
+                                detail_parts.append(f"{len(crashes)} crash inputs")
+                            if not angr_available:
+                                detail_parts.append("(lightweight mode)")
+
+                            update_phase("symbolic_execution", "completed",
+                                " | ".join(detail_parts), 100)
+                            yield make_progress(f"Symbolic execution complete: {' | '.join(detail_parts)}", 100)
+                        else:
+                            update_phase("symbolic_execution", "completed",
+                                "No results (binary may not be suitable for symbolic execution)", 100)
+                            yield make_progress("Symbolic execution: no results", 100)
+
+                    except Exception as sym_err:
+                        logger.error(f"Symbolic execution failed: {sym_err}")
+                        update_phase("symbolic_execution", "error", str(sym_err), 100)
+
+                    if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Scan cancelled'})}\n\n"
+                        yield "data: {\"type\":\"done\"}\n\n"
+                        return
+
+                # ================================================================
                 # NEW PHASE: AI Report Generation (4 reports like APK)
                 # ================================================================
                 current_phase_idx = get_phase_idx("ai_reports")
@@ -1843,6 +2017,7 @@ async def unified_binary_scan(
                     attack_surface=attack_surface_result,
                     dynamic_analysis=dynamic_analysis_result,
                     emulation_analysis=emulation_result,
+                    symbolic_execution=_serialize_symbolic_result(symbolic_execution_result) if symbolic_execution_result else None,
                     ai_functionality_report=ai_reports_result.get("functionality_report") if ai_reports_result else None,
                     ai_security_report=ai_reports_result.get("security_report") if ai_reports_result else None,
                     ai_architecture_diagram=ai_reports_result.get("architecture_diagram") if ai_reports_result else None,

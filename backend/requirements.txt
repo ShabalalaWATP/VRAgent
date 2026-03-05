@@ -72,7 +72,14 @@ capstone==5.0.0
 lief==0.15.1
 yara-python==4.5.0
 unicorn==2.0.0  # CPU emulator for dynamic analysis
-# angr>=9.2.0  # Symbolic execution - disabled due to cffi/pycparser conflict
+# angr>=9.2.0  # Symbolic execution engine (OPTIONAL)
+#   To enable full symbolic execution with angr:
+#   1. Install in a separate venv or use: pip install angr --no-deps-check
+#   2. angr requires cffi>=1.17 but other deps pin cffi<1.17
+#   3. Workaround: pip install angr cffi==1.16.0 (may work with warnings)
+#   4. Without angr, lightweight pattern-based symbolic analysis is used instead
+#   5. The lightweight mode detects taint flows, dangerous sink reachability,
+#      and missing mitigations using static heuristics (no constraint solving).
 ropper==1.13.0  # ROP gadget finder
 python-magic==0.4.27  # File type detection by magic bytes
 # ssdeep>=3.4  # Requires libfuzzy-dev, optional

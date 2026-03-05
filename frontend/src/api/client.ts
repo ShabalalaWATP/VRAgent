@@ -8511,6 +8511,31 @@ export type BinaryAnalysisResult = {
   // NEW: Professional binary analysis features
   symbolic_execution?: SymbolicExecutionResult;
   rop_gadgets?: ROPGadgetResult;
+  // Entropy analysis for visualization
+  entropy_analysis?: {
+    overall_entropy: number;
+    is_likely_packed: boolean;
+    packing_confidence: number;
+    detected_packers: string[];
+    section_entropy: Array<{
+      name: string;
+      entropy: number;
+      size?: number;
+      raw_size?: number;
+      virtual_size?: number;
+    }>;
+    analysis_notes: string[];
+    entropy_data: Array<{ offset: number; entropy: number }>;
+    regions: Array<{
+      start: number;
+      end: number;
+      avg_entropy: number;
+      max_entropy: number;
+      classification: string;
+      section_name?: string;
+      description: string;
+    }>;
+  };
   error?: string;
 };
 
@@ -9539,6 +9564,12 @@ export type ReverseEngineeringStatus = {
   ghidra_available: boolean;
   docker_available: boolean;
   message: string;
+  // Ghidra diagnostics
+  ghidra_path?: string | null;
+  ghidra_setup_instructions?: string | null;
+  // AI availability
+  ai_available?: boolean;
+  ai_status?: string | null;
 };
 
 export type DockerImageInfo = {
@@ -10036,12 +10067,28 @@ export const reverseEngineeringClient = {
    */
   getStatus: async (): Promise<ReverseEngineeringStatus> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+    if (!token) {
+      throw new Error("Not authenticated. Please log in to access the Reverse Engineering Hub.");
     }
+    const headers: HeadersInit = {
+      "Authorization": `Bearer ${token}`,
+    };
     const resp = await fetch(`${API_URL}/reverse/status`, { headers });
-    if (!resp.ok) throw new Error(await resp.text());
+    if (resp.status === 401) {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      throw new Error("Authentication expired. Please log in again.");
+    }
+    if (!resp.ok) {
+      const text = await resp.text();
+      try {
+        const parsed = JSON.parse(text);
+        throw new Error(parsed.detail || parsed.message || text);
+      } catch (parseErr) {
+        if (parseErr instanceof SyntaxError) throw new Error(text || resp.statusText);
+        throw parseErr;
+      }
+    }
     return resp.json();
   },
 
@@ -10191,6 +10238,7 @@ export const reverseEngineeringClient = {
       includeVulnHunt?: boolean;
       vulnHuntMaxPasses?: number;
       vulnHuntMaxTargets?: number;
+      includeSymbolic?: boolean;
     },
     onProgress: (progress: UnifiedBinaryScanProgress) => void,
     onResult: (result: BinaryAnalysisResult) => void,
@@ -10221,9 +10269,17 @@ export const reverseEngineeringClient = {
         include_vuln_hunt: String(options.includeVulnHunt ?? false),
         vuln_hunt_max_passes: String(options.vulnHuntMaxPasses ?? 3),
         vuln_hunt_max_targets: String(options.vulnHuntMaxTargets ?? 15),
+        include_symbolic: String(options.includeSymbolic ?? true),
       });
 
       try {
+        // Pre-flight auth check: verify we have a valid token before uploading
+        if (!token) {
+          throw new Error(
+            "Not authenticated. Please log in to use the Binary Analyzer."
+          );
+        }
+
         const resp = await fetch(`${API_URL}/reverse/binary/unified-scan?${params}`, {
           method: "POST",
           headers,
@@ -10232,8 +10288,25 @@ export const reverseEngineeringClient = {
         });
 
         if (!resp.ok) {
+          if (resp.status === 401) {
+            // Auth failure — clear stale tokens and provide a clear message
+            localStorage.removeItem(ACCESS_TOKEN_KEY);
+            localStorage.removeItem(REFRESH_TOKEN_KEY);
+            throw new Error(
+              "Authentication expired. Please log in again to use the Binary Analyzer."
+            );
+          }
           const text = await resp.text();
-          throw new Error(text || resp.statusText);
+          // Parse JSON error responses for a clean message
+          try {
+            const parsed = JSON.parse(text);
+            throw new Error(parsed.detail || parsed.message || text);
+          } catch (parseErr) {
+            if (parseErr instanceof SyntaxError) {
+              throw new Error(text || resp.statusText);
+            }
+            throw parseErr;
+          }
         }
 
         const reader = resp.body?.getReader();

@@ -44,6 +44,8 @@ import {
   VpnKey as SecretIcon,
   Functions as FunctionIcon,
   Code as CodeIcon,
+  Timeline as SymbolicIcon,
+  TrendingUp as PathIcon,
 } from "@mui/icons-material";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { formatMarkdownSafe } from "../utils/sanitizeHtml";
@@ -435,6 +437,8 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
           <Tab icon={<SecurityIcon />} label="Security Findings" iconPosition="start" />
           <Tab icon={<ArchitectureIcon />} label="Architecture Diagram" iconPosition="start" />
           <Tab icon={<ShieldIcon />} label="Attack Surface Map" iconPosition="start" />
+          <Tab icon={<BinaryIcon />} label="Entropy Analysis" iconPosition="start" />
+          <Tab icon={<SymbolicIcon />} label="Symbolic Execution" iconPosition="start" />
         </Tabs>
         
         <Box sx={{ p: 3 }}>
@@ -741,6 +745,507 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
             ) : (
               <Alert severity="info">
                 Attack surface map not available. Enable AI reports during scanning to generate attack visualizations.
+              </Alert>
+            )
+          )}
+
+          {/* Tab 4: Entropy Analysis */}
+          {activeTab === 4 && (
+            result.entropy_analysis ? (
+              <Box>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Entropy analysis measures randomness in the binary. High entropy (&gt;7.0) indicates encryption or packing.
+                  Low entropy (&lt;2.0) indicates sparse/empty data.
+                </Alert>
+
+                {/* Summary Cards */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color={
+                        result.entropy_analysis.overall_entropy > 7.0 ? "error" :
+                        result.entropy_analysis.overall_entropy > 6.0 ? "warning.main" : "success.main"
+                      }>
+                        {result.entropy_analysis.overall_entropy.toFixed(2)}
+                      </Typography>
+                      <Typography variant="caption">Overall Entropy (0-8)</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color={result.entropy_analysis.is_likely_packed ? "error" : "success.main"}>
+                        {result.entropy_analysis.is_likely_packed ? "Yes" : "No"}
+                      </Typography>
+                      <Typography variant="caption">Likely Packed</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color="primary">
+                        {Math.round(result.entropy_analysis.packing_confidence * 100)}%
+                      </Typography>
+                      <Typography variant="caption">Packing Confidence</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color="secondary">
+                        {result.entropy_analysis.detected_packers.length || 0}
+                      </Typography>
+                      <Typography variant="caption">Detected Packers</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Detected Packers */}
+                {result.entropy_analysis.detected_packers.length > 0 && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <strong>Detected packers/protectors:</strong>{" "}
+                    {result.entropy_analysis.detected_packers.join(", ")}
+                  </Alert>
+                )}
+
+                {/* Per-Section Entropy Heatmap */}
+                {result.entropy_analysis.section_entropy && result.entropy_analysis.section_entropy.length > 0 && (
+                  <Accordion defaultExpanded>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Section Entropy Heatmap</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {result.entropy_analysis.section_entropy.map((section: any, idx: number) => {
+                          const entropy = section.entropy || 0;
+                          const pct = (entropy / 8) * 100;
+                          // Color gradient: green (low) -> yellow (medium) -> red (high)
+                          const r = entropy > 4 ? 255 : Math.round((entropy / 4) * 255);
+                          const g = entropy < 4 ? 200 : Math.round((1 - (entropy - 4) / 4) * 200);
+                          const barColor = `rgb(${r}, ${g}, 50)`;
+                          return (
+                            <Box key={idx} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ width: 120, fontFamily: "monospace", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+                                title={section.name}
+                              >
+                                {section.name || "(unnamed)"}
+                              </Typography>
+                              <Box sx={{ flex: 1, bgcolor: alpha(theme.palette.divider, 0.2), borderRadius: 1, height: 24, position: "relative" }}>
+                                <Box
+                                  sx={{
+                                    width: `${pct}%`,
+                                    height: "100%",
+                                    bgcolor: barColor,
+                                    borderRadius: 1,
+                                    transition: "width 0.3s ease",
+                                    minWidth: 2,
+                                  }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: 8,
+                                    transform: "translateY(-50%)",
+                                    fontWeight: "bold",
+                                    color: pct > 50 ? "#fff" : "text.primary",
+                                    textShadow: pct > 50 ? "0 1px 2px rgba(0,0,0,0.5)" : "none",
+                                  }}
+                                >
+                                  {entropy.toFixed(2)}
+                                </Typography>
+                              </Box>
+                              <Typography variant="caption" sx={{ width: 80, textAlign: "right", flexShrink: 0 }}>
+                                {section.raw_size ? `${(section.raw_size / 1024).toFixed(1)} KB` : ""}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      <Box sx={{ mt: 2, display: "flex", gap: 2, justifyContent: "center" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Box sx={{ width: 16, height: 16, bgcolor: "rgb(0, 200, 50)", borderRadius: 0.5 }} />
+                          <Typography variant="caption">Low (code/data)</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Box sx={{ width: 16, height: 16, bgcolor: "rgb(255, 200, 50)", borderRadius: 0.5 }} />
+                          <Typography variant="caption">Medium (compressed)</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Box sx={{ width: 16, height: 16, bgcolor: "rgb(255, 0, 50)", borderRadius: 0.5 }} />
+                          <Typography variant="caption">High (encrypted/packed)</Typography>
+                        </Box>
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Entropy Regions */}
+                {result.entropy_analysis.regions && result.entropy_analysis.regions.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Entropy Regions ({result.entropy_analysis.regions.length})</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        {result.entropy_analysis.regions.map((region: any, idx: number) => (
+                          <ListItem key={idx}>
+                            <ListItemIcon>
+                              <Chip
+                                label={region.classification}
+                                size="small"
+                                color={
+                                  region.classification === "packed" || region.classification === "encrypted" ? "error" :
+                                  region.classification === "code" ? "primary" :
+                                  region.classification === "sparse" ? "default" : "warning"
+                                }
+                              />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={`0x${region.start.toString(16)} - 0x${region.end.toString(16)}${region.section_name ? ` (${region.section_name})` : ""}`}
+                              secondary={`${region.description} | Avg: ${region.avg_entropy.toFixed(2)}, Max: ${region.max_entropy.toFixed(2)}`}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Entropy Sparkline (text-based) */}
+                {result.entropy_analysis.entropy_data && result.entropy_analysis.entropy_data.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Entropy Distribution (File Offset)</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{
+                        display: "flex",
+                        height: 80,
+                        alignItems: "flex-end",
+                        gap: "1px",
+                        bgcolor: alpha(theme.palette.divider, 0.1),
+                        borderRadius: 1,
+                        p: 1,
+                        overflow: "hidden",
+                      }}>
+                        {result.entropy_analysis.entropy_data.map((point: any, idx: number) => {
+                          const h = (point.entropy / 8) * 100;
+                          const r = point.entropy > 4 ? 255 : Math.round((point.entropy / 4) * 255);
+                          const g = point.entropy < 4 ? 200 : Math.round((1 - (point.entropy - 4) / 4) * 200);
+                          return (
+                            <Tooltip key={idx} title={`Offset 0x${point.offset.toString(16)}: ${point.entropy.toFixed(2)} bits/byte`}>
+                              <Box
+                                sx={{
+                                  flex: 1,
+                                  minWidth: 1,
+                                  maxWidth: 8,
+                                  height: `${h}%`,
+                                  bgcolor: `rgb(${r}, ${g}, 50)`,
+                                  borderRadius: "1px 1px 0 0",
+                                  transition: "height 0.2s ease",
+                                  "&:hover": { opacity: 0.8 },
+                                }}
+                              />
+                            </Tooltip>
+                          );
+                        })}
+                      </Box>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          0x{result.entropy_analysis.entropy_data[0]?.offset.toString(16) || "0"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">File Offset</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          0x{result.entropy_analysis.entropy_data[result.entropy_analysis.entropy_data.length - 1]?.offset.toString(16) || "0"}
+                        </Typography>
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Analysis Notes */}
+                {result.entropy_analysis.analysis_notes && result.entropy_analysis.analysis_notes.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Analysis Notes</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        {result.entropy_analysis.analysis_notes.map((note: string, idx: number) => (
+                          <ListItem key={idx}>
+                            <ListItemIcon><InfoIcon fontSize="small" /></ListItemIcon>
+                            <ListItemText primary={note} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+              </Box>
+            ) : (
+              <Alert severity="info">
+                Entropy analysis not available for this binary. This may occur for very small files or unsupported formats.
+              </Alert>
+            )
+          )}
+
+          {/* Tab 5: Symbolic Execution */}
+          {activeTab === 5 && (
+            result.symbolic_execution ? (
+              <Box>
+                <Alert severity={result.symbolic_execution.error && !result.symbolic_execution.vulnerabilities_found?.length ? "warning" : "info"} sx={{ mb: 2 }}>
+                  {result.symbolic_execution.error && !result.symbolic_execution.vulnerabilities_found?.length
+                    ? result.symbolic_execution.error
+                    : "Symbolic execution explores program paths to discover inputs that trigger vulnerabilities, reach dangerous functions, or cause crashes."}
+                </Alert>
+
+                {/* Summary Cards */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color="primary">
+                        {result.symbolic_execution.paths_explored}
+                      </Typography>
+                      <Typography variant="caption">Paths Explored</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color={result.symbolic_execution.vulnerabilities_found?.length ? "error" : "success.main"}>
+                        {result.symbolic_execution.vulnerabilities_found?.length || 0}
+                      </Typography>
+                      <Typography variant="caption">Vulnerabilities Found</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color={result.symbolic_execution.crash_inputs?.length ? "warning.main" : "success.main"}>
+                        {result.symbolic_execution.crash_inputs?.length || 0}
+                      </Typography>
+                      <Typography variant="caption">Crash Inputs</Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper sx={{ p: 2, textAlign: "center" }}>
+                      <Typography variant="h4" color="secondary">
+                        {result.symbolic_execution.target_reaches?.length || 0}
+                      </Typography>
+                      <Typography variant="caption">Targets Reached</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Execution Stats */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={4}>
+                    <Chip
+                      label={`${result.symbolic_execution.execution_time_seconds?.toFixed(1) || 0}s execution time`}
+                      size="small"
+                      color="default"
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Chip
+                      label={`Max depth: ${result.symbolic_execution.max_depth_reached || 0}`}
+                      size="small"
+                      color="default"
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    {result.symbolic_execution.timeout_reached && (
+                      <Chip label="Timeout reached" size="small" color="warning" />
+                    )}
+                    {result.symbolic_execution.memory_used_mb > 0 && (
+                      <Chip
+                        label={`${result.symbolic_execution.memory_used_mb.toFixed(1)} MB used`}
+                        size="small"
+                        color="default"
+                      />
+                    )}
+                  </Grid>
+                </Grid>
+
+                {/* Vulnerabilities Found */}
+                {result.symbolic_execution.vulnerabilities_found && result.symbolic_execution.vulnerabilities_found.length > 0 && (
+                  <Accordion defaultExpanded>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">
+                        <BugIcon fontSize="small" sx={{ mr: 1, verticalAlign: "middle" }} />
+                        Vulnerabilities Found ({result.symbolic_execution.vulnerabilities_found.length})
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {result.symbolic_execution.vulnerabilities_found.map((vuln: any, idx: number) => (
+                          <Paper key={idx} sx={{ p: 2, border: 1, borderColor: "error.main", borderRadius: 1 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                              <Typography variant="subtitle2" color="error">
+                                {(vuln.type || "vulnerability").replace(/_/g, " ").toUpperCase()}
+                              </Typography>
+                              <Box sx={{ display: "flex", gap: 1 }}>
+                                {vuln.cwe && <Chip label={vuln.cwe} size="small" color="error" variant="outlined" />}
+                                {vuln.function && <Chip label={vuln.function} size="small" color="warning" variant="outlined" />}
+                              </Box>
+                            </Box>
+                            <Typography variant="body2" sx={{ mb: 1 }}>{vuln.description}</Typography>
+                            {vuln.address !== undefined && vuln.address !== 0 && (
+                              <Typography variant="caption" sx={{ fontFamily: "monospace" }}>
+                                Address: {typeof vuln.address === "number" ? `0x${vuln.address.toString(16)}` : vuln.address}
+                              </Typography>
+                            )}
+                            {vuln.input_sample && (
+                              <Typography variant="caption" display="block" sx={{ fontFamily: "monospace", mt: 0.5 }}>
+                                Input sample: {vuln.input_sample}
+                              </Typography>
+                            )}
+                            {vuln.details && typeof vuln.details === "object" && (
+                              <Box sx={{ mt: 1, p: 1, bgcolor: "action.hover", borderRadius: 1 }}>
+                                {Object.entries(vuln.details).map(([key, val]: [string, any]) => (
+                                  <Typography key={key} variant="caption" display="block" sx={{ fontFamily: "monospace" }}>
+                                    {key}: {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            )}
+                          </Paper>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Target Reaches */}
+                {result.symbolic_execution.target_reaches && result.symbolic_execution.target_reaches.length > 0 && (
+                  <Accordion defaultExpanded={!result.symbolic_execution.vulnerabilities_found?.length}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">
+                        <PathIcon fontSize="small" sx={{ mr: 1, verticalAlign: "middle" }} />
+                        Dangerous Function Reachability ({result.symbolic_execution.target_reaches.length})
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {result.symbolic_execution.target_reaches.map((tr: any, idx: number) => (
+                          <Paper key={idx} sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2 }}>
+                            <Chip
+                              label={tr.reached ? "REACHED" : "NOT REACHED"}
+                              size="small"
+                              color={tr.reached ? "error" : "default"}
+                            />
+                            <Typography variant="body2" sx={{ fontWeight: "bold", fontFamily: "monospace" }}>
+                              {tr.target_name || "unknown"}
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                              @ {tr.target_address}
+                            </Typography>
+                            {tr.path_length > 0 && (
+                              <Chip label={`${tr.path_length} steps`} size="small" variant="outlined" />
+                            )}
+                            {tr.constraints_solved > 0 && (
+                              <Chip label={`${tr.constraints_solved} constraints`} size="small" variant="outlined" />
+                            )}
+                          </Paper>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Crash Inputs */}
+                {result.symbolic_execution.crash_inputs && result.symbolic_execution.crash_inputs.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">
+                        <ErrorIcon fontSize="small" sx={{ mr: 1, verticalAlign: "middle", color: "warning.main" }} />
+                        Crash-Inducing Inputs ({result.symbolic_execution.crash_inputs.length})
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {result.symbolic_execution.crash_inputs.map((ci: any, idx: number) => (
+                          <Paper key={idx} sx={{ p: 1.5, border: 1, borderColor: "warning.main", borderRadius: 1 }}>
+                            <Box sx={{ display: "flex", gap: 1, mb: 0.5 }}>
+                              <Chip label={ci.crash_type} size="small" color="warning" />
+                              <Chip label={ci.vulnerability_type} size="small" variant="outlined" />
+                              {ci.cwe_id && <Chip label={ci.cwe_id} size="small" variant="outlined" color="error" />}
+                              <Chip label={ci.exploitability} size="small" variant="outlined" />
+                            </Box>
+                            <Typography variant="caption" display="block" sx={{ fontFamily: "monospace" }}>
+                              Type: {ci.input_type} | Crash @ {ci.crash_address}
+                            </Typography>
+                            {ci.input_value && (
+                              <Typography variant="caption" display="block" sx={{ fontFamily: "monospace", mt: 0.5, wordBreak: "break-all" }}>
+                                Input: {ci.input_value.substring(0, 128)}{ci.input_value.length > 128 ? "..." : ""}
+                              </Typography>
+                            )}
+                          </Paper>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Symbolic Inputs */}
+                {result.symbolic_execution.symbolic_inputs && result.symbolic_execution.symbolic_inputs.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Symbolic Inputs Detected</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {result.symbolic_execution.symbolic_inputs.map((si: any, idx: number) => (
+                          <Paper key={idx} sx={{ p: 1.5 }}>
+                            <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                              {si.name} ({si.type})
+                              {si.size_bits > 0 && ` - ${si.size_bits} bits`}
+                            </Typography>
+                            {si.constraints && si.constraints.length > 0 && (
+                              <Box sx={{ mt: 0.5 }}>
+                                {si.constraints.map((c: string, ci2: number) => (
+                                  <Typography key={ci2} variant="caption" display="block" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+                                    {c}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            )}
+                          </Paper>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Interesting Paths */}
+                {result.symbolic_execution.interesting_paths && result.symbolic_execution.interesting_paths.length > 0 && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle1">Interesting Paths ({result.symbolic_execution.interesting_paths.length})</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {result.symbolic_execution.interesting_paths.map((path: any, idx: number) => (
+                          <Paper key={idx} sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            <Chip label={`Path #${path.path_id}`} size="small" />
+                            <Chip label={`Depth: ${path.depth}`} size="small" variant="outlined" />
+                            <Chip label={`${path.constraints_count} constraints`} size="small" variant="outlined" />
+                            <Chip
+                              label={path.termination_reason}
+                              size="small"
+                              color={path.termination_reason === "reached_target" ? "success" : "default"}
+                              variant="outlined"
+                            />
+                            {path.is_feasible && <Chip label="Feasible" size="small" color="success" variant="outlined" />}
+                          </Paper>
+                        ))}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+              </Box>
+            ) : (
+              <Alert severity="info">
+                Symbolic execution not available for this binary. Enable symbolic execution in scan options or install angr for full support.
               </Alert>
             )
           )}

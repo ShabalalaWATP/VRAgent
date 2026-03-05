@@ -43,6 +43,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-3-flash-preview}
       NVD_API_KEY: ${NVD_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       # Enable localhost/private IP scanning for local testing (e.g., Juice Shop)
       ALLOW_LOCALHOST_SCANS: "true"
@@ -113,6 +114,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-3-flash-preview}
       NVD_API_KEY: ${NVD_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       GHIDRA_HOME: /opt/ghidra
     volumes:

@@ -1786,10 +1786,10 @@ export default function SwiftProgrammingPage() {
                 <span style={{ color: "#ff79c6" }}>let</span> a: <span style={{ color: "#8be9fd" }}>Set</span> = [<span style={{ color: "#bd93f9" }}>1</span>, <span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>]{"\n"}
                 <span style={{ color: "#ff79c6" }}>let</span> b: <span style={{ color: "#8be9fd" }}>Set</span> = [<span style={{ color: "#bd93f9" }}>2</span>, <span style={{ color: "#bd93f9" }}>3</span>, <span style={{ color: "#bd93f9" }}>4</span>]{"\n"}
                 {"\n"}
-                a.<span style={{ color: "#50fa7b" }}>union</span>(b)          <span style={{ color: "#6272a4" }}>// {1, 2, 3, 4}</span>{"\n"}
-                a.<span style={{ color: "#50fa7b" }}>intersection</span>(b)   <span style={{ color: "#6272a4" }}>// {2, 3}</span>{"\n"}
-                a.<span style={{ color: "#50fa7b" }}>subtracting</span>(b)    <span style={{ color: "#6272a4" }}>// {1}</span>{"\n"}
-                a.<span style={{ color: "#50fa7b" }}>symmetricDifference</span>(b)  <span style={{ color: "#6272a4" }}>// {1, 4}</span>
+                a.<span style={{ color: "#50fa7b" }}>union</span>(b)          <span style={{ color: "#6272a4" }}>{"// {1, 2, 3, 4}"}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>intersection</span>(b)   <span style={{ color: "#6272a4" }}>{"// {2, 3}"}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>subtracting</span>(b)    <span style={{ color: "#6272a4" }}>{"// {1}"}</span>{"\n"}
+                a.<span style={{ color: "#50fa7b" }}>symmetricDifference</span>(b)  <span style={{ color: "#6272a4" }}>{"// {1, 4}"}</span>
               </Typography>
             </Paper>
           </Paper>
@@ -2131,7 +2131,7 @@ export default function SwiftProgrammingPage() {
               <Typography variant="body2" sx={{ color: "#f8f8f2" }}>
                 <span style={{ color: "#6272a4" }}>// Must use 'try' when calling throwing function</span>{"\n"}
                 <span style={{ color: "#ff79c6" }}>do</span> {"{"}{"\n"}
-                {"    "}<span style="{{ color: "#ff79c6" }}>try</span> <span style={{ color: "#50fa7b" }}>validate</span>(password: <span style={{ color: "#f1fa8c" }}>"abc"</span>){"\n"}
+                {"    "}<span style={{ color: "#ff79c6" }}>try</span> <span style={{ color: "#50fa7b" }}>validate</span>(password: <span style={{ color: "#f1fa8c" }}>"abc"</span>){"\n"}
                 {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Success!"</span>){"\n"}
                 {"}"} <span style={{ color: "#ff79c6" }}>catch</span> <span style={{ color: "#8be9fd" }}>ValidationError</span>.tooShort(<span style={{ color: "#ff79c6" }}>let</span> min) {"{"}{"\n"}
                 {"    "}<span style={{ color: "#50fa7b" }}>print</span>(<span style={{ color: "#f1fa8c" }}>"Password too short. Need </span>\(<span style={{ color: "#ff79c6" }}>min</span>)<span style={{ color: "#f1fa8c" }}>+ chars"</span>){"\n"}

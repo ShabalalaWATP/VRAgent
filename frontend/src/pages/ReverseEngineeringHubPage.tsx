@@ -13237,7 +13237,19 @@ export default function ReverseEngineeringHub() {
         setDockerImages(imgs.images);
       }
     } catch (e: any) {
-      setError(e.message);
+      const msg = e.message || "Failed to load status";
+      // If it's an auth error, redirect to login
+      if (msg.includes("log in") || msg.includes("Authentication expired")) {
+        setError(msg);
+        // Auto-redirect after a short delay so user sees the message
+        setTimeout(() => {
+          if (!window.location.pathname.includes("/login")) {
+            window.location.href = "/login";
+          }
+        }, 2000);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -14170,15 +14182,22 @@ export default function ReverseEngineeringHub() {
             />
             <Chip
               icon={<CodeIcon />}
-              label="Ghidra Decompilation"
-              color={status.ghidra_available ? "success" : "default"}
+              label={status.ghidra_available ? "Ghidra Decompilation" : "Ghidra (Not Configured)"}
+              color={status.ghidra_available ? "success" : "warning"}
               variant={status.ghidra_available ? "filled" : "outlined"}
+              title={status.ghidra_available && status.ghidra_path ? `Path: ${status.ghidra_path}` : "Set GHIDRA_HOME to enable"}
             />
             <Chip
               icon={<DockerIcon />}
               label="Docker Inspector"
               color={status.docker_analysis ? "success" : "default"}
               variant={status.docker_analysis ? "filled" : "outlined"}
+            />
+            <Chip
+              label={status.ai_available ? "AI Analysis" : "AI (No API Key)"}
+              color={status.ai_available ? "success" : "warning"}
+              variant={status.ai_available ? "filled" : "outlined"}
+              title={status.ai_available ? "Gemini AI enabled" : "Set GEMINI_API_KEY to enable"}
             />
             {/* AI Analysis is always enabled for best results */}
             <Chip
@@ -14323,7 +14342,19 @@ export default function ReverseEngineeringHub() {
                 </Typography>
                 {!status?.ghidra_available && (
                   <Alert severity="warning" sx={{ mb: 2 }}>
-                    Ghidra not detected. Configure `GHIDRA_HOME` to enable decompilation.
+                    <strong>Ghidra not detected.</strong> Decompilation features are disabled.
+                    {status?.ghidra_setup_instructions ? (
+                      <Box component="pre" sx={{ mt: 1, mb: 0, fontSize: '0.8rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                        {status.ghidra_setup_instructions}
+                      </Box>
+                    ) : (
+                      <> Set the <code>GHIDRA_HOME</code> environment variable to your Ghidra installation directory and restart the backend.</>
+                    )}
+                  </Alert>
+                )}
+                {status?.ai_available === false && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <strong>AI analysis unavailable.</strong> {status?.ai_status || 'Set the GEMINI_API_KEY environment variable to enable AI-powered security analysis.'}
                   </Alert>
                 )}
                 <FormGroup>

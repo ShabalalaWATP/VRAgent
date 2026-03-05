@@ -122,7 +122,7 @@ Complete guides to VRAgent's tools and features.
 | **MITM Workbench Guide** | Traffic interception, AI rule creation, request modification | Proxy, Interception, AI Rules |
 | **Reverse Engineering Hub Guide** | APK analysis, binary inspection, Docker Inspector | APK, Binary, Docker |
 | **APK Analysis Guide** | Permissions, certificates, manifest parsing, obfuscation | Android, Permissions, Security |
-| **Binary Analysis Guide** | PE/ELF inspection, strings extraction, disassembly | PE, ELF, Disassembly |
+| **Binary Analysis Guide** | PE/ELF inspection, 11-phase unified scan, named reports, project-aware exports | PE, ELF, Disassembly |
 | **Docker Inspector Guide** | Layer inventory, secrets detection, attack vectors | Layers, Secrets, Risk |
 | **Combined Analysis Guide** | 9 AI agents merging all security findings | AI Report, Cross-Correlation |
 
