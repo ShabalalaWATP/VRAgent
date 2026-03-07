@@ -24,6 +24,7 @@ from packaging.specifiers import SpecifierSet
 import httpx
 
 from backend import models
+from backend.core.config import settings
 from backend.core.exceptions import OSVAPIError
 from backend.core.logging import get_logger
 from backend.core.cache import cache
@@ -61,6 +62,11 @@ def _check_local_osv_db_available() -> bool:
     return os.path.exists(LOCAL_OSV_DB)
 
 
+def _normalize_local_osv_ecosystem(ecosystem: str) -> str:
+    """Collapse version-qualified OSV ecosystems like Alpine:v3.19 to Alpine."""
+    return (ecosystem or "").split(":", 1)[0].strip()
+
+
 def _lookup_package_vulns_local(
     ecosystem: str, 
     package_name: str, 
@@ -81,18 +87,21 @@ def _lookup_package_vulns_local(
         return []
     
     try:
+        normalized_ecosystem = _normalize_local_osv_ecosystem(ecosystem)
         conn = sqlite3.connect(LOCAL_OSV_DB)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        # Get all vulnerabilities affecting this package
+        # Match against the normalized ecosystem stored in the vulnerability row.
+        # The older offline bundles stored versioned ecosystems in affected_ranges
+        # (e.g. Alpine:v3.19), so range lookups tolerate both exact and prefixed forms.
         cursor.execute("""
-            SELECT DISTINCT v.id, v.summary, v.details, v.severity, 
+            SELECT DISTINCT v.id, v.summary, v.details, v.severity,
+                   v.package_name,
                    v.cvss_score, v.cvss_vector, v.aliases, v.published, v.modified
             FROM vulnerabilities v
-            JOIN affected_ranges ar ON v.id = ar.vuln_id
-            WHERE ar.ecosystem = ? AND ar.package_name = ?
-        """, (ecosystem, package_name))
+            WHERE v.ecosystem = ? AND lower(v.package_name) = lower(?)
+        """, (normalized_ecosystem, package_name))
         
         vulns = []
         for row in cursor.fetchall():
@@ -102,10 +111,16 @@ def _lookup_package_vulns_local(
             cursor.execute("""
                 SELECT range_type, introduced, fixed, last_affected
                 FROM affected_ranges
-                WHERE vuln_id = ? AND ecosystem = ? AND package_name = ?
-            """, (vuln_id, ecosystem, package_name))
+                WHERE vuln_id = ?
+                  AND lower(package_name) = lower(?)
+                  AND (
+                    ecosystem = ?
+                    OR ecosystem LIKE ?
+                  )
+            """, (vuln_id, package_name, normalized_ecosystem, f"{normalized_ecosystem}:%"))
             
             ranges = []
+            matchable_ranges = []
             for rng in cursor.fetchall():
                 events = []
                 if rng["introduced"]:
@@ -120,10 +135,19 @@ def _lookup_package_vulns_local(
                         "type": rng["range_type"],
                         "events": events
                     })
+                    matchable_range = {}
+                    if rng["introduced"]:
+                        matchable_range["introduced"] = rng["introduced"]
+                    if rng["fixed"]:
+                        matchable_range["fixed"] = rng["fixed"]
+                    if rng["last_affected"]:
+                        matchable_range["last_affected"] = rng["last_affected"]
+                    if matchable_range:
+                        matchable_ranges.append(matchable_range)
             
             # Check if version is affected (if provided)
-            if version and ranges:
-                if not _is_version_in_ranges(version, ranges):
+            if version and matchable_ranges:
+                if not _is_version_affected(version, matchable_ranges):
                     continue
             
             # Build OSV-like response
@@ -135,14 +159,16 @@ def _lookup_package_vulns_local(
                 "published": row["published"],
                 "modified": row["modified"],
                 "affected": [{
-                    "package": {"name": package_name, "ecosystem": ecosystem},
+                    "package": {"name": row["package_name"] or package_name, "ecosystem": normalized_ecosystem},
                     "ranges": ranges
                 }],
             }
             
-            # Add severity if available
-            if row["cvss_vector"]:
-                vuln_data["severity"] = [{"type": "CVSS_V3", "score": row["cvss_vector"]}]
+            # Preserve numeric score when available and fall back to stored severity.
+            if row["cvss_score"] is not None:
+                vuln_data["severity"] = [{"type": "CVSS_V3", "score": row["cvss_score"]}]
+            if row["severity"]:
+                vuln_data["database_specific"] = {"severity": row["severity"]}
             
             vulns.append(vuln_data)
         
@@ -248,10 +274,10 @@ def get_local_osv_db_stats() -> Dict:
         cursor.execute("SELECT COUNT(*) FROM vulnerabilities")
         vuln_count = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(DISTINCT package_name) FROM affected_ranges")
+        cursor.execute("SELECT COUNT(DISTINCT package_name) FROM vulnerabilities WHERE package_name != ''")
         pkg_count = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(DISTINCT ecosystem) FROM affected_ranges")
+        cursor.execute("SELECT COUNT(DISTINCT ecosystem) FROM vulnerabilities WHERE ecosystem != ''")
         eco_count = cursor.fetchone()[0]
         
         cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
@@ -288,6 +314,12 @@ async def _check_osv_connectivity() -> bool:
     Caches result for CONNECTIVITY_CHECK_INTERVAL seconds.
     """
     global _last_connectivity_check, _is_online
+
+    if settings.app_offline_mode:
+        _is_online = False
+        _last_connectivity_check = datetime.utcnow()
+        logger.info("APP_OFFLINE_MODE enabled - using local OSV database fallback")
+        return False
     
     # Return cached result if recent
     if _last_connectivity_check and _is_online is not None:
@@ -322,7 +354,14 @@ def _parse_severity(entry: dict) -> Tuple[Optional[str], Optional[float]]:
     if entry.get("severity"):
         for sev in entry["severity"]:
             if sev.get("type") == "CVSS_V3":
-                cvss_score = float(sev.get("score", 0)) if sev.get("score") else None
+                raw_score = sev.get("score")
+                if raw_score is not None:
+                    if isinstance(raw_score, (int, float)):
+                        cvss_score = float(raw_score)
+                    else:
+                        score_text = str(raw_score).strip()
+                        if re.fullmatch(r"\d+(?:\.\d+)?", score_text):
+                            cvss_score = float(score_text)
                 if cvss_score:
                     if cvss_score >= 9.0:
                         severity = "critical"
@@ -443,17 +482,34 @@ def _make_cache_key(name: str, ecosystem: str, version: str) -> str:
     return f"{ecosystem}:{name}:{version}"
 
 
+def _canonical_vulnerability_id(entry: dict) -> Optional[str]:
+    """Prefer a canonical CVE ID when OSV entries use vendor-prefixed advisory IDs."""
+    aliases = entry.get("aliases") or []
+    for alias in aliases:
+        alias_text = str(alias).upper()
+        if alias_text.startswith("CVE-"):
+            return alias_text
+
+    advisory_id = str(entry.get("id") or "").upper()
+    match = re.search(r"(CVE-\d{4}-\d+)$", advisory_id)
+    if match:
+        return match.group(1)
+
+    return advisory_id or None
+
+
 def _parse_osv_vulns(dep: models.Dependency, osv_data: List[dict]) -> List[models.Vulnerability]:
     """Parse OSV vulnerability data into Vulnerability models."""
     vulns = []
     for entry in osv_data:
         severity, cvss_score = _parse_severity(entry)
+        external_id = _canonical_vulnerability_id(entry)
         vulns.append(
             models.Vulnerability(
                 project_id=dep.project_id,
                 dependency_id=dep.id,
                 source="osv",
-                external_id=entry.get("id"),
+                external_id=external_id,
                 title=entry.get("summary") or entry.get("id") or dep.name,
                 description=entry.get("details"),
                 severity=severity,

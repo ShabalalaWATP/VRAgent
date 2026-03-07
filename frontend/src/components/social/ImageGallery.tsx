@@ -24,6 +24,8 @@ import {
   Fullscreen as FullscreenIcon,
   FullscreenExit as FullscreenExitIcon,
 } from '@mui/icons-material';
+import { getAuthHeadersNoContentType } from '../../api/client';
+import { AuthImage } from './AuthImage';
 
 export interface GalleryImage {
   id: number; // message ID
@@ -141,7 +143,12 @@ export function ImageGallery({
   const handleDownload = async () => {
     if (!currentImage) return;
     try {
-      const response = await fetch(currentImage.url);
+      const response = await fetch(currentImage.url, {
+        headers: getAuthHeadersNoContentType(),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to download image (${response.status})`);
+      }
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -325,11 +332,11 @@ export function ImageGallery({
                       },
                     }}
                   >
-                    <img
+                    <AuthImage
                       src={img.thumbnailUrl || img.url}
                       alt={img.filename}
-                      loading="lazy"
-                      style={{
+                      sx={{
+                        width: '100%',
                         height: 150,
                         objectFit: 'cover',
                       }}
@@ -395,7 +402,7 @@ export function ImageGallery({
 
             {/* Image */}
             <Zoom in={true} key={currentIndex}>
-              <img
+              <AuthImage
                 src={currentImage.url}
                 alt={currentImage.filename}
                 style={{
@@ -405,7 +412,6 @@ export function ImageGallery({
                   transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
                   transition: isDragging ? 'none' : 'transform 0.2s ease-out',
                 }}
-                draggable={false}
               />
             </Zoom>
           </Box>
@@ -447,10 +453,10 @@ export function ImageGallery({
                     },
                   }}
                 >
-                  <img
+                  <AuthImage
                     src={img.thumbnailUrl || img.url}
                     alt={img.filename}
-                    style={{
+                    sx={{
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',

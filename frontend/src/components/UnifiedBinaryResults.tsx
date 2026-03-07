@@ -99,14 +99,88 @@ const getSeverityColor = (severity: string): string => {
   }
 };
 
+type AnyRecord = Record<string, unknown>;
+
+const normalizeReportText = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (["not available", "n/a", "none", "null", "undefined"].includes(trimmed.toLowerCase())) {
+    return undefined;
+  }
+  return trimmed;
+};
+
+const collectNestedRecords = (root: unknown, maxDepth = 5): AnyRecord[] => {
+  const records: AnyRecord[] = [];
+  const seen = new Set<unknown>();
+  const walk = (node: unknown, depth: number): void => {
+    if (depth > maxDepth || node == null) return;
+    if (Array.isArray(node)) {
+      node.forEach((item) => walk(item, depth + 1));
+      return;
+    }
+    if (typeof node !== "object") return;
+    if (seen.has(node)) return;
+    seen.add(node);
+    const record = node as AnyRecord;
+    records.push(record);
+    Object.values(record).forEach((value) => walk(value, depth + 1));
+  };
+  walk(root, 0);
+  return records;
+};
+
+const pickText = (records: AnyRecord[], keys: string[]): string | undefined => {
+  for (const record of records) {
+    for (const key of keys) {
+      const cleaned = normalizeReportText(record[key]);
+      if (cleaned) return cleaned;
+    }
+  }
+  return undefined;
+};
+
 interface UnifiedBinaryResultsProps {
   result: BinaryAnalysisResult;
+  reportTitle?: string;
   onSaveReport?: () => void;
 }
 
-export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResultsProps) {
+export function UnifiedBinaryResults({ result, reportTitle, onSaveReport }: UnifiedBinaryResultsProps) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
+  const normalizedReportTitle = (reportTitle || "").trim();
+  const headerTitle = normalizedReportTitle || result.filename;
+
+  const fallbackRecords = useMemo(() => collectNestedRecords(result as unknown, 6), [result]);
+
+  const functionalityReport = useMemo(() => (
+    normalizeReportText(result.ai_functionality_report) ||
+    pickText(fallbackRecords, [
+      "ai_functionality_report",
+      "ai_report_functionality",
+      "functionality_report",
+      "functionality",
+      "report_functionality",
+      "binary_functionality_report",
+      "what_does_binary_do",
+    ]) ||
+    normalizeReportText(result.ai_analysis)
+  ), [result.ai_functionality_report, result.ai_analysis, fallbackRecords]);
+
+  const securityReport = useMemo(() => (
+    normalizeReportText(result.ai_security_report) ||
+    pickText(fallbackRecords, [
+      "ai_security_report",
+      "ai_report_security",
+      "security_report",
+      "security",
+      "report_security",
+      "binary_security_report",
+    ]) ||
+    normalizeReportText(result.ai_analysis)
+  ), [result.ai_security_report, result.ai_analysis, fallbackRecords]);
   
   // Memoize extracted analysis results to prevent recalculation
   const analysisData = useMemo(() => {
@@ -265,8 +339,13 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={6}>
             <Typography variant="h5" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <BinaryIcon color="primary" /> {result.filename}
+              <BinaryIcon color="primary" /> {headerTitle}
             </Typography>
+            {normalizedReportTitle && normalizedReportTitle !== result.filename && (
+              <Typography variant="body2" color="text.secondary">
+                File: {result.filename}
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary">
               {result.metadata.file_type} • {result.metadata.architecture} • {(result.metadata.file_size / 1024).toFixed(1)} KB
               {result.metadata.compile_time && ` • Compiled: ${result.metadata.compile_time}`}
@@ -444,14 +523,14 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
         <Box sx={{ p: 3 }}>
           {/* Tab 0: What Does This Binary Do? */}
           {activeTab === 0 && (
-            result.ai_functionality_report ? (
+            functionalityReport ? (
               <Box>
                 <Alert severity="info" sx={{ mb: 2 }}>
                   This report explains the binary's purpose, capabilities, and behavior based on AI analysis of its code, imports, and strings.
                 </Alert>
                 <Box 
                   sx={htmlContentStyles} 
-                  dangerouslySetInnerHTML={{ __html: formatMarkdownContent(result.ai_functionality_report) }} 
+                  dangerouslySetInnerHTML={{ __html: formatMarkdownContent(functionalityReport) }} 
                 />
               </Box>
             ) : (
@@ -519,7 +598,7 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
           {activeTab === 1 && (
             <Box>
               {/* For legitimate software, show security posture instead of vulnerability report */}
-              {result.is_legitimate_software && result.ai_security_report ? (
+              {result.is_legitimate_software && securityReport ? (
                 <>
                   <Alert severity="success" icon={<CheckIcon />} sx={{ mb: 2 }}>
                     <strong>Legitimate Software Detected</strong> - This binary is from a known, trusted publisher. 
@@ -539,17 +618,17 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
                   )}
                   <Box 
                     sx={htmlContentStyles} 
-                    dangerouslySetInnerHTML={{ __html: formatMarkdownContent(result.ai_security_report) }} 
+                    dangerouslySetInnerHTML={{ __html: formatMarkdownContent(securityReport) }} 
                   />
                 </>
-              ) : result.ai_security_report ? (
+              ) : securityReport ? (
                 <>
                   <Alert severity="info" sx={{ mb: 2 }}>
                     This security assessment identifies vulnerabilities, risks, and provides prioritized remediation recommendations.
                   </Alert>
                   <Box 
                     sx={htmlContentStyles} 
-                    dangerouslySetInnerHTML={{ __html: formatMarkdownContent(result.ai_security_report) }} 
+                    dangerouslySetInnerHTML={{ __html: formatMarkdownContent(securityReport) }} 
                   />
                 </>
               ) : displayFindings.length > 0 ? (
@@ -659,7 +738,13 @@ export function UnifiedBinaryResults({ result, onSaveReport }: UnifiedBinaryResu
             result.ai_attack_surface_map && result.ai_attack_surface_map.trim() ? (
               <Box>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  This attack tree visualizes potential attack vectors, entry points, and exploitation paths.
+                  <Typography variant="body2" sx={{ mb: 0.75 }}>
+                    Read this map top-to-bottom: external input enters, code processes it, trust boundaries are crossed,
+                    weaknesses appear, and mitigations reduce risk.
+                  </Typography>
+                  <Typography variant="caption">
+                    Shorthand legend: E = Entry, P = Processing, W = Weakness, B = Boundary, I = Impact, M = Mitigation.
+                  </Typography>
                 </Alert>
                 <ErrorBoundary fallback={<Alert severity="warning">Attack surface diagram failed to render. View the code below.</Alert>}>
                   <MermaidDiagram code={result.ai_attack_surface_map} />

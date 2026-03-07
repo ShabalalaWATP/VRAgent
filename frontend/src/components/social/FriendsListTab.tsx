@@ -30,7 +30,7 @@ import {
   Save as SaveIcon,
   Circle as CircleIcon,
 } from '@mui/icons-material';
-import { socialApi, Friend, getAuthHeadersNoContentType } from '../../api/client';
+import { socialApi, Friend, fetchWithAuthRetry, getAuthHeadersNoContentType } from '../../api/client';
 import { PresenceIndicator, PresenceStatus } from './PresenceIndicator';
 
 interface PresenceData {
@@ -81,7 +81,7 @@ export default function FriendsListTab({ onStartChat }: FriendsListTabProps) {
     setPresenceLoading(true);
     setPresenceError(null);
     try {
-      const response = await fetch('/api/social/presence/friends/all', {
+      const response = await fetchWithAuthRetry('/social/presence/friends/all', {
         headers: getAuthHeadersNoContentType(),
       });
       if (response.ok) {

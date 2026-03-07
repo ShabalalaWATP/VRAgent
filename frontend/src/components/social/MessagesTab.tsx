@@ -82,6 +82,7 @@ import {
 } from '@mui/icons-material';
 import {
   socialApi,
+  getAuthHeadersNoContentType,
   ConversationSummary,
   ConversationDetail,
   SocialMessage,
@@ -112,6 +113,7 @@ import { OfflineQueueIndicator } from './OfflineQueueIndicator';
 import { ThreadViewDialog } from './ThreadViewDialog';
 import { RichTextToolbar } from './RichTextToolbar';
 import { GlobalSearchDialog } from './GlobalSearchDialog';
+import { AuthImage } from './AuthImage';
 import { useMessageDraft, getAllDraftConversations, formatDraftPreview } from '../../hooks/useMessageDraft';
 
 interface MessagesTabProps {
@@ -707,6 +709,35 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
       setImageGalleryOpen(true);
     }
   };
+
+  const handleDownloadAttachment = useCallback(async (fileUrl?: string, fileName?: string) => {
+    if (!fileUrl) {
+      setError('File URL is missing');
+      return;
+    }
+
+    try {
+      const response = await fetch(fileUrl, {
+        headers: getAuthHeadersNoContentType(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || fileUrl.split('/').pop() || 'download';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download file');
+    }
+  }, []);
 
   // Pin/Unpin a message
   const handlePinMessage = async (messageId: number) => {
@@ -2008,6 +2039,7 @@ export default function MessagesTab({ unreadCounts, onRefresh }: MessagesTabProp
                 onBookmark={() => handleBookmarkMessage(msg.id)}
                 onViewEditHistory={() => handleViewEditHistory(msg)}
                 onImageClick={() => handleImageClick(msg.id)}
+                onDownloadAttachment={handleDownloadAttachment}
                 onViewThread={() => {
                   setThreadParentMessage(msg);
                   setShowThreadView(true);
@@ -2451,6 +2483,7 @@ function MessageBubble({
   onBookmark,
   onViewEditHistory,
   onImageClick,
+  onDownloadAttachment,
   onViewThread,
   isPinned,
   readBy,
@@ -2467,6 +2500,7 @@ function MessageBubble({
   onBookmark: () => void;
   onViewEditHistory: () => void;
   onImageClick: () => void;
+  onDownloadAttachment: (fileUrl?: string, fileName?: string) => void;
   onViewThread: () => void;
   isPinned: boolean;
   readBy: ReadReceiptInfo[];
@@ -2575,8 +2609,7 @@ function MessageBubble({
                     }}
                     sx={{ display: 'block', cursor: 'pointer' }}
                   >
-                    <Box
-                      component="img"
+                    <AuthImage
                       src={message.attachment_data.thumbnail_url || message.attachment_data.file_url}
                       alt={message.attachment_data.file_name}
                       sx={{
@@ -2594,19 +2627,19 @@ function MessageBubble({
                   </Box>
                 ) : (
                   <Box
-                    component="a"
-                    href={message.attachment_data.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
+                    component="button"
+                    type="button"
+                    onClick={() => onDownloadAttachment(message.attachment_data?.file_url, message.attachment_data?.file_name)}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 1.5,
+                      width: '100%',
+                      textAlign: 'left',
+                      cursor: 'pointer',
                       p: 1.5,
                       bgcolor: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
                       borderRadius: 1,
-                      textDecoration: 'none',
                       color: 'inherit',
                       border: '1px solid',
                       borderColor: isOwn ? 'rgba(255,255,255,0.2)' : 'divider',

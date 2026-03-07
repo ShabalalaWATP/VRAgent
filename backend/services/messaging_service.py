@@ -606,33 +606,22 @@ def get_conversation_participant_ids(db: Session, conversation_id: int) -> List[
     return [p.user_id for p in participants]
 
 
-def _get_reactions_for_message(db: Session, message_id: int, user_id: int) -> List[Dict]:
-    """Internal helper to get reactions for a message as a list."""
+def _get_reactions_for_message(db: Session, message_id: int, user_id: int) -> Dict[str, Dict]:
+    """Internal helper to get reactions for a message as an emoji-keyed map."""
     reactions = db.query(MessageReaction).filter(
         MessageReaction.message_id == message_id
     ).all()
-    
-    # Group by emoji
-    emoji_groups: Dict[str, Dict] = {}
-    for r in reactions:
-        user = db.query(User).filter(User.id == r.user_id).first()
-        if r.emoji not in emoji_groups:
-            emoji_groups[r.emoji] = {
-                "emoji": r.emoji,
-                "count": 0,
-                "users": [],
-                "user_ids": [],
-                "has_reacted": False
-            }
-        emoji_groups[r.emoji]["count"] += 1
-        if user:
-            emoji_groups[r.emoji]["users"].append(user.username)
-            emoji_groups[r.emoji]["user_ids"].append(user.id)
-        if r.user_id == user_id:
-            emoji_groups[r.emoji]["has_reacted"] = True
-    
-    # Return as list instead of dict
-    return list(emoji_groups.values())
+
+    if not reactions:
+        return {}
+
+    reaction_user_ids = list({reaction.user_id for reaction in reactions})
+    reaction_users = {
+        user.id: user.username
+        for user in db.query(User).filter(User.id.in_(reaction_user_ids)).all()
+    }
+
+    return _format_reactions_summary(reactions, user_id, reaction_users)
 
 
 def _get_reply_info(db: Session, message_id: int) -> Optional[Dict]:
@@ -762,6 +751,13 @@ def get_messages(
     all_reactions = db.query(MessageReaction).filter(
         MessageReaction.message_id.in_(message_ids)
     ).all()
+    reaction_user_ids = list({reaction.user_id for reaction in all_reactions})
+    reaction_users = {}
+    if reaction_user_ids:
+        reaction_users = {
+            user.id: user.username
+            for user in db.query(User).filter(User.id.in_(reaction_user_ids)).all()
+        }
     reactions_by_message: Dict[int, list] = {}
     for reaction in all_reactions:
         if reaction.message_id not in reactions_by_message:
@@ -801,7 +797,7 @@ def get_messages(
         
         # Get reactions summary from batch loaded data
         msg_reactions = reactions_by_message.get(msg.id, [])
-        reactions = _format_reactions_summary(msg_reactions, user_id)
+        reactions = _format_reactions_summary(msg_reactions, user_id, reaction_users)
         
         # Get reply info from batch loaded data
         reply_to = reply_info_map.get(msg.reply_to_id) if msg.reply_to_id else None
@@ -832,15 +828,29 @@ def get_messages(
     return result, total, has_more
 
 
-def _format_reactions_summary(reactions: List[MessageReaction], user_id: int) -> Dict[str, dict]:
-    """Format reactions list into summary dict with user counts."""
-    summary = {}
+def _format_reactions_summary(
+    reactions: List[MessageReaction],
+    user_id: int,
+    reaction_users: Optional[Dict[int, str]] = None,
+) -> Dict[str, dict]:
+    """Format reactions list into an emoji-keyed summary map."""
+    summary: Dict[str, dict] = {}
+    reaction_users = reaction_users or {}
     for reaction in reactions:
         emoji = reaction.emoji
         if emoji not in summary:
-            summary[emoji] = {"count": 0, "users": [], "has_reacted": False}
+            summary[emoji] = {
+                "emoji": emoji,
+                "count": 0,
+                "users": [],
+                "user_ids": [],
+                "has_reacted": False,
+            }
         summary[emoji]["count"] += 1
-        summary[emoji]["users"].append({"user_id": reaction.user_id, "username": ""})  # Username populated separately if needed
+        username = reaction_users.get(reaction.user_id)
+        if username:
+            summary[emoji]["users"].append(username)
+        summary[emoji]["user_ids"].append(reaction.user_id)
         if reaction.user_id == user_id:
             summary[emoji]["has_reacted"] = True
     return summary
@@ -1054,8 +1064,8 @@ def get_message_reactions(
     if not is_conversation_participant(db, message.conversation_id, user_id):
         return [], 0
 
-    # _get_reactions_for_message returns a List, not a Dict
-    reactions = _get_reactions_for_message(db, message_id, user_id)
+    reactions_map = _get_reactions_for_message(db, message_id, user_id)
+    reactions = list(reactions_map.values())
     total = sum(r["count"] for r in reactions)
 
     return reactions, total
@@ -2167,7 +2177,10 @@ def _delete_conversation_completely(db: Session, conversation_id: int) -> None:
     if message_ids:
         db.query(MessageReaction).filter(MessageReaction.message_id.in_(message_ids)).delete(synchronize_session=False)
         db.query(PinnedMessage).filter(PinnedMessage.message_id.in_(message_ids)).delete(synchronize_session=False)
-        db.query(MessageReadReceipt).filter(MessageReadReceipt.message_id.in_(message_ids)).delete(synchronize_session=False)
+        # Read receipts are keyed by conversation_id + user_id, not message_id.
+        db.query(MessageReadReceipt).filter(
+            MessageReadReceipt.conversation_id == conversation_id
+        ).delete(synchronize_session=False)
     
     # Delete messages
     db.query(Message).filter(Message.conversation_id == conversation_id).delete(synchronize_session=False)

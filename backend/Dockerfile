@@ -16,8 +16,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     NODE_PATH=/usr/lib/node_modules \
     GOPATH=/go \
-    PATH="/go/bin:/usr/local/go/bin:$PATH" \
+    JAVA_HOME=/opt/jdk-21 \
+    PATH="/opt/jdk-21/bin:/go/bin:/usr/local/go/bin:$PATH" \
     SPOTBUGS_HOME=/opt/spotbugs \
+    TRIVY_PATH=/usr/local/bin/trivy \
+    TRIVY_CACHE_DIR=/var/lib/trivy \
     TESSERACT_CMD=/usr/bin/tesseract \
     TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
@@ -96,10 +99,32 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Trivy inside the backend image so Docker Inspector and background
+# package/image scans work when the app itself runs in Linux containers.
+ARG TRIVY_VERSION=0.69.3
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) trivy_arch="64bit" ;; \
+      arm64) trivy_arch="ARM64" ;; \
+      *) echo "Unsupported architecture for Trivy: $arch" >&2; exit 1 ;; \
+    esac; \
+    wget -q -O /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${trivy_arch}.tar.gz"; \
+    tar -xzf /tmp/trivy.tar.gz -C /tmp trivy; \
+    install -m 0755 /tmp/trivy "${TRIVY_PATH}"; \
+    mkdir -p "${TRIVY_CACHE_DIR}"; \
+    rm -f /tmp/trivy /tmp/trivy.tar.gz
+
 # Install Go (for gosec)
 RUN wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
     && tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz \
     && rm go1.21.5.linux-amd64.tar.gz
+
+# Install JDK 21 for Ghidra 11.2+ headless support
+RUN wget -q -O /tmp/jdk21.tar.gz https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz \
+    && mkdir -p ${JAVA_HOME} \
+    && tar -xzf /tmp/jdk21.tar.gz --strip-components=1 -C ${JAVA_HOME} \
+    && rm /tmp/jdk21.tar.gz
 
 # Install Gosec (Go security scanner)
 RUN go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -132,6 +157,7 @@ RUN wget -q -O /tmp/ghidra.zip https://github.com/NationalSecurityAgency/ghidra/
     && unzip -q /tmp/ghidra.zip -d /opt \
     && mv /opt/ghidra_${GHIDRA_VERSION}_PUBLIC ${GHIDRA_HOME} \
     && chmod +x ${GHIDRA_HOME}/support/analyzeHeadless \
+    && sed -i "s|^JAVA_HOME_OVERRIDE=.*|JAVA_HOME_OVERRIDE=${JAVA_HOME}|" ${GHIDRA_HOME}/support/launch.properties \
     && rm /tmp/ghidra.zip
 
 # Install ESLint and security plugins globally for scanning

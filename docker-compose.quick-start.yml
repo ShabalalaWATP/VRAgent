@@ -67,12 +67,19 @@ services:
       # Quick Start Mode
       QUICK_START: "true"
       SKIP_MIGRATIONS: "false"
+      APP_OFFLINE_MODE: ${APP_OFFLINE_MODE:-false}
+      TRIVY_CACHE_DIR: ${TRIVY_CACHE_DIR:-/var/lib/trivy}
+      TRIVY_OFFLINE_MODE: ${TRIVY_OFFLINE_MODE:-false}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app/backend
       - ./uploads:/tmp/uploads
       - ./yara_rules:/app/backend/yara_rules
+      - trivy_cache:/var/lib/trivy
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/offline:/app/data/offline:ro
+      - ./data/offline/trivy-cache:/app/data/offline/trivy-cache:rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +134,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  trivy_cache:
     driver: local
 
 networks:

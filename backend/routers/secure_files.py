@@ -52,6 +52,27 @@ def check_project_access(db: Session, project_id: int, user_id: int) -> bool:
     return collaborator is not None
 
 
+def _get_chat_message_file_url(message: Message) -> Optional[str]:
+    """
+    Extract the chat file URL from a message attachment.
+
+    Current schema stores file metadata in `attachment_data`.
+    A legacy `file_url` column may exist in older databases.
+    """
+    attachment = message.attachment_data
+    if isinstance(attachment, dict):
+        file_url = attachment.get("file_url")
+        if isinstance(file_url, str):
+            return file_url
+
+    # Backward compatibility for legacy schema variants.
+    legacy_file_url = getattr(message, "file_url", None)
+    if isinstance(legacy_file_url, str):
+        return legacy_file_url
+
+    return None
+
+
 def check_chat_file_access(db: Session, filename: str, user_id: int) -> bool:
     """
     Check if user has access to a chat file.
@@ -62,18 +83,19 @@ def check_chat_file_access(db: Session, filename: str, user_id: int) -> bool:
     # Build the file URL pattern to search for
     file_url = f"/api/files/chat/{filename}"
 
-    # Find messages containing this file URL
+    # Find candidate file messages and filter in Python so this works
+    # consistently across PostgreSQL/SQLite JSON implementations.
     messages_with_file = db.query(Message).filter(
-        Message.file_url == file_url
+        Message.message_type == "file",
+        Message.is_deleted != "true",
+        Message.attachment_data.isnot(None)
     ).all()
-
-    if not messages_with_file:
-        # Also check file_urls JSON array for multi-file messages
-        # This is a fallback - most messages use file_url
-        return False
 
     # Check if user is a participant in any conversation containing this message
     for message in messages_with_file:
+        if _get_chat_message_file_url(message) != file_url:
+            continue
+
         participant = db.query(ConversationParticipant).filter(
             and_(
                 ConversationParticipant.conversation_id == message.conversation_id,
@@ -341,12 +363,16 @@ async def download_chat_file(
         # Also allow the file uploader to access their own files
         # Check if this file was uploaded by looking at messages
         file_url = f"/api/files/chat/{filename}"
-        user_message = db.query(Message).filter(
-            and_(
-                Message.file_url == file_url,
-                Message.sender_id == current_user.id
-            )
-        ).first()
+        user_messages = db.query(Message).filter(
+            Message.sender_id == current_user.id,
+            Message.message_type == "file",
+            Message.is_deleted != "true",
+            Message.attachment_data.isnot(None)
+        ).all()
+        user_message = next(
+            (msg for msg in user_messages if _get_chat_message_file_url(msg) == file_url),
+            None,
+        )
 
         if not user_message:
             raise HTTPException(
@@ -449,13 +475,21 @@ async def list_orphaned_files(
     # Check chat files
     chat_dir = Path(settings.upload_dir) / "chat"
     if chat_dir.exists():
+        chat_messages = db.query(Message).filter(
+            Message.message_type == "file",
+            Message.is_deleted != "true",
+            Message.attachment_data.isnot(None)
+        ).all()
+        referenced_urls = {
+            url for msg in chat_messages
+            for url in [_get_chat_message_file_url(msg)]
+            if url
+        }
+
         for file_path in chat_dir.iterdir():
             if file_path.is_file():
                 file_url = f"/api/files/chat/{file_path.name}"
-                exists = db.query(Message).filter(
-                    Message.file_url == file_url
-                ).first()
-                if not exists:
+                if file_url not in referenced_urls:
                     orphaned["chat_files"].append(str(file_path))
 
     return {

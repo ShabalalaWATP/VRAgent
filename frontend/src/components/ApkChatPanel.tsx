@@ -44,13 +44,27 @@ import {
   OpenInFull as OpenInFullIcon,
   CloseFullscreen as CloseFullscreenIcon,
 } from "@mui/icons-material";
-import { reverseEngineeringClient, type ApkChatMessage, type ApkChatResponse, type UnifiedApkScanResult } from "../api/client";
+import {
+  reverseEngineeringClient,
+  type ApkChatMessage,
+  type ApkChatResponse,
+  type BinaryAnalysisResult,
+  type DockerAnalysisResult,
+  type UnifiedApkScanResult,
+} from "../api/client";
 import ReactMarkdown from "react-markdown";
 import { createChatMarkdownComponents, chatMarkdownContainerSx } from "./ChatMarkdownComponents";
 
+type AnalyzerChatMode = "apk" | "binary" | "docker";
+
 interface ApkChatPanelProps {
-  // The main unified scan result
-  unifiedScanResult: UnifiedApkScanResult | null;
+  mode?: AnalyzerChatMode;
+  // Context key to reset chat when switching scan/report
+  chatContextKey?: string;
+  // Analyzer results
+  unifiedScanResult?: UnifiedApkScanResult | null;
+  binaryResult?: BinaryAnalysisResult | null;
+  dockerResult?: DockerAnalysisResult | null;
   // Optional: Selected finding context (when user clicks "Ask about this")
   selectedFinding?: {
     type: string;
@@ -74,7 +88,11 @@ interface ChatMessageWithMeta extends ApkChatMessage {
 }
 
 export default function ApkChatPanel({
+  mode = "apk",
+  chatContextKey,
   unifiedScanResult,
+  binaryResult,
+  dockerResult,
   selectedFinding,
   currentSourceCode,
   currentSourceClass,
@@ -94,23 +112,39 @@ export default function ApkChatPanel({
   const [contextExpanded, setContextExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasAnalysisContext =
+    mode === "apk" ? Boolean(unifiedScanResult) :
+    mode === "binary" ? Boolean(binaryResult) :
+    Boolean(dockerResult);
+  const analyzerLabel =
+    mode === "apk" ? "APK Analyzer" :
+    mode === "binary" ? "Binary Analyzer" :
+    "Docker Inspector";
+  const resolvedContextKey = chatContextKey || [
+    mode,
+    mode === "apk"
+      ? (unifiedScanResult?.scan_id || unifiedScanResult?.package_name || "none")
+      : mode === "binary"
+        ? (binaryResult?.filename || "none")
+        : (dockerResult?.image_id || dockerResult?.image_name || "none"),
+  ].join(":");
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Initial suggestions based on analysis
+  // Reset chat on analyzer/report switch
   useEffect(() => {
-    if (unifiedScanResult && messages.length === 0) {
-      const initialSuggestions = generateInitialSuggestions(unifiedScanResult);
-      setCurrentSuggestions(initialSuggestions);
-    }
-  }, [unifiedScanResult, messages.length]);
+    setMessages([]);
+    setMessage("");
+    setCurrentSuggestions([]);
+    setContextExpanded(false);
+  }, [resolvedContextKey]);
 
   // When a finding is selected, offer to ask about it
   useEffect(() => {
-    if (selectedFinding) {
+    if (mode === "apk" && selectedFinding) {
       setCurrentSuggestions([
         `Tell me more about this ${selectedFinding.type} issue`,
         "How can I exploit this vulnerability?",
@@ -118,120 +152,228 @@ export default function ApkChatPanel({
         "Is this a false positive?",
       ]);
     }
-  }, [selectedFinding]);
+  }, [selectedFinding, mode]);
 
-  const generateInitialSuggestions = (result: UnifiedApkScanResult): string[] => {
+  const generateInitialSuggestions = useCallback((): string[] => {
     const suggestions: string[] = [];
-    
-    // Based on findings
-    if (result.security_issues?.length > 0) {
-      suggestions.push("What are the most critical security issues?");
-      suggestions.push("How can I exploit the vulnerabilities found?");
+    if (mode === "apk" && unifiedScanResult) {
+      if (unifiedScanResult.security_issues?.length > 0) {
+        suggestions.push("What are the most critical security issues?");
+        suggestions.push("How can I exploit the vulnerabilities found?");
+      }
+      if (unifiedScanResult.secrets?.length > 0) {
+        suggestions.push("Tell me about the hardcoded secrets found");
+      }
+      const sensitiveFindings = (unifiedScanResult as any).sensitive_data_findings?.findings || [];
+      if (sensitiveFindings.length > 0) {
+        suggestions.push("Explain the sensitive data (passwords, emails, PII) found");
+      }
+      const cveFindings = (unifiedScanResult as any).cve_scan_results?.findings || [];
+      if (cveFindings.length > 0) {
+        suggestions.push("What CVEs affect this app's dependencies?");
+      }
+      const verifiedFindings = (unifiedScanResult as any).verification_results?.verified_findings || [];
+      if (verifiedFindings.length > 0) {
+        suggestions.push("Walk me through the AI-verified vulnerabilities");
+      }
+      if (unifiedScanResult.dangerous_permissions_count > 0) {
+        suggestions.push("Explain the dangerous permissions this app uses");
+      }
+      if (suggestions.length < 4) {
+        suggestions.push("Give me an overview of this APK's security posture");
+      }
+      if (suggestions.length < 4) {
+        suggestions.push("What attack vectors should I focus on?");
+      }
+    } else if (mode === "binary" && binaryResult) {
+      const vulnCount = binaryResult.vuln_hunt_result?.vulnerabilities?.length || 0;
+      const patternCount = binaryResult.pattern_scan_result?.findings?.length || 0;
+      if (vulnCount + patternCount > 0) {
+        suggestions.push("Which binary vulnerabilities are highest risk?");
+        suggestions.push("Explain an exploit path from entry point to impact");
+      }
+      if (binaryResult.secrets?.length > 0) {
+        suggestions.push("What secrets were exposed in this binary?");
+      }
+      if (binaryResult.attack_surface?.entry_points?.length) {
+        suggestions.push("Walk me through the attack surface entry points");
+      }
+      if (suggestions.length < 4) {
+        suggestions.push("Summarize what this binary does in beginner-friendly terms");
+      }
+      if (suggestions.length < 4) {
+        suggestions.push("What should I fix first to reduce risk?");
+      }
+    } else if (mode === "docker" && dockerResult) {
+      if (dockerResult.security_issues?.length > 0) {
+        suggestions.push("What are the most critical Docker security issues?");
+      }
+      if ((dockerResult.secrets?.length || 0) + (dockerResult.layer_secrets?.length || 0) > 0) {
+        suggestions.push("Explain the secret exposure risk in this container image");
+      }
+      if ((dockerResult.cve_scan?.total_vulnerabilities || 0) > 0) {
+        suggestions.push("Which CVEs should be patched first and why?");
+      }
+      suggestions.push("Explain the trust boundaries and likely attack paths");
+      if (suggestions.length < 4) {
+        suggestions.push("Give me a beginner-friendly container hardening plan");
+      }
     }
-    
-    if (result.secrets?.length > 0) {
-      suggestions.push("Tell me about the hardcoded secrets found");
-    }
-    
-    // NEW: Sensitive data findings
-    const sensitiveFindings = (result as any).sensitive_data_findings?.findings || [];
-    if (sensitiveFindings.length > 0) {
-      suggestions.push("Explain the sensitive data (passwords, emails, PII) found");
-    }
-    
-    // NEW: CVE findings
-    const cveFindings = (result as any).cve_scan_results?.findings || [];
-    if (cveFindings.length > 0) {
-      suggestions.push("What CVEs affect this app's dependencies?");
-    }
-    
-    // NEW: Verified findings
-    const verifiedFindings = (result as any).verification_results?.verified_findings || [];
-    if (verifiedFindings.length > 0) {
-      suggestions.push("Walk me through the AI-verified vulnerabilities");
-    }
-    
-    if (result.dangerous_permissions_count > 0) {
-      suggestions.push("Explain the dangerous permissions this app uses");
-    }
-    
-    // General questions
-    if (suggestions.length < 4) {
-      suggestions.push("Give me an overview of this APK's security posture");
-    }
-    
-    if (suggestions.length < 4) {
-      suggestions.push("What attack vectors should I focus on?");
-    }
-    
     return suggestions.slice(0, 5);
-  };
+  }, [mode, unifiedScanResult, binaryResult, dockerResult]);
+
+  // Initial suggestions based on analysis
+  useEffect(() => {
+    if (hasAnalysisContext && messages.length === 0) {
+      setCurrentSuggestions(generateInitialSuggestions());
+    }
+  }, [hasAnalysisContext, messages.length, generateInitialSuggestions]);
 
   const buildAnalysisContext = useCallback(() => {
-    if (!unifiedScanResult) return {};
-    
-    const context: Record<string, unknown> = {
-      // Basic app info
-      package_name: unifiedScanResult.package_name,
-      version_name: unifiedScanResult.version_name,
-      version_code: unifiedScanResult.version_code,
-      min_sdk: unifiedScanResult.min_sdk,
-      target_sdk: unifiedScanResult.target_sdk,
-      
-      // Permissions
-      permissions: unifiedScanResult.permissions,
-      dangerous_permissions_count: unifiedScanResult.dangerous_permissions_count,
-      
-      // Security findings
-      security_issues: unifiedScanResult.security_issues,
-      secrets: unifiedScanResult.secrets,
-      
-      // Components
-      components: unifiedScanResult.components,
-      
-      // AI Reports
-      ai_functionality_report: unifiedScanResult.ai_functionality_report,
-      ai_security_report: unifiedScanResult.ai_security_report,
-      ai_architecture_diagram: unifiedScanResult.ai_architecture_diagram,
-      ai_attack_surface_map: unifiedScanResult.ai_attack_surface_map,
-      
-      // NEW: Decompiled code analysis
-      decompiled_code_findings: unifiedScanResult.decompiled_code_findings,
-      decompiled_code_summary: unifiedScanResult.decompiled_code_summary,
-      
-      // NEW: Sensitive data discovery (PII, passwords, emails, etc.)
-      sensitive_data_findings: unifiedScanResult.sensitive_data_findings,
-      
-      // NEW: CVE/Vulnerability database scan
-      cve_scan_results: unifiedScanResult.cve_scan_results,
-      
-      // NEW: AI vulnerability hunt results (note: vuln_hunt_result singular)
-      vuln_hunt_results: unifiedScanResult.vuln_hunt_result,
-      
-      // NEW: AI verification results (false positive filtering)
-      verification_results: unifiedScanResult.verification_results,
-      
-      // Dynamic analysis & protections
-      dynamic_analysis: unifiedScanResult.dynamic_analysis,
+    if (mode === "apk") {
+      if (!unifiedScanResult) return {};
+
+      const context: Record<string, unknown> = {
+        package_name: unifiedScanResult.package_name,
+        version_name: unifiedScanResult.version_name,
+        version_code: unifiedScanResult.version_code,
+        min_sdk: unifiedScanResult.min_sdk,
+        target_sdk: unifiedScanResult.target_sdk,
+        permissions: unifiedScanResult.permissions,
+        dangerous_permissions_count: unifiedScanResult.dangerous_permissions_count,
+        security_issues: unifiedScanResult.security_issues,
+        secrets: unifiedScanResult.secrets,
+        components: unifiedScanResult.components,
+        ai_functionality_report: unifiedScanResult.ai_functionality_report,
+        ai_security_report: unifiedScanResult.ai_security_report,
+        ai_architecture_diagram: unifiedScanResult.ai_architecture_diagram,
+        ai_attack_surface_map: unifiedScanResult.ai_attack_surface_map,
+        decompiled_code_findings: unifiedScanResult.decompiled_code_findings,
+        decompiled_code_summary: unifiedScanResult.decompiled_code_summary,
+        sensitive_data_findings: unifiedScanResult.sensitive_data_findings,
+        cve_scan_results: unifiedScanResult.cve_scan_results,
+        vuln_hunt_results: unifiedScanResult.vuln_hunt_result,
+        verification_results: unifiedScanResult.verification_results,
+        dynamic_analysis: unifiedScanResult.dynamic_analysis,
+      };
+
+      if (selectedFinding) {
+        context.selected_finding = {
+          ...selectedFinding,
+        };
+      }
+
+      if (currentSourceCode && currentSourceClass) {
+        context.current_source_code = {
+          class_name: currentSourceClass,
+          code_snippet: currentSourceCode.substring(0, 2000),
+        };
+      }
+
+      return context;
+    }
+
+    if (mode === "binary") {
+      if (!binaryResult) return {};
+
+      const vulnerabilities = [
+        ...(binaryResult.vuln_hunt_result?.vulnerabilities || []),
+        ...((binaryResult.pattern_scan_result?.findings || []).map((finding, idx) => ({
+          id: `pattern-${idx}`,
+          title: finding.title,
+          severity: finding.severity,
+          category: finding.category,
+          function_name: finding.function_name || "",
+          description: finding.description,
+          technical_details: finding.evidence || "",
+          remediation: finding.remediation || "",
+          cwe_id: finding.cwe_id,
+        }))),
+      ];
+
+      return {
+        binary_info: {
+          filename: binaryResult.filename,
+          metadata: binaryResult.metadata,
+          strings_count: binaryResult.strings_count,
+          imports_count: binaryResult.imports.length,
+          exports_count: binaryResult.exports.length,
+          secrets_count: binaryResult.secrets.length,
+        },
+        purpose_analysis: {
+          functionality_report: binaryResult.ai_functionality_report || binaryResult.ai_analysis || "",
+          security_report: binaryResult.ai_security_report || "",
+          legitimacy: binaryResult.is_legitimate_software,
+        },
+        vulnerabilities,
+        attack_surface: binaryResult.attack_surface || {},
+        hunt_result: binaryResult.vuln_hunt_result || {
+          risk_score: binaryResult.verification_result?.summary?.verified_total || 0,
+          executive_summary: binaryResult.ai_security_report || binaryResult.ai_analysis || "",
+        },
+      };
+    }
+
+    if (!dockerResult) return {};
+
+    const dockerVulns = [
+      ...(dockerResult.security_issues || []).map((issue, idx) => ({
+        id: `docker-issue-${idx}`,
+        title: issue.category ? `${issue.category} issue` : "Container security issue",
+        severity: issue.severity || "medium",
+        category: issue.category || "container-security",
+        description: issue.description || "",
+        remediation: issue.remediation || "",
+      })),
+      ...((dockerResult.cve_scan?.vulnerabilities || []).map((cve, idx) => ({
+        id: `docker-cve-${idx}`,
+        title: cve.id || cve.external_id || cve.title || "CVE finding",
+        severity: cve.severity || "medium",
+        category: "cve",
+        description: cve.description || "",
+        remediation: cve.fixed_version ? `Upgrade ${cve.package || cve.package_name} to ${cve.fixed_version}` : "",
+      }))),
+      ...((dockerResult.layer_secrets || []).map((secret, idx) => ({
+        id: `docker-secret-${idx}`,
+        title: `Recoverable secret in ${secret.file_path}`,
+        severity: secret.severity || "high",
+        category: "secrets",
+        description: secret.attack_vector || "Potential secret exposure in image layer history.",
+        remediation: "Remove secrets from image history and rotate exposed credentials.",
+      }))),
+    ];
+
+    return {
+      binary_info: {
+        image_name: dockerResult.image_name,
+        image_id: dockerResult.image_id,
+        total_layers: dockerResult.total_layers,
+        total_size_human: dockerResult.total_size_human,
+        base_image: dockerResult.base_image,
+      },
+      purpose_analysis: {
+        summary: dockerResult.ai_analysis || dockerResult.adjudication_summary || "",
+      },
+      vulnerabilities: dockerVulns,
+      attack_surface: {
+        layers: (dockerResult.layers || []).map((layer) => layer.command),
+        exposed_ports: (dockerResult as any).exposed_ports || [],
+        env_vars: (dockerResult as any).env_vars || [],
+      },
+      hunt_result: {
+        risk_score:
+          (dockerResult.cve_scan?.critical_count || 0) * 10 +
+          (dockerResult.cve_scan?.high_count || 0) * 5 +
+          (dockerResult.security_issues?.length || 0) * 3,
+        executive_summary: dockerResult.ai_analysis || "",
+        recommended_focus_areas: [
+          "Patch high/critical CVEs",
+          "Remove secrets from layers",
+          "Harden runtime privileges and exposed interfaces",
+        ],
+      },
     };
-
-    // Add selected finding context if available
-    if (selectedFinding) {
-      context.selected_finding = {
-        ...selectedFinding,
-      };
-    }
-
-    // Add source code context if viewing code
-    if (currentSourceCode && currentSourceClass) {
-      context.current_source_code = {
-        class_name: currentSourceClass,
-        code_snippet: currentSourceCode.substring(0, 2000), // Truncate for context
-      };
-    }
-
-    return context;
-  }, [unifiedScanResult, selectedFinding, currentSourceCode, currentSourceClass]);
+  }, [mode, unifiedScanResult, binaryResult, dockerResult, selectedFinding, currentSourceCode, currentSourceClass]);
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || message.trim();
@@ -249,7 +391,6 @@ export default function ApkChatPanel({
     setIsLoading(true);
 
     try {
-      // Build conversation history (last 10 messages)
       const conversationHistory: ApkChatMessage[] = messages
         .slice(-10)
         .map(m => ({
@@ -257,29 +398,57 @@ export default function ApkChatPanel({
           content: m.content,
           timestamp: m.timestamp,
         }));
+      const beginnerPrefix =
+        beginnerMode && mode !== "apk"
+          ? "Please explain in beginner-friendly language where possible.\n\n"
+          : "";
+      let responseText = "";
+      let responseLearningTip: string | undefined;
+      let responseSuggestions: string[] = [];
+      let responseFindings: string[] = [];
 
-      const response: ApkChatResponse = await reverseEngineeringClient.chatAboutApk({
-        message: textToSend,
-        conversation_history: conversationHistory,
-        analysis_context: buildAnalysisContext(),
-        beginner_mode: beginnerMode,
-      });
+      if (mode === "apk") {
+        const response: ApkChatResponse = await reverseEngineeringClient.chatAboutApk({
+          message: textToSend,
+          conversation_history: conversationHistory,
+          analysis_context: buildAnalysisContext(),
+          beginner_mode: beginnerMode,
+        });
+        responseText = response.response;
+        responseLearningTip = response.learning_tip;
+        responseSuggestions = response.suggested_questions || [];
+        responseFindings = response.related_findings || [];
+      } else {
+        const response = await reverseEngineeringClient.chatAboutAnalysis({
+          message: `${beginnerPrefix}${textToSend}`,
+          conversation_history: conversationHistory.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+          analysis_context: buildAnalysisContext() as any,
+        });
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        responseText = response.response;
+        responseSuggestions = generateInitialSuggestions();
+      }
 
       const assistantMessage: ChatMessageWithMeta = {
         id: `msg-${Date.now()}-response`,
         role: "assistant",
-        content: response.response,
+        content: responseText,
         timestamp: new Date().toISOString(),
-        learning_tip: response.learning_tip,
-        suggested_questions: response.suggested_questions,
-        related_findings: response.related_findings,
+        learning_tip: responseLearningTip,
+        suggested_questions: responseSuggestions,
+        related_findings: responseFindings,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
       // Update suggestions
-      if (response.suggested_questions?.length > 0) {
-        setCurrentSuggestions(response.suggested_questions);
+      if (responseSuggestions.length > 0) {
+        setCurrentSuggestions(responseSuggestions);
       }
     } catch (error: any) {
       const errorMessage: ChatMessageWithMeta = {
@@ -308,8 +477,8 @@ export default function ApkChatPanel({
 
   const handleClearChat = () => {
     setMessages([]);
-    if (unifiedScanResult) {
-      setCurrentSuggestions(generateInitialSuggestions(unifiedScanResult));
+    if (hasAnalysisContext) {
+      setCurrentSuggestions(generateInitialSuggestions());
     }
     setMenuAnchor(null);
   };
@@ -323,7 +492,14 @@ export default function ApkChatPanel({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `apk_chat_${unifiedScanResult?.package_name || "analysis"}_${new Date().toISOString().split("T")[0]}.md`;
+    const chatPrefix = mode === "apk" ? "apk" : mode === "binary" ? "binary" : "docker";
+    const targetName =
+      mode === "apk"
+        ? (unifiedScanResult?.package_name || "analysis")
+        : mode === "binary"
+          ? (binaryResult?.filename || "analysis")
+          : (dockerResult?.image_name || "analysis");
+    a.download = `${chatPrefix}_chat_${targetName}_${new Date().toISOString().split("T")[0]}.md`;
     a.click();
     URL.revokeObjectURL(url);
     setMenuAnchor(null);
@@ -334,21 +510,42 @@ export default function ApkChatPanel({
   };
 
   const getContextSummary = () => {
-    if (!unifiedScanResult) return "No analysis loaded";
-    
+    if (!hasAnalysisContext) return `No ${analyzerLabel} analysis loaded`;
+
     const parts: string[] = [];
-    parts.push(`📦 ${unifiedScanResult.package_name || "Unknown Package"}`);
-    if (unifiedScanResult.security_issues?.length) {
-      parts.push(`🔴 ${unifiedScanResult.security_issues.length} security issues`);
-    }
-    if (unifiedScanResult.secrets?.length) {
-      parts.push(`🔑 ${unifiedScanResult.secrets.length} secrets`);
-    }
-    if (selectedFinding) {
-      parts.push(`👁️ Viewing: ${selectedFinding.title}`);
-    }
-    if (currentSourceClass) {
-      parts.push(`📄 Code: ${currentSourceClass}`);
+    if (mode === "apk" && unifiedScanResult) {
+      parts.push(`📦 ${unifiedScanResult.package_name || "Unknown Package"}`);
+      if (unifiedScanResult.security_issues?.length) {
+        parts.push(`🔴 ${unifiedScanResult.security_issues.length} security issues`);
+      }
+      if (unifiedScanResult.secrets?.length) {
+        parts.push(`🔑 ${unifiedScanResult.secrets.length} secrets`);
+      }
+      if (selectedFinding) {
+        parts.push(`👁️ Viewing: ${selectedFinding.title}`);
+      }
+      if (currentSourceClass) {
+        parts.push(`📄 Code: ${currentSourceClass}`);
+      }
+    } else if (mode === "binary" && binaryResult) {
+      parts.push(`🧠 ${binaryResult.filename || "Unknown Binary"}`);
+      parts.push(`📥 ${binaryResult.imports?.length || 0} imports`);
+      if (binaryResult.vuln_hunt_result?.vulnerabilities?.length) {
+        parts.push(`🔴 ${binaryResult.vuln_hunt_result.vulnerabilities.length} vulnerabilities`);
+      }
+      if (binaryResult.secrets?.length) {
+        parts.push(`🔑 ${binaryResult.secrets.length} secrets`);
+      }
+    } else if (dockerResult) {
+      parts.push(`🐳 ${dockerResult.image_name || "Unknown Image"}`);
+      parts.push(`🧱 ${dockerResult.total_layers || 0} layers`);
+      if (dockerResult.security_issues?.length) {
+        parts.push(`🔴 ${dockerResult.security_issues.length} security issues`);
+      }
+      const cveTotal = dockerResult.cve_scan?.total_vulnerabilities || 0;
+      if (cveTotal > 0) {
+        parts.push(`🛡️ ${cveTotal} CVEs`);
+      }
     }
     return parts.join(" • ");
   };
@@ -356,20 +553,20 @@ export default function ApkChatPanel({
   // FAB button when panel is closed
   if (!isOpen) {
     return (
-      <Tooltip title="AI Chat Assistant - Ask questions about this APK">
+      <Tooltip title={`AI Chat Assistant - Ask questions about this ${analyzerLabel} result`}>
         <Fab
           color="primary"
           onClick={() => setIsOpen(true)}
-          disabled={!unifiedScanResult}
+          disabled={!hasAnalysisContext}
           sx={{
             position: "fixed",
             bottom: 24,
             right: 24,
-            background: unifiedScanResult
+            background: hasAnalysisContext
               ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`
               : undefined,
             "&:hover": {
-              background: unifiedScanResult
+              background: hasAnalysisContext
                 ? `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.secondary.dark} 100%)`
                 : undefined,
             },
@@ -412,7 +609,7 @@ export default function ApkChatPanel({
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <AiIcon />
             <Typography variant="h6" fontWeight={600}>
-              APK Analysis Chat
+              {analyzerLabel} Chat
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -544,11 +741,11 @@ export default function ApkChatPanel({
                 </Avatar>
                 <Box>
                   <Typography variant="body2" color="text.primary" fontWeight={500}>
-                    Hi! I'm your APK analysis assistant.
+                    {`Hi! I'm your ${analyzerLabel} assistant.`}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     I can help you understand security findings, explain vulnerabilities, suggest exploitation strategies, 
-                    and provide beginner-friendly explanations. Ask me anything about this APK!
+                    and provide beginner-friendly explanations. Ask me anything about this analysis.
                   </Typography>
                   {beginnerMode && (
                     <Chip
@@ -728,11 +925,11 @@ export default function ApkChatPanel({
               fullWidth
               multiline
               maxRows={4}
-              placeholder="Ask about this APK..."
+              placeholder={`Ask about this ${analyzerLabel} result...`}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={isLoading || !unifiedScanResult}
+              disabled={isLoading || !hasAnalysisContext}
               inputRef={inputRef}
               size="small"
               sx={{
@@ -744,7 +941,7 @@ export default function ApkChatPanel({
             <IconButton
               color="primary"
               onClick={() => handleSendMessage()}
-              disabled={!message.trim() || isLoading || !unifiedScanResult}
+              disabled={!message.trim() || isLoading || !hasAnalysisContext}
               sx={{
                 bgcolor: theme.palette.primary.main,
                 color: "white",
@@ -760,9 +957,9 @@ export default function ApkChatPanel({
               <SendIcon />
             </IconButton>
           </Box>
-          {!unifiedScanResult && (
+          {!hasAnalysisContext && (
             <Typography variant="caption" color="error" sx={{ mt: 1, display: "block" }}>
-              Run an APK scan first to enable chat
+              {`Run a ${analyzerLabel} scan first to enable chat`}
             </Typography>
           )}
         </Box>

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.core.logging import get_logger
 from backend.core.auth import get_current_active_user
 from backend.models.models import User
@@ -943,7 +944,7 @@ import uuid
 import aiofiles
 from pathlib import Path
 
-UPLOAD_DIR = Path("uploads/chat")
+UPLOAD_DIR = Path(settings.upload_dir) / "chat"
 
 # Comprehensive file extension whitelist organized by category
 ALLOWED_EXTENSIONS = {

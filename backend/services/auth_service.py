@@ -2,10 +2,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import hashlib
+import secrets
 
 import bcrypt
 import redis
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
@@ -22,6 +24,13 @@ REFRESH_TOKEN_EXPIRE_DAYS = settings.refresh_token_expire_days
 
 # Token blacklist prefix
 TOKEN_BLACKLIST_PREFIX = "vragent:token_blacklist:"
+
+# Legacy password hash context for backward compatibility.
+# Native bcrypt is used for current hashes to avoid passlib+bcrypt backend issues.
+_legacy_pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+)
 
 # Redis client for token blacklist (lazy initialization)
 _redis_client: Optional[redis.Redis] = None
@@ -103,12 +112,34 @@ def is_token_blacklisted(token: str) -> bool:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    if not hashed_password:
+        return False
+
+    # Fast path: current bcrypt hashes.
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Password verification failed due to invalid bcrypt hash format: {type(e).__name__}")
+            return False
+
+    # Compatibility path: legacy hash formats.
+    try:
+        return _legacy_pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        # Last-resort migration path for legacy rows that stored plain-text passwords.
+        # If this matches, authenticate_user() will re-hash to bcrypt immediately.
+        if secrets.compare_digest(plain_password, hashed_password):
+            logger.warning("Authenticated user with legacy plain-text password row; hash will be upgraded")
+            return True
+        # Invalid or unsupported hash formats should fail closed without crashing login.
+        logger.warning(f"Password verification skipped due to invalid hash format: {type(e).__name__}")
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """Generate password hash."""
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -174,6 +205,18 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     if not verify_password(password, user.password_hash):
         logger.info(f"Login attempt failed: invalid password for user {username}")
         return None
+
+    # Opportunistically migrate legacy hashes to current bcrypt format.
+    try:
+        if not user.password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+            user.password_hash = get_password_hash(password)
+            db.commit()
+            db.refresh(user)
+            logger.info(f"Password hash upgraded for user {username}")
+    except Exception as e:
+        # Do not block successful login if hash migration fails.
+        logger.warning(f"Password hash upgrade skipped for user {username}: {type(e).__name__}")
+
     return user
 
 

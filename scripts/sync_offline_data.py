@@ -8,6 +8,8 @@ Downloads and prepares all security databases for air-gapped operation:
 3. ZAP Add-ons - Active scan rules and vulnerability checks
 4. OpenVAS NVT Feeds - Network Vulnerability Tests (~80k NVTs)
 5. CVE Database - NVD CVE entries for reference
+6. OSV Database - Package vulnerability database for offline dependency lookups
+7. EPSS Database - Exploit probability scores for offline prioritization
 
 Run this script BEFORE deploying to an air-gapped network!
 
@@ -27,8 +29,10 @@ import tarfile
 import tempfile
 import urllib.request
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 # Data directories
 BASE_DIR = Path(__file__).parent.parent
@@ -37,8 +41,33 @@ EXPLOITDB_DIR = DATA_DIR / "exploitdb"
 NUCLEI_DIR = DATA_DIR / "nuclei-templates"
 CVE_DIR = DATA_DIR / "cve"
 OSV_DIR = DATA_DIR / "osv"
+EPSS_DIR = DATA_DIR / "epss"
 ZAP_DIR = DATA_DIR / "zap-addons"
 OPENVAS_DIR = DATA_DIR / "openvas-feeds"
+
+# OSV ecosystems bundled for offline lookups.
+# Include both language ecosystems and the Linux distro ecosystems used by
+# Docker image package scans (Trivy -> cve_service -> local OSV fallback).
+OSV_ECOSYSTEMS = [
+    "PyPI",        # Python packages
+    "npm",         # Node.js packages
+    "Go",          # Go modules
+    "Maven",       # Java packages
+    "NuGet",       # .NET packages
+    "crates.io",   # Rust packages
+    "RubyGems",    # Ruby gems
+    "Packagist",   # PHP packages
+    "Pub",         # Dart/Flutter packages
+    "Hex",         # Erlang/Elixir packages
+    "Alpine",      # Alpine OS packages
+    "Debian",      # Debian/Ubuntu OS packages
+    "Rocky Linux", # RHEL/CentOS/Rocky/Alma OS packages
+]
+
+
+def normalize_osv_ecosystem(ecosystem: str) -> str:
+    """Collapse version-qualified OSV ecosystems like Alpine:v3.19 to Alpine."""
+    return (ecosystem or "").split(":", 1)[0].strip()
 
 
 def print_status(msg: str, status: str = "INFO"):
@@ -331,7 +360,6 @@ def sync_osv_database():
     import json
     import sqlite3
     import zipfile
-    from datetime import datetime
     
     print_status("=" * 60)
     print_status("Syncing OSV Database - Package Vulnerability Database")
@@ -340,20 +368,6 @@ def sync_osv_database():
     OSV_DIR.mkdir(parents=True, exist_ok=True)
     
     db_path = OSV_DIR / "osv.db"
-    
-    # Ecosystems to download (most common for code scanning)
-    ECOSYSTEMS = [
-        "PyPI",      # Python packages
-        "npm",       # Node.js packages
-        "Go",        # Go modules
-        "Maven",     # Java packages
-        "NuGet",     # .NET packages
-        "crates.io", # Rust packages
-        "RubyGems",  # Ruby gems
-        "Packagist", # PHP packages
-        "Pub",       # Dart/Flutter packages
-        "Hex",       # Erlang/Elixir packages
-    ]
     
     # Create SQLite database
     print_status("Creating local OSV SQLite database...")
@@ -411,11 +425,11 @@ def sync_osv_database():
     
     total_vulns = 0
     
-    for ecosystem in ECOSYSTEMS:
+    for ecosystem in OSV_ECOSYSTEMS:
         print_status(f"Downloading {ecosystem} vulnerabilities...")
         
         # OSV provides ZIP files per ecosystem
-        zip_url = f"https://osv-vulnerabilities.storage.googleapis.com/{ecosystem}/all.zip"
+        zip_url = f"https://osv-vulnerabilities.storage.googleapis.com/{quote(ecosystem, safe='')}/all.zip"
         
         try:
             zip_path = OSV_DIR / f"{ecosystem}.zip"
@@ -490,7 +504,7 @@ def sync_osv_database():
                             for affected in vuln.get("affected", []):
                                 pkg = affected.get("package", {})
                                 pkg_name = pkg.get("name", "")
-                                pkg_ecosystem = pkg.get("ecosystem", ecosystem)
+                                pkg_ecosystem = normalize_osv_ecosystem(pkg.get("ecosystem", ecosystem))
                                 
                                 # Update package name in main record
                                 if pkg_name and not cursor.execute(
@@ -521,6 +535,20 @@ def sync_osv_database():
                                                 vuln_id, pkg_ecosystem, pkg_name, range_type,
                                                 introduced, fixed, last_affected
                                             ))
+
+                                # Some OSV exports rely on exact versions instead of ranges.
+                                # Preserve those for offline matching when ranges are absent.
+                                if affected.get("versions") and not affected.get("ranges"):
+                                    for exact_version in affected.get("versions", []):
+                                        cursor.execute("""
+                                            INSERT INTO affected_ranges
+                                            (vuln_id, ecosystem, package_name, range_type,
+                                             introduced, fixed, last_affected)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        """, (
+                                            vuln_id, pkg_ecosystem, pkg_name, "ECOSYSTEM",
+                                            exact_version, None, exact_version
+                                        ))
                             
                             # Insert references (limit to 5 per vuln)
                             for ref in vuln.get("references", [])[:5]:
@@ -550,7 +578,7 @@ def sync_osv_database():
     cursor.execute("""
         INSERT OR REPLACE INTO sync_info (key, value)
         VALUES ('last_sync', ?), ('total_vulns', ?), ('ecosystems', ?)
-    """, (datetime.utcnow().isoformat(), str(total_vulns), ",".join(ECOSYSTEMS)))
+    """, (datetime.now(timezone.utc).isoformat(), str(total_vulns), ",".join(OSV_ECOSYSTEMS)))
     conn.commit()
     
     # Get final stats
@@ -558,7 +586,7 @@ def sync_osv_database():
     vuln_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM affected_ranges")
     range_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT package_name) FROM affected_ranges")
+    cursor.execute("SELECT COUNT(DISTINCT package_name) FROM vulnerabilities WHERE package_name != ''")
     pkg_count = cursor.fetchone()[0]
     
     conn.close()
@@ -568,7 +596,220 @@ def sync_osv_database():
     print_status(f"OSV Database ready: {vuln_count:,} vulns, {pkg_count:,} packages", "OK")
     print_status(f"Database size: {db_size:.1f} MB")
     print_status(f"Database location: {db_path}")
+
+    reference = OSV_DIR / "OSV_SOURCES.md"
+    with open(reference, 'w', encoding='utf-8') as f:
+        f.write(f"""# OSV Data Sources in VRAgent
+
+## Local OSV Database (OFFLINE READY)
+- **Location**: `{db_path}`
+- **Vulnerability Count**: {vuln_count:,}
+- **Affected Packages**: {pkg_count:,}
+- **Indexed Ranges**: {range_count:,}
+- **Database Size**: {db_size:.1f} MB
+
+## Source
+
+The database is built from OSV ecosystem exports:
+- `https://osv-vulnerabilities.storage.googleapis.com/<ecosystem>/all.zip`
+
+## Air-Gapped Deployment
+
+The local SQLite database works fully offline. No internet connection required
+once synced. To update, run on an internet-connected system:
+```bash
+python scripts/sync_offline_data.py --osv
+```
+Then copy `data/offline/osv/osv.db` to the air-gapped system.
+""")
+    print_status(f"OSV documentation saved to {reference}", "OK")
     
+    return True
+
+
+def sync_epss_database():
+    """
+    Download FIRST EPSS data and create a local SQLite database for offline use.
+
+    Source:
+    - FIRST EPSS API/Data docs: https://www.first.org/epss/api
+    - Daily score files: https://epss.empiricalsecurity.com/epss_scores-YYYY-mm-dd.csv.gz
+    """
+    import csv
+    import gzip
+    import io
+    import sqlite3
+    import urllib.error
+    from datetime import datetime, timedelta, timezone
+
+    print_status("=" * 60)
+    print_status("Syncing EPSS Database - Exploit Probability Scores")
+    print_status("=" * 60)
+
+    EPSS_DIR.mkdir(parents=True, exist_ok=True)
+
+    db_path = EPSS_DIR / "epss.db"
+    download_path = EPSS_DIR / "epss_scores_latest.csv.gz"
+
+    score_date = None
+    source_url = None
+    model_version = None
+    for offset in range(0, 7):
+        candidate_date = (datetime.now(timezone.utc) - timedelta(days=offset)).strftime("%Y-%m-%d")
+        candidate_url = f"https://epss.empiricalsecurity.com/epss_scores-{candidate_date}.csv.gz"
+        try:
+            if download_file(candidate_url, download_path, f"EPSS scores for {candidate_date}"):
+                score_date = candidate_date
+                source_url = candidate_url
+                break
+        except urllib.error.HTTPError:
+            continue
+
+    if not source_url or not download_path.exists():
+        print_status("Could not download an EPSS score file from the last 7 days", "ERROR")
+        return False
+
+    print_status("Creating local EPSS SQLite database...")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS epss_scores (
+            cve_id TEXT PRIMARY KEY,
+            epss_score REAL,
+            percentile REAL,
+            score_date TEXT,
+            model_version TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_info (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_epss_score ON epss_scores(epss_score);
+        CREATE INDEX IF NOT EXISTS idx_epss_percentile ON epss_scores(percentile);
+    """)
+    cursor.execute("DELETE FROM epss_scores")
+    conn.commit()
+
+    imported = 0
+    buffer = []
+    with gzip.open(download_path, 'rt', encoding='utf-8', newline='') as gz_file:
+        first_line = gz_file.readline().strip()
+        if first_line.startswith("#"):
+            metadata = {}
+            for part in first_line.lstrip("# ").split(","):
+                if ":" in part:
+                    key, value = part.split(":", 1)
+                    metadata[key.strip().lower().replace(" ", "_")] = value.strip()
+            model_version = metadata.get("model_version")
+            score_date = metadata.get("score_date", score_date)
+            header_line = gz_file.readline()
+        else:
+            header_line = first_line + "\n"
+
+        reader = csv.DictReader(io.StringIO(header_line + gz_file.read()))
+        for row in reader:
+            cve_id = (row.get("cve") or "").strip().upper()
+            if not cve_id:
+                continue
+
+            try:
+                epss_score = float(row.get("epss") or 0)
+                percentile = float(row.get("percentile") or 0)
+            except ValueError:
+                continue
+
+            if percentile <= 1:
+                percentile *= 100
+
+            buffer.append((cve_id, epss_score, percentile, score_date, model_version))
+            if len(buffer) >= 10000:
+                cursor.executemany(
+                    """
+                    INSERT OR REPLACE INTO epss_scores
+                    (cve_id, epss_score, percentile, score_date, model_version)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    buffer,
+                )
+                conn.commit()
+                imported += len(buffer)
+                buffer.clear()
+                sys.stdout.write(f"\r  Imported {imported:,} EPSS records")
+                sys.stdout.flush()
+
+    if buffer:
+        cursor.executemany(
+            """
+            INSERT OR REPLACE INTO epss_scores
+            (cve_id, epss_score, percentile, score_date, model_version)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            buffer,
+        )
+        conn.commit()
+        imported += len(buffer)
+        sys.stdout.write(f"\r  Imported {imported:,} EPSS records")
+        sys.stdout.flush()
+    print()
+
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO sync_info (key, value)
+        VALUES
+            ('last_sync', ?),
+            ('score_date', ?),
+            ('source_url', ?),
+            ('model_version', ?),
+            ('total_scores', ?)
+        """,
+        (
+            datetime.now(timezone.utc).isoformat(),
+            score_date or "",
+            source_url or "",
+            model_version or "",
+            str(imported),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    db_size = db_path.stat().st_size / (1024 * 1024)
+    reference = EPSS_DIR / "EPSS_SOURCES.md"
+    with open(reference, 'w', encoding='utf-8') as f:
+        f.write(f"""# EPSS Data Sources in VRAgent
+
+## Local EPSS Database (OFFLINE READY)
+- **Location**: `{db_path}`
+- **Score Count**: {imported:,}
+- **Score Date**: {score_date or 'Unknown'}
+- **Model Version**: {model_version or 'Unknown'}
+- **Database Size**: {db_size:.1f} MB
+
+## Source
+
+The database is built from FIRST EPSS daily score files:
+- **Data/API Docs**: `https://www.first.org/epss/api`
+- **Downloaded File**: `{source_url}`
+
+## Air-Gapped Deployment
+
+The local SQLite database works fully offline. No internet connection required
+once synced. To update, run on an internet-connected system:
+```bash
+python scripts/sync_offline_data.py --epss
+```
+Then copy `data/offline/epss/epss.db` to the air-gapped system.
+""")
+
+    if download_path.exists():
+        download_path.unlink()
+
+    print_status(f"EPSS Database ready: {imported:,} scores", "OK")
+    print_status(f"Database size: {db_size:.1f} MB")
+    print_status(f"Database location: {db_path}")
+    print_status(f"EPSS documentation saved to {reference}", "OK")
     return True
 
 
@@ -929,29 +1170,24 @@ def create_docker_volume_mount_config():
     
     override_content = """# Docker Compose Override for Offline Data
 # Copy this to docker-compose.override.yml
+#
+# Seed Trivy's offline cache on a connected machine before moving the data into
+# ./data/offline/trivy-cache:
+#   trivy image --download-db-only --cache-dir ./data/offline/trivy-cache
+#   trivy image --download-java-db-only --cache-dir ./data/offline/trivy-cache
 
 version: '3.8'
 
 services:
   backend:
+    environment:
+      - APP_OFFLINE_MODE=true
+      - TRIVY_OFFLINE_MODE=true
+      - TRIVY_CACHE_DIR=/app/data/offline/trivy-cache
     volumes:
       - ./data/offline:/app/data/offline:ro
       # Exploit database
       - ./data/offline/exploitdb/files_exploits.csv:/app/data/exploitdb.csv:ro
-  
-  scanner:
-    volumes:
-      # Nuclei templates for offline scanning
-      - ./data/offline/nuclei-templates:/root/nuclei-templates:ro
-    environment:
-      # Use local templates instead of updating
-      - NUCLEI_TEMPLATES_PATH=/root/nuclei-templates
-      - NUCLEI_UPDATE_TEMPLATES=false
-  
-  openvas:
-    environment:
-      # Disable feed sync for air-gapped
-      - AUTO_SYNC=false
 """
     
     override_file = BASE_DIR / "docker-compose.airgap.yml"
@@ -975,14 +1211,19 @@ def print_summary():
         ("Nuclei Templates", NUCLEI_DIR / "http"),
         ("ZAP Add-ons Info", ZAP_DIR / "required_addons.txt"),
         ("OpenVAS Instructions", OPENVAS_DIR / "AIRGAP_INSTRUCTIONS.md"),
+        ("NVD CVE Database", CVE_DIR / "nvd_cve.db"),
+        ("OSV Database", OSV_DIR / "osv.db"),
+        ("EPSS Database", EPSS_DIR / "epss.db"),
         ("CVE Sources", CVE_DIR / "CVE_SOURCES.md"),
+        ("OSV Sources", OSV_DIR / "OSV_SOURCES.md"),
+        ("EPSS Sources", EPSS_DIR / "EPSS_SOURCES.md"),
     ]
     
     for name, path in checks:
         if path.exists():
-            print_status(f"✓ {name}: Ready", "OK")
+            print_status(f"[OK] {name}: Ready", "OK")
         else:
-            print_status(f"✗ {name}: Not synced", "WARN")
+            print_status(f"[WARN] {name}: Not synced", "WARN")
     
     print_status("")
     print_status("For air-gapped deployment:")
@@ -1012,13 +1253,14 @@ Examples:
     parser.add_argument("--openvas", action="store_true", help="Create OpenVAS instructions")
     parser.add_argument("--cve", action="store_true", help="Download NVD CVE database")
     parser.add_argument("--osv", action="store_true", help="Download OSV package vulnerability database")
+    parser.add_argument("--epss", action="store_true", help="Download FIRST EPSS score database")
     parser.add_argument("--status", action="store_true", help="Show current status")
     
     args = parser.parse_args()
     
     # If no args, show help
     if not any([args.all, args.exploitdb, args.nuclei, args.zap, 
-                args.openvas, args.cve, args.osv, args.status]):
+                args.openvas, args.cve, args.osv, args.epss, args.status]):
         parser.print_help()
         return
     
@@ -1054,6 +1296,10 @@ Examples:
     
     if args.all or args.osv:
         sync_osv_database()
+        print_status("")
+
+    if args.all or args.epss:
+        sync_epss_database()
         print_status("")
     
     if args.all:

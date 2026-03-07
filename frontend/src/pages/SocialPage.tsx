@@ -28,7 +28,13 @@ import {
   StatusSelector,
 } from '../components/social';
 import type { PresenceStatus } from '../components/social';
-import { socialApi, FriendRequestListResponse, UnreadCountResponse } from '../api/client';
+import {
+  socialApi,
+  fetchWithAuthRetry,
+  getAuthHeadersNoContentType,
+  FriendRequestListResponse,
+  UnreadCountResponse,
+} from '../api/client';
 
 // Polling intervals (in ms) - increased to reduce server load since WebSocket handles real-time
 const POLLING_INTERVAL_VISIBLE = 60000; // 60 seconds when tab is visible
@@ -74,13 +80,32 @@ export default function SocialPage() {
 
   const loadCounts = useCallback(async () => {
     try {
-      const [requestsData, unreadData] = await Promise.all([
+      const [requestsResult, unreadResult] = await Promise.allSettled([
         socialApi.getFriendRequests(),
         socialApi.getUnreadCounts(),
       ]);
-      setFriendRequests(requestsData);
-      setUnreadCounts(unreadData);
-      setError('');
+
+      let hasData = false;
+
+      if (requestsResult.status === 'fulfilled') {
+        setFriendRequests(requestsResult.value);
+        hasData = true;
+      } else {
+        console.error('Failed to load friend requests:', requestsResult.reason);
+        setFriendRequests((current) =>
+          current ?? { incoming: [], outgoing: [], incoming_count: 0, outgoing_count: 0 }
+        );
+      }
+
+      if (unreadResult.status === 'fulfilled') {
+        setUnreadCounts(unreadResult.value);
+        hasData = true;
+      } else {
+        console.error('Failed to load unread counts:', unreadResult.reason);
+        setUnreadCounts((current) => current ?? { by_conversation: {}, total_unread: 0 });
+      }
+
+      setError(hasData ? '' : 'Failed to load social data');
     } catch (err) {
       console.error('Failed to load social counts:', err);
       setError('Failed to load social data');
@@ -126,10 +151,8 @@ export default function SocialPage() {
 
   const loadMyPresence = async () => {
     try {
-      const response = await fetch('/api/social/presence/me', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`,
-        },
+      const response = await fetchWithAuthRetry('/social/presence/me', {
+        headers: getAuthHeadersNoContentType(),
       });
       if (response.ok) {
         const data = await response.json();
@@ -151,10 +174,10 @@ export default function SocialPage() {
     durationMinutes?: number
   ) => {
     try {
-      const response = await fetch('/api/social/presence/me', {
+      const response = await fetchWithAuthRetry('/social/presence/me', {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('vragent_access_token')}`,
+          ...getAuthHeadersNoContentType(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

@@ -157,6 +157,15 @@ except ImportError:
 try:
     from unicorn import Uc, UC_ARCH_X86, UC_ARCH_ARM, UC_ARCH_ARM64, UC_ARCH_MIPS
     from unicorn import UC_MODE_32, UC_MODE_64, UC_MODE_ARM, UC_MODE_THUMB, UC_MODE_MIPS32
+    try:
+        from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE, UC_MEM_READ, UC_MEM_WRITE
+    except ImportError:
+        # Compatibility fallback for older Unicorn builds.
+        UC_HOOK_CODE = 4
+        UC_HOOK_MEM_READ = 1024
+        UC_HOOK_MEM_WRITE = 2048
+        UC_MEM_READ = 16
+        UC_MEM_WRITE = 17
     from unicorn.x86_const import (
         UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDX,
         UC_X86_REG_ESI, UC_X86_REG_EDI, UC_X86_REG_EBP, UC_X86_REG_ESP, UC_X86_REG_EIP,
@@ -170,6 +179,11 @@ try:
     UNICORN_AVAILABLE = True
 except ImportError:
     UNICORN_AVAILABLE = False
+    UC_HOOK_CODE = 4
+    UC_HOOK_MEM_READ = 1024
+    UC_HOOK_MEM_WRITE = 2048
+    UC_MEM_READ = 16
+    UC_MEM_WRITE = 17
     logger.warning("unicorn not installed - CPU emulation not available")
 
 # Try to import angr for symbolic execution
@@ -1460,6 +1474,126 @@ LEGITIMATE_PRODUCTS = {
     "python", "node", "java", "dotnet", ".net",  # Runtimes
     "defender", "security", "antivirus",  # Security
 }
+
+def assess_binary_legitimacy(
+    analysis_result: Optional[Any],
+    filename: str = "",
+) -> Tuple[bool, List[str]]:
+    """
+    Assess whether a binary appears to be legitimate software.
+
+    Uses cross-platform static indicators from PE/ELF/Mach-O style metadata.
+    Returns a conservative boolean plus human-readable indicators.
+    """
+    if not analysis_result:
+        return False, []
+
+    metadata = getattr(analysis_result, "metadata", None)
+    strings = getattr(analysis_result, "strings", []) or []
+    imports = getattr(analysis_result, "imports", []) or []
+
+    filename_candidate = filename or getattr(analysis_result, "filename", "")
+    filename_lower = str(filename_candidate or "").lower()
+
+    indicators: List[str] = []
+    score = 0
+
+    def add_indicator(text: str, points: int = 1) -> None:
+        nonlocal score
+        if text and text not in indicators:
+            indicators.append(text)
+            score += points
+
+    # Fast filename signal
+    for product in LEGITIMATE_PRODUCTS:
+        if product in filename_lower:
+            add_indicator(f"Known product filename: {product}", points=1)
+            break
+
+    if metadata:
+        file_type = str(getattr(metadata, "file_type", "") or "").lower()
+
+        # Strong PE signal: Authenticode signature present
+        authenticode = getattr(metadata, "authenticode", None) or {}
+        if isinstance(authenticode, dict) and authenticode.get("signed"):
+            add_indicator("Digitally signed (Authenticode present)", points=3)
+
+        # Version info / company metadata
+        version_info = getattr(metadata, "version_info", None) or {}
+        if isinstance(version_info, dict) and version_info:
+            company_name = str(version_info.get("CompanyName", "") or "").lower()
+            product_name = str(version_info.get("ProductName", "") or "").lower()
+            file_desc = str(version_info.get("FileDescription", "") or "").lower()
+            orig_name = str(version_info.get("OriginalFilename", "") or "").lower()
+
+            for pub in LEGITIMATE_PUBLISHERS:
+                if pub in company_name:
+                    add_indicator(f"Known publisher in version info: {pub.title()}", points=3)
+                    break
+
+            for product in LEGITIMATE_PRODUCTS:
+                if product in product_name:
+                    add_indicator(f"Known product in version info: {product}", points=2)
+                    break
+
+            if version_info.get("FileVersion") and version_info.get("ProductVersion") and version_info.get("CompanyName"):
+                add_indicator("Complete version info present", points=1)
+
+            if any(token in file_desc or token in orig_name for token in ("microsoft", "windows", "system32", "win32")):
+                add_indicator("Windows system file indicators", points=2)
+
+        # Generic mitigations signal
+        mitigations = getattr(metadata, "mitigations", None) or {}
+        if isinstance(mitigations, dict) and mitigations:
+            bool_values = [v for v in mitigations.values() if isinstance(v, bool)]
+            if bool_values:
+                enabled = sum(1 for v in bool_values if v)
+                if enabled / max(len(bool_values), 1) >= 0.7:
+                    add_indicator(f"Strong security mitigations ({enabled}/{len(bool_values)})", points=1)
+
+        # ELF/Linux legitimacy signals
+        if "elf" in file_type:
+            if getattr(metadata, "elf_build_id", None):
+                add_indicator("ELF build-id present", points=1)
+
+            interpreter = str(getattr(metadata, "interpreter", "") or "").lower()
+            if any(x in interpreter for x in ("ld-linux", "ld-musl", "/lib64/ld-", "/lib/ld-")):
+                add_indicator("Standard ELF dynamic loader", points=1)
+
+            linked_libraries = [str(x).lower() for x in (getattr(metadata, "linked_libraries", None) or [])]
+            standard_elf_libs = ("libc.so", "libstdc++.so", "libgcc_s.so", "libpthread.so", "libm.so", "libdl.so")
+            std_lib_hits = sum(1 for lib in linked_libraries if any(std in lib for std in standard_elf_libs))
+            if std_lib_hits >= 3:
+                add_indicator(f"Standard ELF runtime linkage ({std_lib_hits} libs)", points=1)
+
+            if getattr(metadata, "nx_enabled", False) and getattr(metadata, "pie_enabled", False):
+                add_indicator("Modern ELF mitigations enabled (NX + PIE)", points=1)
+
+        # Mach-O/macOS legitimacy signals (best-effort)
+        if "mach" in file_type:
+            import_libs = [str(getattr(i, "library", "") or "").lower() for i in imports]
+            if any("/system/library/" in lib or "libsystem.b.dylib" in lib for lib in import_libs):
+                add_indicator("Links against macOS system libraries", points=1)
+
+    # String-based publisher/signature hints
+    for s in strings[:600]:
+        value = str(getattr(s, "value", "") or "").lower()
+        if not value:
+            continue
+
+        if any(marker in value for marker in ("copyright", "(c)", "company", "publisher", "signed by")):
+            for pub in LEGITIMATE_PUBLISHERS:
+                if pub in value:
+                    add_indicator(f"Publisher reference in strings: {pub.title()}", points=2)
+                    break
+
+        if any(sig in value for sig in ("authenticode", "digicert", "globalsign", "verisign", "comodo", "symantec")):
+            add_indicator("Certificate authority reference", points=1)
+
+        if any(mac_hint in value for mac_hint in ("com.apple.", "cfbundleidentifier")):
+            add_indicator("macOS bundle identifier indicators", points=1)
+
+    return score >= 3, indicators[:12]
 
 # APIs that are NORMAL in legitimate software (only flag if other red flags present)
 # These are marked as 'low' suspicion unless combined with other indicators
@@ -4146,8 +4280,8 @@ def disassemble_function(data: bytes, base_address: int, func_offset: int, func_
     )
 
 
-def build_cross_references(functions: List[DisassemblyFunction], 
-                           string_map: Dict[int, str]) -> List[CrossReference]:
+def build_binary_cross_references(functions: List[DisassemblyFunction], 
+                                  string_map: Dict[int, str]) -> List[CrossReference]:
     """Build cross-reference list from analyzed functions."""
     xrefs = []
     
@@ -4404,7 +4538,7 @@ def disassemble_binary(file_path: Path, metadata: BinaryMetadata,
                 logger.warning(f"Failed to disassemble function {sym.name}: {e}")
         
         # Build cross-references
-        all_xrefs = build_cross_references(functions, string_map)
+        all_xrefs = build_binary_cross_references(functions, string_map)
         
         # Calculate coverage
         coverage = (total_instructions * 4) / max(text_size, 1) * 100  # Rough estimate
@@ -4501,10 +4635,10 @@ TAINT_SINKS = {
 }
 
 
-def analyze_data_flow(instructions_map: Dict[int, DisassemblyInstruction],
-                      cfg: Optional[ControlFlowGraph],
-                      imports: List[ImportedFunction],
-                      architecture: str) -> DataFlowAnalysisResult:
+def analyze_binary_data_flow(instructions_map: Dict[int, DisassemblyInstruction],
+                             cfg: Optional[ControlFlowGraph],
+                             imports: List[ImportedFunction],
+                             architecture: str) -> DataFlowAnalysisResult:
     """
     Perform taint analysis / data flow analysis on disassembled code.
     
@@ -4935,21 +5069,30 @@ class BinaryEmulator:
                 state = self._capture_state(address)
                 self.trace.append(state)
         
-        self.uc.hook_add(1, hook_code)  # UC_HOOK_CODE = 1
-        
+        try:
+            self.uc.hook_add(UC_HOOK_CODE, hook_code)
+        except Exception as e:
+            logger.warning(f"Failed to add Unicorn code hook: {e}")
+
         # Hook memory access
         def hook_mem_access(uc, access, address, size, value, user_data):
-            access_type = "write" if access == 17 else "read"  # UC_MEM_WRITE = 17
+            access_type = "write" if access == UC_MEM_WRITE else "read"
             self.memory_accesses.append(EmulationMemoryAccess(
                 address=address,
                 access_type=access_type,
                 size=size,
-                value=value if access == 17 else None,
+                value=value if access == UC_MEM_WRITE else None,
                 instruction_address=0
             ))
-        
-        self.uc.hook_add(18, hook_mem_access)  # UC_HOOK_MEM_WRITE = 18
-        self.uc.hook_add(16, hook_mem_access)  # UC_HOOK_MEM_READ = 16
+
+        try:
+            self.uc.hook_add(UC_HOOK_MEM_WRITE, hook_mem_access)
+        except Exception as e:
+            logger.warning(f"Failed to add Unicorn mem-write hook: {e}")
+        try:
+            self.uc.hook_add(UC_HOOK_MEM_READ, hook_mem_access)
+        except Exception as e:
+            logger.warning(f"Failed to add Unicorn mem-read hook: {e}")
     
     def _capture_state(self, address: int) -> EmulationState:
         """Capture current CPU state."""
@@ -5518,6 +5661,7 @@ def perform_lightweight_symbolic_analysis(
     file_path: Path,
     result: Optional['DisassemblyResult'] = None,
     imports: Optional[List] = None,
+    is_legitimate_software: bool = False,
 ) -> SymbolicExecutionResult:
     """
     Perform lightweight pattern-based symbolic analysis without angr.
@@ -5562,11 +5706,6 @@ def perform_lightweight_symbolic_analysis(
         'execl': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
         'execlp': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
         'popen': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
-        'WinExec': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'critical'},
-        'ShellExecuteA': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
-        'ShellExecuteW': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
-        'CreateProcessA': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
-        'CreateProcessW': {'cwe': 'CWE-78', 'type': 'command_injection', 'severity': 'high'},
         # Format string
         'printf': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
         'fprintf': {'cwe': 'CWE-134', 'type': 'format_string', 'severity': 'high'},
@@ -5582,6 +5721,11 @@ def perform_lightweight_symbolic_analysis(
         'open': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
         'CreateFileA': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
         'CreateFileW': {'cwe': 'CWE-22', 'type': 'path_traversal', 'severity': 'medium'},
+    }
+
+    # Execution APIs are common in legitimate software; presence alone is not CWE-78.
+    EXECUTION_CAPABILITY_APIS = {
+        'WinExec', 'ShellExecuteA', 'ShellExecuteW', 'CreateProcessA', 'CreateProcessW',
     }
 
     SAFE_ALTERNATIVES = {
@@ -5606,6 +5750,7 @@ def perform_lightweight_symbolic_analysis(
     has_input_sources = imported_names & INPUT_SOURCES
     has_dangerous_sinks = {name: info for name, info in DANGEROUS_SINKS.items() if name in imported_names}
     has_bounds_checks = imported_names & BOUNDS_CHECKS
+    execution_capability_apis = imported_names & EXECUTION_CAPABILITY_APIS
 
     # If both input sources and dangerous sinks exist, there's a potential taint flow
     if has_input_sources and has_dangerous_sinks:
@@ -5652,6 +5797,37 @@ def perform_lightweight_symbolic_analysis(
                 path_length=-1,  # Unknown from static analysis
                 constraints_solved=0,
             ))
+
+    # Track execution capability separately to avoid CWE-78 false positives on legitimate software.
+    if execution_capability_apis:
+        for api_name in sorted(execution_capability_apis):
+            target_reaches.append(TargetReach(
+                target_address=0,
+                target_name=api_name,
+                reached=True,
+                input_to_reach=None,
+                path_length=-1,
+                constraints_solved=0,
+            ))
+        if has_input_sources and not is_legitimate_software:
+            vulnerabilities.append({
+                "type": "process_execution_capability",
+                "function": sorted(execution_capability_apis)[0],
+                "address": 0,
+                "cwe": None,
+                "description": (
+                    "Input sources and process execution APIs co-exist. "
+                    "Manual validation required to determine exploitability."
+                ),
+                "severity": "low",
+                "details": {
+                    "analysis_type": "execution_capability",
+                    "input_sources": sorted(has_input_sources)[:3],
+                    "execution_apis": sorted(execution_capability_apis)[:5],
+                    "confidence": "low",
+                    "note": "This is capability-only, not a confirmed command injection finding.",
+                },
+            })
 
     # ---- Phase 2: Disassembly-based call flow analysis ----
     functions_with_calls = {}  # func_name -> set of called functions
@@ -5776,6 +5952,19 @@ def perform_lightweight_symbolic_analysis(
             constraints=[f"Input via {src}" for src in sorted(has_input_sources)],
             concrete_examples=[],
         ))
+
+    # Conservative filtering for known legitimate software to reduce false positives.
+    if is_legitimate_software:
+        filtered_vulns = []
+        for vuln in vulnerabilities:
+            analysis_type = (vuln.get("details") or {}).get("analysis_type", "")
+            if analysis_type in {"import_taint_flow", "execution_capability"}:
+                # Keep only inherently unsafe or stronger evidence categories.
+                if vuln.get("function") in {"gets"}:
+                    filtered_vulns.append(vuln)
+                continue
+            filtered_vulns.append(vuln)
+        vulnerabilities = filtered_vulns
 
     return SymbolicExecutionResult(
         paths_explored=paths_explored,
@@ -6342,7 +6531,7 @@ def _find_gadgets_with_ropper(file_path: Path, max_gadgets: int,
             rop_difficulty=difficulty
         )
         
-    except Exception as e:
+    except BaseException as e:
         logger.error(f"Ropper gadget finding failed: {e}")
         return _find_gadgets_with_capstone(file_path, max_gadgets, max_gadget_length)
 
@@ -6975,16 +7164,24 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                         # Build instruction map from all functions
                         # Use a local scope to ensure cleanup after analysis
                         all_instructions: Dict[int, DisassemblyInstruction] = {}
+                        combined_cfg: Optional[ControlFlowGraph] = None
                         try:
                             for func in disassembly.functions:
                                 for instr in func.instructions:
                                     all_instructions[instr.address] = instr
 
+                            # Build a best-effort aggregate CFG for whole-program analyses.
+                            try:
+                                combined_cfg = build_cfg(all_instructions)
+                            except Exception as e:
+                                logger.warning(f"Failed to build aggregate CFG: {e}")
+                                combined_cfg = None
+
                             # Data flow analysis
                             try:
-                                data_flow_result = analyze_data_flow(
+                                data_flow_result = analyze_binary_data_flow(
                                     all_instructions,
-                                    disassembly.control_flow_graph,
+                                    combined_cfg,
                                     imports,
                                     disassembly.architecture
                                 )
@@ -6996,7 +7193,7 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                             try:
                                 type_recovery_result = recover_types(
                                     all_instructions,
-                                    disassembly.control_flow_graph,
+                                    combined_cfg,
                                     disassembly.architecture
                                 )
                             except Exception as e:
@@ -7007,6 +7204,7 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                             # This can be very large for big binaries (millions of entries)
                             all_instructions.clear()
                             del all_instructions
+                            combined_cfg = None
 
                         # Emulation analysis (if Unicorn available)
                         try:
@@ -7371,7 +7569,10 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                 # Lightweight pattern-based symbolic analysis (no angr required)
                 logger.info("Running lightweight symbolic analysis (angr not available)...")
                 symbolic_result = perform_lightweight_symbolic_analysis(
-                    file_path, result=disassembly, imports=imports
+                    file_path,
+                    result=disassembly,
+                    imports=imports,
+                    is_legitimate_software=is_likely_legitimate,
                 )
                 if symbolic_result and symbolic_result.vulnerabilities_found:
                     for vuln in symbolic_result.vulnerabilities_found:
@@ -7431,7 +7632,7 @@ def analyze_binary(file_path: Path) -> BinaryAnalysisResult:
                             "useful_gadgets": len(rop_result.useful_gadgets),
                         },
                     })
-        except Exception as e:
+        except BaseException as e:
             logger.debug(f"ROP gadget analysis skipped: {e}")
 
         # Entropy analysis for visualization
@@ -15180,13 +15381,6 @@ def _infer_base_image(image_info: Dict[str, Any], layers: List[Dict[str, Any]], 
         base_image = _extract_base_from_history(layers)
     if not base_image:
         base_image = _resolve_image_name_from_parent(image_info.get("Parent"))
-    if not base_image:
-        for tag in image_info.get("RepoTags") or []:
-            base_image = _clean_base_image(tag)
-            if base_image:
-                break
-    if not base_image:
-        base_image = _clean_base_image(image_name)
     return base_image
 
 
@@ -15460,19 +15654,380 @@ class AIAnalysisStructured:
     confidence: float  # 0.0-1.0
 
 
+_GHIDRA_ALLOWED_SELECTION_MODES = {"smart", "security", "size", "all"}
+_GHIDRA_CONTEXT_HINTS = {
+    "alloc", "malloc", "free", "realloc", "memcpy", "memmove", "memset",
+    "strcpy", "strncpy", "strcat", "sprintf", "snprintf",
+    "recv", "send", "socket", "connect", "bind", "listen", "accept",
+    "http", "url", "dns", "tls", "ssl", "crypto", "encrypt", "decrypt",
+    "auth", "token", "password", "key", "secret", "login", "credential",
+    "process", "thread", "inject", "shell", "exec", "command",
+    "open", "read", "write", "fopen", "fread", "fwrite", "parse",
+    "deserialize", "json", "xml", "registry", "config", "update",
+}
+_GHIDRA_CONTEXT_STOPWORDS = {
+    "this", "that", "with", "from", "have", "were", "will", "would", "could",
+    "should", "into", "about", "after", "before", "while", "which", "where",
+    "when", "because", "these", "those", "their", "there", "here", "only",
+    "binary", "function", "functions", "evidence", "description", "finding",
+    "analysis", "severity", "critical", "high", "medium", "low", "unknown",
+    "code", "data", "value", "string", "title", "category", "issue",
+}
+
+
+def _normalize_ghidra_selection_mode(selection_mode: Optional[str]) -> str:
+    mode = (selection_mode or "smart").strip().lower()
+    if mode not in _GHIDRA_ALLOWED_SELECTION_MODES:
+        return "smart"
+    return mode
+
+
+def _resolve_smart_ghidra_mode(
+    file_path: Path,
+    max_functions: int,
+    decomp_limit: int,
+) -> Tuple[str, str]:
+    """Resolve 'smart' mode into one of Ghidra script's supported modes."""
+    try:
+        file_size_mb = file_path.stat().st_size / (1024 * 1024)
+    except Exception:
+        file_size_mb = 0.0
+
+    if max_functions >= 1200 or file_size_mb >= 180:
+        return "all", "smart: large scan target, prefer broad coverage"
+    if file_size_mb <= 8 and max_functions >= 350:
+        return "all", "smart: small binary, expand function coverage"
+    if max_functions <= 90 and decomp_limit >= 7000:
+        return "size", "smart: small target set, prioritize deeper functions"
+    return "security", "smart: prioritize security-relevant functions"
+
+
+def _ghidra_payload_stats(payload: Dict[str, Any]) -> Dict[str, int]:
+    funcs = payload.get("functions") or []
+    exported = len(funcs)
+    total = int(payload.get("functions_total") or exported)
+    non_empty = 0
+    security = 0
+    decompiled_chars = 0
+
+    for func in funcs:
+        if not isinstance(func, dict):
+            continue
+        code = (func.get("decompiled") or func.get("code") or "")
+        if isinstance(code, str) and code.strip():
+            non_empty += 1
+            decompiled_chars += len(code)
+        if func.get("security_relevant"):
+            security += 1
+
+    return {
+        "total": total,
+        "exported": exported,
+        "non_empty": non_empty,
+        "security": security,
+        "decompiled_chars": decompiled_chars,
+    }
+
+
+def _ghidra_payload_quality_score(payload: Dict[str, Any]) -> int:
+    stats = _ghidra_payload_stats(payload)
+    avg_chars = (stats["decompiled_chars"] // stats["non_empty"]) if stats["non_empty"] else 0
+    return (
+        stats["non_empty"] * 4
+        + stats["security"] * 3
+        + stats["exported"]
+        + min(avg_chars // 400, 20)
+    )
+
+
+def _should_retry_ghidra_for_coverage(payload: Dict[str, Any], max_functions: int) -> bool:
+    stats = _ghidra_payload_stats(payload)
+    total = stats["total"]
+    exported = stats["exported"]
+    non_empty = stats["non_empty"]
+    security = stats["security"]
+
+    low_coverage_threshold = max(25, min(max_functions // 4, 120))
+    low_coverage = total > (exported + 25) and exported < low_coverage_threshold
+    low_decompilation = exported >= 20 and non_empty < max(10, exported // 3)
+    no_security_focus = total >= 200 and security == 0
+
+    return low_coverage or low_decompilation or no_security_focus
+
+
+def _add_text_terms(target_terms: Set[str], value: Any, max_terms: int = 160) -> None:
+    if value is None or len(target_terms) >= max_terms:
+        return
+
+    text = value if isinstance(value, str) else str(value)
+    for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", text.lower()):
+        if token in _GHIDRA_CONTEXT_STOPWORDS or len(token) > 32:
+            continue
+        target_terms.add(token)
+        if len(target_terms) >= max_terms:
+            break
+
+
+def _collect_ghidra_context_terms(
+    findings: Optional[List[Dict[str, Any]]] = None,
+    cve_findings: Optional[List[Dict[str, Any]]] = None,
+    attack_surface: Optional[Dict[str, Any]] = None,
+) -> Set[str]:
+    terms: Set[str] = set()
+
+    for finding in (findings or [])[:60]:
+        if not isinstance(finding, dict):
+            _add_text_terms(terms, finding)
+            continue
+        for key in ("function_name", "function", "category", "title", "description", "evidence", "cwe", "cwe_id"):
+            _add_text_terms(terms, finding.get(key))
+
+    for cve in (cve_findings or [])[:40]:
+        if not isinstance(cve, dict):
+            _add_text_terms(terms, cve)
+            continue
+        for key in ("cve_id", "library_name", "title", "description", "severity"):
+            _add_text_terms(terms, cve.get(key))
+
+    if isinstance(attack_surface, dict):
+        _add_text_terms(terms, attack_surface)
+        _add_text_terms(terms, attack_surface.get("summary", {}))
+        for vector in (attack_surface.get("attack_vectors") or [])[:30]:
+            if not isinstance(vector, dict):
+                _add_text_terms(terms, vector)
+                continue
+            for key in ("name", "vector", "description", "component", "entry_point", "function"):
+                _add_text_terms(terms, vector.get(key))
+
+    return terms
+
+
+def _score_ghidra_function_for_ai(func: Dict[str, Any], context_terms: Set[str]) -> int:
+    name = str(func.get("name") or "unknown")
+    name_lower = name.lower()
+    called = [str(c) for c in (func.get("called_functions") or []) if c]
+    called_blob = " ".join(c.lower() for c in called[:30])
+    size = int(func.get("size") or 0)
+    code = str(func.get("decompiled") or func.get("code") or "")
+
+    score = 0
+    if func.get("security_relevant"):
+        score += 35
+    if name_lower in {"main", "wmain", "winmain", "dllmain", "driverentry"}:
+        score += 20
+
+    score += min(size // 180, 25)
+    if code.strip():
+        score += 12
+        score += min(len(code) // 1400, 10)
+
+    hint_hits_name = sum(1 for hint in _GHIDRA_CONTEXT_HINTS if hint in name_lower)
+    hint_hits_calls = sum(1 for hint in _GHIDRA_CONTEXT_HINTS if hint in called_blob)
+    score += min(hint_hits_name * 5, 20)
+    score += min(hint_hits_calls * 2, 16)
+
+    if context_terms:
+        combined = f"{name_lower} {called_blob}"
+        term_hits = 0
+        for term in context_terms:
+            if term in combined:
+                term_hits += 1
+                if term_hits >= 8:
+                    break
+        score += term_hits * 6
+
+    return score
+
+
+def select_ghidra_functions_for_ai(
+    ghidra_analysis: Optional[Dict[str, Any]],
+    max_functions: int = 20,
+    findings: Optional[List[Dict[str, Any]]] = None,
+    cve_findings: Optional[List[Dict[str, Any]]] = None,
+    attack_surface: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Rank and select the most useful decompiled functions for AI analysis."""
+    if not isinstance(ghidra_analysis, dict):
+        return []
+
+    functions = ghidra_analysis.get("functions") or []
+    if not functions:
+        return []
+
+    context_terms = _collect_ghidra_context_terms(
+        findings=findings,
+        cve_findings=cve_findings,
+        attack_surface=attack_surface,
+    )
+
+    scored: List[Tuple[int, int, Dict[str, Any]]] = []
+    for func in functions:
+        if not isinstance(func, dict):
+            continue
+        score = _score_ghidra_function_for_ai(func, context_terms)
+        scored.append((score, int(func.get("size") or 0), func))
+
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+    selected: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
+    for _, _, func in scored:
+        name = str(func.get("name") or "")
+        entry = str(func.get("entry") or "")
+        key = f"{name}@{entry}"
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append(func)
+        if len(selected) >= max_functions:
+            break
+
+    return selected
+
+
+def build_budgeted_ghidra_context(
+    ghidra_result: Optional[Dict[str, Any]],
+    findings: Optional[List[Dict[str, Any]]] = None,
+    cve_findings: Optional[List[Dict[str, Any]]] = None,
+    attack_surface: Optional[Dict[str, Any]] = None,
+    max_functions: int = 10,
+    total_char_budget: int = 18000,
+    min_chars_per_function: int = 600,
+    max_chars_per_function: int = 2400,
+) -> Dict[str, Any]:
+    """
+    Build budget-aware, evidence-rich Ghidra context for LLM prompts.
+
+    Returns a dictionary with overview fields and a markdown code block.
+    """
+    if not isinstance(ghidra_result, dict):
+        return {}
+
+    stats = _ghidra_payload_stats(ghidra_result)
+    selected = select_ghidra_functions_for_ai(
+        ghidra_result,
+        max_functions=max_functions,
+        findings=findings,
+        cve_findings=cve_findings,
+        attack_surface=attack_surface,
+    )
+
+    remaining = max(total_char_budget, 1800)
+    snippets: List[str] = []
+
+    for func in selected:
+        code = str(func.get("decompiled") or func.get("code") or "").strip()
+        if not code:
+            continue
+
+        slots_left = max(1, max_functions - len(snippets))
+        per_limit = max(min_chars_per_function, remaining // slots_left)
+        per_limit = min(per_limit, max_chars_per_function)
+        per_limit = max(per_limit, 240)
+
+        snippet = code[:per_limit].rstrip()
+        if len(snippet) < 80:
+            # Keep short but highly-relevant snippets so reports still have concrete evidence.
+            if not (func.get("security_relevant") or len(snippets) == 0):
+                continue
+        if len(code) > len(snippet):
+            snippet += "\n/* ... truncated ... */"
+
+        called = [str(c) for c in (func.get("called_functions") or [])[:6] if c]
+        header = (
+            f"// {func.get('name', 'unknown')} @ {func.get('entry', '0x0')} "
+            f"size={int(func.get('size') or 0)}"
+        )
+        if called:
+            header += f" calls: {', '.join(called)}"
+
+        block = f"{header}\n{snippet}"
+        if len(block) > remaining and snippets:
+            break
+        if len(block) > remaining:
+            tail_budget = max(180, remaining - len(header) - 30)
+            snippet = code[:tail_budget].rstrip() + "\n/* ... truncated ... */"
+            block = f"{header}\n{snippet}"
+
+        snippets.append(block)
+        remaining -= len(block)
+        if remaining < max(240, min_chars_per_function // 2):
+            break
+
+    mode = (
+        ghidra_result.get("selection_mode_effective")
+        or ghidra_result.get("selection_mode")
+        or "unknown"
+    )
+    overview = (
+        f"Decompiled Functions: {stats['exported']} of {stats['total']} "
+        f"(non-empty: {stats['non_empty']}, security-relevant: {stats['security']}, mode: {mode})."
+    )
+    selected_names = ", ".join(str(f.get("name") or "unknown") for f in selected[:25])
+    code_block = ""
+    if snippets:
+        code_block = "=== GHIDRA DECOMPILED EVIDENCE ===\n```c\n" + "\n\n".join(snippets) + "\n```"
+
+    return {
+        "overview": overview,
+        "selected_names": selected_names,
+        "selected_count": len(snippets),
+        "snippets": snippets,
+        "code_block": code_block,
+    }
+
+
+def truncate_text_for_llm_budget(text: str, max_chars: int = 60000) -> str:
+    """Trim oversized prompt context while retaining both early and late details."""
+    if not text or len(text) <= max_chars:
+        return text
+
+    marker = "\n\n[... context truncated for model token budget ...]\n\n"
+    marker_len = len(marker)
+
+    # Handle tiny budgets safely.
+    if max_chars <= marker_len + 24:
+        return text[:max_chars]
+
+    head = int(max_chars * 0.75)
+    tail = max_chars - head - marker_len
+    if tail < 0:
+        tail = 0
+    if head + tail + marker_len > max_chars:
+        head = max(1, max_chars - marker_len - tail)
+
+    head_part = text[:head].rstrip()
+    tail_part = text[-tail:].lstrip() if tail > 0 else ""
+    return head_part + marker + tail_part
+
+
 def analyze_binary_with_ghidra(
     file_path: Path,
     max_functions: int = 200,
     decomp_limit: int = 4000,
+    selection_mode: str = "smart",
+    smart_fallback: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """Run Ghidra headless decompilation and return parsed JSON data."""
     try:
         from backend.services.ghidra_service import run_ghidra_decompilation
 
+        requested_mode = _normalize_ghidra_selection_mode(selection_mode)
+        if requested_mode == "smart":
+            effective_mode, strategy = _resolve_smart_ghidra_mode(
+                file_path=file_path,
+                max_functions=max_functions,
+                decomp_limit=decomp_limit,
+            )
+        else:
+            effective_mode = requested_mode
+            strategy = f"user-selected: {requested_mode}"
+
         result = run_ghidra_decompilation(
             file_path,
             max_functions=max_functions,
             decomp_limit=decomp_limit,
+            selection_mode=effective_mode,
         )
         if "error" in result:
             return {"error": result["error"]}
@@ -15482,10 +16037,57 @@ def analyze_binary_with_ghidra(
             return {"error": "Ghidra returned no data"}
 
         try:
-            return json.loads(raw)
+            payload = json.loads(raw)
         except Exception as exc:
             logger.error(f"Failed to parse Ghidra JSON: {exc}")
             return {"error": "Failed to parse Ghidra output"}
+
+        if isinstance(payload, dict):
+            payload["selection_mode_requested"] = requested_mode
+            payload["selection_mode_effective"] = effective_mode
+            payload["selection_strategy"] = strategy
+
+        if (
+            requested_mode == "smart"
+            and smart_fallback
+            and effective_mode == "security"
+            and isinstance(payload, dict)
+            and _should_retry_ghidra_for_coverage(payload, max_functions=max_functions)
+        ):
+            logger.info("Ghidra smart mode: retrying with 'all' for better coverage")
+            fallback_max_functions = min(max_functions, 800)
+            fallback_decomp_limit = min(decomp_limit, 6000)
+            fallback_result = run_ghidra_decompilation(
+                file_path,
+                max_functions=fallback_max_functions,
+                decomp_limit=fallback_decomp_limit,
+                selection_mode="all",
+            )
+            if "error" not in fallback_result:
+                fallback_raw = fallback_result.get("data", "")
+                if fallback_raw:
+                    try:
+                        fallback_payload = json.loads(fallback_raw)
+                        if isinstance(fallback_payload, dict):
+                            fallback_payload["selection_mode_requested"] = requested_mode
+                            fallback_payload["selection_mode_effective"] = "all"
+                            fallback_payload["selection_strategy"] = "smart fallback: broadened coverage"
+                            base_score = _ghidra_payload_quality_score(payload)
+                            fallback_score = _ghidra_payload_quality_score(fallback_payload)
+                            if fallback_score >= (base_score + 20):
+                                fallback_payload["selection_fallback_applied"] = {
+                                    "from": effective_mode,
+                                    "to": "all",
+                                    "fallback_max_functions": fallback_max_functions,
+                                    "fallback_decomp_limit": fallback_decomp_limit,
+                                    "base_score": base_score,
+                                    "fallback_score": fallback_score,
+                                }
+                                payload = fallback_payload
+                    except Exception as fallback_exc:
+                        logger.warning(f"Failed to parse Ghidra fallback payload: {fallback_exc}")
+
+        return payload
     except Exception as exc:
         logger.error(f"Ghidra analysis failed: {exc}")
         return {"error": f"Ghidra analysis failed: {exc}"}
@@ -15501,8 +16103,11 @@ async def analyze_ghidra_functions_with_ai(
         logger.info("Ghidra AI function summaries skipped: GEMINI_API_KEY not configured")
         return [{"skipped": True, "reason": "Gemini API key not configured. Set GEMINI_API_KEY to enable AI function summaries."}]
 
-    functions = ghidra_analysis.get("functions") or []
-    if not functions:
+    selected_functions = select_ghidra_functions_for_ai(
+        ghidra_analysis,
+        max_functions=max_functions,
+    )
+    if not selected_functions:
         return None
 
     try:
@@ -15558,8 +16163,7 @@ async def analyze_ghidra_functions_with_ai(
                 "summary": response.text or "",
             }
 
-        targets = functions[:max_functions]
-        results = await asyncio.gather(*(analyze_function(f) for f in targets))
+        results = await asyncio.gather(*(analyze_function(f) for f in selected_functions))
         return results
     except Exception as exc:
         logger.error(f"Ghidra AI analysis failed: {exc}")
@@ -15617,6 +16221,22 @@ async def analyze_binary_with_ai(result: BinaryAnalysisResult) -> Optional[str]:
                 f"- {s.get('name', 'unknown')} ({s.get('entry', '0x0')}): {s.get('summary', '')[:200]}"
                 for s in result.ghidra_ai_summaries[:15]
             ])
+        elif result.ghidra_analysis and isinstance(result.ghidra_analysis, dict):
+            ranked = select_ghidra_functions_for_ai(
+                result.ghidra_analysis,
+                max_functions=6,
+                findings=result.suspicious_indicators,
+            )
+            previews = []
+            for f in ranked:
+                code = (f.get("decompiled") or f.get("code") or "").strip()
+                if not code:
+                    continue
+                previews.append(
+                    f"- {f.get('name', 'unknown')} ({f.get('entry', '0x0')}): {code[:220]}"
+                )
+            if previews:
+                ghidra_summary = "\n".join(previews)
 
         prompt = f"""You are a malware analyst. Analyze this binary file and provide a comprehensive security assessment.
 
@@ -15644,7 +16264,7 @@ async def analyze_binary_with_ai(result: BinaryAnalysisResult) -> Optional[str]:
 ## INTERESTING STRINGS ({len(interesting_strings)} of {len(result.strings)} total)
 {strings_summary or "None of interest"}
 
-## GHIDRA FUNCTION SUMMARIES
+## GHIDRA FUNCTION SUMMARIES / CODE PREVIEW
 {ghidra_summary or "Not available"}
 
 ## ANALYSIS INSTRUCTIONS
@@ -18186,6 +18806,8 @@ async def analyze_docker_with_ai(
     base_image_intel: Optional[List[Dict[str, Any]]] = None,
     layer_secrets: Optional[List[Dict[str, Any]]] = None,
     layer_scan_metadata: Optional[Dict[str, Any]] = None,
+    cve_scan: Optional[Dict[str, Any]] = None,
+    trivy_scan: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """Use Gemini to provide comprehensive security analysis of Docker image."""
     if not settings.gemini_api_key:
@@ -18200,6 +18822,8 @@ async def analyze_docker_with_ai(
         base_image_intel = base_image_intel or []
         layer_secrets = layer_secrets or []
         layer_scan_metadata = layer_scan_metadata or {}
+        cve_scan = cve_scan or {}
+        trivy_scan = trivy_scan or {}
         
         # Group secrets by type
         secrets_by_type = {}
@@ -18240,6 +18864,67 @@ async def analyze_docker_with_ai(
                 f"Files scanned: {layer_scan_metadata.get('files_scanned', 'N/A')}, "
                 f"Deleted secrets: {layer_scan_metadata.get('deleted_secrets_found', 0)}"
             )
+
+        cve_vulnerabilities = cve_scan.get("vulnerabilities") if isinstance(cve_scan.get("vulnerabilities"), list) else []
+        prioritized_cves = sorted(
+            cve_vulnerabilities,
+            key=lambda vuln: (
+                0 if vuln.get("in_kev") else 1,
+                0 if str(vuln.get("severity", "")).lower() == "critical" else 1,
+                -float(vuln.get("cvss_score") or 0),
+                -float(vuln.get("epss_score") or 0),
+            ),
+        )[:10]
+        cve_summary = "\n".join([
+            (
+                f"- {v.get('external_id', 'Unknown')} in "
+                f"{v.get('package_name', 'unknown')}@{v.get('package_version', 'unknown')} "
+                f"[sev={str(v.get('severity', 'unknown')).upper()}, "
+                f"cvss={v.get('cvss_score', 'N/A')}, "
+                f"kev={'yes' if v.get('in_kev') else 'no'}, "
+                f"epss={v.get('epss_score', 'N/A')}, "
+                f"priority={v.get('priority_label', 'N/A')}]"
+            )
+            for v in prioritized_cves
+        ])
+
+        trivy_enabled_scanners = trivy_scan.get("enabled_scanners") if isinstance(trivy_scan.get("enabled_scanners"), list) else []
+        trivy_vulns = trivy_scan.get("vulnerabilities") if isinstance(trivy_scan.get("vulnerabilities"), list) else []
+        trivy_misconfigs = trivy_scan.get("misconfigurations") if isinstance(trivy_scan.get("misconfigurations"), list) else []
+        trivy_secrets = trivy_scan.get("secrets") if isinstance(trivy_scan.get("secrets"), list) else []
+        trivy_licenses = trivy_scan.get("licenses") if isinstance(trivy_scan.get("licenses"), list) else []
+        trivy_vuln_summary = "\n".join([
+            (
+                f"- {v.get('vulnerability_id', 'Unknown')} in "
+                f"{v.get('package_name', 'unknown')}@{v.get('installed_version', 'unknown')} "
+                f"-> fixed {v.get('fixed_version', '-')}, "
+                f"severity {str(v.get('severity', 'unknown')).upper()}"
+            )
+            for v in trivy_vulns[:10]
+        ])
+        trivy_misconfig_summary = "\n".join([
+            (
+                f"- {m.get('id', 'Unknown')} on {m.get('target', 'unknown')}: "
+                f"{m.get('message') or m.get('title') or 'No details'} "
+                f"[{str(m.get('severity', 'unknown')).upper()}]"
+            )
+            for m in trivy_misconfigs[:10]
+        ])
+        trivy_secret_summary = "\n".join([
+            (
+                f"- {s.get('rule_id', 'Unknown')} on {s.get('target', 'unknown')} "
+                f"[{str(s.get('severity', 'unknown')).upper()}]"
+            )
+            for s in trivy_secrets[:10]
+        ])
+        trivy_license_summary = "\n".join([
+            (
+                f"- {l.get('name', 'Unknown')} in {l.get('package_name', 'unknown')} "
+                f"[category={l.get('category', 'unknown')}, "
+                f"severity={str(l.get('severity', 'unknown')).upper()}]"
+            )
+            for l in trivy_licenses[:10]
+        ])
         
         prompt = f"""You are a container security analyst. Analyze this Docker image and provide a comprehensive security assessment.
 
@@ -18270,35 +18955,80 @@ async def analyze_docker_with_ai(
 - Scan stats: {layer_scan_stats or "N/A"}
 {layer_secrets_summary or "None"}
 
+## PACKAGE CVE SCAN ({len(cve_vulnerabilities)})
+- Packages scanned: {cve_scan.get('packages_scanned', 0)}
+- Packages with vulns: {cve_scan.get('packages_with_vulns', 0)}
+- Critical: {cve_scan.get('critical_count', 0)}
+- High: {cve_scan.get('high_count', 0)}
+- KEV: {cve_scan.get('kev_count', 0)}
+- High EPSS: {cve_scan.get('high_epss_count', 0)}
+- Enrichment applied: {cve_scan.get('enrichment_applied', False)}
+{cve_summary or "None"}
+
+## NATIVE TRIVY SCAN
+- Enabled scanners: {", ".join(trivy_enabled_scanners) or "None"}
+- Packages observed: {trivy_scan.get('package_count', 0)}
+- Vulnerabilities: {len(trivy_vulns)}
+- Misconfigurations: {len(trivy_misconfigs)}
+- Secrets: {len(trivy_secrets)}
+- Licenses: {len(trivy_licenses)}
+- Trivy error: {trivy_scan.get('error') or "None"}
+
+### Trivy Vulnerabilities
+{trivy_vuln_summary or "None"}
+
+### Trivy Misconfigurations
+{trivy_misconfig_summary or "None"}
+
+### Trivy Secret Findings
+{trivy_secret_summary or "None"}
+
+### Trivy License Findings
+{trivy_license_summary or "None"}
+
 ## ANALYSIS INSTRUCTIONS
-Provide your analysis in the following structured format:
+Generate an ATTACKER-FOCUSED Docker security report. Use HTML formatting.
 
-**RISK ASSESSMENT**
-- Risk Level: [Critical/High/Medium/Low/Clean]
-- Risk Score: [0-100]
-- Confidence: [High/Medium/Low]
+FORMAT YOUR RESPONSE AS CLEAN HTML (no markdown, no code blocks):
+- Use <h3> for section headings
+- Use <p> for narrative paragraphs
+- Use <ul>, <ol>, and <li> for lists
+- Use <strong> for inline emphasis
+- Do not use markdown headings, markdown bullets, tables, or fenced code blocks
+- Return only an HTML fragment, not a full <html> document
 
-**EXECUTIVE SUMMARY**
-[2-3 sentence summary of findings]
+Required section order:
+<h3>Risk Assessment</h3>
+<p>State the risk level, score, and confidence in prose.</p>
 
-**SECRET EXPOSURE ANALYSIS**
-[Analysis of exposed secrets, their impact, and which layers contain them]
+<h3>Executive Summary</h3>
+<p>Give a 2-3 sentence summary of the image's security posture.</p>
 
-**SUPPLY CHAIN CONCERNS**
-[Analysis of base image, dependencies, and supply chain risks]
+<h3>Secret Exposure Analysis</h3>
+<p>Explain the exposed secrets, their likely impact, and the relevant layers.</p>
 
-**KEY SECURITY FINDINGS**
-1. [Finding with severity and details]
-2. [Continue for significant findings]
+<h3>Supply Chain Concerns</h3>
+<p>Explain base image risk, package CVEs, KEV or EPSS prioritization, and dependency concerns.</p>
 
-**CONTAINER HARDENING RECOMMENDATIONS**
-1. [Specific Dockerfile improvements]
-2. [Runtime security recommendations]
-3. [Secret management recommendations]
+<h3>Native Trivy Correlation</h3>
+<p>Explain where Trivy findings reinforce, contradict, or extend the built-in Docker Inspector findings.</p>
 
-**REMEDIATION STEPS**
-1. [Step to remove/rotate exposed secrets]
-2. [Steps to rebuild image securely]
+<h3>Key Security Findings</h3>
+<ol>
+  <li>List the most important issues with severity and concrete evidence.</li>
+</ol>
+
+<h3>Container Hardening Recommendations</h3>
+<ul>
+  <li>Specific Dockerfile improvements</li>
+  <li>Runtime security recommendations</li>
+  <li>Secret management recommendations</li>
+</ul>
+
+<h3>Remediation Steps</h3>
+<ol>
+  <li>Give the practical next steps to remove or rotate secrets, patch vulnerabilities, and rebuild securely.</li>
+</ol>
 
 Be thorough but actionable. Focus on practical remediation."""
 
@@ -18317,7 +19047,19 @@ Be thorough but actionable. Focus on practical remediation."""
         if response is None:
             return "AI analysis unavailable: All retry attempts failed"
         
-        return response.text
+        docker_report = (response.text or "").strip()
+        if docker_report.startswith("```html"):
+            docker_report = docker_report[7:]
+        if docker_report.startswith("```markdown"):
+            docker_report = docker_report[11:]
+        elif docker_report.startswith("```md"):
+            docker_report = docker_report[5:]
+        elif docker_report.startswith("```"):
+            docker_report = docker_report[3:]
+        if docker_report.endswith("```"):
+            docker_report = docker_report[:-3]
+
+        return docker_report.strip()
         
     except Exception as e:
         logger.error(f"AI analysis failed: {e}")
@@ -20007,7 +20749,7 @@ TAINT_PROPAGATORS = [
 ]
 
 
-def analyze_data_flow(source_code: str, class_name: str) -> Dict[str, Any]:
+def analyze_decompiled_code_data_flow(source_code: str, class_name: str) -> Dict[str, Any]:
     """
     Analyze data flow in decompiled Java source code.
     
@@ -25152,7 +25894,8 @@ def generate_apk_markdown_report(
     cve_scan_results: Optional[List[Dict]] = None,
     ai_architecture_diagram: Optional[str] = None,
     ai_attack_surface_map: Optional[str] = None,
-    dynamic_analysis: Optional[Dict[str, Any]] = None
+    dynamic_analysis: Optional[Dict[str, Any]] = None,
+    report_title: Optional[str] = None,
 ) -> str:
     """
     Generate a formatted Markdown report for APK analysis.
@@ -25169,10 +25912,11 @@ def generate_apk_markdown_report(
     Returns:
         Markdown formatted string
     """
+    display_title = (report_title or "").strip() or "APK Analysis Report"
     md = []
     
     # Header
-    md.append(f"# APK Analysis Report")
+    md.append(f"# {display_title}")
     md.append(f"**Package:** {result.package_name}")
     md.append(f"**App Name:** {result.app_name or 'Unknown'}")
     md.append(f"**Version:** {result.version_name} (code: {result.version_code})")
@@ -25180,10 +25924,58 @@ def generate_apk_markdown_report(
     md.append("")
     md.append("---")
     md.append("")
+
+    def append_ai_markdown_section(title: str, content: Optional[str]) -> None:
+        md.append(f"## {title}")
+        md.append("")
+
+        normalized_content = _apk_ai_report_to_markdown(content)
+        if normalized_content:
+            title_key = _normalize_apk_report_heading(title)
+            skipped_duplicate_heading = False
+            for line in normalized_content.splitlines():
+                heading_match = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
+                if (
+                    heading_match
+                    and not skipped_duplicate_heading
+                    and _normalize_apk_report_heading(heading_match.group(2)) == title_key
+                ):
+                    skipped_duplicate_heading = True
+                    continue
+                md.append(line)
+        else:
+            md.append("_AI narrative summary was not available for this section. Detailed technical findings appear later in this report._")
+
+        md.append("")
+
+    if report_type in ["functionality", "both"]:
+        append_ai_markdown_section("What Does This APK Do", result.ai_report_functionality)
+
+    if report_type in ["security", "both"]:
+        append_ai_markdown_section("Security Findings", result.ai_report_security)
+
+    if ai_architecture_diagram:
+        md.append("## Application Architecture")
+        md.append("")
+        md.append("```mermaid")
+        md.append(ai_architecture_diagram)
+        md.append("```")
+        md.append("")
+
+    if ai_attack_surface_map:
+        md.append("## Attack Surface Map")
+        md.append("")
+        md.append("```mermaid")
+        md.append(ai_attack_surface_map)
+        md.append("```")
+        md.append("")
+
+    md.append("## Additional Technical Details")
+    md.append("")
     
     # ==================== FUNCTIONALITY REPORT ====================
     if report_type in ["functionality", "both"]:
-        md.append("## 📱 What Does This APK Do")
+        md.append("### Functionality Details")
         md.append("")
         
         # App Overview
@@ -25255,30 +26047,12 @@ def generate_apk_markdown_report(
                 md.append(f"- `{lib}`")
             md.append("")
         
-        # AI Functionality Report
-        if result.ai_report_functionality:
-            md.append("### AI Analysis: App Functionality")
-            md.append("")
-            # Convert HTML to basic markdown
-            html_content = result.ai_report_functionality
-            # Strip HTML tags but keep content
-            import re
-            html_content = re.sub(r'<h3[^>]*>', '\n#### ', html_content)
-            html_content = re.sub(r'</h3>', '\n', html_content)
-            html_content = re.sub(r'<strong>', '**', html_content)
-            html_content = re.sub(r'</strong>', '**', html_content)
-            html_content = re.sub(r'<li>', '- ', html_content)
-            html_content = re.sub(r'</li>', '\n', html_content)
-            html_content = re.sub(r'<[^>]+>', '', html_content)
-            md.append(html_content)
-            md.append("")
-        
         md.append("---")
         md.append("")
     
     # ==================== SECURITY REPORT ====================
     if report_type in ["security", "both"]:
-        md.append("## 🔒 Security Findings")
+        md.append("### Security Details")
         md.append("")
         
         # Security Overview
@@ -25420,27 +26194,10 @@ def generate_apk_markdown_report(
                     md.append(f"- {check}")
                 md.append("")
         
-        # AI Security Report
-        if result.ai_report_security:
-            md.append("### AI Security Analysis")
-            md.append("")
-            # Convert HTML to basic markdown
-            import re
-            html_content = result.ai_report_security
-            html_content = re.sub(r'<h3[^>]*>', '\n#### ', html_content)
-            html_content = re.sub(r'</h3>', '\n', html_content)
-            html_content = re.sub(r'<strong>', '**', html_content)
-            html_content = re.sub(r'</strong>', '**', html_content)
-            html_content = re.sub(r'<li>', '- ', html_content)
-            html_content = re.sub(r'</li>', '\n', html_content)
-            html_content = re.sub(r'<span[^>]*>([^<]+)</span>', r'\1', html_content)
-            html_content = re.sub(r'<[^>]+>', '', html_content)
-            md.append(html_content)
-            md.append("")
-    
+
     # ==================== CVE SCAN RESULTS ====================
     if cve_scan_results:
-        md.append("## 🔍 Known CVEs in Dependencies")
+        md.append("### Known CVEs in Dependencies")
         md.append("")
         md.append(f"**Total CVEs Found:** {len(cve_scan_results)}")
         md.append("")
@@ -25488,7 +26245,7 @@ def generate_apk_markdown_report(
     
     # ==================== FRIDA SCRIPTS FOR DYNAMIC TESTING ====================
     if dynamic_analysis and dynamic_analysis.get('frida_scripts'):
-        md.append("## 🔧 Frida Scripts for Dynamic Testing")
+        md.append("### Frida Scripts for Dynamic Testing")
         md.append("")
         md.append("Auto-generated Frida scripts based on static analysis findings. These scripts can be used ")
         md.append("to bypass security protections and monitor sensitive operations during dynamic testing.")
@@ -25576,28 +26333,256 @@ def generate_apk_markdown_report(
         
         md.append("---")
         md.append("")
-    
-    # ==================== AI ARCHITECTURE DIAGRAM ====================
-    if ai_architecture_diagram:
-        md.append("## 🏗️ Application Architecture")
-        md.append("")
-        md.append("```mermaid")
-        md.append(ai_architecture_diagram)
-        md.append("```")
-        md.append("")
-        md.append("---")
-        md.append("")
-    
-    # ==================== AI ATTACK SURFACE MAP ====================
-    if ai_attack_surface_map:
-        md.append("## 🎯 Attack Surface Map")
-        md.append("")
-        md.append("```mermaid")
-        md.append(ai_attack_surface_map)
-        md.append("```")
-        md.append("")
-    
     return "\n".join(md)
+
+
+def _extract_mermaid_source(diagram: Optional[str]) -> str:
+    """Normalize Mermaid input before rendering it for document exports."""
+    mermaid_code = (diagram or "").strip()
+    if not mermaid_code:
+        return ""
+
+    fenced_match = re.search(
+        r"```(?:mermaid)?\s*([\s\S]*?)```",
+        mermaid_code,
+        flags=re.IGNORECASE,
+    )
+    if fenced_match:
+        mermaid_code = fenced_match.group(1).strip()
+
+    return sanitize_mermaid_diagram(mermaid_code)
+
+
+def _render_mermaid_to_image(mermaid_code: str, output_format: str = "png") -> Optional[bytes]:
+    """Render Mermaid source to an image using Kroki for export documents."""
+    import httpx
+    import zlib
+
+    normalized_diagram = _extract_mermaid_source(mermaid_code)
+    if not normalized_diagram:
+        return None
+
+    try:
+        encoded = base64.urlsafe_b64encode(
+            zlib.compress(normalized_diagram.encode("utf-8"), 9)
+        ).decode("ascii")
+
+        if output_format == "png":
+            url = f"https://kroki.io/mermaid/{output_format}/{encoded}?scale=2"
+        else:
+            url = f"https://kroki.io/mermaid/{output_format}/{encoded}"
+
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            response = client.get(url)
+            if response.status_code == 200:
+                return response.content
+
+            logger.warning(
+                "APK Mermaid rendering failed: %s - %s",
+                response.status_code,
+                response.text[:200],
+            )
+            return None
+    except Exception as exc:
+        logger.warning(f"Failed to render APK Mermaid diagram: {exc}")
+        return None
+
+
+def _strip_basic_markdown(text: str) -> str:
+    """Strip lightweight Markdown markers for PDF/DOCX paragraph rendering."""
+    cleaned = text or ""
+    cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned)
+    cleaned = re.sub(r'__(.*?)__', r'\1', cleaned)
+    cleaned = re.sub(r'\*(.*?)\*', r'\1', cleaned)
+    cleaned = re.sub(r'_(.*?)_', r'\1', cleaned)
+    cleaned = re.sub(r'`([^`]+)`', r'\1', cleaned)
+    return cleaned.strip()
+
+
+def _normalize_apk_report_heading(text: str) -> str:
+    """Normalize headings so duplicated AI section titles can be skipped cleanly."""
+    normalized = _strip_basic_markdown(text).lower()
+    return re.sub(r'[^a-z0-9]+', ' ', normalized).strip()
+
+
+def _looks_like_apk_report_markdown(text: str) -> bool:
+    """Detect malformed fenced blocks that are actually report prose."""
+    candidate = (text or "").strip()
+    if not candidate:
+        return False
+
+    lines = [line.strip() for line in candidate.splitlines() if line.strip()]
+    if not lines:
+        return False
+
+    markdown_like = sum(
+        1 for line in lines
+        if re.match(r'^(#{1,6}\s+|[-*•]\s+|\d+\.\s+)', line)
+    )
+    code_like = sum(
+        1 for line in lines
+        if (
+            re.search(r'[{}();=<>\[\]]', line)
+            or re.match(
+                r'^(def|class|function|import|from|const|let|var|if|for|while|return|public|private|protected|package)\b',
+                line,
+                flags=re.IGNORECASE,
+            )
+        )
+    )
+
+    if re.search(r'(?m)^#{1,6}\s+.+(?<!\s)-\s+\*\*', candidate):
+        return True
+
+    return markdown_like >= 2 and markdown_like > code_like
+
+
+def _apk_ai_report_to_markdown(content: Optional[str]) -> str:
+    """Convert GUI-formatted AI report HTML/markdown into export-friendly markdown."""
+    from html import unescape
+
+    text = (content or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+
+    if "<" in text and ">" in text:
+        for level in range(6, 0, -1):
+            hashes = "#" * min(level + 2, 6)
+            text = re.sub(rf'<h{level}[^>]*>', f'\n{hashes} ', text, flags=re.IGNORECASE)
+            text = re.sub(rf'</h{level}>', '\n', text, flags=re.IGNORECASE)
+
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</p\s*>', '\n\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<p[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<li[^>]*>', '\n- ', text, flags=re.IGNORECASE)
+        text = re.sub(r'</li\s*>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</?(ul|ol)[^>]*>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<pre[^>]*>\s*<code[^>]*>', '\n```\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</code>\s*</pre>', '\n```\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<pre[^>]*>', '\n```\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</pre>', '\n```\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<code[^>]*>', '`', text, flags=re.IGNORECASE)
+        text = re.sub(r'</code>', '`', text, flags=re.IGNORECASE)
+        text = re.sub(r'<(strong|b)[^>]*>', '**', text, flags=re.IGNORECASE)
+        text = re.sub(r'</(strong|b)>', '**', text, flags=re.IGNORECASE)
+        text = re.sub(r'<(em|i)[^>]*>', '*', text, flags=re.IGNORECASE)
+        text = re.sub(r'</(em|i)>', '*', text, flags=re.IGNORECASE)
+        text = re.sub(r'</?span[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', '', text)
+        text = unescape(text)
+
+    normalized_lines: List[str] = []
+    in_code_block = False
+    previous_blank = True
+
+    for raw_line in text.split('\n'):
+        stripped = raw_line.strip()
+
+        if stripped.startswith("```"):
+            normalized_lines.append("```")
+            in_code_block = not in_code_block
+            previous_blank = False
+            continue
+
+        if in_code_block:
+            normalized_lines.append(raw_line.rstrip())
+            previous_blank = False
+            continue
+
+        if not stripped:
+            if not previous_blank:
+                normalized_lines.append("")
+            previous_blank = True
+            continue
+
+        joined_heading_bullet = re.match(r'^(#{1,6}\s+.+?)(?<!\s)-\s+(\*\*.+)$', stripped)
+        if joined_heading_bullet:
+            normalized_lines.append(joined_heading_bullet.group(1).rstrip())
+            normalized_lines.append(f"- {joined_heading_bullet.group(2).strip()}")
+            previous_blank = False
+            continue
+
+        normalized_lines.append(stripped)
+        previous_blank = False
+
+    while normalized_lines and not normalized_lines[0]:
+        normalized_lines.pop(0)
+    while normalized_lines and not normalized_lines[-1]:
+        normalized_lines.pop()
+
+    return "\n".join(normalized_lines)
+
+
+def _apk_ai_report_blocks(content: Optional[str]) -> List[Dict[str, Any]]:
+    """Parse AI report content into simple blocks for PDF and Word rendering."""
+    markdown_content = _apk_ai_report_to_markdown(content)
+    if not markdown_content:
+        return []
+
+    blocks: List[Dict[str, Any]] = []
+    paragraph_lines: List[str] = []
+    code_lines: List[str] = []
+    in_code_block = False
+
+    def flush_paragraph() -> None:
+        if paragraph_lines:
+            blocks.append({"type": "paragraph", "text": " ".join(paragraph_lines).strip()})
+            paragraph_lines.clear()
+
+    for raw_line in markdown_content.splitlines():
+        stripped = raw_line.strip()
+
+        if stripped == "```":
+            if in_code_block:
+                blocks.append({"type": "code", "text": "\n".join(code_lines).strip()})
+                code_lines.clear()
+                in_code_block = False
+            else:
+                flush_paragraph()
+                in_code_block = True
+            continue
+
+        if in_code_block:
+            code_lines.append(raw_line.rstrip())
+            continue
+
+        if not stripped:
+            flush_paragraph()
+            continue
+
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if heading_match:
+            flush_paragraph()
+            blocks.append({
+                "type": "heading",
+                "level": len(heading_match.group(1)),
+                "text": heading_match.group(2).strip(),
+            })
+            continue
+
+        bullet_match = re.match(r'^[-*•]\s+(.+)$', stripped)
+        if bullet_match:
+            flush_paragraph()
+            blocks.append({"type": "bullet", "text": bullet_match.group(1).strip()})
+            continue
+
+        number_match = re.match(r'^\d+\.\s+(.+)$', stripped)
+        if number_match:
+            flush_paragraph()
+            blocks.append({"type": "number", "text": number_match.group(1).strip()})
+            continue
+
+        paragraph_lines.append(stripped)
+
+    if in_code_block and code_lines:
+        trailing_block = "\n".join(code_lines).strip()
+        if _looks_like_apk_report_markdown(trailing_block):
+            blocks.extend(_apk_ai_report_blocks(trailing_block))
+        else:
+            blocks.append({"type": "code", "text": trailing_block})
+
+    flush_paragraph()
+    return blocks
 
 
 def generate_apk_pdf_report(
@@ -25607,7 +26592,8 @@ def generate_apk_pdf_report(
     cve_scan_results: Optional[List[Dict]] = None,
     ai_architecture_diagram: Optional[str] = None,
     ai_attack_surface_map: Optional[str] = None,
-    dynamic_analysis: Optional[Dict[str, Any]] = None
+    dynamic_analysis: Optional[Dict[str, Any]] = None,
+    report_title: Optional[str] = None,
 ) -> bytes:
     """
     Generate a PDF report for APK analysis.
@@ -25625,72 +26611,573 @@ def generate_apk_pdf_report(
         PDF bytes
     """
     try:
+        display_title = (report_title or "").strip() or "APK Analysis Report"
+        from datetime import datetime
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.lib.utils import ImageReader
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+            PageBreak,
+            Image,
+            HRFlowable,
+        )
         import io
-        
+
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
-        
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            leftMargin=0.72 * inch,
+            rightMargin=0.72 * inch,
+            topMargin=0.9 * inch,
+            bottomMargin=0.7 * inch,
+        )
+        page_width, page_height = letter
+
         styles = getSampleStyleSheet()
-        
-        # Custom styles
+
+        palette = {
+            "ink": colors.HexColor("#0f172a"),
+            "muted": colors.HexColor("#475569"),
+            "primary": colors.HexColor("#1d4ed8"),
+            "primary_dark": colors.HexColor("#0f172a"),
+            "primary_soft": colors.HexColor("#dbeafe"),
+            "surface": colors.HexColor("#f8fafc"),
+            "surface_alt": colors.HexColor("#eef2ff"),
+            "border": colors.HexColor("#cbd5e1"),
+            "success": colors.HexColor("#059669"),
+            "success_soft": colors.HexColor("#ecfdf5"),
+            "warning": colors.HexColor("#d97706"),
+            "warning_soft": colors.HexColor("#fff7ed"),
+            "danger": colors.HexColor("#dc2626"),
+            "danger_soft": colors.HexColor("#fef2f2"),
+            "critical_soft": colors.HexColor("#fee2e2"),
+            "teal": colors.HexColor("#0f766e"),
+            "teal_soft": colors.HexColor("#ecfeff"),
+            "white": colors.white,
+        }
+
+        severity_colors = {
+            "critical": palette["danger"],
+            "high": colors.HexColor("#ea580c"),
+            "medium": palette["warning"],
+            "low": palette["success"],
+            "info": colors.HexColor("#64748b"),
+        }
+        severity_surfaces = {
+            "critical": palette["critical_soft"],
+            "high": colors.HexColor("#fff7ed"),
+            "medium": colors.HexColor("#fffbeb"),
+            "low": palette["success_soft"],
+            "info": colors.HexColor("#f1f5f9"),
+        }
+
         styles.add(ParagraphStyle(
-            name='Title',
+            name='ApkReportTitle',
             parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=20,
-            textColor=colors.HexColor("#1e40af")
-        ))
-        styles.add(ParagraphStyle(
-            name='SectionHeader',
-            parent=styles['Heading2'],
-            fontSize=16,
-            spaceBefore=20,
-            spaceAfter=10,
-            textColor=colors.HexColor("#1e40af")
-        ))
-        styles.add(ParagraphStyle(
-            name='SubHeader',
-            parent=styles['Heading3'],
-            fontSize=12,
-            spaceBefore=15,
+            fontSize=28,
+            leading=32,
             spaceAfter=8,
-            textColor=colors.HexColor("#374151")
+            textColor=palette["white"],
         ))
         styles.add(ParagraphStyle(
-            name='Body',
+            name='ApkCoverMeta',
             parent=styles['Normal'],
-            fontSize=10,
-            spaceAfter=6,
-            leading=14
+            fontSize=10.5,
+            leading=14,
+            textColor=colors.HexColor("#cbd5f5"),
+            spaceAfter=2,
         ))
         styles.add(ParagraphStyle(
-            name='Code',
+            name='ApkSectionEyebrow',
+            parent=styles['Normal'],
+            fontSize=8.5,
+            leading=10,
+            textColor=palette["primary"],
+            spaceAfter=2,
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkSectionHeader',
+            parent=styles['Heading2'],
+            fontSize=19,
+            leading=22,
+            spaceBefore=2,
+            spaceAfter=4,
+            textColor=palette["ink"],
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkSectionLead',
+            parent=styles['Normal'],
+            fontSize=10.5,
+            leading=15,
+            spaceAfter=4,
+            textColor=palette["muted"],
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkSubHeader',
+            parent=styles['Heading3'],
+            fontSize=12.5,
+            leading=15,
+            spaceBefore=10,
+            spaceAfter=8,
+            textColor=palette["ink"],
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkBody',
+            parent=styles['Normal'],
+            fontSize=10.2,
+            leading=15,
+            spaceAfter=6,
+            textColor=palette["ink"],
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkCode',
             parent=styles['Normal'],
             fontSize=9,
             fontName='Courier',
-            backColor=colors.HexColor("#f3f4f6"),
-            leftIndent=10
+            leading=12,
+            textColor=palette["ink"],
         ))
         styles.add(ParagraphStyle(
-            name='BulletItem',
+            name='ApkCodeBlock',
+            parent=styles['ApkCode'],
+            fontSize=8.3,
+            leading=10.5,
+            backColor=palette["surface"],
+            borderColor=palette["border"],
+            borderWidth=0.7,
+            borderPadding=8,
+            leftIndent=0,
+            rightIndent=0,
+            spaceAfter=6,
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkBulletItem',
             parent=styles['Normal'],
             fontSize=10,
-            leftIndent=20,
-            spaceAfter=4
+            leftIndent=18,
+            bulletIndent=8,
+            leading=14,
+            spaceAfter=4,
+            textColor=palette["ink"],
         ))
-        
+        styles.add(ParagraphStyle(
+            name='ApkMetricLabel',
+            parent=styles['Normal'],
+            fontSize=8.5,
+            leading=10,
+            textColor=palette["muted"],
+            spaceAfter=2,
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkMetricValue',
+            parent=styles['Normal'],
+            fontSize=18,
+            leading=21,
+            textColor=palette["ink"],
+            spaceAfter=2,
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkMetricMeta',
+            parent=styles['Normal'],
+            fontSize=8.5,
+            leading=11,
+            textColor=palette["muted"],
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkCardTitle',
+            parent=styles['Normal'],
+            fontSize=11,
+            leading=14,
+            textColor=palette["ink"],
+            spaceAfter=4,
+        ))
+        styles.add(ParagraphStyle(
+            name='ApkCardMeta',
+            parent=styles['Normal'],
+            fontSize=9,
+            leading=12,
+            textColor=palette["muted"],
+            spaceAfter=0,
+        ))
         story = []
-        
-        # Title
-        story.append(Paragraph("APK Analysis Report", styles['Title']))
-        story.append(Spacer(1, 10))
-        
-        # App Info Table
+        additional_details_started = False
+
+        def escape_pdf_text(text: str) -> str:
+            return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def paragraph(text: str, style_name: str) -> Paragraph:
+            return Paragraph(escape_pdf_text(text), styles[style_name])
+
+        def color_to_hex(color_value) -> str:
+            if hasattr(color_value, "red") and hasattr(color_value, "green") and hasattr(color_value, "blue"):
+                return "#{:02x}{:02x}{:02x}".format(
+                    int(float(color_value.red) * 255),
+                    int(float(color_value.green) * 255),
+                    int(float(color_value.blue) * 255),
+                )
+            return str(color_value)
+
+        def status_text(flag: bool, good_text: str = "OK", bad_text: str = "Review") -> str:
+            return bad_text if flag else good_text
+
+        def build_labeled_table(
+            rows: List[List[str]],
+            col_widths: List[float],
+            *,
+            header: bool = False,
+            header_background=palette["primary_dark"],
+            body_row_colors=None,
+            first_column_background=None,
+            first_column_text_color=palette["ink"],
+            font_size: int = 9,
+            center_columns: Optional[List[int]] = None,
+        ) -> Table:
+            table = Table(rows, colWidths=col_widths, hAlign='LEFT')
+            body_row_colors = body_row_colors or [colors.white, palette["surface"]]
+            center_columns = center_columns or []
+            table_style = [
+                ('BOX', (0, 0), (-1, -1), 0.75, palette["border"]),
+                ('INNERGRID', (0, 0), (-1, -1), 0.5, palette["border"]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 9),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+                ('TEXTCOLOR', (0, 0), (-1, -1), palette["ink"]),
+                ('FONTSIZE', (0, 0), (-1, -1), font_size),
+            ]
+
+            body_start = 0
+            if header:
+                table_style.extend([
+                    ('BACKGROUND', (0, 0), (-1, 0), header_background),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), palette["white"]),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ])
+                body_start = 1
+
+            if len(rows) > body_start:
+                table_style.append(('ROWBACKGROUNDS', (0, body_start), (-1, -1), body_row_colors))
+
+            if first_column_background is not None and len(rows[0]) > 1:
+                table_style.extend([
+                    ('BACKGROUND', (0, body_start), (0, -1), first_column_background),
+                    ('TEXTCOLOR', (0, body_start), (0, -1), first_column_text_color),
+                    ('FONTNAME', (0, body_start), (0, -1), 'Helvetica-Bold'),
+                ])
+
+            for center_col in center_columns:
+                table_style.append(('ALIGN', (center_col, 0), (center_col, -1), 'CENTER'))
+
+            table.setStyle(TableStyle(table_style))
+            return table
+
+        def build_metric_card(title: str, value: str, detail: str, accent_color) -> Table:
+            card = Table(
+                [[
+                    [
+                        paragraph(title, 'ApkMetricLabel'),
+                        paragraph(value, 'ApkMetricValue'),
+                        paragraph(detail, 'ApkMetricMeta'),
+                    ]
+                ]],
+                colWidths=[(doc.width - (0.18 * inch * 3)) / 4],
+            )
+            card.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+                ('BOX', (0, 0), (-1, -1), 0.8, palette["border"]),
+                ('LINEABOVE', (0, 0), (-1, 0), 3, accent_color),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            return card
+
+        def append_section_heading(title: str, description: Optional[str] = None, eyebrow: Optional[str] = None) -> None:
+            if eyebrow:
+                story.append(paragraph(eyebrow.upper(), 'ApkSectionEyebrow'))
+            story.append(paragraph(title, 'ApkSectionHeader'))
+            if description:
+                story.append(paragraph(description, 'ApkSectionLead'))
+            story.append(
+                HRFlowable(
+                    width="100%",
+                    thickness=1,
+                    color=palette["border"],
+                    spaceBefore=2,
+                    spaceAfter=12,
+                )
+            )
+
+        def append_notice_card(title: str, lines: List[str], accent_color, background_color) -> None:
+            normalized_title = " ".join(_strip_basic_markdown(title or "Details").split())
+            normalized_lines: List[str] = []
+            for line in lines:
+                cleaned_line = _strip_basic_markdown(line or "")
+                for sub_line in cleaned_line.splitlines():
+                    compact = " ".join(sub_line.split())
+                    if compact:
+                        normalized_lines.append(compact)
+
+            max_title_length = 140
+            if len(normalized_title) > max_title_length:
+                overflow = normalized_title[max_title_length:].strip()
+                normalized_title = normalized_title[:max_title_length].rstrip(" -:;,.") + "..."
+                if overflow:
+                    normalized_lines.insert(0, overflow)
+
+            title_style = ParagraphStyle(
+                name='ApkCalloutTitle',
+                parent=styles['ApkCardTitle'],
+                textColor=palette["ink"],
+                backColor=background_color,
+                borderColor=accent_color,
+                borderWidth=0.8,
+                borderPadding=8,
+                leftIndent=12,
+                rightIndent=12,
+                spaceBefore=0,
+                spaceAfter=4,
+            )
+            body_style = ParagraphStyle(
+                name='ApkCalloutBody',
+                parent=styles['ApkCardMeta'],
+                textColor=palette["ink"],
+                backColor=background_color,
+                borderColor=accent_color,
+                borderWidth=0.8,
+                borderPadding=8,
+                leftIndent=12,
+                rightIndent=12,
+                spaceBefore=0,
+                spaceAfter=3,
+            )
+
+            story.append(HRFlowable(width="100%", thickness=2.5, color=accent_color, spaceBefore=0, spaceAfter=6))
+            story.append(Paragraph(escape_pdf_text(normalized_title), title_style))
+            if normalized_lines:
+                for line in normalized_lines:
+                    story.append(Paragraph(escape_pdf_text(line), body_style))
+            story.append(Spacer(1, 10))
+
+        def append_code_block(block_text: str) -> None:
+            lines = (block_text or "").splitlines() or [block_text or ""]
+            rendered_lines: List[str] = []
+            for raw_line in lines:
+                escaped_line = escape_pdf_text(raw_line.rstrip())
+                rendered_lines.append(escaped_line if escaped_line else "&nbsp;")
+
+            story.append(HRFlowable(width="100%", thickness=1.5, color=palette["border"], spaceBefore=0, spaceAfter=6))
+            story.append(Paragraph("<br/>".join(rendered_lines), styles['ApkCodeBlock']))
+            story.append(Spacer(1, 6))
+
+        def render_cover() -> None:
+            app_name = result.app_name or "Unknown application"
+            generated_on = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
+            report_scope = {
+                "both": "Functionality and security narrative",
+                "functionality": "Functionality narrative only",
+                "security": "Security narrative only",
+            }.get(report_type, report_type.title())
+            hero_content = [
+                paragraph(display_title, 'ApkReportTitle'),
+                Paragraph(
+                    f"<font size='12' color='#cbd5f5'>{escape_pdf_text(app_name)}</font>",
+                    styles['ApkCoverMeta'],
+                ),
+                Paragraph(
+                    f"<font color='#cbd5f5'>{escape_pdf_text(result.package_name)}</font>",
+                    styles['ApkCoverMeta'],
+                ),
+                Spacer(1, 6),
+                Paragraph(
+                    f"<font color='#bfdbfe'>Generated:</font> {escape_pdf_text(generated_on)}"
+                    f" &nbsp;&nbsp;&nbsp; <font color='#bfdbfe'>Scope:</font> {escape_pdf_text(report_scope)}",
+                    styles['ApkCoverMeta'],
+                ),
+            ]
+            hero = Table([[hero_content]], colWidths=[doc.width], hAlign='LEFT')
+            hero.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), palette["primary_dark"]),
+                ('BOX', (0, 0), (-1, -1), 0.8, palette["primary_dark"]),
+                ('LINEBEFORE', (0, 0), (0, -1), 5, palette["primary"]),
+                ('LEFTPADDING', (0, 0), (-1, -1), 18),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 18),
+                ('TOPPADDING', (0, 0), (-1, -1), 18),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 18),
+            ]))
+            story.append(hero)
+            story.append(Spacer(1, 14))
+
+            components_total = len(result.activities) + len(result.services) + len(result.receivers) + len(result.providers)
+            dangerous_permissions = len([perm for perm in result.permissions if perm.is_dangerous])
+            signal_count = len(result.security_issues) + len(result.secrets)
+            if result.debuggable:
+                signal_count += 1
+            if result.allow_backup:
+                signal_count += 1
+            if result.certificate and result.certificate.is_debug_cert:
+                signal_count += 1
+
+            cards = [
+                build_metric_card("Risk Signals", str(signal_count), "Static flags requiring review", palette["danger"] if signal_count else palette["success"]),
+                build_metric_card("Permissions", str(len(result.permissions)), f"{dangerous_permissions} dangerous", palette["warning"] if dangerous_permissions else palette["success"]),
+                build_metric_card("Components", str(components_total), "Activities, services, receivers, providers", palette["primary"]),
+                build_metric_card("Target SDK", str(result.target_sdk), f"Min SDK {result.min_sdk}", palette["teal"]),
+            ]
+            metrics = Table([cards], colWidths=[card._colWidths[0] for card in cards], hAlign='LEFT')
+            metrics.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            story.append(metrics)
+            story.append(Spacer(1, 18))
+
+        def draw_page_chrome(canvas, document) -> None:
+            canvas.saveState()
+            canvas.setStrokeColor(palette["primary_soft"])
+            canvas.setLineWidth(1)
+            canvas.line(document.leftMargin, page_height - 0.45 * inch, page_width - document.rightMargin, page_height - 0.45 * inch)
+            canvas.line(document.leftMargin, 0.5 * inch, page_width - document.rightMargin, 0.5 * inch)
+            canvas.setFillColor(palette["muted"])
+            canvas.setFont("Helvetica", 8)
+            canvas.drawString(document.leftMargin, 0.34 * inch, display_title[:72])
+            canvas.drawRightString(page_width - document.rightMargin, 0.34 * inch, f"Page {canvas.getPageNumber()}")
+            canvas.restoreState()
+
+        def append_ai_report_section(title: str, content: Optional[str]) -> None:
+            descriptions = {
+                "What Does This APK Do": "Natural-language summary of user-facing workflows, app purpose, and behavior inferred from the package.",
+                "Security Findings": "Natural-language interpretation of the most important security observations and attack paths found during analysis.",
+            }
+            append_section_heading(title, descriptions.get(title), "Narrative Summary")
+
+            blocks = _apk_ai_report_blocks(content)
+            title_key = _normalize_apk_report_heading(title)
+            rendered_anything = False
+
+            for block in blocks:
+                block_type = block.get("type")
+                block_text = block.get("text", "")
+                cleaned_text = _strip_basic_markdown(block_text)
+
+                if block_type == "heading":
+                    if _normalize_apk_report_heading(cleaned_text) == title_key:
+                        continue
+                    story.append(paragraph(cleaned_text, 'ApkSubHeader'))
+                    rendered_anything = True
+                elif block_type in {"bullet", "number"}:
+                    story.append(Paragraph(f"• {escape_pdf_text(cleaned_text)}", styles['ApkBulletItem']))
+                    rendered_anything = True
+                elif block_type == "code":
+                    append_code_block(block_text)
+                    rendered_anything = True
+                elif cleaned_text:
+                    story.append(paragraph(cleaned_text, 'ApkBody'))
+                    rendered_anything = True
+
+            if not rendered_anything:
+                append_notice_card(
+                    "Narrative summary unavailable",
+                    ["Detailed technical findings appear later in this report."],
+                    palette["warning"],
+                    palette["warning_soft"],
+                )
+
+            story.append(Spacer(1, 10))
+
+        def start_additional_details() -> None:
+            nonlocal additional_details_started
+            if additional_details_started:
+                return
+            story.append(PageBreak())
+            append_section_heading(
+                "Additional Technical Details",
+                "Structured evidence from permissions, manifest components, certificates, source scanning, dependency scanning, and dynamic-analysis outputs.",
+                "Evidence",
+            )
+            additional_details_started = True
+
+        def append_mermaid_diagram(title: str, description: str, mermaid_code: str) -> None:
+            append_section_heading(title, description, "Visual Model")
+
+            img_bytes = _render_mermaid_to_image(mermaid_code, "png")
+            if not img_bytes:
+                append_notice_card(
+                    "Diagram unavailable",
+                    ["Diagram rendering was unavailable for this PDF export.", "Use the Markdown export or web interface if needed."],
+                    palette["warning"],
+                    palette["warning_soft"],
+                )
+                story.append(Spacer(1, 10))
+                return
+
+            img_buffer = io.BytesIO(img_bytes)
+            try:
+                img_reader = ImageReader(img_buffer)
+                orig_w, orig_h = img_reader.getSize()
+                if not orig_w or not orig_h:
+                    raise ValueError("Invalid Mermaid image dimensions")
+
+                max_w = float(doc.width)
+                max_h = float(doc.height) * 0.55
+                scale = min(max_w / float(orig_w), max_h / float(orig_h))
+                scale = min(scale, 2.0)
+                draw_w = max(120.0, float(orig_w) * scale)
+                draw_h = max(90.0, float(orig_h) * scale)
+
+                img_buffer.seek(0)
+                image = Image(img_buffer, width=draw_w, height=draw_h)
+                image.hAlign = 'CENTER'
+                figure = Table(
+                    [[[
+                        paragraph("Generated Mermaid diagram", 'ApkMetricLabel'),
+                        image,
+                    ]]],
+                    colWidths=[doc.width],
+                    hAlign='LEFT',
+                )
+                figure.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+                    ('BOX', (0, 0), (-1, -1), 0.8, palette["border"]),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                    ('TOPPADDING', (0, 0), (-1, -1), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                ]))
+                story.append(figure)
+            except Exception as img_err:
+                logger.warning(f"Failed to embed APK Mermaid diagram in PDF: {img_err}")
+                append_notice_card(
+                    "Diagram embed failed",
+                    ["Diagram rendering completed but the image could not be embedded in this PDF export."],
+                    palette["warning"],
+                    palette["warning_soft"],
+                )
+
+            story.append(Spacer(1, 10))
+
+        render_cover()
+
+        append_section_heading(
+            "Application Overview",
+            "Core identity and platform metadata extracted directly from the APK package.",
+            "Context",
+        )
+
         app_info = [
             ["Package", result.package_name],
             ["App Name", result.app_name or "Unknown"],
@@ -25698,24 +27185,46 @@ def generate_apk_pdf_report(
             ["Min SDK", str(result.min_sdk)],
             ["Target SDK", str(result.target_sdk)],
         ]
-        t = Table(app_info, colWidths=[1.5*inch, 4*inch])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#f3f4f6")),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('PADDING', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e7eb")),
-        ]))
+        t = build_labeled_table(
+            app_info,
+            [1.65 * inch, doc.width - 1.65 * inch],
+            first_column_background=palette["surface_alt"],
+            font_size=9,
+        )
         story.append(t)
         story.append(Spacer(1, 20))
+
+        if report_type in ["functionality", "both"]:
+            append_ai_report_section("What Does This APK Do", result.ai_report_functionality)
+
+        if report_type in ["security", "both"]:
+            append_ai_report_section("Security Findings", result.ai_report_security)
+
+        if ai_architecture_diagram:
+            append_mermaid_diagram(
+                "Application Architecture",
+                "This diagram shows the architecture of the application including components, services, and their interactions.",
+                ai_architecture_diagram,
+            )
+
+        if ai_attack_surface_map:
+            append_mermaid_diagram(
+                "Attack Surface Map",
+                "This diagram maps potential attack vectors, entry points, and security-critical components.",
+                ai_attack_surface_map,
+            )
         
         # ==================== FUNCTIONALITY SECTION ====================
         if report_type in ["functionality", "both"]:
-            story.append(Paragraph("What Does This APK Do", styles['SectionHeader']))
-            story.append(Spacer(1, 10))
+            start_additional_details()
+            append_section_heading(
+                "Functionality Details",
+                "Manifest structure, declared components, permissions, and native code assets discovered in the package.",
+                "Deep Dive",
+            )
             
             # Components summary
-            story.append(Paragraph("App Components", styles['SubHeader']))
+            story.append(paragraph("App Components", 'ApkSubHeader'))
             components = [
                 ["Component Type", "Count"],
                 ["Activities", str(len(result.activities))],
@@ -25723,92 +27232,93 @@ def generate_apk_pdf_report(
                 ["Receivers", str(len(result.receivers))],
                 ["Providers", str(len(result.providers))],
             ]
-            t = Table(components, colWidths=[2*inch, 1*inch])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e40af")),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('PADDING', (0, 0), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e7eb")),
-                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
-            ]))
+            t = build_labeled_table(
+                components,
+                [2.1 * inch, 1.1 * inch],
+                header=True,
+                header_background=palette["primary"],
+                center_columns=[1],
+            )
             story.append(t)
             story.append(Spacer(1, 15))
             
             # Permissions
-            story.append(Paragraph("Permissions", styles['SubHeader']))
+            story.append(paragraph("Permissions", 'ApkSubHeader'))
             dangerous_perms = [p for p in result.permissions if p.is_dangerous]
-            story.append(Paragraph(f"Total: {len(result.permissions)} | Dangerous: {len(dangerous_perms)}", styles['Body']))
+            append_notice_card(
+                "Permission footprint",
+                [
+                    f"Total declared permissions: {len(result.permissions)}",
+                    f"Dangerous permissions: {len(dangerous_perms)}",
+                ],
+                palette["warning"] if dangerous_perms else palette["success"],
+                palette["warning_soft"] if dangerous_perms else palette["success_soft"],
+            )
             
             if dangerous_perms:
-                story.append(Spacer(1, 5))
-                story.append(Paragraph("Dangerous Permissions:", styles['Body']))
+                story.append(paragraph("Dangerous Permissions", 'ApkSubHeader'))
                 for perm in dangerous_perms[:10]:
                     name = perm.name.replace('android.permission.', '')
-                    story.append(Paragraph(f"• {name}", styles['BulletItem']))
+                    story.append(Paragraph(f"• {name}", styles['ApkBulletItem']))
             
             story.append(Spacer(1, 15))
             
             # Native libraries
             if result.native_libraries:
-                story.append(Paragraph("Native Libraries", styles['SubHeader']))
+                story.append(paragraph("Native Libraries", 'ApkSubHeader'))
                 for lib in result.native_libraries[:8]:
-                    story.append(Paragraph(f"• {lib}", styles['BulletItem']))
+                    story.append(Paragraph(f"• {lib}", styles['ApkBulletItem']))
             
             if report_type == "both":
                 story.append(PageBreak())
         
         # ==================== SECURITY SECTION ====================
         if report_type in ["security", "both"]:
-            story.append(Paragraph("Security Findings", styles['SectionHeader']))
-            story.append(Spacer(1, 10))
+            start_additional_details()
+            append_section_heading(
+                "Security Details",
+                "Static findings, manifest risk indicators, embedded secrets, and signing posture extracted from the APK.",
+                "Deep Dive",
+            )
             
             # Security Summary
             summary_data = [
                 ["Metric", "Value", "Status"],
-                ["Security Issues", str(len(result.security_issues)), "⚠️" if result.security_issues else "✅"],
-                ["Secrets Found", str(len(result.secrets)), "⚠️" if result.secrets else "✅"],
-                ["Debuggable", "Yes" if result.debuggable else "No", "⚠️" if result.debuggable else "✅"],
-                ["Allows Backup", "Yes" if result.allow_backup else "No", "⚠️" if result.allow_backup else "✅"],
+                ["Security Issues", str(len(result.security_issues)), status_text(bool(result.security_issues))],
+                ["Secrets Found", str(len(result.secrets)), status_text(bool(result.secrets))],
+                ["Debuggable", "Yes" if result.debuggable else "No", status_text(result.debuggable)],
+                ["Allows Backup", "Yes" if result.allow_backup else "No", status_text(result.allow_backup)],
             ]
-            t = Table(summary_data, colWidths=[2*inch, 1.5*inch, 0.5*inch])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#dc2626")),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('PADDING', (0, 0), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e7eb")),
-                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-            ]))
+            t = build_labeled_table(
+                summary_data,
+                [2.15 * inch, 1.25 * inch, 1.1 * inch],
+                header=True,
+                header_background=palette["danger"],
+                center_columns=[1, 2],
+            )
             story.append(t)
             story.append(Spacer(1, 20))
             
             # Security Issues by Severity
             if result.security_issues:
-                story.append(Paragraph("Security Issues", styles['SubHeader']))
-                
-                severity_colors = {
-                    'critical': colors.HexColor("#dc2626"),
-                    'high': colors.HexColor("#ea580c"),
-                    'medium': colors.HexColor("#ca8a04"),
-                    'low': colors.HexColor("#16a34a"),
-                    'info': colors.HexColor("#6b7280"),
-                }
+                story.append(paragraph("Security Issues", 'ApkSubHeader'))
                 
                 for issue in result.security_issues[:15]:
                     sev = issue.get('severity', 'info').lower()
                     color = severity_colors.get(sev, colors.black)
-                    story.append(Paragraph(
-                        f"<font color='{color}'>[{sev.upper()}]</font> <b>{issue.get('category', 'Unknown')}:</b> {issue.get('description', '')}",
-                        styles['BulletItem']
-                    ))
+                    issue_category = _strip_basic_markdown(issue.get('category', 'Unknown'))
+                    issue_description = _strip_basic_markdown(issue.get('description', 'No description available.'))
+                    append_notice_card(
+                        f"[{sev.upper()}] {issue_category}",
+                        [issue_description],
+                        color,
+                        severity_surfaces.get(sev, palette["surface"]),
+                    )
                 story.append(Spacer(1, 15))
             
             # Secrets
             if result.secrets:
-                story.append(Paragraph("Hardcoded Secrets", styles['SubHeader']))
+                story.append(paragraph("Hardcoded Secrets", 'ApkSubHeader'))
                 secrets_data = [["Type", "Value (Masked)", "Severity"]]
                 for secret in result.secrets[:10]:
                     secrets_data.append([
@@ -25816,21 +27326,19 @@ def generate_apk_pdf_report(
                         secret.get('masked_value', '***')[:40],
                         secret.get('severity', 'Unknown')
                     ])
-                t = Table(secrets_data, colWidths=[1.5*inch, 3*inch, 1*inch])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#7f1d1d")),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                    ('PADDING', (0, 0), (-1, -1), 6),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e7eb")),
-                ]))
+                t = build_labeled_table(
+                    secrets_data,
+                    [1.5 * inch, 3.1 * inch, 1.0 * inch],
+                    header=True,
+                    header_background=colors.HexColor("#7f1d1d"),
+                    center_columns=[2],
+                )
                 story.append(t)
                 story.append(Spacer(1, 15))
             
             # Certificate
             if result.certificate:
-                story.append(Paragraph("Certificate Analysis", styles['SubHeader']))
+                story.append(paragraph("Certificate Analysis", 'ApkSubHeader'))
                 cert = result.certificate
                 cert_status = "DEBUG CERTIFICATE - INSECURE" if cert.is_debug_cert else "Production Certificate"
                 cert_data = [
@@ -25840,35 +27348,25 @@ def generate_apk_pdf_report(
                     ["Valid Until", cert.valid_until or "Unknown"],
                     ["Signature", cert.signature_version or "Unknown"],
                 ]
-                t = Table(cert_data, colWidths=[1.5*inch, 4*inch])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#fef2f2") if cert.is_debug_cert else colors.HexColor("#f0fdf4")),
-                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                    ('PADDING', (0, 0), (-1, -1), 6),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e7eb")),
-                ]))
+                t = build_labeled_table(
+                    cert_data,
+                    [1.5 * inch, doc.width - (1.5 * inch)],
+                    first_column_background=palette["danger_soft"] if cert.is_debug_cert else palette["success_soft"],
+                    font_size=9,
+                )
                 story.append(t)
             
             # Decompiled Code Vulnerability Scan
             if decompiled_code_findings:
                 story.append(PageBreak())
-                story.append(Paragraph("Source Code Vulnerability Scan", styles['SectionHeader']))
-                story.append(Paragraph(
+                append_section_heading(
+                    "Source Code Vulnerability Scan",
                     f"Pattern-based security analysis found {len(decompiled_code_findings)} potential vulnerabilities in decompiled source code.",
-                    styles['Body']
-                ))
-                story.append(Spacer(1, 10))
+                    "Code Findings",
+                )
                 
                 # Group by severity
                 severity_order = ['critical', 'high', 'medium', 'low', 'info']
-                severity_colors_scan = {
-                    'critical': colors.HexColor("#dc2626"),
-                    'high': colors.HexColor("#ea580c"),
-                    'medium': colors.HexColor("#ca8a04"),
-                    'low': colors.HexColor("#16a34a"),
-                    'info': colors.HexColor("#6b7280"),
-                }
                 
                 findings_by_sev = {}
                 for f in decompiled_code_findings:
@@ -25880,11 +27378,8 @@ def generate_apk_pdf_report(
                 for sev in severity_order:
                     if sev in findings_by_sev:
                         sev_findings = findings_by_sev[sev]
-                        color = severity_colors_scan.get(sev, colors.black)
-                        story.append(Paragraph(
-                            f"<font color='{color}'><b>{sev.upper()} ({len(sev_findings)})</b></font>",
-                            styles['SubHeader']
-                        ))
+                        color = severity_colors.get(sev, colors.black)
+                        story.append(Paragraph(f"<font color='{color_to_hex(color)}'><b>{sev.upper()} ({len(sev_findings)})</b></font>", styles['ApkSubHeader']))
                         
                         for finding in sev_findings[:10]:  # Limit per severity
                             title = finding.get('title', 'Unknown Issue')
@@ -25895,36 +27390,36 @@ def generate_apk_pdf_report(
                             
                             story.append(Paragraph(
                                 f"<b>• {title}</b>",
-                                styles['BulletItem']
+                                styles['ApkBulletItem']
                             ))
                             story.append(Paragraph(
                                 f"  Location: {file_path}:{line} | Category: {category}" + (f" | CWE: {cwe}" if cwe else ""),
-                                styles['BulletItem']
+                                styles['ApkBulletItem']
                             ))
                             
                             if finding.get('exploitation'):
                                 story.append(Paragraph(
                                     f"  <i>Exploitation: {finding.get('exploitation')[:200]}</i>",
-                                    styles['BulletItem']
+                                    styles['ApkBulletItem']
                                 ))
                             story.append(Spacer(1, 5))
                         
                         if len(sev_findings) > 10:
                             story.append(Paragraph(
                                 f"  <i>...and {len(sev_findings) - 10} more {sev} findings</i>",
-                                styles['BulletItem']
+                                styles['ApkBulletItem']
                             ))
                         story.append(Spacer(1, 10))
         
         # ==================== CVE SCAN RESULTS ====================
         if cve_scan_results:
+            start_additional_details()
             story.append(PageBreak())
-            story.append(Paragraph("Known CVEs in Dependencies", styles['SectionHeader']))
-            story.append(Paragraph(
-                f"<b>Total CVEs Found:</b> {len(cve_scan_results)}",
-                styles['Body']
-            ))
-            story.append(Spacer(1, 10))
+            append_section_heading(
+                "Known CVEs in Dependencies",
+                f"Total CVEs found across discovered dependencies: {len(cve_scan_results)}",
+                "Dependency Risk",
+            )
             
             # Group by severity
             severity_order = ['critical', 'high', 'medium', 'low']
@@ -25947,8 +27442,8 @@ def generate_apk_pdf_report(
                     sev_cves = cves_by_sev[sev]
                     color = cve_severity_colors.get(sev, colors.black)
                     story.append(Paragraph(
-                        f"<font color='{color}'><b>{sev.upper()} ({len(sev_cves)})</b></font>",
-                        styles['SubHeader']
+                        f"<font color='{color_to_hex(color)}'><b>{sev.upper()} ({len(sev_cves)})</b></font>",
+                        styles['ApkSubHeader']
                     ))
                     
                     for cve in sev_cves[:10]:  # Limit per severity
@@ -25961,93 +27456,88 @@ def generate_apk_pdf_report(
                         
                         story.append(Paragraph(
                             f"<b>• {cve_id}</b>",
-                            styles['BulletItem']
+                            styles['ApkBulletItem']
                         ))
                         story.append(Paragraph(
                             f"  Package: {package} v{version}" + (f" | CVSS: {cvss}" if cvss else ""),
-                            styles['BulletItem']
+                            styles['ApkBulletItem']
                         ))
                         story.append(Paragraph(
                             f"  {summary}",
-                            styles['BulletItem']
+                            styles['ApkBulletItem']
                         ))
                         if fixed:
                             story.append(Paragraph(
                                 f"  <i>Fixed in: v{fixed}</i>",
-                                styles['BulletItem']
+                                styles['ApkBulletItem']
                             ))
                         story.append(Spacer(1, 5))
                     
                     if len(sev_cves) > 10:
                         story.append(Paragraph(
                             f"  <i>...and {len(sev_cves) - 10} more {sev} CVEs</i>",
-                            styles['BulletItem']
+                            styles['ApkBulletItem']
                         ))
                     story.append(Spacer(1, 10))
         
         # ==================== FRIDA SCRIPTS ====================
         if dynamic_analysis and dynamic_analysis.get('frida_scripts'):
+            start_additional_details()
             story.append(PageBreak())
-            story.append(Paragraph("Frida Scripts for Dynamic Testing", styles['SectionHeader']))
-            story.append(Paragraph(
-                "Auto-generated Frida scripts based on static analysis findings. These scripts can be used "
-                "to bypass security protections and monitor sensitive operations during dynamic testing.",
-                styles['Body']
-            ))
-            story.append(Spacer(1, 10))
+            append_section_heading(
+                "Frida Scripts for Dynamic Testing",
+                "Auto-generated Frida scripts based on static analysis findings. These scripts can be used to bypass security protections and monitor sensitive operations during dynamic testing.",
+                "Dynamic Analysis",
+            )
             
             # Detection Summary
             detections = dynamic_analysis.get('detections', {})
             if detections:
-                story.append(Paragraph("Security Protection Detection", styles['SubHeader']))
+                story.append(paragraph("Security Protection Detection", 'ApkSubHeader'))
                 
                 detection_data = [
                     ["Protection", "Detected"],
-                    ["SSL/TLS Pinning", "Yes ✓" if detections.get('ssl_pinning_detected') else "No"],
-                    ["Root Detection", "Yes ✓" if detections.get('root_detection_detected') else "No"],
-                    ["Emulator Detection", "Yes ✓" if detections.get('emulator_detection_detected') else "No"],
-                    ["Anti-Debugging", "Yes ✓" if detections.get('anti_debug_detected') else "No"],
-                    ["Anti-Tampering", "Yes ✓" if detections.get('anti_tampering_detected') else "No"],
+                    ["SSL/TLS Pinning", "Detected" if detections.get('ssl_pinning_detected') else "Not detected"],
+                    ["Root Detection", "Detected" if detections.get('root_detection_detected') else "Not detected"],
+                    ["Emulator Detection", "Detected" if detections.get('emulator_detection_detected') else "Not detected"],
+                    ["Anti-Debugging", "Detected" if detections.get('anti_debug_detected') else "Not detected"],
+                    ["Anti-Tampering", "Detected" if detections.get('anti_tampering_detected') else "Not detected"],
                 ]
                 
-                det_table = Table(detection_data, colWidths=[2.5*inch, 1.5*inch])
-                det_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e40af")),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f9fafb")),
-                ]))
+                det_table = build_labeled_table(
+                    detection_data,
+                    [2.7 * inch, 1.8 * inch],
+                    header=True,
+                    header_background=palette["primary"],
+                )
                 story.append(det_table)
                 story.append(Spacer(1, 15))
             
             # Quick Start Commands
             if dynamic_analysis.get('frida_spawn_command') or dynamic_analysis.get('frida_attach_command'):
-                story.append(Paragraph("Quick Start Commands", styles['SubHeader']))
+                story.append(paragraph("Quick Start Commands", 'ApkSubHeader'))
                 
                 if dynamic_analysis.get('frida_spawn_command'):
-                    story.append(Paragraph("<b>Spawn Mode</b> (starts app with hooks):", styles['Body']))
-                    story.append(Paragraph(
-                        f"<font face='Courier' size='8'>{dynamic_analysis['frida_spawn_command']}</font>",
-                        styles['Code']
-                    ))
-                    story.append(Spacer(1, 5))
+                    append_notice_card(
+                        "Spawn mode",
+                        ["Starts the application with hooks preloaded.", dynamic_analysis['frida_spawn_command']],
+                        palette["teal"],
+                        palette["teal_soft"],
+                    )
                 
                 if dynamic_analysis.get('frida_attach_command'):
-                    story.append(Paragraph("<b>Attach Mode</b> (hooks running app):", styles['Body']))
-                    story.append(Paragraph(
-                        f"<font face='Courier' size='8'>{dynamic_analysis['frida_attach_command']}</font>",
-                        styles['Code']
-                    ))
+                    append_notice_card(
+                        "Attach mode",
+                        ["Hooks a running application instance.", dynamic_analysis['frida_attach_command']],
+                        palette["primary"],
+                        palette["surface_alt"],
+                    )
                 story.append(Spacer(1, 15))
             
             # Scripts List
             scripts = dynamic_analysis.get('frida_scripts', [])
             if scripts:
-                story.append(Paragraph(f"Available Scripts ({len(scripts)} total)", styles['SubHeader']))
+                story.append(paragraph(f"Available Scripts ({len(scripts)} total)", 'ApkSubHeader'))
                 
                 scripts_data = [["Script Name", "Category", "Description"]]
                 for script in scripts:
@@ -26057,61 +27547,19 @@ def generate_apk_pdf_report(
                         script.get('description', 'No description')[:80] + ("..." if len(script.get('description', '')) > 80 else "")
                     ])
                 
-                scripts_table = Table(scripts_data, colWidths=[1.8*inch, 1.2*inch, 3.5*inch])
-                scripts_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e40af")),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f9fafb")),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
-                ]))
+                scripts_table = build_labeled_table(
+                    scripts_data,
+                    [1.8 * inch, 1.2 * inch, 3.2 * inch],
+                    header=True,
+                    header_background=palette["primary"],
+                    font_size=8,
+                )
                 story.append(scripts_table)
                 story.append(Spacer(1, 10))
                 
-                story.append(Paragraph(
-                    "<i>Note: Full script code is available in the Markdown export or web interface.</i>",
-                    styles['Body']
-                ))
+                story.append(Paragraph("<i>Note: Full script code is available in the Markdown export or web interface.</i>", styles['ApkBody']))
         
-        # ==================== AI DIAGRAMS NOTE ====================
-        if ai_architecture_diagram or ai_attack_surface_map:
-            story.append(PageBreak())
-            story.append(Paragraph("AI-Generated Diagrams", styles['SectionHeader']))
-            story.append(Paragraph(
-                "The following Mermaid diagrams are included in this analysis. To view them as rendered graphics, "
-                "use the Markdown export or view the diagrams in the web interface.",
-                styles['Body']
-            ))
-            story.append(Spacer(1, 10))
-            
-            if ai_architecture_diagram:
-                story.append(Paragraph("Application Architecture Diagram", styles['SubHeader']))
-                story.append(Paragraph(
-                    "This diagram shows the architecture of the application including components, "
-                    "services, and their interactions.",
-                    styles['Body']
-                ))
-                # Include first 500 chars of Mermaid code
-                diagram_preview = ai_architecture_diagram[:500] + ("..." if len(ai_architecture_diagram) > 500 else "")
-                story.append(Paragraph(f"<font face='Courier' size='8'>{diagram_preview}</font>", styles['Body']))
-                story.append(Spacer(1, 10))
-            
-            if ai_attack_surface_map:
-                story.append(Paragraph("Attack Surface Map", styles['SubHeader']))
-                story.append(Paragraph(
-                    "This diagram maps potential attack vectors, entry points, and security-critical components.",
-                    styles['Body']
-                ))
-                # Include first 500 chars of Mermaid code
-                diagram_preview = ai_attack_surface_map[:500] + ("..." if len(ai_attack_surface_map) > 500 else "")
-                story.append(Paragraph(f"<font face='Courier' size='8'>{diagram_preview}</font>", styles['Body']))
-                story.append(Spacer(1, 10))
-        
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_page_chrome, onLaterPages=draw_page_chrome)
         return buffer.getvalue()
         
     except ImportError as e:
@@ -26126,7 +27574,8 @@ def generate_apk_docx_report(
     cve_scan_results: Optional[List[Dict]] = None,
     ai_architecture_diagram: Optional[str] = None,
     ai_attack_surface_map: Optional[str] = None,
-    dynamic_analysis: Optional[Dict[str, Any]] = None
+    dynamic_analysis: Optional[Dict[str, Any]] = None,
+    report_title: Optional[str] = None,
 ) -> bytes:
     """
     Generate a Word document report for APK analysis.
@@ -26144,6 +27593,7 @@ def generate_apk_docx_report(
         DOCX bytes
     """
     try:
+        display_title = (report_title or "").strip() or "APK Analysis Report"
         from docx import Document
         from docx.shared import Inches, Pt, RGBColor
         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -26151,9 +27601,78 @@ def generate_apk_docx_report(
         import io
         
         doc = Document()
+        additional_details_started = False
+
+        def append_ai_docx_section(title_text: str, content: Optional[str], color: Optional[RGBColor] = None) -> None:
+            heading = doc.add_heading(title_text, 1)
+            if heading.runs and color is not None:
+                heading.runs[0].font.color.rgb = color
+
+            blocks = _apk_ai_report_blocks(content)
+            title_key = _normalize_apk_report_heading(title_text)
+            rendered_anything = False
+
+            for block in blocks:
+                block_type = block.get("type")
+                block_text = block.get("text", "")
+                cleaned_text = _strip_basic_markdown(block_text)
+
+                if block_type == "heading":
+                    if _normalize_apk_report_heading(cleaned_text) == title_key:
+                        continue
+                    doc.add_heading(cleaned_text, 2)
+                    rendered_anything = True
+                elif block_type == "bullet":
+                    doc.add_paragraph(cleaned_text, style='List Bullet')
+                    rendered_anything = True
+                elif block_type == "number":
+                    doc.add_paragraph(cleaned_text, style='List Number')
+                    rendered_anything = True
+                elif block_type == "code":
+                    code_p = doc.add_paragraph()
+                    code_run = code_p.add_run(block_text)
+                    code_run.font.name = 'Courier New'
+                    code_run.font.size = Pt(9)
+                    rendered_anything = True
+                elif cleaned_text:
+                    doc.add_paragraph(cleaned_text)
+                    rendered_anything = True
+
+            if not rendered_anything:
+                doc.add_paragraph(
+                    "AI narrative summary was not available for this section. Detailed technical findings appear later in this report."
+                )
+
+            doc.add_paragraph()
+
+        def append_docx_mermaid_diagram(title_text: str, description: str, mermaid_code: str) -> None:
+            doc.add_heading(title_text, 1)
+            doc.add_paragraph(description)
+
+            img_bytes = _render_mermaid_to_image(mermaid_code, "png")
+            if not img_bytes:
+                doc.add_paragraph(
+                    "Diagram rendering was unavailable for this Word export. Use the Markdown export or web interface if needed."
+                )
+                doc.add_paragraph()
+                return
+
+            image_paragraph = doc.add_paragraph()
+            image_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            image_run = image_paragraph.add_run()
+            image_run.add_picture(io.BytesIO(img_bytes), width=Inches(6.2))
+            doc.add_paragraph()
+
+        def start_additional_details() -> None:
+            nonlocal additional_details_started
+            if additional_details_started:
+                return
+            doc.add_page_break()
+            doc.add_heading('Additional Technical Details', 1)
+            additional_details_started = True
         
         # Title
-        title = doc.add_heading('APK Analysis Report', 0)
+        title = doc.add_heading(display_title, 0)
         title.runs[0].font.color.rgb = RGBColor(30, 64, 175)
         
         # App Info
@@ -26173,10 +27692,31 @@ def generate_apk_docx_report(
             info_table.rows[i].cells[0].paragraphs[0].runs[0].bold = True
         
         doc.add_paragraph()
+
+        if report_type in ["functionality", "both"]:
+            append_ai_docx_section('What Does This APK Do', result.ai_report_functionality)
+
+        if report_type in ["security", "both"]:
+            append_ai_docx_section('Security Findings', result.ai_report_security, RGBColor(220, 38, 38))
+
+        if ai_architecture_diagram:
+            append_docx_mermaid_diagram(
+                'Application Architecture',
+                "This diagram shows the architecture of the application including components, services, and their interactions.",
+                ai_architecture_diagram,
+            )
+
+        if ai_attack_surface_map:
+            append_docx_mermaid_diagram(
+                'Attack Surface Map',
+                "This diagram maps potential attack vectors, entry points, and security-critical components.",
+                ai_attack_surface_map,
+            )
         
         # ==================== FUNCTIONALITY SECTION ====================
         if report_type in ["functionality", "both"]:
-            doc.add_heading('What Does This APK Do', 1)
+            start_additional_details()
+            doc.add_heading('Functionality Details', 2)
             
             # Components
             doc.add_heading('App Components', 2)
@@ -26220,7 +27760,8 @@ def generate_apk_docx_report(
         
         # ==================== SECURITY SECTION ====================
         if report_type in ["security", "both"]:
-            sec_heading = doc.add_heading('Security Findings', 1)
+            start_additional_details()
+            sec_heading = doc.add_heading('Security Details', 2)
             sec_heading.runs[0].font.color.rgb = RGBColor(220, 38, 38)
             
             # Summary
@@ -26366,6 +27907,7 @@ def generate_apk_docx_report(
         
         # ==================== CVE SCAN RESULTS ====================
         if cve_scan_results:
+            start_additional_details()
             doc.add_page_break()
             doc.add_heading('Known CVEs in Dependencies', 1)
             doc.add_paragraph(
@@ -26430,6 +27972,7 @@ def generate_apk_docx_report(
         
         # ==================== FRIDA SCRIPTS ====================
         if dynamic_analysis and dynamic_analysis.get('frida_scripts'):
+            start_additional_details()
             doc.add_page_break()
             doc.add_heading('Frida Scripts for Dynamic Testing', 1)
             doc.add_paragraph(
@@ -26512,40 +28055,6 @@ def generate_apk_docx_report(
                 note_p = doc.add_paragraph()
                 note_run = note_p.add_run("Note: Full script code is available in the Markdown export or web interface.")
                 note_run.italic = True
-        
-        # ==================== AI DIAGRAMS ====================
-        if ai_architecture_diagram or ai_attack_surface_map:
-            doc.add_page_break()
-            doc.add_heading('AI-Generated Diagrams', 1)
-            doc.add_paragraph(
-                "The following Mermaid diagrams are included in this analysis. To view them as rendered graphics, "
-                "use the Markdown export or view the diagrams in the web interface."
-            )
-            
-            if ai_architecture_diagram:
-                doc.add_heading('Application Architecture Diagram', 2)
-                doc.add_paragraph(
-                    "This diagram shows the architecture of the application including components, "
-                    "services, and their interactions."
-                )
-                # Include first 500 chars of Mermaid code
-                diagram_preview = ai_architecture_diagram[:500] + ("..." if len(ai_architecture_diagram) > 500 else "")
-                p = doc.add_paragraph()
-                code_run = p.add_run(diagram_preview)
-                code_run.font.name = 'Courier New'
-                code_run.font.size = Pt(8)
-            
-            if ai_attack_surface_map:
-                doc.add_heading('Attack Surface Map', 2)
-                doc.add_paragraph(
-                    "This diagram maps potential attack vectors, entry points, and security-critical components."
-                )
-                # Include first 500 chars of Mermaid code
-                diagram_preview = ai_attack_surface_map[:500] + ("..." if len(ai_attack_surface_map) > 500 else "")
-                p = doc.add_paragraph()
-                code_run = p.add_run(diagram_preview)
-                code_run.font.name = 'Courier New'
-                code_run.font.size = Pt(8)
         
         buffer = io.BytesIO()
         doc.save(buffer)
@@ -33686,17 +35195,18 @@ async def analyze_binary_purpose(
     # Step 1: Basic binary analysis
     await report_progress("metadata", 10, "Analyzing binary metadata...")
     
-    metadata = analyze_binary(file_path)
-    if "error" in metadata:
-        raise ValueError(f"Failed to analyze binary: {metadata['error']}")
+    analysis_result = analyze_binary(file_path)
+    if analysis_result.error:
+        raise ValueError(f"Failed to analyze binary: {analysis_result.error}")
     
     # Step 2: Extract detailed information
     await report_progress("imports", 20, "Analyzing imports and exports...")
     
-    imports = metadata.get("imports", [])
-    exports = metadata.get("exports", [])
-    strings_data = metadata.get("strings", [])
-    sections = metadata.get("sections", [])
+    metadata = analysis_result.metadata
+    imports = analysis_result.imports or []
+    exports = analysis_result.exports or []
+    strings_data = analysis_result.strings or []
+    sections = metadata.sections or []
     
     # Categorize imports by functionality
     api_categories = {
@@ -33719,15 +35229,31 @@ async def analyze_binary_purpose(
     }
     
     categorized_apis: Dict[str, List[str]] = {cat: [] for cat in api_categories}
+    imports_by_library: Dict[str, int] = {}
+
+    def _import_name(imp: Any) -> str:
+        if isinstance(imp, dict):
+            return str(imp.get("name", "") or "")
+        return str(getattr(imp, "name", "") or "")
+
+    def _import_library(imp: Any) -> str:
+        if isinstance(imp, dict):
+            return str(imp.get("library", "") or "")
+        return str(getattr(imp, "library", "") or "")
     
     for imp in imports:
-        imp_name = imp.get("name", "") if isinstance(imp, dict) else str(imp)
+        imp_name = _import_name(imp)
+        library = _import_library(imp) or "unknown"
+        imports_by_library[library] = imports_by_library.get(library, 0) + 1
         for category, apis in api_categories.items():
             if any(api.lower() in imp_name.lower() for api in apis):
                 categorized_apis[category].append(imp_name)
     
     # Remove empty categories
     categorized_apis = {k: v for k, v in categorized_apis.items() if v}
+    top_imports_by_library = dict(
+        sorted(imports_by_library.items(), key=lambda kv: kv[1], reverse=True)[:20]
+    )
     
     # Step 3: Decompile with Ghidra for code understanding
     decompiled_code = ""
@@ -33737,22 +35263,22 @@ async def analyze_binary_purpose(
         await report_progress("ghidra", 40, "Decompiling with Ghidra...")
         
         try:
-            ghidra_result = await analyze_binary_with_ghidra(
+            ghidra_result = analyze_binary_with_ghidra(
                 file_path,
                 max_functions=50,  # Limit for purpose analysis
-                decompilation_limit=3000,
+                decomp_limit=3000,
             )
             
-            if ghidra_result.get("success"):
+            if ghidra_result and "error" not in ghidra_result:
                 functions = ghidra_result.get("functions", [])
                 
                 # Get interesting function summaries
                 for func in functions[:30]:
-                    if func.get("decompiled_code"):
-                        code = func["decompiled_code"][:1500]
+                    code = (func.get("decompiled") or func.get("decompiled_code") or "")[:1500]
+                    if code:
                         function_summaries.append({
                             "name": func.get("name", "unknown"),
-                            "entry": func.get("entry_point", ""),
+                            "entry": func.get("entry", func.get("entry_point", "")),
                             "code_preview": code,
                         })
                         decompiled_code += f"\n\n// Function: {func.get('name', 'unknown')}\n{code}"
@@ -33769,7 +35295,10 @@ async def analyze_binary_purpose(
     messages = []
     
     for s in strings_data[:500]:
-        value = s.get("value", "") if isinstance(s, dict) else str(s)
+        if isinstance(s, dict):
+            value = str(s.get("value", "") or "")
+        else:
+            value = str(getattr(s, "value", "") or str(s))
         if len(value) < 4:
             continue
             
@@ -33797,12 +35326,12 @@ async def analyze_binary_purpose(
 
 ## Binary Information
 - Filename: {file_path.name}
-- File Type: {metadata.get("file_type", "unknown")}
-- Architecture: {metadata.get("architecture", "unknown")}
-- Size: {metadata.get("file_size", 0)} bytes
-- Entry Point: {hex(metadata.get("entry_point", 0)) if metadata.get("entry_point") else "N/A"}
-- Is Packed: {metadata.get("is_packed", False)}
-- Compile Time: {metadata.get("compile_time", "unknown")}
+- File Type: {metadata.file_type}
+- Architecture: {metadata.architecture}
+- Size: {metadata.file_size} bytes
+- Entry Point: {hex(metadata.entry_point) if isinstance(metadata.entry_point, int) else (metadata.entry_point or "N/A")}
+- Is Packed: {metadata.is_packed}
+- Compile Time: {metadata.compile_time or "unknown"}
 
 ## Sections
 {json.dumps(sections[:10], indent=2)}
@@ -33811,7 +35340,7 @@ async def analyze_binary_purpose(
 {json.dumps(categorized_apis, indent=2)}
 
 ## Import Count by Library
-{json.dumps({lib: len([i for i in imports if isinstance(i, dict) and i.get("library") == lib]) for lib in set(i.get("library", "") for i in imports if isinstance(i, dict))}[:20], indent=2) if imports else "No imports"}
+{json.dumps(top_imports_by_library, indent=2) if imports else "No imports"}
 
 ## Interesting Strings (sample)
 URLs: {url_patterns[:10]}
@@ -38171,13 +39700,19 @@ CRITICAL FALSE POSITIVE FILTER RULES:
         
         if decompiled_code:
             # Include a sample of decompiled functions for context
-            functions = decompiled_code.get("functions", [])[:5]
+            functions = decompiled_code.get("functions", [])[:8]
             if functions:
-                func_preview = "\n\n".join([
-                    f"// {f.get('name', 'unknown')}\n{f.get('code', '')[:500]}..."
-                    for f in functions if f.get('code')
-                ])
-                context_parts.append(f"Sample Decompiled Functions:\n```c\n{func_preview}\n```")
+                previews = []
+                for f in functions:
+                    code = (f.get("decompiled") or f.get("code") or "").strip()
+                    if not code:
+                        continue
+                    previews.append(
+                        f"// {f.get('name', 'unknown')} @ {f.get('entry', '0x0')}\n{code[:900]}..."
+                    )
+                if previews:
+                    func_preview = "\n\n".join(previews)
+                    context_parts.append(f"Sample Decompiled Functions:\n```c\n{func_preview}\n```")
         
         context = "\n\n".join(context_parts)
         
@@ -38518,6 +40053,8 @@ async def run_comprehensive_binary_analysis(
     ghidra_result: Optional[Dict[str, Any]] = None,
     static_result: Optional[Any] = None,
     verify_with_ai: bool = True,
+    is_legitimate_software: bool = False,
+    legitimacy_indicators: Optional[List[str]] = None,
     on_progress: Optional[callable] = None
 ) -> Dict[str, Any]:
     """
@@ -38534,6 +40071,8 @@ async def run_comprehensive_binary_analysis(
         ghidra_result: Optional pre-computed Ghidra decompilation
         static_result: Optional pre-computed static analysis
         verify_with_ai: Whether to use AI for verification
+        is_legitimate_software: Whether binary appears to be from a known publisher
+        legitimacy_indicators: Why the binary appears legitimate
         on_progress: Optional callback for progress updates
         
     Returns:
@@ -38542,6 +40081,16 @@ async def run_comprehensive_binary_analysis(
     import time
     start_time = time.time()
     results = {}
+    legitimacy_indicators = legitimacy_indicators or []
+
+    # Auto-assess legitimacy when caller did not already provide a decision.
+    if static_result is not None and not is_legitimate_software and not legitimacy_indicators:
+        auto_legit, auto_indicators = assess_binary_legitimacy(
+            static_result,
+            filename=Path(binary_path).name if binary_path else "",
+        )
+        is_legitimate_software = auto_legit
+        legitimacy_indicators = auto_indicators
     
     def progress(msg: str, pct: int = 0):
         if on_progress:
@@ -38554,7 +40103,10 @@ async def run_comprehensive_binary_analysis(
     pattern_findings = []
     if ghidra_result and "functions" in ghidra_result:
         progress("Running pattern-based vulnerability scan...", 10)
-        pattern_result = scan_decompiled_binary_comprehensive(ghidra_result)
+        pattern_result = scan_decompiled_binary_comprehensive(
+            ghidra_result,
+            is_legitimate_software=is_legitimate_software,
+        )
         pattern_findings = pattern_result.get("findings", [])
         results["pattern_scan"] = pattern_result
         progress(f"Pattern scan found {len(pattern_findings)} potential vulnerabilities", 25)
@@ -38615,7 +40167,9 @@ async def run_comprehensive_binary_analysis(
             cve_findings=cve_findings,
             sensitive_findings=sensitive_findings,
             decompiled_code=decompiled_code,
-            binary_metadata=binary_metadata
+            binary_metadata=binary_metadata,
+            is_legitimate_software=is_legitimate_software,
+            legitimacy_indicators=legitimacy_indicators,
         )
         results["verification"] = verification_result
         
@@ -39455,40 +41009,78 @@ might try to compromise this legitimate application from the outside:
 4. **POTENTIAL WEAKNESSES** - Areas that could contain vulnerabilities
 5. **SECURITY MITIGATIONS** - Protections in place (ASLR, DEP, CFG, etc.)
 
+BEGINNER READABILITY RULES:
+- Build one clear top-to-bottom story: Input -> Processing -> Weakness -> Boundary -> Impact -> Mitigation.
+- Use plain-English labels (3-8 words). NEVER leave labels as just "E1", "P1", "W2", etc.
+- If you use short IDs, label must include meaning (example: E1["Entry: Named Pipe Input"]).
+- Keep it concise (max 22 nodes).
+- Avoid pastel/light fills that reduce readability.
+
 Structure:
 ```mermaid
 flowchart TD
     subgraph External["🌐 EXTERNAL INPUTS"]
-        E1["Network Traffic"]
-        E2["File Handlers"]
-        E3["IPC Messages"]
+        E1["Entry: Network Request Input"]
+        E2["Entry: File/Path Input"]
+        E3["Entry: IPC/Named Pipe Input"]
     end
     
     subgraph Processing["⚙️ DATA PROCESSING"]
-        P1["Parser Components"]
-        P2["Protocol Handlers"]
+        P1["Processing: Path Normalization"]
+        P2["Processing: Parser + Config Handling"]
     end
     
+    subgraph Weaknesses["⚠️ POTENTIAL WEAKNESSES"]
+        W1["Weakness: Incomplete Input Validation"]
+        W2["Weakness: Unsafe Argument Construction"]
+    end
+
     subgraph Boundaries["🔒 TRUST BOUNDARIES"]
-        B1["Sandbox Boundary"]
-        B2["Privilege Level"]
+        B1["Boundary: User to System Transition"]
     end
     
-    subgraph Mitigations["🛡️ PROTECTIONS"]
-        M1["ASLR/DEP"]
-        M2["CFG/CET"]
+    subgraph Impact["💥 POTENTIAL IMPACT"]
+        I1["Impact: Privilege Escalation Path"]
     end
     
-    External --> Processing
-    Processing --> Boundaries
+    subgraph Mitigations["🛡️ SECURITY MITIGATIONS"]
+        M1["Mitigation: Path Canonicalization"]
+        M2["Mitigation: ASLR/DEP/CFG"]
+        M3["Mitigation: Privilege Separation"]
+    end
+    
+    E1 --> P1
+    E2 --> P1
+    E3 --> P2
+    P1 --> W1
+    P2 --> W2
+    W1 --> B1
+    W2 --> B1
+    B1 --> I1
+    M1 -.reduces.-> W1
+    M2 -.hardens.-> I1
+    M3 -.contains.-> B1
+
+    classDef entry fill:#0b3b69,stroke:#38bdf8,color:#ffffff
+    classDef process fill:#1e3a5f,stroke:#60a5fa,color:#ffffff
+    classDef weakness fill:#9a3412,stroke:#fb923c,color:#ffffff
+    classDef boundary fill:#334155,stroke:#94a3b8,color:#ffffff
+    classDef impact fill:#b91c1c,stroke:#ef4444,color:#ffffff
+    classDef mitigation fill:#166534,stroke:#22c55e,color:#ffffff
+    class E1,E2,E3 entry
+    class P1,P2 process
+    class W1,W2 weakness
+    class B1 boundary
+    class I1 impact
+    class M1,M2,M3 mitigation
 ```
 
 Requirements:
 - Focus on attack SURFACE not attack TREES (map inputs, not exploitation)
 - Show security mitigations present
-- Use blue/green colors for protected areas, yellow for areas needing review
+- Use high-contrast dark palette with readable text (no low-contrast combinations)
 - Do NOT imply the software is malicious
-- Max 30 nodes to keep readable
+- Max 22 nodes to keep readable
 
 Return ONLY the mermaid code block."""
         else:
@@ -39591,6 +41183,230 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
     - Parentheses in labels that confuse the parser
     """
     import re as regex
+
+    def _split_style_parts(style_blob: str) -> List[str]:
+        """Split Mermaid style blobs while preserving commas inside rgb()/hsl()."""
+        if not style_blob:
+            return []
+        return [part.strip() for part in regex.split(r'[;,](?![^(]*\))', style_blob) if part.strip()]
+
+    def _hsl_to_rgb(h: float, s: float, l: float) -> Tuple[int, int, int]:
+        h = h % 360
+        s = max(0.0, min(1.0, s))
+        l = max(0.0, min(1.0, l))
+        c = (1 - abs(2 * l - 1)) * s
+        x = c * (1 - abs((h / 60) % 2 - 1))
+        m = l - c / 2
+        if h < 60:
+            r1, g1, b1 = c, x, 0
+        elif h < 120:
+            r1, g1, b1 = x, c, 0
+        elif h < 180:
+            r1, g1, b1 = 0, c, x
+        elif h < 240:
+            r1, g1, b1 = 0, x, c
+        elif h < 300:
+            r1, g1, b1 = x, 0, c
+        else:
+            r1, g1, b1 = c, 0, x
+        return (
+            int(round((r1 + m) * 255)),
+            int(round((g1 + m) * 255)),
+            int(round((b1 + m) * 255)),
+        )
+
+    def _parse_color(color: Optional[str]) -> Optional[Tuple[int, int, int]]:
+        if not color:
+            return None
+        value = color.strip().lower()
+        if not value or value in {"none", "transparent", "currentcolor"}:
+            return None
+
+        named = {
+            "white": "#ffffff",
+            "black": "#000000",
+            "lightyellow": "#ffffe0",
+            "ivory": "#fffff0",
+            "yellow": "#ffff00",
+        }
+        value = named.get(value, value)
+
+        short_hex = regex.match(r'^#([0-9a-f]{3})$', value)
+        if short_hex:
+            r, g, b = short_hex.group(1)
+            return (int(r * 2, 16), int(g * 2, 16), int(b * 2, 16))
+
+        long_hex = regex.match(r'^#([0-9a-f]{6})$', value)
+        if long_hex:
+            hex_value = long_hex.group(1)
+            return (
+                int(hex_value[0:2], 16),
+                int(hex_value[2:4], 16),
+                int(hex_value[4:6], 16),
+            )
+
+        rgb_match = regex.match(r'^rgba?\(([^)]+)\)$', value)
+        if rgb_match:
+            parts = [p.strip() for p in rgb_match.group(1).split(",")]
+            if len(parts) >= 3:
+                try:
+                    r = float(parts[0])
+                    g = float(parts[1])
+                    b = float(parts[2])
+                    if len(parts) >= 4:
+                        alpha = float(parts[3])
+                        if alpha <= 0:
+                            return None
+                    return (
+                        int(max(0, min(255, r))),
+                        int(max(0, min(255, g))),
+                        int(max(0, min(255, b))),
+                    )
+                except ValueError:
+                    return None
+
+        hsl_match = regex.match(r'^hsla?\(([^)]+)\)$', value)
+        if hsl_match:
+            parts = [p.strip() for p in hsl_match.group(1).split(",")]
+            if len(parts) >= 3:
+                try:
+                    h = float(parts[0])
+                    s = float(parts[1].replace("%", "")) / 100.0
+                    l = float(parts[2].replace("%", "")) / 100.0
+                    if len(parts) >= 4:
+                        alpha = float(parts[3])
+                        if alpha <= 0:
+                            return None
+                    return _hsl_to_rgb(h, s, l)
+                except ValueError:
+                    return None
+
+        return None
+
+    def _relative_luminance(rgb: Tuple[int, int, int]) -> float:
+        def _to_linear(channel: int) -> float:
+            c = channel / 255.0
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        r, g, b = rgb
+        return (0.2126 * _to_linear(r)) + (0.7152 * _to_linear(g)) + (0.0722 * _to_linear(b))
+
+    def _contrast_ratio(first: Tuple[int, int, int], second: Tuple[int, int, int]) -> float:
+        l1 = _relative_luminance(first)
+        l2 = _relative_luminance(second)
+        lighter = max(l1, l2)
+        darker = min(l1, l2)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    def _semantic_style_for_name(name: str) -> Dict[str, str]:
+        key = (name or "").strip().lower()
+        if any(token in key for token in ("critical", "impact", "goal", "attack", "exploit")):
+            return {"fill": "#b91c1c", "stroke": "#ef4444", "color": "#ffffff"}
+        if any(token in key for token in ("high", "weak", "vuln", "vector", "danger", "risk", "threat")):
+            return {"fill": "#c2410c", "stroke": "#f97316", "color": "#ffffff"}
+        if any(token in key for token in ("medium", "warning", "warn")):
+            return {"fill": "#92400e", "stroke": "#f59e0b", "color": "#ffffff"}
+        if any(token in key for token in ("mitig", "security", "protect", "defense", "safe", "hardening")):
+            return {"fill": "#166534", "stroke": "#22c55e", "color": "#ffffff"}
+        if any(token in key for token in ("boundary", "trust", "sandbox", "privilege", "isolation")):
+            return {"fill": "#334155", "stroke": "#94a3b8", "color": "#ffffff"}
+        if any(token in key for token in ("entry", "input", "source", "external", "ingress")):
+            return {"fill": "#0b3b69", "stroke": "#38bdf8", "color": "#ffffff"}
+        if any(token in key for token in ("process", "parser", "mapping", "logic", "data")):
+            return {"fill": "#1e3a5f", "stroke": "#60a5fa", "color": "#ffffff"}
+        return {"fill": "#1e3a5f", "stroke": "#60a5fa", "color": "#ffffff"}
+
+    def _enforce_high_contrast_dark_fill(
+        style: Dict[str, str],
+        fallback_style: Dict[str, str],
+    ) -> None:
+        white_rgb = (255, 255, 255)
+        fill_value = style.get("fill")
+        fill_rgb = _parse_color(fill_value)
+        if fill_rgb is None:
+            style["fill"] = fallback_style["fill"]
+            fill_rgb = _parse_color(style["fill"])
+
+        # Mermaid html labels commonly render light text; keep fill dark enough for white text.
+        if fill_rgb is not None and _contrast_ratio(fill_rgb, white_rgb) < 4.5:
+            style["fill"] = fallback_style["fill"]
+            style["stroke"] = fallback_style.get("stroke", style.get("stroke", "#60a5fa"))
+
+        stroke_rgb = _parse_color(style.get("stroke"))
+        if stroke_rgb is None or _contrast_ratio(stroke_rgb, white_rgb) < 1.8:
+            style["stroke"] = fallback_style.get("stroke", "#60a5fa")
+
+        style["color"] = "#ffffff"
+
+    def _normalize_inline_style(style_blob: str) -> str:
+        """Normalize Mermaid `style NODE ...` lines for text contrast."""
+        parsed: Dict[str, str] = {}
+        for part in _split_style_parts(style_blob):
+            if ":" not in part:
+                continue
+            key, value = part.split(":", 1)
+            parsed[key.strip().lower()] = value.strip()
+
+        if not parsed:
+            return style_blob
+
+        _enforce_high_contrast_dark_fill(parsed, _semantic_style_for_name("process"))
+
+        ordered_keys = ["fill", "stroke", "color", "stroke-width", "font-weight"]
+        emitted = []
+        for key in ordered_keys:
+            if key in parsed:
+                emitted.append(f"{key}:{parsed[key]}")
+        for key, value in parsed.items():
+            if key not in ordered_keys:
+                emitted.append(f"{key}:{value}")
+        return ",".join(emitted)
+
+    def _normalize_classdef_style(name: str, style_blob: str) -> str:
+        """
+        Normalize Mermaid classDef styles to keep text contrast readable.
+        """
+        defaults = {
+            # Preferred classes
+            "critical": {"fill": "#b91c1c", "stroke": "#ef4444", "color": "#ffffff"},
+            "high": {"fill": "#c2410c", "stroke": "#f97316", "color": "#ffffff"},
+            "medium": {"fill": "#92400e", "stroke": "#f59e0b", "color": "#ffffff"},
+            "low": {"fill": "#15803d", "stroke": "#22c55e", "color": "#ffffff"},
+            "info": {"fill": "#0369a1", "stroke": "#38bdf8", "color": "#ffffff"},
+            "attacker": {"fill": "#6d28d9", "stroke": "#8b5cf6", "color": "#ffffff"},
+            # Alias classes often returned by models
+            "danger": {"fill": "#b91c1c", "stroke": "#ef4444", "color": "#ffffff"},
+            "warning": {"fill": "#92400e", "stroke": "#f59e0b", "color": "#ffffff"},
+            "safe": {"fill": "#15803d", "stroke": "#22c55e", "color": "#ffffff"},
+        }
+
+        parsed: Dict[str, str] = {}
+        for part in _split_style_parts(style_blob):
+            if ":" not in part:
+                continue
+            key, value = part.split(":", 1)
+            parsed[key.strip().lower()] = value.strip()
+
+        key_name = name.strip().lower()
+        if key_name in defaults:
+            merged = defaults[key_name].copy()
+            merged.update(parsed)
+        else:
+            merged = parsed or _semantic_style_for_name(key_name).copy()
+
+        if not merged:
+            return style_blob
+
+        _enforce_high_contrast_dark_fill(merged, defaults.get(key_name, _semantic_style_for_name(key_name)))
+
+        ordered_keys = ["fill", "stroke", "color", "stroke-width", "font-weight"]
+        emitted = []
+        for key in ordered_keys:
+            if key in merged:
+                emitted.append(f"{key}:{merged[key]}")
+        for key, value in merged.items():
+            if key not in ordered_keys:
+                emitted.append(f"{key}:{value}")
+        return ",".join(emitted)
     
     # Mermaid reserved keywords that can't be used as node IDs or in certain contexts
     # These are shape keywords that cause parse errors like "got 'PE'"
@@ -39633,6 +41449,11 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
         words = label.split()
         new_words = []
         for word in words:
+            # Keep identifier-style tokens (e.g., E1, W2, CVE-2024-1234) untouched.
+            # Escaping these creates confusing labels like "E-item1".
+            if regex.search(r'\d', word):
+                new_words.append(word)
+                continue
             # If word matches a reserved keyword exactly, add suffix
             clean_word = regex.sub(r'[^A-Za-z]', '', word)
             if clean_word.upper() in MERMAID_RESERVED:
@@ -39641,10 +41462,43 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
             else:
                 new_words.append(word)
         return ' '.join(new_words)
+
+    def _expand_terse_node_label(node_id: str, label: str) -> str:
+        """
+        Expand labels like E1/P2/W3 when the label is only the opaque code.
+        """
+        code = (label or "").strip().upper()
+        if not code:
+            return label
+        if not regex.fullmatch(r'[A-Z]{1,3}\d+', code):
+            return label
+
+        prefix_match = regex.match(r'^([A-Z]+)', code)
+        prefix = prefix_match.group(1) if prefix_match else ""
+        label_map = {
+            "E": "Entry Point",
+            "EP": "Entry Point",
+            "P": "Processing Step",
+            "PR": "Processing Step",
+            "W": "Weakness",
+            "V": "Vulnerability",
+            "B": "Trust Boundary",
+            "TB": "Trust Boundary",
+            "I": "Impact",
+            "M": "Mitigation",
+            "G": "Goal",
+            "T": "Technique",
+        }
+        base = label_map.get(prefix)
+        if not base:
+            return label
+        return f"{base} {code}"
     
     # First pass: fix common AI mistakes
     lines = diagram.split('\n')
     sanitized_lines = []
+    defined_node_ids: Set[str] = set()
+    edge_node_refs: Set[str] = set()
     
     for line in lines:
         original_line = line
@@ -39691,6 +41545,23 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
                 line = f'{indent}subgraph {name}'
             sanitized_lines.append(line)
             continue
+
+        # Expand bare terse nodes like `E1` so beginner users see meaningful labels.
+        bare_terse_node = regex.match(r'^(\s*)([A-Za-z]{1,3}\d+)\s*$', line)
+        if bare_terse_node:
+            indent = bare_terse_node.group(1)
+            node_id = bare_terse_node.group(2)
+            if node_id.upper() in MERMAID_RESERVED:
+                node_id = f"Node_{node_id}"
+            readable_label = escape_reserved_in_label(_expand_terse_node_label(node_id, node_id))
+            defined_node_ids.add(node_id)
+            sanitized_lines.append(f'{indent}{node_id}["{readable_label}"]')
+            continue
+
+        # Keep track of icon-style node definitions (Node@{ ... }).
+        icon_node = regex.match(r'^\s*([A-Za-z][A-Za-z0-9_]*)@\{', line)
+        if icon_node:
+            defined_node_ids.add(icon_node.group(1))
         
         # Fix node definitions with brackets: NodeID["Label"] or NodeID[Label]
         def fix_node_label(match):
@@ -39709,6 +41580,9 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
             
             # Clean up the label using our robust cleaner
             label = label.strip('"\'')
+            # Expand opaque short labels first (E1/P2/W3...) before keyword escaping.
+            # This avoids converting E1 -> E-item1.
+            label = _expand_terse_node_label(node_id, label)
             label = escape_reserved_in_label(label)  # This now also calls clean_label_text
             
             # Truncate very long labels
@@ -39716,6 +41590,7 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
                 label = label[:47] + "..."
             
             # Always use square brackets with quoted labels for safety
+            defined_node_ids.add(node_id)
             return f'{prefix}{node_id}["{label}"]{suffix}'
         
         # Pattern to match node definitions
@@ -39729,11 +41604,51 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
         line = regex.sub(r'\s*---\s*', ' --- ', line)
         line = regex.sub(r'\s*-\.->\s*', ' -.-> ', line)
         line = regex.sub(r'\s*==>\s*', ' ==> ', line)
+        if any(arrow in line for arrow in (" --> ", " -.-> ", " ==> ", " --- ")):
+            if not line.strip().startswith(("class ", "classDef ", "style ", "click ", "linkStyle ")):
+                for token in regex.findall(r'\b([A-Za-z]{1,3}\d+)\b', line):
+                    edge_node_refs.add(token)
         
         # Fix style definitions
         line = regex.sub(r'style\s+(\w+)\s+', r'style \1 ', line)
+        style_match = regex.match(r'^(\s*)style\s+([A-Za-z0-9_-]+)\s+(.+)$', line)
+        if style_match:
+            indent = style_match.group(1)
+            node_name = style_match.group(2)
+            style_blob = style_match.group(3).strip()
+            normalized_style = _normalize_inline_style(style_blob)
+            line = f"{indent}style {node_name} {normalized_style}"
+
+        # Normalize class definitions for contrast/readability.
+        classdef_match = regex.match(r'^(\s*)classDef\s+([A-Za-z0-9_-]+)\s+(.+)$', line)
+        if classdef_match:
+            indent = classdef_match.group(1)
+            class_name = classdef_match.group(2)
+            class_aliases = {
+                "danger": "critical",
+                "warning": "medium",
+                "safe": "low",
+            }
+            class_name = class_aliases.get(class_name.lower(), class_name)
+            style_blob = classdef_match.group(3).strip()
+            normalized = _normalize_classdef_style(class_name, style_blob)
+            line = f"{indent}classDef {class_name} {normalized}"
+
+        # Map common alias classes to our standard severity classes.
+        line = regex.sub(r':::\s*danger\b', ':::critical', line)
+        line = regex.sub(r':::\s*warning\b', ':::medium', line)
+        line = regex.sub(r':::\s*safe\b', ':::low', line)
         
         sanitized_lines.append(line)
+
+    # Add explicit labels for terse IDs that only appeared in edges (auto-created by Mermaid otherwise).
+    for terse_id in sorted(edge_node_refs):
+        if terse_id in defined_node_ids:
+            continue
+        readable_label = escape_reserved_in_label(_expand_terse_node_label(terse_id, terse_id))
+        if readable_label != terse_id:
+            sanitized_lines.append(f'    {terse_id}["{readable_label}"]')
+            defined_node_ids.add(terse_id)
     
     result = '\n'.join(sanitized_lines)
     
@@ -39748,7 +41663,21 @@ def _sanitize_mermaid_diagram(diagram: str) -> str:
             continue
         final_lines.append(line)
     
-    return '\n'.join(final_lines)
+    sanitized = '\n'.join(final_lines).strip()
+
+    # Ensure we return a supported Mermaid diagram type.
+    if not sanitized:
+        return "flowchart TD\n    A[Diagram] --> B[No valid content]"
+    first_line = sanitized.splitlines()[0].strip().lower()
+    if not first_line.startswith(("flowchart", "graph", "sequencediagram", "classdiagram", "statediagram", "erdiagram", "journey", "gantt")):
+        sanitized = "flowchart TD\n" + sanitized
+
+    return sanitized
+
+
+def sanitize_mermaid_diagram(diagram: str) -> str:
+    """Public wrapper for Mermaid sanitization used by multiple routers."""
+    return _sanitize_mermaid_diagram(diagram)
 
 
 def _generate_basic_attack_tree(
@@ -43854,7 +45783,10 @@ async def run_enhanced_emulation_with_verification(
         score = 0
         
         # Evasion techniques
-        evasion_score = result.get("evasion_analysis", {}).get("evasion_score", 0)
+        evasion_analysis = result.get("evasion_analysis") or {}
+        if not isinstance(evasion_analysis, dict):
+            evasion_analysis = {}
+        evasion_score = evasion_analysis.get("evasion_score", 0)
         score += evasion_score * 0.3
         
         # Malicious API patterns
@@ -43866,7 +45798,12 @@ async def run_enhanced_emulation_with_verification(
             score += 10
         
         # Behavioral indicators
-        behaviors = result.get("emulation_result", {}).get("behavioral_indicators", [])
+        emulation_result = result.get("emulation_result") or {}
+        if not isinstance(emulation_result, dict):
+            emulation_result = {}
+        behaviors = emulation_result.get("behavioral_indicators", [])
+        if not isinstance(behaviors, list):
+            behaviors = []
         if "anti_analysis_techniques" in behaviors:
             score += 10
         if "network_capability" in behaviors:
@@ -43893,16 +45830,30 @@ async def run_enhanced_emulation_with_verification(
         recommendations.append("Binary is packed - review unpacked strings and code")
     
     if result["summary"]["evasion_techniques"] > 0:
-        techniques = result.get("evasion_analysis", {}).get("techniques_detected", [])
+        evasion_analysis = result.get("evasion_analysis") or {}
+        if not isinstance(evasion_analysis, dict):
+            evasion_analysis = {}
+        techniques = evasion_analysis.get("techniques_detected", [])
+        if not isinstance(techniques, list):
+            techniques = []
         recommendations.append(f"Evasion detected: {', '.join(techniques[:3])}")
     
     if result["summary"]["malicious_patterns"] > 0:
-        classifications = result.get("api_sequence_analysis", {}).get("behavior_classification", [])
+        api_sequence_analysis = result.get("api_sequence_analysis") or {}
+        if not isinstance(api_sequence_analysis, dict):
+            api_sequence_analysis = {}
+        classifications = api_sequence_analysis.get("behavior_classification", [])
+        if not isinstance(classifications, list):
+            classifications = []
         if classifications:
             recommendations.append(f"Malicious behavior: {', '.join(classifications[:3])}")
     
-    if result.get("ai_verification", {}).get("recommendations"):
-        recommendations.extend(result["ai_verification"]["recommendations"][:3])
+    ai_verification = result.get("ai_verification") or {}
+    if not isinstance(ai_verification, dict):
+        ai_verification = {}
+    ai_recommendations = ai_verification.get("recommendations", [])
+    if isinstance(ai_recommendations, list) and ai_recommendations:
+        recommendations.extend(ai_recommendations[:3])
     
     result["recommendations"] = recommendations
     result["success"] = True
@@ -44028,11 +45979,22 @@ Status: SIGNED (Authenticode certificate present)
 Certificate Type: {meta.authenticode.get('certificate_type', 'Unknown')}""")
         
         if ghidra_result:
-            funcs = ghidra_result.get("functions", [])
-            context_parts.append(f"\nDecompiled Functions: {len(funcs)}")
-            # Include sample function names
-            func_names = [f.get("name", "") for f in funcs[:20]]
-            context_parts.append(f"Sample Functions: {', '.join(func_names)}")
+            ghidra_context = build_budgeted_ghidra_context(
+                ghidra_result=ghidra_result,
+                findings=verified_findings,
+                cve_findings=cve_findings,
+                attack_surface=attack_surface,
+                max_functions=12,
+                total_char_budget=22000,
+                min_chars_per_function=700,
+                max_chars_per_function=2400,
+            )
+            if ghidra_context.get("overview"):
+                context_parts.append(f"\n{ghidra_context['overview']}")
+            if ghidra_context.get("selected_names"):
+                context_parts.append(f"Sample Functions: {ghidra_context['selected_names']}")
+            if ghidra_context.get("code_block"):
+                context_parts.append(ghidra_context["code_block"])
         
         if obfuscation_result:
             context_parts.append(f"""
@@ -44117,7 +46079,7 @@ Risk Assessment: {verdict_data.get('risk_assessment', 'unknown')}""")
                 if isinstance(script_result, dict):
                     context_parts.append(f"\n{script_name}: {script_result.get('summary', 'No summary')}")
         
-        context = "\n".join(context_parts)
+        context = truncate_text_for_llm_budget("\n".join(context_parts), max_chars=60000)
         
         # Check if we have emulation data for enhanced prompts
         has_emulation = emulation_result and emulation_result.get("final_verdict")

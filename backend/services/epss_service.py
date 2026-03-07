@@ -3,15 +3,23 @@ EPSS (Exploit Prediction Scoring System) Service
 
 Retrieves EPSS scores from FIRST (Forum of Incident Response and Security Teams)
 to help prioritize vulnerabilities based on likelihood of exploitation.
+
+Supports:
+- Live lookups via the FIRST EPSS API
+- Offline fallback using a local SQLite database
+- APP_OFFLINE_MODE to force local-only behavior in air-gapped deployments
 """
 
+import os
+import sqlite3
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from backend.core.config import settings
 from backend.core.logging import get_logger
 from backend.core.cache import cache
 
@@ -19,6 +27,12 @@ logger = get_logger(__name__)
 
 # EPSS API endpoint
 EPSS_API_URL = "https://api.first.org/data/v1/epss"
+
+# Local offline database path
+LOCAL_EPSS_DB = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "data", "offline", "epss", "epss.db"
+)
 
 # Cache namespace for EPSS lookups
 CACHE_NAMESPACE = "epss"
@@ -60,6 +74,143 @@ class EPSSScore:
             return "medium"
         else:
             return "low"
+
+
+def _normalize_cve_id(cve_id: str) -> str:
+    """Normalize CVE IDs to the canonical CVE-YYYY-NNNN form."""
+    normalized = (cve_id or "").strip().upper()
+    if normalized and not normalized.startswith("CVE-"):
+        normalized = f"CVE-{normalized}"
+    return normalized
+
+
+def _check_local_epss_db_available() -> bool:
+    """Check whether the local offline EPSS database exists."""
+    return os.path.exists(LOCAL_EPSS_DB)
+
+
+def is_epss_offline_data_available() -> bool:
+    """Return True when local EPSS data is available for offline use."""
+    return _check_local_epss_db_available()
+
+
+def _cache_local_score(score: EPSSScore) -> None:
+    """Cache a locally resolved EPSS score."""
+    _cache_score(score.cve_id, score.score, score.percentile, score.date)
+
+
+def _lookup_epss_local(cve_id: str) -> Optional[EPSSScore]:
+    """Look up a single EPSS score from the local offline database."""
+    if not _check_local_epss_db_available():
+        return None
+
+    normalized = _normalize_cve_id(cve_id)
+    if not normalized:
+        return None
+
+    try:
+        conn = sqlite3.connect(LOCAL_EPSS_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT cve_id, epss_score, percentile, score_date
+            FROM epss_scores
+            WHERE cve_id = ?
+            """,
+            (normalized,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        score = EPSSScore(
+            cve_id=row["cve_id"],
+            score=float(row["epss_score"]),
+            percentile=float(row["percentile"]),
+            date=row["score_date"],
+        )
+        _cache_local_score(score)
+        return score
+    except Exception as e:
+        logger.warning(f"Local EPSS lookup error for {normalized}: {e}")
+        return None
+
+
+def _lookup_epss_local_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
+    """Look up EPSS scores for multiple CVEs from the local offline database."""
+    normalized_ids = [_normalize_cve_id(cve_id) for cve_id in cve_ids if _normalize_cve_id(cve_id)]
+    if not normalized_ids or not _check_local_epss_db_available():
+        return {}
+
+    try:
+        conn = sqlite3.connect(LOCAL_EPSS_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in normalized_ids)
+        cursor.execute(
+            f"""
+            SELECT cve_id, epss_score, percentile, score_date
+            FROM epss_scores
+            WHERE cve_id IN ({placeholders})
+            """,
+            normalized_ids,
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        results: Dict[str, EPSSScore] = {}
+        for row in rows:
+            score = EPSSScore(
+                cve_id=row["cve_id"],
+                score=float(row["epss_score"]),
+                percentile=float(row["percentile"]),
+                date=row["score_date"],
+            )
+            results[score.cve_id] = score
+            _cache_local_score(score)
+
+        return results
+    except Exception as e:
+        logger.warning(f"Local EPSS batch lookup error: {e}")
+        return {}
+
+
+def get_local_epss_db_stats() -> Dict[str, Any]:
+    """Return availability and freshness information for the local EPSS database."""
+    if not _check_local_epss_db_available():
+        return {"available": False, "path": LOCAL_EPSS_DB}
+
+    try:
+        conn = sqlite3.connect(LOCAL_EPSS_DB)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) AS count FROM epss_scores")
+        count_row = cursor.fetchone()
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
+        last_sync_row = cursor.fetchone()
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'score_date'")
+        score_date_row = cursor.fetchone()
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'source_url'")
+        source_url_row = cursor.fetchone()
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'model_version'")
+        model_row = cursor.fetchone()
+        conn.close()
+
+        return {
+            "available": True,
+            "path": LOCAL_EPSS_DB,
+            "entries": int(count_row["count"]) if count_row else 0,
+            "last_sync": last_sync_row["value"] if last_sync_row else None,
+            "score_date": score_date_row["value"] if score_date_row else None,
+            "source_url": source_url_row["value"] if source_url_row else None,
+            "model_version": model_row["value"] if model_row else None,
+            "size_mb": round(os.path.getsize(LOCAL_EPSS_DB) / (1024 * 1024), 2),
+        }
+    except Exception as e:
+        return {"available": False, "path": LOCAL_EPSS_DB, "error": str(e)}
 
 
 def _get_cached_score(cve_id: str) -> Optional[EPSSScore]:
@@ -106,15 +257,20 @@ async def get_epss_score(cve_id: str) -> Optional[EPSSScore]:
     Returns:
         EPSSScore object or None if not found
     """
+    cve_id = _normalize_cve_id(cve_id)
+    if not cve_id:
+        return None
+
     # Check cache first
     cached = _get_cached_score(cve_id)
     if cached:
         return cached
-    
-    # Normalize CVE ID format
-    cve_id = cve_id.upper()
-    if not cve_id.startswith("CVE-"):
-        cve_id = f"CVE-{cve_id}"
+
+    if settings.app_offline_mode:
+        local = _lookup_epss_local(cve_id)
+        if local is None:
+            logger.info(f"APP_OFFLINE_MODE enabled and no local EPSS data for {cve_id}")
+        return local
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -147,13 +303,13 @@ async def get_epss_score(cve_id: str) -> Optional[EPSSScore]:
             
     except httpx.TimeoutException:
         logger.warning(f"EPSS API timeout for {cve_id}")
-        return None
+        return _lookup_epss_local(cve_id)
     except httpx.HTTPStatusError as e:
         logger.warning(f"EPSS API HTTP error for {cve_id}: {e.response.status_code}")
-        return None
+        return _lookup_epss_local(cve_id)
     except Exception as e:
         logger.error(f"EPSS API error for {cve_id}: {e}")
-        return None
+        return _lookup_epss_local(cve_id)
 
 
 async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
@@ -170,12 +326,8 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
         return {}
     
     # Normalize CVE IDs
-    normalized_ids = []
-    for cve_id in cve_ids:
-        cve_id = cve_id.upper()
-        if not cve_id.startswith("CVE-"):
-            cve_id = f"CVE-{cve_id}"
-        normalized_ids.append(cve_id)
+    normalized_ids = [_normalize_cve_id(cve_id) for cve_id in cve_ids]
+    normalized_ids = [cve_id for cve_id in normalized_ids if cve_id]
     
     # Check cache for already-fetched scores (batch lookup from Redis)
     results: Dict[str, EPSSScore] = {}
@@ -205,6 +357,17 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
     
     if not ids_to_fetch:
         logger.info(f"All {len(normalized_ids)} EPSS scores found in cache")
+        return results
+
+    if settings.app_offline_mode:
+        local_results = _lookup_epss_local_batch(ids_to_fetch)
+        if local_results:
+            results.update(local_results)
+            logger.info(
+                f"APP_OFFLINE_MODE enabled - resolved {len(local_results)}/{len(ids_to_fetch)} EPSS scores from local database"
+            )
+        else:
+            logger.info("APP_OFFLINE_MODE enabled - local EPSS database unavailable or had no matching CVEs")
         return results
     
     # Batch API request (API supports up to 100 CVEs per request)
@@ -253,6 +416,15 @@ async def get_epss_scores_batch(cve_ids: List[str]) -> Dict[str, EPSSScore]:
         except Exception as e:
             logger.error(f"EPSS batch API error: {e}")
             continue
+
+    missing_ids = [cve_id for cve_id in ids_to_fetch if cve_id not in results]
+    if missing_ids:
+        local_results = _lookup_epss_local_batch(missing_ids)
+        if local_results:
+            results.update(local_results)
+            logger.info(
+                f"Resolved {len(local_results)}/{len(missing_ids)} EPSS scores from local fallback database"
+            )
     
     # Batch cache to Redis
     if items_to_cache and cache.is_connected:

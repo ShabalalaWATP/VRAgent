@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ghidra_home: str = Field("", validation_alias="GHIDRA_HOME")
     ghidra_headless_path: str = Field("", validation_alias="GHIDRA_HEADLESS_PATH")
     environment: str = Field("development", validation_alias="ENVIRONMENT")
+    app_offline_mode: bool = Field(False, validation_alias="APP_OFFLINE_MODE")
     
     # Authentication settings
     # SECURITY: Generate a strong secret with: python -c "import secrets; print(secrets.token_urlsafe(64))"

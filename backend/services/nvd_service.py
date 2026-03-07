@@ -357,6 +357,12 @@ async def _check_nvd_connectivity() -> bool:
     Caches result for CONNECTIVITY_CHECK_INTERVAL seconds.
     """
     global _last_connectivity_check, _is_online
+
+    if settings.app_offline_mode:
+        _is_online = False
+        _last_connectivity_check = datetime.utcnow()
+        logger.info("APP_OFFLINE_MODE enabled - using local NVD database fallback")
+        return False
     
     # Return cached result if recent
     if _last_connectivity_check and _is_online is not None:

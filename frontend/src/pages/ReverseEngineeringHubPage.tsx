@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { useAuth } from "../contexts/AuthContext";
 import {
   Box,
   Container,
@@ -135,6 +136,7 @@ import {
   reverseEngineeringClient,
   type ReverseEngineeringStatus,
   type BinaryAnalysisResult,
+  type BinaryMetadataResult,
   type ApkAnalysisResult,
   type ApkCertificate,
   type DockerAnalysisResult,
@@ -169,18 +171,6 @@ import { UnifiedBinaryResults } from "../components/UnifiedBinaryResults";
 // AI Chat Panel and Guided Walkthrough
 import ApkChatPanel from "../components/ApkChatPanel";
 import GuidedWalkthrough from "../components/GuidedWalkthrough";
-import LearnPageLayout from "../components/LearnPageLayout";
-
-// Page context for AI chat
-const pageContext = `This is the Reverse Engineering Hub page covering:
-- Binary Analysis (EXE, ELF, DLL) - Extract strings, imports, metadata, entropy visualization
-- APK Analysis - Android app analysis with permission/security checks, JADX decompilation, manifest analysis
-- Docker Inspector - Layer inventory, secrets detection, and risk insights
-- Ghidra integration for decompilation and function analysis
-- AI-powered security scanning and vulnerability detection
-- Attack surface mapping and obfuscation analysis
-- Hex viewing and data flow analysis
-Topics include: IDA Pro, Ghidra, radare2, x64dbg, debugging, disassembly, decompilation, malware analysis, reverse engineering techniques, binary exploitation, and mobile security testing.`;
 
 // Severity colors
 const getSeverityColor = (severity: string): string => {
@@ -264,6 +254,21 @@ const getDockerRiskLevelLabel = (score: number): "critical" | "high" | "medium" 
   if (score >= 40) return "high";
   if (score >= 20) return "medium";
   return "low";
+};
+
+const formatTrivyScannerLabel = (scanner: string): string => {
+  switch ((scanner || "").toLowerCase()) {
+    case "vuln":
+      return "Vulnerabilities";
+    case "misconfig":
+      return "Misconfigurations";
+    case "secret":
+      return "Secrets";
+    case "license":
+      return "Licenses";
+    default:
+      return scanner || "Unknown";
+  }
 };
 
 // Format seconds to human-readable time
@@ -481,16 +486,22 @@ const BINARY_SCAN_PHASE_LABELS: Record<string, string> = {
 
 interface UnifiedApkScannerProps {
   apkFile: File | null;
+  scanName: string;
+  onScanNameChange: (value: string) => void;
   onFileSelect: (file: File | null) => void;
   onScanComplete: (result: UnifiedApkScanResult) => void;
   onJadxSessionReady: (sessionId: string) => void;
+  projectId?: number;
 }
 
 function UnifiedApkScanner({ 
   apkFile, 
+  scanName,
+  onScanNameChange,
   onFileSelect, 
   onScanComplete,
   onJadxSessionReady,
+  projectId,
 }: UnifiedApkScannerProps) {
   const theme = useTheme();
   const [isScanning, setIsScanning] = useState(false);
@@ -583,6 +594,18 @@ function UnifiedApkScanner({
                 <Alert severity="info" sx={{ mb: 2 }}>
                   <strong>{apkFile.name}</strong> ({(apkFile.size / (1024 * 1024)).toFixed(1)} MB)
                 </Alert>
+
+                <TextField
+                  fullWidth
+                  sx={{ mb: 2 }}
+                  label="Scan Name (optional)"
+                  placeholder="e.g. Q1 mobile auth boundary review"
+                  value={scanName}
+                  onChange={(e) => onScanNameChange(e.target.value)}
+                  inputProps={{ maxLength: 160 }}
+                  helperText={`Used for saved scan titles and exports${projectId ? " in this project" : ""}.`}
+                  disabled={isScanning}
+                />
                 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   This comprehensive scan will:
@@ -1290,6 +1313,242 @@ function SensitiveDataFindingsSection({ result }: { result: ApkAnalysisResult | 
         )}
       </Collapse>
     </Paper>
+  );
+}
+
+function VerificationResultsAccordion({ verification }: { verification: NonNullable<UnifiedApkScanResult["verification_results"]> }) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [showFiltered, setShowFiltered] = useState(false);
+
+  const verifiedFindings = verification.verified_findings || [];
+  const filteredOut = verification.filtered_out || [];
+  const attackChains = verification.attack_chains || [];
+  const stats = verification.verification_stats;
+
+  const verdictColor = (verdict?: string): "success" | "warning" | "error" | "default" => {
+    switch (verdict) {
+      case "CONFIRMED":
+        return "success";
+      case "LIKELY":
+      case "SUSPICIOUS":
+        return "warning";
+      case "FALSE_POSITIVE":
+        return "error";
+      default:
+        return "default";
+    }
+  };
+
+  return (
+    <Accordion expanded={expanded} onChange={(_, exp) => setExpanded(exp)}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <CheckIcon color="success" />
+          <strong>AI Finding Verification</strong>
+          <Chip label={`${stats?.verified || verifiedFindings.length} verified`} size="small" color="success" />
+          <Chip label={`${stats?.filtered || filteredOut.length} filtered`} size="small" variant="outlined" />
+          {attackChains.length > 0 && <Chip label={`${attackChains.length} attack chains`} size="small" color="warning" />}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        {stats && (
+          <Box sx={{ mb: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip label={`Input: ${stats.total_input}`} size="small" variant="outlined" />
+            <Chip label={`Filter Rate: ${(stats.filter_rate * 100).toFixed(0)}%`} size="small" variant="outlined" />
+            <Chip label={`Avg Confidence: ${(stats.avg_confidence * 100).toFixed(0)}%`} size="small" variant="outlined" />
+            <Chip label={`High Confidence: ${stats.high_confidence_count}`} size="small" variant="outlined" />
+          </Box>
+        )}
+
+        {attackChains.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>Attack Chains</Typography>
+            {attackChains.slice(0, 5).map((chain, idx) => (
+              <Box key={`${chain.chain_name}-${idx}`} sx={{ mb: idx < Math.min(attackChains.length, 5) - 1 ? 1 : 0 }}>
+                <Typography variant="body2" fontWeight={600}>{chain.chain_name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {chain.description}
+                </Typography>
+              </Box>
+            ))}
+          </Alert>
+        )}
+
+        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360, overflow: "auto" }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Verdict</TableCell>
+                <TableCell>Severity</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Confidence</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {verifiedFindings.slice(0, 50).map((finding, idx) => (
+                <TableRow key={`${finding.title}-${idx}`} hover>
+                  <TableCell>
+                    <Chip
+                      label={finding.verification?.verdict || "UNVERIFIED"}
+                      size="small"
+                      color={verdictColor(finding.verification?.verdict)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={(finding.severity || "info").toUpperCase()}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(getSeverityColor(finding.severity || "info"), 0.15),
+                        color: getSeverityColor(finding.severity || "info"),
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500}>{finding.title}</Typography>
+                    {finding.source && (
+                      <Typography variant="caption" color="text.secondary">{finding.source}</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" fontFamily="monospace">
+                      {finding.file_path || finding.class_name || "Unknown"}
+                    </Typography>
+                    {finding.line_number ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Line {finding.line_number}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption">
+                      {finding.verification?.confidence ? `${(finding.verification.confidence * 100).toFixed(0)}%` : "N/A"}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {filteredOut.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Button size="small" onClick={() => setShowFiltered(!showFiltered)}>
+              {showFiltered ? "Hide" : "Show"} filtered findings
+            </Button>
+            <Collapse in={showFiltered}>
+              <List dense>
+                {filteredOut.slice(0, 20).map((finding, idx) => (
+                  <ListItem key={`${finding.title}-${idx}`}>
+                    <ListItemText
+                      primary={finding.title}
+                      secondary={finding.filtered_reason || finding.description || "Filtered out during verification"}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Collapse>
+          </Box>
+        )}
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+function VulnerabilityHuntResultsAccordion({ huntResult }: { huntResult: NonNullable<UnifiedApkScanResult["vuln_hunt_result"]> }) {
+  const [expanded, setExpanded] = useState(false);
+  const vulnerabilities = huntResult.vulnerabilities || [];
+  const targets = huntResult.targets || [];
+  const summary = huntResult.summary;
+
+  return (
+    <Accordion expanded={expanded} onChange={(_, exp) => setExpanded(exp)}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <BugReportIcon color="error" />
+          <strong>AI Vulnerability Hunt</strong>
+          <Chip label={`${vulnerabilities.length} vulnerabilities`} size="small" color="error" />
+          <Chip label={`${targets.length} targets`} size="small" variant="outlined" />
+          <Chip label={`${huntResult.total_passes} passes`} size="small" variant="outlined" />
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        {summary && (
+          <Box sx={{ mb: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip label={`Critical: ${summary.by_severity?.critical || 0}`} size="small" color="error" />
+            <Chip label={`High: ${summary.by_severity?.high || 0}`} size="small" color="warning" />
+            <Chip label={`Medium: ${summary.by_severity?.medium || 0}`} size="small" variant="outlined" />
+            <Chip label={`Low: ${summary.by_severity?.low || 0}`} size="small" variant="outlined" />
+          </Box>
+        )}
+
+        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360, overflow: "auto" }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Severity</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Pass</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {vulnerabilities.slice(0, 50).map((vuln, idx) => (
+                <TableRow key={`${vuln.title}-${idx}`} hover>
+                  <TableCell>
+                    <Chip
+                      label={(vuln.severity || "info").toUpperCase()}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(getSeverityColor(vuln.severity || "info"), 0.15),
+                        color: getSeverityColor(vuln.severity || "info"),
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500}>{vuln.title}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {vuln.description}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{vuln.category}</TableCell>
+                  <TableCell>
+                    <Typography variant="caption" fontFamily="monospace">
+                      {vuln.file_path || "Unknown"}
+                    </Typography>
+                    {vuln.line_number ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Line {vuln.line_number}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{vuln.discovered_in_pass || "N/A"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {targets.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>Priority Targets</Typography>
+            <List dense>
+              {targets.slice(0, 10).map((target, idx) => (
+                <ListItem key={`${target.file_path}-${idx}`}>
+                  <ListItemText
+                    primary={target.file_path}
+                    secondary={`${target.category} • priority ${target.priority} • ${target.reason}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        )}
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -2445,6 +2704,7 @@ interface UnifiedApkResultsProps {
 function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onEnhancedSecurityComplete }: UnifiedApkResultsProps) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
+  const showAdvancedAnalysis = Boolean(apkFile || result.manifest_visualization || result.obfuscation_analysis);
   
   // Whether we're viewing a saved report (no live JADX session)
   const isViewingOnly = !jadxSessionId && result.scan_id.startsWith('saved-');
@@ -3428,13 +3688,24 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
           {/* Tab 3: Attack Surface Map */}
           {activeTab === 3 && (
             result.ai_attack_surface_map ? (
-              <MermaidDiagram 
-                code={result.ai_attack_surface_map}
-                title="Attack Surface Map"
-                maxHeight={600}
-                showControls={true}
-                showCodeToggle={true}
-              />
+              <Box>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 0.75 }}>
+                    Read this map top-to-bottom: external input enters, code processes it, trust boundaries are crossed,
+                    weaknesses are exposed, and mitigations reduce risk.
+                  </Typography>
+                  <Typography variant="caption">
+                    Shorthand legend: E = Entry, P = Processing, W = Weakness, B = Boundary, I = Impact, M = Mitigation.
+                  </Typography>
+                </Alert>
+                <MermaidDiagram 
+                  code={result.ai_attack_surface_map}
+                  title="Attack Surface Map"
+                  maxHeight={600}
+                  showControls={true}
+                  showCodeToggle={true}
+                />
+              </Box>
             ) : (
               <Alert severity="info">
                 Attack surface map not available. Run a Full Security Scan to generate an attack surface visualization.
@@ -3609,6 +3880,8 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
       
       {/* Additional Details Accordions */}
       <Box sx={{ mt: 3 }}>
+        <SensitiveDataFindingsSection result={result} />
+
         {/* Permissions */}
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -3759,6 +4032,14 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
           />
         )}
 
+        {result.verification_results && (
+          <VerificationResultsAccordion verification={result.verification_results} />
+        )}
+
+        {result.vuln_hunt_result && (
+          <VulnerabilityHuntResultsAccordion huntResult={result.vuln_hunt_result} />
+        )}
+
         {/* Standard Frida Scripts (SSL Bypass, Root Detection, etc.) */}
         {result.dynamic_analysis && (
           <UnifiedFridaScriptsAccordion dynamicAnalysis={result.dynamic_analysis} />
@@ -3771,7 +4052,7 @@ function UnifiedApkResults({ result, jadxSessionId, onBrowseSource, apkFile, onE
       </Box>
       
       {/* Advanced Analysis Tools - Manifest Visualization, Obfuscation */}
-      {apkFile && (
+      {showAdvancedAnalysis && (
         <AdvancedAnalysisToolsTabs 
           apkFile={apkFile} 
           autoStart={false}
@@ -6159,7 +6440,7 @@ function ApkResults({
 // Advanced Analysis Tools Tabs - Full-width tabbed interface
 // ============================================================================
 interface AdvancedAnalysisToolsTabsProps {
-  apkFile: File;
+  apkFile: File | null;
   autoStart: boolean;
   onAttackSurfaceResult?: (result: AttackSurfaceMapResult) => void;
   // Pre-computed results from unified scan (no need to re-run if available)
@@ -6227,6 +6508,15 @@ function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult, 
             </Box>
           }
         />
+        <Tab 
+          disabled={!apkFile}
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <span>🗺️</span>
+              <span>Interactive Attack Surface</span>
+            </Box>
+          }
+        />
       </Tabs>
 
       {/* Tab Panels - Use precomputed data if available, otherwise fallback to on-demand components */}
@@ -6243,6 +6533,19 @@ function AdvancedAnalysisToolsTabs({ apkFile, autoStart, onAttackSurfaceResult, 
             <PrecomputedObfuscationAnalysis data={precomputedObfuscation} />
           ) : (
             <ObfuscationAnalyzer apkFile={apkFile} autoStart={autoStart} />
+          )}
+        </Box>
+        <Box sx={{ p: 2, display: activeTab === 2 ? 'block' : 'none' }}>
+          {apkFile ? (
+            <AttackSurfaceMap
+              apkFile={apkFile}
+              autoStart={autoStart}
+              onResult={onAttackSurfaceResult}
+            />
+          ) : (
+            <Alert severity="info">
+              Interactive attack-surface mapping requires the original APK file. Saved reports still preserve the AI attack-surface diagram in the main results tabs.
+            </Alert>
           )}
         </Box>
       </Box>
@@ -6330,7 +6633,9 @@ function PrecomputedManifestVisualization({ data }: { data: NonNullable<UnifiedA
         <Alert severity="warning" sx={{ mb: 2 }}>
           <Typography variant="subtitle2">Security Assessment</Typography>
           <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
-            {data.security_assessment}
+            {typeof data.security_assessment === "string"
+              ? data.security_assessment
+              : JSON.stringify(data.security_assessment, null, 2)}
           </Typography>
         </Alert>
       )}
@@ -6350,11 +6655,13 @@ function PrecomputedManifestVisualization({ data }: { data: NonNullable<UnifiedA
             </Box>
           </Box>
           {showMermaid && (
-            <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.default, 0.5), overflowX: 'auto' }}>
-              <pre style={{ margin: 0, fontSize: '0.75rem', whiteSpace: 'pre-wrap' }}>
-                {data.mermaid_diagram}
-              </pre>
-            </Paper>
+            <MermaidDiagram
+              code={data.mermaid_diagram}
+              title="Manifest Structure Diagram"
+              maxHeight={500}
+              showControls={true}
+              showCodeToggle={true}
+            />
           )}
         </Box>
       )}
@@ -7330,22 +7637,54 @@ Be specific with class names, methods, and technical details from the decompiled
 // ============================================================================
 
 // Helper function to convert markdown-like content to HTML
+function normalizeAiReportContent(content: string): string {
+  if (!content) return "";
+
+  let normalized = content.replace(/\r\n/g, "\n").trim();
+
+  const fencedMatch = normalized.match(/^```(?:html|markdown|md)?\s*\n?([\s\S]*?)\n?```$/i);
+  if (fencedMatch) {
+    normalized = fencedMatch[1].trim();
+  } else {
+    if (normalized.startsWith("```html")) {
+      normalized = normalized.slice(7).trim();
+    } else if (normalized.startsWith("```markdown")) {
+      normalized = normalized.slice(11).trim();
+    } else if (normalized.startsWith("```md")) {
+      normalized = normalized.slice(5).trim();
+    } else if (normalized.startsWith("```")) {
+      normalized = normalized.slice(3).trim();
+    }
+    if (normalized.endsWith("```")) {
+      normalized = normalized.slice(0, -3).trim();
+    }
+  }
+
+  if (!normalized.includes("\n") && normalized.includes("\\n")) {
+    normalized = normalized.replace(/\\n/g, "\n");
+  }
+
+  return normalized;
+}
+
 function formatReportContent(content: string): string {
   if (!content) return "";
-  
-  let html = content;
-  
-  // If it's already HTML (has HTML tags), just clean it up
-  if (html.includes("<h3>") || html.includes("<ul>") || html.includes("<p>")) {
-    // Already HTML, just ensure proper formatting
+
+  let html = normalizeAiReportContent(content);
+
+  // If it's already HTML, just return it for sanitization by the caller.
+  if (/<(?:h[1-6]|p|ul|ol|li|div|strong|em|blockquote|pre|code|table)\b/i.test(html)) {
     return html;
   }
-  
+
   // Convert markdown to HTML
   // Headers
   html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
   html = html.replace(/^## (.*$)/gim, '<h3>$1</h3>');
   html = html.replace(/^# (.*$)/gim, '<h3>$1</h3>');
+
+  // Promote standalone bold section labels into headings for legacy Docker AI reports.
+  html = html.replace(/^\*\*([^*\n]+)\*\*\s*$/gim, '<h3>$1</h3>');
   
   // Bold text
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -11740,6 +12079,22 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
   const deletedSecretsCount =
     result.deleted_secrets_count ?? layerSecrets.filter((s) => s.is_deleted).length;
   const baseImageIntelCount = baseImageIntel.length;
+  const scanChecks = Array.isArray(result.scan_summary?.checks) ? result.scan_summary.checks : [];
+  const completedScanChecks = scanChecks.filter((check) => check.status === "completed");
+  const skippedScanChecks = scanChecks.filter((check) => check.status === "skipped");
+  const erroredScanChecks = scanChecks.filter((check) => check.status === "error");
+  const deepLayerCoverage = scanChecks.find((check) => check.id === "deep_layer_scan");
+  const showSecretsSection = secrets.length > 0 || layerSecrets.length > 0;
+  const showAdjudication = Boolean(
+    result.adjudication_enabled && (result.adjudication_summary || result.adjudication_stats)
+  );
+  const showSupplyChainSection = Boolean(
+    baseImageIntel.length > 0 || result.cve_scan || result.trivy_scan
+  );
+  const aiAnalysisHtml = useMemo(
+    () => sanitizeHtml(formatReportContent(result.ai_analysis || "")),
+    [result.ai_analysis]
+  );
 
   const normalizeSeverity = (severity?: string) => (severity || "unknown").toLowerCase();
   const severityScore: Record<string, number> = {
@@ -11750,6 +12105,28 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
     advisory: 0,
     info: 0,
     unknown: 0,
+  };
+
+  const formatScanDuration = (seconds?: number) => {
+    if (typeof seconds !== "number" || Number.isNaN(seconds)) {
+      return "0.0s";
+    }
+    if (seconds >= 60) {
+      return `${(seconds / 60).toFixed(1)}m`;
+    }
+    return `${seconds.toFixed(1)}s`;
+  };
+
+  const getScanStatusColor = (status?: string): "success" | "error" | "default" => {
+    if (status === "completed") return "success";
+    if (status === "error") return "error";
+    return "default";
+  };
+
+  const getScanStatusLabel = (status?: string) => {
+    if (status === "completed") return "Completed";
+    if (status === "error") return "Error";
+    return "Skipped";
   };
   const getSeverityRank = (severity?: string) => severityScore[normalizeSeverity(severity)] ?? 0;
 
@@ -11828,6 +12205,7 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         secret.secret_type,
         secret.layer_id,
         secret.layer_command,
+        secret.value,
         secret.masked_value,
         secret.context,
       ].some((field) => field?.toLowerCase().includes(search));
@@ -11901,12 +12279,6 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
 
   const layerScanMeta = result.layer_scan_metadata || {};
   const layerScanError = (layerScanMeta as { error?: string }).error;
-
-  const maskSecretContext = (context: string, value: string, maskedValue: string) => {
-    if (!context) return "-";
-    if (!value) return "-";
-    return context.split(value).join(maskedValue);
-  };
 
   return (
     <Box>
@@ -12139,8 +12511,250 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         </Grid>
       </Paper>
 
+      <Typography
+        variant="overline"
+        sx={{
+          display: "block",
+          mb: 1,
+          color: "text.secondary",
+          letterSpacing: "0.08em",
+          fontWeight: 700,
+        }}
+      >
+        Scan Overview
+      </Typography>
+
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={5}>
+          <Paper sx={{ p: 3, height: "100%", bgcolor: alpha(theme.palette.background.paper, 0.72) }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <DockerIcon color="info" /> Image Information
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="caption" color="text.secondary">Image Name</Typography>
+                <Typography variant="body1" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                  {result.image_name}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Image ID</Typography>
+                <Typography variant="body1" fontFamily="monospace">{result.image_id.slice(0, 12)}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Base Image</Typography>
+                <Typography variant="body1">{result.base_image || "Unknown"}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Total Size</Typography>
+                <Typography variant="body1">{result.total_size_human}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">Total Layers</Typography>
+                <Typography variant="body1">{result.total_layers}</Typography>
+              </Grid>
+            </Grid>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
+              <Chip size="small" label={`${securityIssues.length} heuristic findings`} />
+              <Chip size="small" color={secretCount > 0 ? "error" : "default"} label={`${secretCount} secrets`} />
+              <Chip size="small" color={(cveCount > 0 || cveScan?.error) ? "warning" : "default"} label={`${cveCount} CVEs`} />
+              {result.trivy_scan && (
+                <Chip
+                  size="small"
+                  color={
+                    ((result.trivy_scan.vulnerabilities?.length || 0) +
+                      (result.trivy_scan.misconfigurations?.length || 0) +
+                      (result.trivy_scan.secrets?.length || 0) +
+                      (result.trivy_scan.licenses?.length || 0)) > 0
+                      ? "warning"
+                      : "default"
+                  }
+                  label={`${(result.trivy_scan.enabled_scanners || []).length} Trivy scanners`}
+                />
+              )}
+            </Box>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={7}>
+          <Paper sx={{ p: 3, height: "100%", bgcolor: alpha(theme.palette.info.main, 0.04) }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <AccessTimeIcon color="info" /> Scan Coverage
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Total runtime: {formatScanDuration(result.scan_summary?.total_duration_seconds)}. This panel shows what the Docker Inspector actually executed for this result.
+            </Typography>
+            {scanChecks.length > 0 ? (
+              <>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+                  <Chip size="small" color="success" label={`${completedScanChecks.length} completed`} />
+                  <Chip size="small" label={`${skippedScanChecks.length} skipped`} />
+                  {erroredScanChecks.length > 0 && (
+                    <Chip size="small" color="error" label={`${erroredScanChecks.length} errors`} />
+                  )}
+                </Box>
+                <Box sx={{ display: "grid", gap: 1.25 }}>
+                  {scanChecks.map((check) => (
+                    <Box
+                      key={check.id}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1.5,
+                        border: `1px solid ${alpha(
+                          check.status === "error"
+                            ? theme.palette.error.main
+                            : check.status === "completed"
+                              ? theme.palette.success.main
+                              : theme.palette.divider,
+                          0.25
+                        )}`,
+                        bgcolor:
+                          check.status === "error"
+                            ? alpha(theme.palette.error.main, 0.04)
+                            : check.status === "completed"
+                              ? alpha(theme.palette.success.main, 0.04)
+                              : alpha(theme.palette.background.default, 0.25),
+                      }}
+                    >
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                        <Typography variant="subtitle2">{check.label}</Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                          <Chip size="small" color={getScanStatusColor(check.status)} label={getScanStatusLabel(check.status)} />
+                          <Typography variant="caption" color="text.secondary">
+                            {formatScanDuration(check.duration_seconds)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      {check.detail && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                          {check.detail}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+                {deepLayerCoverage?.status === "skipped" && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    This run did not export and inspect saved image layers, so deleted-file and recoverable-secret forensics were not performed.
+                  </Alert>
+                )}
+              </>
+            ) : (
+              <Alert severity="info">
+                Detailed scan-phase timing is not available for this result.
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {result.ai_analysis && (
+        <Paper
+          sx={{
+            p: 3,
+            mb: 3,
+            bgcolor: alpha(theme.palette.info.main, 0.05),
+            border: `1px solid ${alpha(theme.palette.info.main, 0.16)}`,
+          }}
+        >
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, mb: 2, flexWrap: "wrap" }}>
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                <AiIcon color="info" /> AI Security Analysis
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                High-level interpretation of the completed Docker checks and the most important remediation priorities.
+              </Typography>
+            </Box>
+            <Chip size="small" color="info" label="Analyst summary" />
+          </Box>
+          <Box
+            sx={{
+              "& h1, & h2, & h3, & h4": {
+                fontWeight: 700,
+                lineHeight: 1.3,
+                mt: 2,
+                mb: 1,
+              },
+              "& h1:first-of-type, & h2:first-of-type, & h3:first-of-type, & h4:first-of-type": {
+                mt: 0,
+              },
+              "& h3": {
+                pb: 0.75,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+              },
+              "& p": {
+                my: 1,
+                lineHeight: 1.7,
+                color: theme.palette.text.secondary,
+              },
+              "& ul, & ol": {
+                pl: 3,
+                my: 1,
+              },
+              "& li": {
+                mb: 0.75,
+                lineHeight: 1.7,
+                color: theme.palette.text.secondary,
+              },
+              "& blockquote": {
+                my: 1.5,
+                pl: 2,
+                py: 0.5,
+                borderLeft: `3px solid ${alpha(theme.palette.info.main, 0.35)}`,
+                color: "text.secondary",
+                bgcolor: alpha(theme.palette.info.main, 0.04),
+              },
+              "& code": {
+                bgcolor: alpha(theme.palette.common.black, 0.08),
+                px: 0.5,
+                py: 0.25,
+                borderRadius: 0.5,
+                fontFamily: "monospace",
+                fontSize: "0.9em",
+              },
+              "& pre": {
+                bgcolor: alpha(theme.palette.common.black, 0.08),
+                p: 1.5,
+                borderRadius: 1,
+                overflowX: "auto",
+              },
+              "& table": {
+                width: "100%",
+                borderCollapse: "collapse",
+                my: 1.5,
+              },
+              "& th, & td": {
+                border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                px: 1,
+                py: 0.75,
+                textAlign: "left",
+              },
+              "& hr": {
+                my: 2,
+                border: 0,
+                borderTop: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+              },
+            }}
+            dangerouslySetInnerHTML={{ __html: aiAnalysisHtml }}
+          />
+        </Paper>
+      )}
+
       {/* Attack Vector Categories */}
       {securityIssues.length > 0 && (
+        <>
+        <Typography
+          variant="overline"
+          sx={{
+            display: "block",
+            mb: 1,
+            color: "text.secondary",
+            letterSpacing: "0.08em",
+            fontWeight: 700,
+          }}
+        >
+          Built-In Findings
+        </Typography>
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <TargetIcon color="error" /> Attack Vectors by Category
@@ -12252,148 +12866,7 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
             )}
           </Grid>
         </Paper>
-      )}
-
-      {/* Image Info */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.background.paper, 0.7) }}>
-        <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <DockerIcon color="info" /> Image Information
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="caption" color="text.secondary">Image Name</Typography>
-            <Typography variant="body1" fontFamily="monospace">{result.image_name}</Typography>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Typography variant="caption" color="text.secondary">Image ID</Typography>
-            <Typography variant="body1" fontFamily="monospace">{result.image_id.slice(0, 12)}</Typography>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Typography variant="caption" color="text.secondary">Total Size</Typography>
-            <Typography variant="body1">{result.total_size_human}</Typography>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Typography variant="caption" color="text.secondary">Total Layers</Typography>
-            <Typography variant="body1">{result.total_layers}</Typography>
-          </Grid>
-          {result.base_image && (
-            <Grid item xs={6} sm={3}>
-              <Typography variant="caption" color="text.secondary">Base Image</Typography>
-              <Typography variant="body1">{result.base_image}</Typography>
-            </Grid>
-          )}
-        </Grid>
-      </Paper>
-
-      {/* Base Image Intelligence */}
-      {baseImageIntel.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <SecurityIcon color="secondary" /> Base Image Intelligence
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell width={110}>Severity</TableCell>
-                  <TableCell width={140}>Category</TableCell>
-                  <TableCell>Message</TableCell>
-                  <TableCell>Recommendation</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {baseImageIntel.map((intel, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      <Chip
-                        label={intel.severity}
-                        size="small"
-                        sx={{
-                          bgcolor: alpha(getSeverityColor(intel.severity), 0.2),
-                          color: getSeverityColor(intel.severity),
-                          fontWeight: 600,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption">{intel.category}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{intel.message}</Typography>
-                      {intel.attack_vector && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                          Attack Vector: {intel.attack_vector}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{intel.recommendation || "-"}</Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
-
-      {/* AI False Positive Adjudication */}
-      {result.adjudication_enabled && (result.adjudication_summary || result.adjudication_stats) && (
-        <Paper sx={{ p: 3, mb: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <AiIcon color="info" /> AI False Positive Adjudication
-          </Typography>
-          {result.adjudication_summary && (
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              {result.adjudication_summary}
-            </Typography>
-          )}
-          {result.adjudication_stats && (
-            <Grid container spacing={2} sx={{ mb: result.rejected_findings?.length ? 2 : 0 }}>
-              <Grid item xs={6} sm={4}>
-                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha(theme.palette.info.main, 0.08), borderRadius: 1 }}>
-                  <Typography variant="h6" color="info">{result.adjudication_stats.total}</Typography>
-                  <Typography variant="caption">Total</Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6} sm={4}>
-                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#16a34a", 0.08), borderRadius: 1 }}>
-                  <Typography variant="h6" sx={{ color: "#16a34a" }}>{result.adjudication_stats.confirmed}</Typography>
-                  <Typography variant="caption">Confirmed</Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6} sm={4}>
-                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#6b7280", 0.08), borderRadius: 1 }}>
-                  <Typography variant="h6" sx={{ color: "#6b7280" }}>{result.adjudication_stats.rejected}</Typography>
-                  <Typography variant="caption">Rejected</Typography>
-                </Box>
-              </Grid>
-            </Grid>
-          )}
-          {result.rejected_findings && result.rejected_findings.length > 0 && (
-            <Accordion>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="subtitle2">Rejected Findings (Sample)</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <List dense>
-                  {result.rejected_findings.slice(0, 5).map((finding, idx) => (
-                    <ListItem key={idx} sx={{ py: 0.25 }}>
-                      <ListItemText
-                        primary={<Typography variant="body2">{finding.message || "Rejected finding"}</Typography>}
-                        secondary={
-                          finding._adjudication?.reason
-                            ? <Typography variant="caption">{finding._adjudication.reason}</Typography>
-                            : undefined
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </AccordionDetails>
-            </Accordion>
-          )}
-        </Paper>
+        </>
       )}
 
       {/* All Security Issues (Detailed) */}
@@ -12529,271 +13002,417 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         </Accordion>
       )}
 
-      {/* Secrets in Layers */}
-      {secrets.length > 0 && (
-        <Accordion sx={{ mt: 2 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
-              <SecretIcon /> Secrets Found in Image ({secrets.length})
+      {/* AI False Positive Adjudication */}
+      {showAdjudication && (
+        <Paper sx={{ p: 3, mt: 3, mb: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <AiIcon color="info" /> AI False Positive Adjudication
+          </Typography>
+          {result.adjudication_summary && (
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              {result.adjudication_summary}
             </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Alert severity="error" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Attack Vector:</strong> Secrets in image layers can be extracted using <code>docker save</code> + <code>tar</code> even if "deleted" in later layers.
-              </Typography>
-            </Alert>
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                size="small"
-                fullWidth
-                label="Search secrets"
-                value={secretSearch}
-                onChange={(e) => setSecretSearch(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
-                  endAdornment: secretSearch ? (
-                    <IconButton size="small" onClick={() => setSecretSearch("")}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  ) : null,
-                }}
-              />
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Layer</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Value (Masked)</TableCell>
-                    <TableCell>Context</TableCell>
-                    <TableCell>Severity</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredSecrets.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>
-                        <Typography variant="body2" color="text.secondary">
-                          No secrets match the current search
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredSecrets.map((secret, idx) => {
-                      const maskedContext = maskSecretContext(secret.context || "", secret.value, secret.masked_value);
-                      const displayContext = maskedContext.length > 120 ? maskedContext.slice(0, 120) + "..." : maskedContext || "-";
-                      return (
-                        <TableRow key={idx}>
-                          <TableCell>
-                            <Tooltip title={secret.layer_command}>
-                              <Typography variant="body2" fontFamily="monospace">
-                                {secret.layer_id.slice(0, 8)}
-                              </Typography>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>{secret.secret_type}</TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                              {secret.masked_value}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Tooltip title={maskedContext || "No context"}>
-                              <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                                {displayContext}
-                              </Typography>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={secret.severity}
-                              size="small"
-                              sx={{
-                                bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
-                                color: getSeverityColor(secret.severity),
-                              }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </AccordionDetails>
-        </Accordion>
+          )}
+          {result.adjudication_stats && (
+            <Grid container spacing={2} sx={{ mb: result.rejected_findings?.length ? 2 : 0 }}>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha(theme.palette.info.main, 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" color="info">{result.adjudication_stats.total}</Typography>
+                  <Typography variant="caption">Total</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#16a34a", 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#16a34a" }}>{result.adjudication_stats.confirmed}</Typography>
+                  <Typography variant="caption">Confirmed</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={4}>
+                <Box sx={{ textAlign: "center", p: 1, bgcolor: alpha("#6b7280", 0.08), borderRadius: 1 }}>
+                  <Typography variant="h6" sx={{ color: "#6b7280" }}>{result.adjudication_stats.rejected}</Typography>
+                  <Typography variant="caption">Rejected</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          )}
+          {result.rejected_findings && result.rejected_findings.length > 0 && (
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Rejected Findings (Sample)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <List dense>
+                  {result.rejected_findings.slice(0, 5).map((finding, idx) => (
+                    <ListItem key={idx} sx={{ py: 0.25 }}>
+                      <ListItemText
+                        primary={<Typography variant="body2">{finding.message || "Rejected finding"}</Typography>}
+                        secondary={
+                          finding._adjudication?.reason
+                            ? <Typography variant="caption">{finding._adjudication.reason}</Typography>
+                            : undefined
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </Paper>
       )}
 
-      {/* Layer Deep Scan Secrets */}
-      {layerSecrets.length > 0 && (
-        <Accordion sx={{ mt: 2 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
-              <LayersIcon /> Layer Deep Scan Secrets ({layerSecrets.length})
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            {deletedSecretsCount > 0 && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>Critical:</strong> {deletedSecretsCount} secret files were deleted in later layers but
-                  remain recoverable from earlier layers.
+      {/* Secrets in Layers */}
+      {showSecretsSection && (
+        <>
+          <Typography
+            variant="overline"
+            sx={{
+              display: "block",
+              mt: 3,
+              mb: 1,
+              color: "text.secondary",
+              letterSpacing: "0.08em",
+              fontWeight: 700,
+            }}
+          >
+            Secret Exposure
+          </Typography>
+
+          {secrets.length > 0 && (
+            <Accordion sx={{ mt: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
+                  <SecretIcon /> Secrets Found in Image ({secrets.length})
                 </Typography>
-              </Alert>
-            )}
-            {result.layer_scan_metadata && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                Layers scanned: {result.layer_scan_metadata.layers_scanned ?? "N/A"} · Files scanned:{" "}
-                {result.layer_scan_metadata.files_scanned ?? "N/A"} · Deleted secrets:{" "}
-                {result.layer_scan_metadata.deleted_secrets_found ?? 0}
-              </Typography>
-            )}
-            <Box sx={{ mb: 2 }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={5}>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Attack Vector:</strong> Secrets in image layers can be extracted using <code>docker save</code> + <code>tar</code> even if "deleted" in later layers.
+                  </Typography>
+                </Alert>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Raw secret values are shown here and will be included in saved/exported Docker reports for remediation.
+                  </Typography>
+                </Alert>
+                <Box sx={{ mb: 2 }}>
                   <TextField
                     size="small"
                     fullWidth
-                    label="Search files"
-                    value={layerSecretSearch}
-                    onChange={(e) => setLayerSecretSearch(e.target.value)}
+                    label="Search secrets"
+                    value={secretSearch}
+                    onChange={(e) => setSecretSearch(e.target.value)}
                     InputProps={{
                       startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
-                      endAdornment: layerSecretSearch ? (
-                        <IconButton size="small" onClick={() => setLayerSecretSearch("")}>
+                      endAdornment: secretSearch ? (
+                        <IconButton size="small" onClick={() => setSecretSearch("")}>
                           <CloseIcon fontSize="small" />
                         </IconButton>
                       ) : null,
                     }}
                   />
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>Min severity</InputLabel>
-                    <Select
-                      label="Min severity"
-                      value={layerSecretMinSeverity}
-                      onChange={(e) => setLayerSecretMinSeverity(e.target.value)}
-                    >
-                      <MenuItem value="all">All</MenuItem>
-                      <MenuItem value="critical">Critical</MenuItem>
-                      <MenuItem value="high">High</MenuItem>
-                      <MenuItem value="medium">Medium</MenuItem>
-                      <MenuItem value="low">Low</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={6} md={4}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={layerSecretDeletedOnly}
-                        onChange={(e) => setLayerSecretDeletedOnly(e.target.checked)}
+                </Box>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Layer</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell>Value (Raw)</TableCell>
+                        <TableCell>Context</TableCell>
+                        <TableCell>Severity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredSecrets.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5}>
+                            <Typography variant="body2" color="text.secondary">
+                              No secrets match the current search
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredSecrets.map((secret, idx) => {
+                          const rawContext = secret.context || "-";
+                          const displayContext = rawContext.length > 120 ? rawContext.slice(0, 120) + "..." : rawContext;
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <Tooltip title={secret.layer_command}>
+                                  <Typography variant="body2" fontFamily="monospace">
+                                    {secret.layer_id.slice(0, 8)}
+                                  </Typography>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell>{secret.secret_type}</TableCell>
+                              <TableCell>
+                                <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                                  {secret.value || secret.masked_value}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Tooltip title={rawContext || "No context"}>
+                                  <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                                    {displayContext}
+                                  </Typography>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={secret.severity}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
+                                    color: getSeverityColor(secret.severity),
+                                  }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
+          {layerSecrets.length > 0 && (
+            <Accordion sx={{ mt: 2 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
+                  <LayersIcon /> Layer Deep Scan Secrets ({layerSecrets.length})
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {deletedSecretsCount > 0 && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Critical:</strong> {deletedSecretsCount} secret files were deleted in later layers but
+                      remain recoverable from earlier layers.
+                    </Typography>
+                  </Alert>
+                )}
+                {result.layer_scan_metadata && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                    Layers scanned: {result.layer_scan_metadata.layers_scanned ?? "N/A"} · Files scanned:{" "}
+                    {result.layer_scan_metadata.files_scanned ?? "N/A"} · Deleted secrets:{" "}
+                    {result.layer_scan_metadata.deleted_secrets_found ?? 0}
+                  </Typography>
+                )}
+                <Box sx={{ mb: 2 }}>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} md={5}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        label="Search files"
+                        value={layerSecretSearch}
+                        onChange={(e) => setLayerSecretSearch(e.target.value)}
+                        InputProps={{
+                          startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+                          endAdornment: layerSecretSearch ? (
+                            <IconButton size="small" onClick={() => setLayerSecretSearch("")}>
+                              <CloseIcon fontSize="small" />
+                            </IconButton>
+                          ) : null,
+                        }}
                       />
-                    }
-                    label="Deleted only"
-                  />
-                </Grid>
-              </Grid>
-              <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                <Chip
-                  label={`Showing ${filteredLayerSecrets.length} of ${layerSecrets.length}`}
-                  size="small"
-                  variant="outlined"
-                />
-              </Box>
-            </Box>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <FormControl size="small" fullWidth>
+                        <InputLabel>Min severity</InputLabel>
+                        <Select
+                          label="Min severity"
+                          value={layerSecretMinSeverity}
+                          onChange={(e) => setLayerSecretMinSeverity(e.target.value)}
+                        >
+                          <MenuItem value="all">All</MenuItem>
+                          <MenuItem value="critical">Critical</MenuItem>
+                          <MenuItem value="high">High</MenuItem>
+                          <MenuItem value="medium">Medium</MenuItem>
+                          <MenuItem value="low">Low</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={6} md={4}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={layerSecretDeletedOnly}
+                            onChange={(e) => setLayerSecretDeletedOnly(e.target.checked)}
+                          />
+                        }
+                        label="Deleted only"
+                      />
+                    </Grid>
+                  </Grid>
+                  <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                    <Chip
+                      label={`Showing ${filteredLayerSecrets.length} of ${layerSecrets.length}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Box>
+                </Box>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Layer</TableCell>
+                        <TableCell>File</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell>Deleted</TableCell>
+                        <TableCell>Size</TableCell>
+                        <TableCell>Severity</TableCell>
+                        <TableCell>Preview</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredLayerSecrets.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7}>
+                            <Typography variant="body2" color="text.secondary">
+                              No layer secrets match the current filters
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredLayerSecrets.map((secret, idx) => (
+                          <TableRow key={idx} sx={{ bgcolor: secret.is_deleted ? alpha("#dc2626", 0.05) : "inherit" }}>
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace">
+                                {String(secret.layer_index)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                                {secret.file_path}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{secret.file_type}</TableCell>
+                            <TableCell>
+                              {secret.is_deleted ? (
+                                <Chip label="YES" size="small" color="error" />
+                              ) : (
+                                <Chip label="No" size="small" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatBytes(secret.size_bytes)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={secret.severity}
+                                size="small"
+                                sx={{
+                                  bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
+                                  color: getSeverityColor(secret.severity),
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Tooltip title={secret.content_preview ? "View preview" : "No preview available"}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => setLayerSecretPreview(secret)}
+                                    disabled={!secret.content_preview}
+                                  >
+                                    <ViewIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </>
+      )}
+
+      {/* Supply Chain Findings */}
+      {showSupplyChainSection && (
+        <>
+        <Typography
+          variant="overline"
+          sx={{
+            display: "block",
+            mt: 3,
+            mb: 1,
+            color: "text.secondary",
+            letterSpacing: "0.08em",
+            fontWeight: 700,
+          }}
+        >
+          Supply Chain Findings
+        </Typography>
+        {baseImageIntel.length > 0 && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <SecurityIcon color="secondary" /> Base Image Intelligence
+            </Typography>
             <TableContainer>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Layer</TableCell>
-                    <TableCell>File</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Deleted</TableCell>
-                    <TableCell>Size</TableCell>
-                    <TableCell>Severity</TableCell>
-                    <TableCell>Preview</TableCell>
+                    <TableCell width={110}>Severity</TableCell>
+                    <TableCell width={140}>Category</TableCell>
+                    <TableCell>Message</TableCell>
+                    <TableCell>Recommendation</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredLayerSecrets.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <Typography variant="body2" color="text.secondary">
-                          No layer secrets match the current filters
-                        </Typography>
+                  {baseImageIntel.map((intel, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Chip
+                          label={intel.severity}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(getSeverityColor(intel.severity), 0.2),
+                            color: getSeverityColor(intel.severity),
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">{intel.category}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{intel.message}</Typography>
+                        {intel.attack_vector && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                            Attack Vector: {intel.attack_vector}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{intel.recommendation || "-"}</Typography>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filteredLayerSecrets.map((secret, idx) => (
-                      <TableRow key={idx} sx={{ bgcolor: secret.is_deleted ? alpha("#dc2626", 0.05) : "inherit" }}>
-                        <TableCell>
-                          <Typography variant="body2" fontFamily="monospace">
-                            {String(secret.layer_index)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
-                            {secret.file_path}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{secret.file_type}</TableCell>
-                        <TableCell>
-                          {secret.is_deleted ? (
-                            <Chip label="YES" size="small" color="error" />
-                          ) : (
-                            <Chip label="No" size="small" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatBytes(secret.size_bytes)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={secret.severity}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha(getSeverityColor(secret.severity), 0.2),
-                              color: getSeverityColor(secret.severity),
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title={secret.content_preview ? "View preview" : "No preview available"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => setLayerSecretPreview(secret)}
-                                disabled={!secret.content_preview}
-                              >
-                                <ViewIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </TableContainer>
-          </AccordionDetails>
-        </Accordion>
-      )}
-
-      {/* CVE Vulnerabilities */}
-      {result.cve_scan && result.cve_scan.vulnerabilities && result.cve_scan.vulnerabilities.length > 0 && (
+          </Paper>
+        )}
+        {result.cve_scan && (
         <Accordion sx={{ mt: 2 }} defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
               <Typography sx={{ display: "flex", alignItems: "center", gap: 1, color: "#dc2626" }}>
-                <BugIcon /> Package Vulnerabilities ({result.cve_scan.vulnerabilities.length} CVEs)
+                <BugIcon /> Package Vulnerabilities ({result.cve_scan.vulnerabilities?.length || 0} CVEs)
               </Typography>
               <Box sx={{ display: "flex", gap: 1, ml: "auto" }}>
                 {(result.cve_scan.critical_count || 0) > 0 && (
@@ -12838,18 +13457,28 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
             </Grid>
 
             {/* KEV warning */}
-            {(result.cve_scan.kev_count || 0) > 0 && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>{result.cve_scan.kev_count} CVE(s) are in the CISA Known Exploited Vulnerabilities catalog!</strong>
-                  {" "}These vulnerabilities are actively exploited in the wild and require immediate attention.
-                </Typography>
-              </Alert>
-            )}
+              {(result.cve_scan.kev_count || 0) > 0 && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>{result.cve_scan.kev_count} CVE(s) are in the CISA Known Exploited Vulnerabilities catalog!</strong>
+                    {" "}These vulnerabilities are actively exploited in the wild and require immediate attention.
+                  </Typography>
+                </Alert>
+              )}
 
-            {/* CVE Table */}
-            <TableContainer sx={{ maxHeight: 500 }}>
-              <Table size="small" stickyHeader>
+              {!(result.cve_scan.vulnerabilities?.length || 0) && (
+                <Alert severity={result.cve_scan.error ? "warning" : "info"} sx={{ mb: 2 }}>
+                  {result.cve_scan.error
+                    ? `The package CVE scan ran but reported an error: ${result.cve_scan.error}`
+                    : result.cve_scan.packages_scanned
+                      ? "The package CVE scan completed and did not return any matching vulnerabilities."
+                      : "The package CVE scan completed but did not detect any packages to match against the vulnerability databases."}
+                </Alert>
+              )}
+
+              {/* CVE Table */}
+              <TableContainer sx={{ maxHeight: 500 }}>
+                <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
                     <TableCell>CVE ID</TableCell>
@@ -12861,94 +13490,104 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
                     <TableCell>KEV</TableCell>
                     <TableCell>Priority</TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {result.cve_scan.vulnerabilities.map((vuln, idx) => (
-                    <TableRow
-                      key={idx}
-                      sx={{
-                        bgcolor: vuln.in_kev
-                          ? alpha("#dc2626", 0.1)
-                          : vuln.severity?.toLowerCase() === "critical"
-                            ? alpha("#dc2626", 0.05)
-                            : "inherit"
-                      }}
-                    >
-                      <TableCell>
-                        <Tooltip title={vuln.title || vuln.description || "No description"}>
-                          <Typography
-                            variant="body2"
-                            fontFamily="monospace"
-                            sx={{
-                              color: vuln.in_kev ? "#dc2626" : "inherit",
-                              fontWeight: vuln.in_kev ? 700 : 400,
-                            }}
-                          >
-                            {vuln.external_id}
+                  </TableHead>
+                  <TableBody>
+                    {(result.cve_scan.vulnerabilities || []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8}>
+                          <Typography variant="body2" color="text.secondary">
+                            No package vulnerabilities were returned for this run.
                           </Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{vuln.package_name || "-"}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" fontFamily="monospace">{vuln.package_version || "-"}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={vuln.severity || "unknown"}
-                          size="small"
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (result.cve_scan.vulnerabilities || []).map((vuln, idx) => (
+                        <TableRow
+                          key={idx}
                           sx={{
-                            bgcolor: alpha(getSeverityColor(vuln.severity || "unknown"), 0.2),
-                            color: getSeverityColor(vuln.severity || "unknown"),
-                            fontWeight: 600,
+                            bgcolor: vuln.in_kev
+                              ? alpha("#dc2626", 0.1)
+                              : vuln.severity?.toLowerCase() === "critical"
+                                ? alpha("#dc2626", 0.05)
+                                : "inherit"
                           }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          fontWeight={vuln.cvss_score && vuln.cvss_score >= 9.0 ? 700 : 400}
-                          color={vuln.cvss_score && vuln.cvss_score >= 9.0 ? "error" : "inherit"}
                         >
-                          {vuln.cvss_score?.toFixed(1) || "-"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={vuln.epss_percentile ? `${(vuln.epss_percentile * 100).toFixed(0)}th percentile` : ""}>
-                          <Typography
-                            variant="body2"
-                            color={vuln.epss_score && vuln.epss_score > 0.5 ? "error" : "inherit"}
-                            fontWeight={vuln.epss_score && vuln.epss_score > 0.5 ? 700 : 400}
-                          >
-                            {vuln.epss_score ? `${(vuln.epss_score * 100).toFixed(1)}%` : "-"}
-                          </Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        {vuln.in_kev ? (
-                          <Chip label="YES" size="small" color="error" />
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">No</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {vuln.priority_label && (
-                          <Chip
-                            label={vuln.priority_label}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha(getSeverityColor(vuln.priority_label), 0.2),
-                              color: getSeverityColor(vuln.priority_label),
-                            }}
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          <TableCell>
+                            <Tooltip title={vuln.title || vuln.description || "No description"}>
+                              <Typography
+                                variant="body2"
+                                fontFamily="monospace"
+                                sx={{
+                                  color: vuln.in_kev ? "#dc2626" : "inherit",
+                                  fontWeight: vuln.in_kev ? 700 : 400,
+                                }}
+                              >
+                                {vuln.external_id}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{vuln.package_name || "-"}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" fontFamily="monospace">{vuln.package_version || "-"}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={vuln.severity || "unknown"}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(vuln.severity || "unknown"), 0.2),
+                                color: getSeverityColor(vuln.severity || "unknown"),
+                                fontWeight: 600,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography
+                              variant="body2"
+                              fontWeight={vuln.cvss_score && vuln.cvss_score >= 9.0 ? 700 : 400}
+                              color={vuln.cvss_score && vuln.cvss_score >= 9.0 ? "error" : "inherit"}
+                            >
+                              {vuln.cvss_score?.toFixed(1) || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title={vuln.epss_percentile ? `${(vuln.epss_percentile * 100).toFixed(0)}th percentile` : ""}>
+                              <Typography
+                                variant="body2"
+                                color={vuln.epss_score && vuln.epss_score > 0.5 ? "error" : "inherit"}
+                                fontWeight={vuln.epss_score && vuln.epss_score > 0.5 ? 700 : 400}
+                              >
+                                {vuln.epss_score ? `${(vuln.epss_score * 100).toFixed(1)}%` : "-"}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>
+                            {vuln.in_kev ? (
+                              <Chip label="YES" size="small" color="error" />
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">No</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {vuln.priority_label && (
+                              <Chip
+                                label={vuln.priority_label}
+                                size="small"
+                                sx={{
+                                  bgcolor: alpha(getSeverityColor(vuln.priority_label), 0.2),
+                                  color: getSeverityColor(vuln.priority_label),
+                                }}
+                              />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
             {/* Scan metadata */}
             <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -12964,7 +13603,320 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
         </Accordion>
       )}
 
+      {result.trivy_scan && (
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
+              <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <ShieldIcon color="primary" /> Native Trivy Scan
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1, ml: "auto", flexWrap: "wrap" }}>
+                <Chip size="small" label={`${result.trivy_scan.enabled_scanners?.length || 0} scanners`} />
+                <Chip size="small" color="error" label={`${result.trivy_scan.vulnerabilities?.length || 0} vulns`} />
+                <Chip size="small" color="warning" label={`${result.trivy_scan.misconfigurations?.length || 0} misconfigs`} />
+                <Chip size="small" color="secondary" label={`${result.trivy_scan.secrets?.length || 0} secrets`} />
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Native Trivy output is shown here alongside the Docker Inspector&apos;s own history, layer, and OSV/NVD-enriched analysis.
+            </Alert>
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+              {(result.trivy_scan.enabled_scanners || []).map((scanner) => (
+                <Chip key={scanner} size="small" label={formatTrivyScannerLabel(scanner)} />
+              ))}
+              {!(result.trivy_scan.enabled_scanners || []).length && (
+                <Chip size="small" label="No native scanners enabled" />
+              )}
+            </Box>
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={6} md={3}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h5">{result.trivy_scan.package_count || 0}</Typography>
+                  <Typography variant="caption">Packages</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h5" color="error">{result.trivy_scan.vulnerabilities?.length || 0}</Typography>
+                  <Typography variant="caption">Vulnerabilities</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h5" color="warning.main">{result.trivy_scan.misconfigurations?.length || 0}</Typography>
+                  <Typography variant="caption">Misconfigs</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h5" color="secondary">{result.trivy_scan.secrets?.length || 0}</Typography>
+                  <Typography variant="caption">Secrets</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h5">{result.trivy_scan.licenses?.length || 0}</Typography>
+                  <Typography variant="caption">Licenses</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {(result.trivy_scan.vulnerabilities?.length || 0) > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <BugIcon color="error" /> Trivy Vulnerabilities
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                  {Object.entries(result.trivy_scan.vulnerability_severity_counts || {}).map(([severity, count]) => (
+                    <Chip
+                      key={severity}
+                      size="small"
+                      label={`${severity.toUpperCase()}: ${count}`}
+                      sx={{
+                        bgcolor: alpha(getSeverityColor(severity), 0.15),
+                        color: getSeverityColor(severity),
+                      }}
+                    />
+                  ))}
+                </Box>
+                <TableContainer sx={{ maxHeight: 360 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Package</TableCell>
+                        <TableCell>Installed</TableCell>
+                        <TableCell>Fixed</TableCell>
+                        <TableCell>Severity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(result.trivy_scan.vulnerabilities || []).slice(0, 20).map((finding, idx) => (
+                        <TableRow key={`trivy-vuln-${idx}`}>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace">
+                              {finding.vulnerability_id || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{finding.package_name || "-"}</TableCell>
+                          <TableCell>
+                            <Typography variant="caption" fontFamily="monospace">
+                              {finding.installed_version || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" fontFamily="monospace">
+                              {finding.fixed_version || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={finding.severity || "unknown"}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(finding.severity || "unknown"), 0.2),
+                                color: getSeverityColor(finding.severity || "unknown"),
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {(result.trivy_scan.misconfigurations?.length || 0) > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <SecurityIcon color="warning" /> Trivy Misconfigurations
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                  {Object.entries(result.trivy_scan.misconfiguration_severity_counts || {}).map(([severity, count]) => (
+                    <Chip
+                      key={severity}
+                      size="small"
+                      label={`${severity.toUpperCase()}: ${count}`}
+                      sx={{
+                        bgcolor: alpha(getSeverityColor(severity), 0.15),
+                        color: getSeverityColor(severity),
+                      }}
+                    />
+                  ))}
+                </Box>
+                <TableContainer sx={{ maxHeight: 320 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Target</TableCell>
+                        <TableCell>Severity</TableCell>
+                        <TableCell>Message</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(result.trivy_scan.misconfigurations || []).slice(0, 20).map((finding, idx) => (
+                        <TableRow key={`trivy-misconfig-${idx}`}>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace">
+                              {finding.id || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{finding.target || "-"}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={finding.severity || "unknown"}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(finding.severity || "unknown"), 0.2),
+                                color: getSeverityColor(finding.severity || "unknown"),
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>{finding.message || finding.title || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {(result.trivy_scan.secrets?.length || 0) > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <SecretIcon color="secondary" /> Trivy Secret Findings
+                </Typography>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  Raw Trivy secret matches are shown here and will be included in Docker reports for remediation.
+                </Alert>
+                <TableContainer sx={{ maxHeight: 320 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Rule</TableCell>
+                        <TableCell>Target</TableCell>
+                        <TableCell>Match</TableCell>
+                        <TableCell>Severity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(result.trivy_scan.secrets || []).slice(0, 20).map((finding, idx) => (
+                        <TableRow key={`trivy-secret-${idx}`}>
+                          <TableCell>
+                            <Typography variant="body2" fontFamily="monospace">
+                              {finding.rule_id || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{finding.target || "-"}</TableCell>
+                          <TableCell sx={{ maxWidth: 320 }}>
+                            <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>
+                              {finding.match || "-"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={finding.severity || "unknown"}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(finding.severity || "unknown"), 0.2),
+                                color: getSeverityColor(finding.severity || "unknown"),
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {(result.trivy_scan.licenses?.length || 0) > 0 && (
+              <Box>
+                <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <ArticleIcon color="action" /> Trivy License Findings
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                  {Object.entries(result.trivy_scan.license_severity_counts || {}).map(([severity, count]) => (
+                    <Chip
+                      key={severity}
+                      size="small"
+                      label={`${severity.toUpperCase()}: ${count}`}
+                      sx={{
+                        bgcolor: alpha(getSeverityColor(severity), 0.15),
+                        color: getSeverityColor(severity),
+                      }}
+                    />
+                  ))}
+                </Box>
+                <TableContainer sx={{ maxHeight: 320 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>License</TableCell>
+                        <TableCell>Package</TableCell>
+                        <TableCell>Category</TableCell>
+                        <TableCell>Severity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(result.trivy_scan.licenses || []).slice(0, 20).map((finding, idx) => (
+                        <TableRow key={`trivy-license-${idx}`}>
+                          <TableCell>{finding.name || "-"}</TableCell>
+                          <TableCell>{finding.package_name || "-"}</TableCell>
+                          <TableCell>{finding.category || "-"}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={finding.severity || "unknown"}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha(getSeverityColor(finding.severity || "unknown"), 0.2),
+                                color: getSeverityColor(finding.severity || "unknown"),
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" color="text.secondary">
+                Trivy {result.trivy_scan.trivy_version || "unknown"} · Duration: {result.trivy_scan.scan_duration_seconds?.toFixed(1) || "0.0"}s · Findings: {(result.trivy_scan.vulnerabilities?.length || 0) + (result.trivy_scan.misconfigurations?.length || 0) + (result.trivy_scan.secrets?.length || 0) + (result.trivy_scan.licenses?.length || 0)}
+              </Typography>
+              {result.trivy_scan.error && (
+                <Chip label={`Error: ${result.trivy_scan.error}`} size="small" color="warning" />
+              )}
+            </Box>
+          </AccordionDetails>
+        </Accordion>
+        )}
+        </>
+      )}
+
       {/* Image Layers */}
+      <Typography
+        variant="overline"
+        sx={{
+          display: "block",
+          mt: 3,
+          mb: 1,
+          color: "text.secondary",
+          letterSpacing: "0.08em",
+          fontWeight: 700,
+        }}
+      >
+        Build History
+      </Typography>
       <Accordion sx={{ mt: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -13015,26 +13967,6 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
           </TableContainer>
         </AccordionDetails>
       </Accordion>
-
-      {/* AI Analysis */}
-      {result.ai_analysis && (
-        <Paper sx={{ p: 3, mt: 3, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-          <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <AiIcon color="info" /> AI Security Analysis
-          </Typography>
-          <Typography
-            variant="body2"
-            component="pre"
-            sx={{
-              whiteSpace: "pre-wrap",
-              fontFamily: "inherit",
-              m: 0,
-            }}
-          >
-            {result.ai_analysis}
-          </Typography>
-        </Paper>
-      )}
 
       <Dialog
         open={Boolean(layerSecretPreview)}
@@ -13115,12 +14047,26 @@ function DockerResults({ result }: { result: DockerAnalysisResult }) {
 
 // Main Component
 export default function ReverseEngineeringHub() {
+  const { isAdmin } = useAuth();
   const theme = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get('projectId') ? parseInt(searchParams.get('projectId')!) : undefined;
+  const parsePositiveIntParam = (key: string): number | undefined => {
+    const raw = searchParams.get(key);
+    if (!raw) return undefined;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+    return parsed;
+  };
+  const projectId = parsePositiveIntParam('projectId');
   const projectName = searchParams.get('projectName') ? decodeURIComponent(searchParams.get('projectName')!) : undefined;
-  const initialTab = searchParams.get('tab') ? parseInt(searchParams.get('tab')!) : 0;
+  const initialTab = (() => {
+    const rawTab = parsePositiveIntParam('tab');
+    if (rawTab === undefined) return 0;
+    if (rawTab > 2) return 0;
+    return rawTab;
+  })();
+  const initialReportId = parsePositiveIntParam('reportId');
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [status, setStatus] = useState<ReverseEngineeringStatus | null>(null);
@@ -13138,6 +14084,7 @@ export default function ReverseEngineeringHub() {
 
   // Binary state
   const [binaryFile, setBinaryFile] = useState<File | null>(null);
+  const [binaryScanName, setBinaryScanName] = useState("");
   const [binaryResult, setBinaryResult] = useState<BinaryAnalysisResult | null>(null);
   const [binaryLoading, setBinaryLoading] = useState(false);
   const [binaryScanProgress, setBinaryScanProgress] = useState<UnifiedBinaryScanProgress | null>(null);
@@ -13154,6 +14101,7 @@ export default function ReverseEngineeringHub() {
 
   // APK state
   const [apkFile, setApkFile] = useState<File | null>(null);
+  const [apkScanName, setApkScanName] = useState("");
   const [apkResult, setApkResult] = useState<ApkAnalysisResult | null>(null);
   const [apkLoading, setApkLoading] = useState(false);
   
@@ -13188,18 +14136,24 @@ export default function ReverseEngineeringHub() {
   const [dockerLoading, setDockerLoading] = useState(false);
   const [dockerImageFilter, setDockerImageFilter] = useState("");
   const [dockerImagesLoading, setDockerImagesLoading] = useState(false);
+  const [allowingDockerImage, setAllowingDockerImage] = useState(false);
   const [dockerIncludeAi, setDockerIncludeAi] = useState(true);
   const [dockerAdjudicateFindings, setDockerAdjudicateFindings] = useState(true);
   const [dockerSkepticismLevel, setDockerSkepticismLevel] = useState<"high" | "medium" | "low">("high");
-  const [dockerDeepScan, setDockerDeepScan] = useState(true);
+  const [dockerDeepScan, setDockerDeepScan] = useState(false);
   const [dockerCheckBaseImage, setDockerCheckBaseImage] = useState(true);
   // CVE Scanning state
   const [dockerScanCves, setDockerScanCves] = useState(true);
   const [dockerIncludeNvd, setDockerIncludeNvd] = useState(true);
   const [dockerIncludeKev, setDockerIncludeKev] = useState(true);
   const [dockerIncludeEpss, setDockerIncludeEpss] = useState(true);
+  const [dockerIncludeTrivyVulnScan, setDockerIncludeTrivyVulnScan] = useState(false);
+  const [dockerIncludeTrivyMisconfigScan, setDockerIncludeTrivyMisconfigScan] = useState(true);
+  const [dockerIncludeTrivySecretScan, setDockerIncludeTrivySecretScan] = useState(true);
+  const [dockerIncludeTrivyLicenseScan, setDockerIncludeTrivyLicenseScan] = useState(false);
   const [dockerExportAnchor, setDockerExportAnchor] = useState<null | HTMLElement>(null);
   const [exportingDocker, setExportingDocker] = useState(false);
+  const [exportingDockerSbom, setExportingDockerSbom] = useState(false);
 
   // Saved reports state
   const [savedReports, setSavedReports] = useState<REReportSummary[]>([]);
@@ -13207,6 +14161,7 @@ export default function ReverseEngineeringHub() {
   const [savingReport, setSavingReport] = useState(false);
   const [viewingReportId, setViewingReportId] = useState<number | null>(null);
   const [loadingReportView, setLoadingReportView] = useState(false);
+  const autoLoadedReportRef = useRef<number | null>(null);
   
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -13216,7 +14171,7 @@ export default function ReverseEngineeringHub() {
   useEffect(() => {
     loadStatus();
     loadSavedReports();
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     if (status && !status.ghidra_available) {
@@ -13224,6 +14179,12 @@ export default function ReverseEngineeringHub() {
       setIncludeGhidraAi(false);
     }
   }, [status?.ghidra_available]);
+
+  useEffect(() => {
+    if (status?.offline_mode && !status.epss_available) {
+      setDockerIncludeEpss(false);
+    }
+  }, [status?.offline_mode, status?.epss_available]);
 
   const loadStatus = async () => {
     try {
@@ -13233,7 +14194,7 @@ export default function ReverseEngineeringHub() {
 
       // If Docker is available, load images
       if (s.docker_available) {
-        const imgs = await reverseEngineeringClient.listDockerImages();
+        const imgs = await reverseEngineeringClient.listDockerImages(projectId);
         setDockerImages(imgs.images);
       }
     } catch (e: any) {
@@ -13260,12 +14221,33 @@ export default function ReverseEngineeringHub() {
     if (!status?.docker_available) return;
     try {
       setDockerImagesLoading(true);
-      const imgs = await reverseEngineeringClient.listDockerImages();
+      const imgs = await reverseEngineeringClient.listDockerImages(projectId);
       setDockerImages(imgs.images);
     } catch (e: any) {
       console.error("Failed to refresh Docker images:", e);
     } finally {
       setDockerImagesLoading(false);
+    }
+  };
+
+  const allowSelectedDockerImage = async (imageName?: string) => {
+    const targetImage = (imageName || selectedImage || "").trim();
+    if (!targetImage) return;
+    try {
+      setAllowingDockerImage(true);
+      setError(null);
+      await reverseEngineeringClient.allowDockerImage(targetImage, projectId);
+      await refreshDockerImages();
+      setSelectedImage(targetImage);
+      setSuccessMessage(
+        projectId
+          ? `Docker image "${targetImage}" allowlisted for this project.`
+          : `Docker image "${targetImage}" allowlisted for your account.`
+      );
+    } catch (e: any) {
+      setError(`Failed to allow Docker image: ${e.message}`);
+    } finally {
+      setAllowingDockerImage(false);
     }
   };
 
@@ -13275,23 +14257,88 @@ export default function ReverseEngineeringHub() {
     img.id.toLowerCase().includes(dockerImageFilter.toLowerCase())
   );
 
+  const allowlistedDockerImagesCount = dockerImages.filter((img) => img.allowlisted !== false).length;
+  const dockerImagesHeading = isAdmin ? "Local Images" : "Allowed Images";
+  const dockerImagesSearchPlaceholder = isAdmin
+    ? "Search local Docker images..."
+    : "Search allowlisted images...";
+  const dockerImagesRefreshLabel = isAdmin
+    ? "Refresh local Docker images"
+    : "Refresh allowlisted images";
+  const getDockerAllowlistScopeLabel = (
+    scope?: DockerImageInfo["allowlist_scope"]
+  ): string | null => {
+    switch (scope) {
+      case "user":
+        return "Allowed for you";
+      case "project":
+        return "Allowed for project";
+      case "user+project":
+        return "Allowed for both";
+      default:
+        return null;
+    }
+  };
+
   const selectedDockerImage = useMemo(
     () => dockerImages.find((img) => img.name === selectedImage),
     [dockerImages, selectedImage]
   );
+  const selectedDockerImageAllowlisted = Boolean(
+    selectedDockerImage && selectedDockerImage.allowlisted !== false
+  );
 
   const dockerScanProfile = useMemo<DockerScanProfile>(() => {
-    if (!dockerIncludeAi && !dockerAdjudicateFindings && !dockerDeepScan && !dockerCheckBaseImage) {
+    if (
+      !dockerIncludeAi &&
+      !dockerAdjudicateFindings &&
+      !dockerDeepScan &&
+      !dockerCheckBaseImage &&
+      !dockerIncludeTrivyVulnScan &&
+      !dockerIncludeTrivyMisconfigScan &&
+      !dockerIncludeTrivySecretScan &&
+      !dockerIncludeTrivyLicenseScan
+    ) {
       return "fast";
     }
-    if (dockerIncludeAi && dockerAdjudicateFindings && dockerSkepticismLevel === "high" && !dockerDeepScan && dockerCheckBaseImage) {
+    if (
+      dockerIncludeAi &&
+      dockerAdjudicateFindings &&
+      dockerSkepticismLevel === "high" &&
+      !dockerDeepScan &&
+      dockerCheckBaseImage &&
+      !dockerIncludeTrivyVulnScan &&
+      dockerIncludeTrivyMisconfigScan &&
+      dockerIncludeTrivySecretScan &&
+      !dockerIncludeTrivyLicenseScan
+    ) {
       return "balanced";
     }
-    if (dockerIncludeAi && dockerAdjudicateFindings && dockerSkepticismLevel === "high" && dockerDeepScan && dockerCheckBaseImage) {
+    if (
+      dockerIncludeAi &&
+      dockerAdjudicateFindings &&
+      dockerSkepticismLevel === "high" &&
+      dockerDeepScan &&
+      dockerCheckBaseImage &&
+      dockerIncludeTrivyVulnScan &&
+      dockerIncludeTrivyMisconfigScan &&
+      dockerIncludeTrivySecretScan &&
+      dockerIncludeTrivyLicenseScan
+    ) {
       return "deep";
     }
     return "custom";
-  }, [dockerIncludeAi, dockerAdjudicateFindings, dockerSkepticismLevel, dockerDeepScan, dockerCheckBaseImage]);
+  }, [
+    dockerIncludeAi,
+    dockerAdjudicateFindings,
+    dockerSkepticismLevel,
+    dockerDeepScan,
+    dockerCheckBaseImage,
+    dockerIncludeTrivyVulnScan,
+    dockerIncludeTrivyMisconfigScan,
+    dockerIncludeTrivySecretScan,
+    dockerIncludeTrivyLicenseScan,
+  ]);
 
   const applyDockerProfile = (profile: Exclude<DockerScanProfile, "custom">) => {
     switch (profile) {
@@ -13301,6 +14348,10 @@ export default function ReverseEngineeringHub() {
         setDockerSkepticismLevel("high");
         setDockerDeepScan(false);
         setDockerCheckBaseImage(false);
+        setDockerIncludeTrivyVulnScan(false);
+        setDockerIncludeTrivyMisconfigScan(false);
+        setDockerIncludeTrivySecretScan(false);
+        setDockerIncludeTrivyLicenseScan(false);
         break;
       case "balanced":
         setDockerIncludeAi(true);
@@ -13308,6 +14359,10 @@ export default function ReverseEngineeringHub() {
         setDockerSkepticismLevel("high");
         setDockerDeepScan(false);
         setDockerCheckBaseImage(true);
+        setDockerIncludeTrivyVulnScan(false);
+        setDockerIncludeTrivyMisconfigScan(true);
+        setDockerIncludeTrivySecretScan(true);
+        setDockerIncludeTrivyLicenseScan(false);
         break;
       case "deep":
         setDockerIncludeAi(true);
@@ -13315,6 +14370,10 @@ export default function ReverseEngineeringHub() {
         setDockerSkepticismLevel("high");
         setDockerDeepScan(true);
         setDockerCheckBaseImage(true);
+        setDockerIncludeTrivyVulnScan(true);
+        setDockerIncludeTrivyMisconfigScan(true);
+        setDockerIncludeTrivySecretScan(true);
+        setDockerIncludeTrivyLicenseScan(true);
         break;
       default:
         break;
@@ -13324,7 +14383,11 @@ export default function ReverseEngineeringHub() {
   const loadSavedReports = async () => {
     try {
       setReportsLoading(true);
-      const reports = await reverseEngineeringClient.listReports({ limit: 50 });
+      const reports = await reverseEngineeringClient.listReports({
+        project_id: projectId,
+        include_project_reports: projectId ? undefined : false,
+        limit: 50,
+      });
       setSavedReports(reports);
     } catch (e: any) {
       console.error("Failed to load reports:", e);
@@ -13333,14 +14396,33 @@ export default function ReverseEngineeringHub() {
     }
   };
 
+  const resolveBinaryReportTitle = useCallback((filename?: string) => {
+    const normalized = binaryScanName.trim().replace(/\s+/g, " ");
+    if (normalized.length > 0) {
+      return normalized.slice(0, 160);
+    }
+    const effectiveFilename = (filename || "Unknown").trim() || "Unknown";
+    return `Binary Analysis: ${effectiveFilename}`;
+  }, [binaryScanName]);
+
+  const resolveApkReportTitle = useCallback((packageName?: string, filename?: string) => {
+    const normalized = apkScanName.trim().replace(/\s+/g, " ");
+    if (normalized.length > 0) {
+      return normalized.slice(0, 160);
+    }
+    const effectiveName = (packageName || filename || "Unknown APK").trim() || "Unknown APK";
+    return `APK Analysis: ${effectiveName}`;
+  }, [apkScanName]);
+
   const saveBinaryReport = async () => {
     if (!binaryResult || !binaryFile) return;
     try {
       setSavingReport(true);
+      const reportTitle = resolveBinaryReportTitle(binaryFile.name || binaryResult.filename);
       const report: SaveREReportRequest = {
         analysis_type: 'binary',
-        title: `Binary Analysis: ${binaryResult.filename}`,
-        filename: binaryResult.filename,
+        title: reportTitle,
+        filename: binaryFile.name || binaryResult.filename,
         project_id: projectId,
         file_type: binaryResult.metadata.file_type,
         architecture: binaryResult.metadata.architecture,
@@ -13352,7 +14434,15 @@ export default function ReverseEngineeringHub() {
         exports_count: binaryResult.exports.length,
         secrets_count: binaryResult.secrets.length,
         suspicious_indicators: binaryResult.suspicious_indicators as any,
-        ai_analysis_raw: binaryResult.ai_analysis || undefined,
+        ai_analysis_raw:
+          binaryResult.ai_analysis ||
+          binaryResult.ai_functionality_report ||
+          binaryResult.ai_security_report ||
+          undefined,
+        ai_functionality_report: binaryResult.ai_functionality_report || undefined,
+        ai_security_report: binaryResult.ai_security_report || undefined,
+        ai_architecture_diagram: binaryResult.ai_architecture_diagram || undefined,
+        ai_attack_surface_map: binaryResult.ai_attack_surface_map || undefined,
         full_analysis_data: {
           metadata: binaryResult.metadata,
           strings_sample: binaryResult.strings_sample,
@@ -13361,10 +14451,22 @@ export default function ReverseEngineeringHub() {
           secrets: binaryResult.secrets,
           ghidra_analysis: binaryResult.ghidra_analysis,
           ghidra_ai_summaries: binaryResult.ghidra_ai_summaries,
+          vuln_hunt_result: binaryResult.vuln_hunt_result,
+          obfuscation_analysis: binaryResult.obfuscation_analysis,
+          attack_surface: binaryResult.attack_surface,
+          pattern_scan_result: binaryResult.pattern_scan_result,
+          cve_lookup_result: binaryResult.cve_lookup_result,
+          verification_result: binaryResult.verification_result,
+          is_legitimate_software: binaryResult.is_legitimate_software,
+          legitimacy_indicators: binaryResult.legitimacy_indicators,
+          ai_functionality_report: binaryResult.ai_functionality_report,
+          ai_security_report: binaryResult.ai_security_report,
+          ai_architecture_diagram: binaryResult.ai_architecture_diagram,
+          ai_attack_surface_map: binaryResult.ai_attack_surface_map,
         },
       };
       await reverseEngineeringClient.saveReport(report);
-      setSuccessMessage("Binary analysis report saved successfully!");
+      setSuccessMessage(`Binary analysis report "${reportTitle}" saved successfully!`);
       loadSavedReports();
     } catch (e: any) {
       setError(`Failed to save report: ${e.message}`);
@@ -13374,12 +14476,17 @@ export default function ReverseEngineeringHub() {
   };
 
   // Auto-save binary scan when complete
-  const autoSaveBinaryResult = async (result: BinaryAnalysisResult, filename: string) => {
+  const autoSaveBinaryResult = async (
+    result: BinaryAnalysisResult,
+    filename: string,
+    preferredTitle?: string,
+  ) => {
     try {
+      const reportTitle = preferredTitle || resolveBinaryReportTitle(result.filename || filename);
       const report: SaveREReportRequest = {
         analysis_type: 'binary',
-        title: `Binary Analysis: ${result.filename}`,
-        filename: result.filename,
+        title: reportTitle,
+        filename: filename || result.filename,
         project_id: projectId,
         file_type: result.metadata.file_type,
         architecture: result.metadata.architecture,
@@ -13391,7 +14498,11 @@ export default function ReverseEngineeringHub() {
         exports_count: (result.exports || []).length,
         secrets_count: (result.secrets || []).length,
         suspicious_indicators: result.suspicious_indicators as any,
-        ai_analysis_raw: result.ai_analysis || undefined,
+        ai_analysis_raw:
+          result.ai_analysis ||
+          result.ai_functionality_report ||
+          result.ai_security_report ||
+          undefined,
         // AI-Generated Reports
         ai_functionality_report: result.ai_functionality_report || undefined,
         ai_security_report: result.ai_security_report || undefined,
@@ -13413,10 +14524,15 @@ export default function ReverseEngineeringHub() {
           verification_result: result.verification_result,
           is_legitimate_software: result.is_legitimate_software,
           legitimacy_indicators: result.legitimacy_indicators,
+          ai_functionality_report: result.ai_functionality_report,
+          ai_security_report: result.ai_security_report,
+          ai_architecture_diagram: result.ai_architecture_diagram,
+          ai_attack_surface_map: result.ai_attack_surface_map,
         },
       };
       await reverseEngineeringClient.saveReport(report);
       setBinaryAutoSaved(true);
+      setSuccessMessage(`Binary analysis auto-saved as "${reportTitle}"`);
       loadSavedReports();
     } catch (e: any) {
       console.error("Auto-save failed:", e);
@@ -13429,14 +14545,14 @@ export default function ReverseEngineeringHub() {
     try {
       setExportingBinary(true);
       setBinaryExportAnchor(null);
-      const blob = await reverseEngineeringClient.exportBinaryResult(binaryResult, format);
+      const exportTitle = resolveBinaryReportTitle(binaryFile?.name || binaryResult.filename);
+      const blob = await reverseEngineeringClient.exportBinaryResult(binaryResult, format, exportTitle);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const ext = format === "markdown" ? "md" : format;
-      const base = binaryResult.filename || "binary_report";
-      const safeBase = base.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
-      a.download = `binary_analysis_${safeBase}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      const safeBase = exportTitle.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 80) || "binary_analysis_report";
+      a.download = `${safeBase}_${new Date().toISOString().split("T")[0]}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -13453,6 +14569,7 @@ export default function ReverseEngineeringHub() {
     if (!apkResult || !apkFile) return;
     try {
       setSavingReport(true);
+      const reportTitle = resolveApkReportTitle(apkResult.package_name, apkFile.name);
       
       // Fetch source code for key classes if we have a JADX session
       let sourceCodeSamples: Array<{
@@ -13519,7 +14636,7 @@ export default function ReverseEngineeringHub() {
       
       const report: SaveREReportRequest = {
         analysis_type: 'apk',
-        title: `APK Analysis: ${apkResult.package_name || apkFile.name}`,
+        title: reportTitle,
         filename: apkFile.name,
         project_id: projectId,
         package_name: apkResult.package_name,
@@ -13540,6 +14657,15 @@ export default function ReverseEngineeringHub() {
           secrets: apkResult.secrets,
           native_libraries: apkResult.native_libraries,
           security_issues: mergedSecurityIssues,
+          scan_time: unifiedApkResult?.scan_time,
+          file_size: unifiedApkResult?.file_size,
+          decompilation_time: unifiedApkResult?.decompilation_time,
+          vuln_hunt_result: unifiedApkResult?.vuln_hunt_result,
+          vulnerability_frida_hooks: unifiedApkResult?.vulnerability_frida_hooks,
+          manifest_visualization: unifiedApkResult?.manifest_visualization,
+          obfuscation_analysis: unifiedApkResult?.obfuscation_analysis,
+          verification_results: unifiedApkResult?.verification_results,
+          sensitive_data_findings: unifiedApkResult?.sensitive_data_findings,
           // Include enhanced security metadata
           enhanced_security_summary: enhancedSecurityResult ? {
             overall_risk: enhancedSecurityResult.overall_risk,
@@ -13598,11 +14724,16 @@ export default function ReverseEngineeringHub() {
         cve_scan_results: unifiedApkResult?.cve_scan_results as any,
         // Vulnerability-specific Frida Hooks
         vulnerability_frida_hooks: unifiedApkResult?.vulnerability_frida_hooks as any,
+        // Unified vulnerability hunt / verification results
+        vuln_hunt_result: unifiedApkResult?.vuln_hunt_result as any,
+        manifest_visualization: unifiedApkResult?.manifest_visualization as any,
+        obfuscation_analysis: unifiedApkResult?.obfuscation_analysis as any,
+        verification_results: unifiedApkResult?.verification_results as any,
         // Sensitive Data Discovery
         sensitive_data_findings: unifiedApkResult?.sensitive_data_findings as any,
       } as any;
       await reverseEngineeringClient.saveReport(report);
-      setSuccessMessage("APK analysis report saved successfully (including Full Scan data)!");
+      setSuccessMessage(`APK analysis report "${reportTitle}" saved successfully!`);
       loadSavedReports();
     } catch (e: any) {
       setError(`Failed to save report: ${e.message}`);
@@ -13617,12 +14748,17 @@ export default function ReverseEngineeringHub() {
     try {
       setExportingUnified(true);
       setUnifiedExportAnchor(null);
-      const blob = await reverseEngineeringClient.exportUnifiedApkScan(unifiedApkResult, format);
+      const exportTitle = resolveApkReportTitle(
+        unifiedApkResult.package_name,
+        apkFile?.name || unifiedApkResult.filename
+      );
+      const blob = await reverseEngineeringClient.exportUnifiedApkScan(unifiedApkResult, format, exportTitle);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const ext = format === "markdown" ? "md" : format;
-      a.download = `apk_analysis_${unifiedApkResult.package_name || "report"}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      const safeBase = exportTitle.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 80) || "apk_analysis_report";
+      a.download = `${safeBase}_${new Date().toISOString().split("T")[0]}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -13636,11 +14772,16 @@ export default function ReverseEngineeringHub() {
   };
 
   // Auto-save unified APK scan when complete
-  const autoSaveUnifiedResult = async (result: UnifiedApkScanResult, filename: string) => {
+  const autoSaveUnifiedResult = async (
+    result: UnifiedApkScanResult,
+    filename: string,
+    preferredTitle?: string,
+  ) => {
     try {
+      const reportTitle = preferredTitle || resolveApkReportTitle(result.package_name, filename);
       const report: SaveREReportRequest = {
         analysis_type: 'apk',
-        title: `APK Analysis: ${result.package_name || filename}`,
+        title: reportTitle,
         filename: filename,
         project_id: projectId,
         package_name: result.package_name,
@@ -13660,6 +14801,15 @@ export default function ReverseEngineeringHub() {
           secrets: result.secrets,
           native_libraries: result.native_libraries,
           security_issues: result.security_issues,
+          scan_time: result.scan_time,
+          file_size: result.file_size,
+          decompilation_time: result.decompilation_time,
+          vuln_hunt_result: result.vuln_hunt_result,
+          vulnerability_frida_hooks: result.vulnerability_frida_hooks,
+          manifest_visualization: result.manifest_visualization,
+          obfuscation_analysis: result.obfuscation_analysis,
+          verification_results: result.verification_results,
+          sensitive_data_findings: result.sensitive_data_findings,
         },
         // JADX Full Scan Data
         jadx_total_classes: result.total_classes,
@@ -13686,9 +14836,16 @@ export default function ReverseEngineeringHub() {
         cve_scan_results: result.cve_scan_results as any,
         // Vulnerability-specific Frida Hooks
         vulnerability_frida_hooks: result.vulnerability_frida_hooks as any,
+        // Unified vulnerability hunt / verification results
+        vuln_hunt_result: result.vuln_hunt_result as any,
+        manifest_visualization: result.manifest_visualization as any,
+        obfuscation_analysis: result.obfuscation_analysis as any,
+        verification_results: result.verification_results as any,
+        sensitive_data_findings: result.sensitive_data_findings as any,
       };
       await reverseEngineeringClient.saveReport(report);
       setAutoSavedReport(true);
+      setSuccessMessage(`APK analysis auto-saved as "${reportTitle}"`);
       loadSavedReports();
     } catch (e: any) {
       console.error("Auto-save failed:", e);
@@ -13719,6 +14876,7 @@ export default function ReverseEngineeringHub() {
         base_image: dockerResult.base_image || undefined,
         secrets_count: secretsCount,
         security_issues: dockerResult.security_issues as any,
+        cve_scan_results: dockerResult.cve_scan as any,
         ai_analysis_raw: dockerResult.ai_analysis || undefined,
         full_analysis_data: {
           image_name: dockerResult.image_name,
@@ -13739,6 +14897,9 @@ export default function ReverseEngineeringHub() {
           adjudication_summary: dockerResult.adjudication_summary,
           adjudication_stats: dockerResult.adjudication_stats,
           rejected_findings: dockerResult.rejected_findings,
+          cve_scan: dockerResult.cve_scan,
+          trivy_scan: dockerResult.trivy_scan,
+          scan_summary: dockerResult.scan_summary,
           risk_score: riskScore,
           risk_level: riskLevel,
         },
@@ -13775,6 +14936,31 @@ export default function ReverseEngineeringHub() {
       setError(`Failed to export report: ${e.message}`);
     } finally {
       setExportingDocker(false);
+    }
+  };
+
+  const exportDockerSbom = async (format: "cyclonedx" | "spdx-json") => {
+    if (!dockerResult) return;
+    try {
+      setExportingDockerSbom(true);
+      setDockerExportAnchor(null);
+      const blob = await reverseEngineeringClient.exportDockerSbom(dockerResult.image_name, format, projectId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = "json";
+      const base = dockerResult.image_name || "docker_sbom";
+      const safeBase = base.replace(/[^a-zA-Z0-9-_]/g, "_").substring(0, 50);
+      a.download = `docker_sbom_${safeBase}_${format}_${new Date().toISOString().split("T")[0]}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMessage(`${format === "cyclonedx" ? "CycloneDX" : "SPDX"} SBOM exported successfully!`);
+    } catch (e: any) {
+      setError(`Failed to export SBOM: ${e.message}`);
+    } finally {
+      setExportingDockerSbom(false);
     }
   };
 
@@ -13827,37 +15013,302 @@ export default function ReverseEngineeringHub() {
       setViewingReportId(reportId);
       
       const detail = await reverseEngineeringClient.getReport(reportId);
+
+      const isRecord = (value: unknown): value is Record<string, unknown> =>
+        typeof value === "object" && value !== null && !Array.isArray(value);
+
+      const coerceRecord = (value: unknown): Record<string, unknown> => {
+        if (isRecord(value)) return value;
+        if (typeof value === "string") {
+          try {
+            const parsed = JSON.parse(value);
+            if (isRecord(parsed)) return parsed;
+          } catch {
+            // Ignore parse errors and return empty record.
+          }
+        }
+        return {};
+      };
+
+      const collectRecords = (root: unknown, maxDepth = 5): Array<Record<string, unknown>> => {
+        const records: Array<Record<string, unknown>> = [];
+        const seen = new Set<unknown>();
+        const walk = (node: unknown, depth: number) => {
+          if (depth > maxDepth || node == null) return;
+          if (Array.isArray(node)) {
+            node.forEach((item) => walk(item, depth + 1));
+            return;
+          }
+          if (!isRecord(node)) return;
+          if (seen.has(node)) return;
+          seen.add(node);
+          records.push(node);
+          Object.values(node).forEach((value) => walk(value, depth + 1));
+        };
+        walk(root, 0);
+        return records;
+      };
+
+      const normalizeText = (value: unknown): string | undefined => {
+        if (typeof value !== "string") return undefined;
+        const trimmed = value.trim();
+        if (!trimmed) return undefined;
+        if (["not available", "n/a", "none", "null", "undefined"].includes(trimmed.toLowerCase())) {
+          return undefined;
+        }
+        return trimmed;
+      };
+
+      const pickFirstText = (
+        records: Array<Record<string, unknown>>,
+        keys: string[]
+      ): string | undefined => {
+        for (const record of records) {
+          for (const key of keys) {
+            const value = normalizeText(record[key]);
+            if (value) return value;
+          }
+        }
+        return undefined;
+      };
+
+      const pickTextByHint = (
+        records: Array<Record<string, unknown>>,
+        hints: string[],
+        minimumLength = 120
+      ): string | undefined => {
+        for (const record of records) {
+          for (const [key, rawValue] of Object.entries(record)) {
+            const loweredKey = key.toLowerCase();
+            if (!hints.some((hint) => loweredKey.includes(hint))) continue;
+            const value = normalizeText(rawValue);
+            if (value && value.length >= minimumLength) {
+              return value;
+            }
+          }
+        }
+        return undefined;
+      };
+
+      const isMermaidCode = (value: unknown): value is string => {
+        if (typeof value !== "string") return false;
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+        const lower = trimmed.toLowerCase();
+        if (lower.includes("```mermaid")) return true;
+        return (
+          lower.startsWith("flowchart") ||
+          lower.startsWith("graph ") ||
+          lower.startsWith("sequencediagram") ||
+          lower.startsWith("classdiagram") ||
+          lower.startsWith("statediagram") ||
+          lower.startsWith("erdiagram") ||
+          lower.startsWith("journey") ||
+          lower.startsWith("gantt")
+        );
+      };
+
+      const pickFirstMermaid = (
+        records: Array<Record<string, unknown>>,
+        keys: string[]
+      ): string | undefined => {
+        const direct = pickFirstText(records, keys);
+        if (isMermaidCode(direct)) return direct;
+        for (const record of records) {
+          for (const value of Object.values(record)) {
+            if (isMermaidCode(value)) return normalizeText(value);
+          }
+        }
+        return undefined;
+      };
+
+      const normalizeReportType = (value: unknown): "binary" | "apk" | "docker" | "unknown" => {
+        const raw = String(value || "").toLowerCase();
+        if (!raw) return "unknown";
+        if (raw === "binary" || raw.includes("binary")) return "binary";
+        if (raw === "apk" || raw.includes("apk")) return "apk";
+        if (raw === "docker" || raw.includes("container")) return "docker";
+        return "unknown";
+      };
+      const normalizedType = normalizeReportType(detail.analysis_type);
       
       // Populate the appropriate result state based on analysis type
-      if (detail.analysis_type === 'binary') {
+      if (normalizedType === 'binary') {
         // Reconstruct binary result from saved data
-        const fullData = detail.full_analysis_data || {};
+        const fullData = coerceRecord(detail.full_analysis_data);
+        const structuredData = coerceRecord((detail as unknown as Record<string, unknown>).ai_analysis_structured);
+        const aiRawRecord = coerceRecord(detail.ai_analysis_raw);
+        const sourceRecords = [
+          coerceRecord(detail as unknown),
+          ...collectRecords(fullData, 6),
+          ...collectRecords(structuredData, 4),
+          ...collectRecords(aiRawRecord, 4),
+        ];
+        const aiRaw = normalizeText(detail.ai_analysis_raw);
+        const aiFunctionalityReport =
+          normalizeText(detail.ai_functionality_report) ||
+          pickFirstText(sourceRecords, [
+            "ai_functionality_report",
+            "ai_report_functionality",
+            "functionality_report",
+            "functionality",
+            "report_functionality",
+            "binary_functionality_report",
+            "what_does_binary_do",
+            "what_does_this_binary_do",
+            "purpose_report",
+            "purpose_summary",
+            "binary_purpose",
+            "binary_behavior_summary",
+            "executive_summary",
+          ]) ||
+          pickTextByHint(sourceRecords, ["functionality", "purpose", "what_does", "behavior"]) ||
+          aiRaw;
+        const aiSecurityReport =
+          normalizeText(detail.ai_security_report) ||
+          pickFirstText(sourceRecords, [
+            "ai_security_report",
+            "ai_report_security",
+            "security_report",
+            "security",
+            "report_security",
+            "binary_security_report",
+            "security_assessment",
+            "vulnerability_summary",
+            "risk_summary",
+            "threat_summary",
+          ]) ||
+          pickTextByHint(sourceRecords, ["security", "vulnerab", "risk", "threat"]) ||
+          aiRaw;
+        const aiArchitectureDiagram =
+          (isMermaidCode(detail.ai_architecture_diagram) ? normalizeText(detail.ai_architecture_diagram) : undefined) ||
+          pickFirstMermaid(sourceRecords, [
+            "ai_architecture_diagram",
+            "architecture_diagram",
+            "ai_architecture",
+            "architecture",
+            "architecture_map",
+            "system_architecture_diagram",
+            "component_diagram",
+            "code_architecture_diagram",
+          ]);
+        const aiAttackSurfaceMap =
+          (isMermaidCode(detail.ai_attack_surface_map) ? normalizeText(detail.ai_attack_surface_map) : undefined) ||
+          pickFirstMermaid(sourceRecords, [
+            "ai_attack_surface_map",
+            "attack_surface_map",
+            "ai_attack_surface",
+            "attack_surface",
+            "attack_tree",
+            "attack_tree_diagram",
+            "attack_surface_tree",
+            "threat_map",
+          ]);
+        const savedVulnHunt =
+          (fullData.vuln_hunt_result as VulnerabilityHuntResult | undefined) ||
+          (fullData.vulnerability_hunt_result as VulnerabilityHuntResult | undefined) ||
+          (fullData.vuln_hunt as VulnerabilityHuntResult | undefined);
+        const savedMetadata = coerceRecord(fullData.metadata) as Partial<BinaryMetadataResult>;
+        const reconstructedMetadata: BinaryMetadataResult = {
+          ...(savedMetadata as BinaryMetadataResult),
+          file_type: String(savedMetadata.file_type ?? detail.file_type ?? 'Unknown'),
+          architecture: String(savedMetadata.architecture ?? detail.architecture ?? 'Unknown'),
+          file_size: Number(savedMetadata.file_size ?? detail.file_size ?? 0),
+          is_packed: typeof savedMetadata.is_packed === 'boolean'
+            ? savedMetadata.is_packed
+            : String(savedMetadata.is_packed ?? detail.is_packed ?? '').toLowerCase() === 'true',
+          packer_name: (savedMetadata.packer_name as string | undefined) || detail.packer_name || undefined,
+          sections: Array.isArray(savedMetadata.sections) ? savedMetadata.sections : [],
+          headers: coerceRecord(savedMetadata.headers) as Record<string, any>,
+        };
         setBinaryResult({
           filename: detail.filename || 'Unknown',
-          metadata: fullData.metadata || {
-            file_type: detail.file_type || 'Unknown',
-            architecture: detail.architecture || 'Unknown',
-            file_size: detail.file_size || 0,
-            is_packed: detail.is_packed || 'unknown',
-            packer_name: detail.packer_name,
-          },
+          metadata: reconstructedMetadata,
           strings_count: detail.strings_count || 0,
           strings_sample: fullData.strings_sample || [],
           imports: fullData.imports || [],
           exports: fullData.exports || [],
           secrets: fullData.secrets || [],
           suspicious_indicators: detail.suspicious_indicators || [],
-          ai_analysis: detail.ai_analysis_raw,
+          ai_analysis: aiRaw,
+          ai_functionality_report: aiFunctionalityReport,
+          ai_security_report: aiSecurityReport,
+          ai_architecture_diagram: aiArchitectureDiagram,
+          ai_attack_surface_map: aiAttackSurfaceMap,
           ghidra_analysis: fullData.ghidra_analysis || undefined,
           ghidra_ai_summaries: fullData.ghidra_ai_summaries || undefined,
-        } as BinaryAnalysisResult);
+          attack_surface: (fullData.attack_surface as BinaryAnalysisResult['attack_surface']) || undefined,
+          pattern_scan_result: (fullData.pattern_scan_result as BinaryAnalysisResult['pattern_scan_result']) || undefined,
+          cve_lookup_result: (fullData.cve_lookup_result as BinaryAnalysisResult['cve_lookup_result']) || undefined,
+          verification_result: (fullData.verification_result as BinaryAnalysisResult['verification_result']) || undefined,
+          obfuscation_analysis: (fullData.obfuscation_analysis as BinaryAnalysisResult['obfuscation_analysis']) || undefined,
+          is_legitimate_software: (fullData.is_legitimate_software as boolean | undefined),
+          legitimacy_indicators: (fullData.legitimacy_indicators as string[] | undefined),
+          full_analysis_data: fullData as any,
+          ai_analysis_structured: structuredData as any,
+        } as unknown as BinaryAnalysisResult);
+        setVulnHuntResult(savedVulnHunt || null);
+        setUnifiedApkResult(null);
+        setApkScanName("");
+        setDockerResult(null);
         setBinaryFile(null); // No file, just viewing
+        setBinaryScanName(detail.title || "");
         setActiveTab(0); // Binary tab
         
-      } else if (detail.analysis_type === 'apk') {
+      } else if (normalizedType === 'apk') {
         // Reconstruct unified APK result from saved data
-        const fullData = detail.full_analysis_data || {};
-        const jadxData = (detail.jadx_data || {}) as Record<string, unknown>;
+        const fullData = coerceRecord(detail.full_analysis_data);
+        const jadxData = coerceRecord(detail.jadx_data);
+        const aiRawRecord = coerceRecord(detail.ai_analysis_raw);
+        const sourceRecords = [
+          coerceRecord(detail as unknown),
+          ...collectRecords(fullData, 6),
+          ...collectRecords(jadxData, 4),
+          ...collectRecords(aiRawRecord, 4),
+        ];
+        const aiRaw = normalizeText(detail.ai_analysis_raw);
+        const aiFunctionalityReport =
+          normalizeText(detail.ai_functionality_report) ||
+          pickFirstText(sourceRecords, [
+            "ai_functionality_report",
+            "ai_report_functionality",
+            "functionality_report",
+            "functionality",
+            "purpose_report",
+            "purpose_summary",
+          ]) ||
+          pickTextByHint(sourceRecords, ["functionality", "purpose", "overview"]) ||
+          aiRaw;
+        const aiSecurityReport =
+          normalizeText(detail.ai_security_report) ||
+          pickFirstText(sourceRecords, [
+            "ai_security_report",
+            "ai_report_security",
+            "security_report",
+            "security",
+            "security_assessment",
+            "risk_summary",
+          ]) ||
+          pickTextByHint(sourceRecords, ["security", "risk", "vulnerab", "threat"]) ||
+          aiRaw;
+        const aiArchitectureDiagram =
+          (isMermaidCode(detail.ai_architecture_diagram) ? normalizeText(detail.ai_architecture_diagram) : undefined) ||
+          pickFirstMermaid(sourceRecords, [
+            "ai_architecture_diagram",
+            "architecture_diagram",
+            "ai_architecture",
+            "architecture",
+            "component_diagram",
+          ]);
+        const aiAttackSurfaceMap =
+          (isMermaidCode(detail.ai_attack_surface_map) ? normalizeText(detail.ai_attack_surface_map) : undefined) ||
+          pickFirstMermaid(sourceRecords, [
+            "ai_attack_surface_map",
+            "attack_surface_map",
+            "attack_surface",
+            "attack_tree",
+            "attack_surface_tree",
+          ]);
         
         // Reconstruct enhanced security result if it was saved
         let savedEnhancedSecurity: EnhancedSecurityResult | undefined;
@@ -13905,10 +15356,10 @@ export default function ReverseEngineeringHub() {
           jadx_security_issues: (jadxData.security_issues || []) as any[],
           decompilation_time: (fullData.decompilation_time as number) || 0,
           // AI Analysis Results
-          ai_functionality_report: detail.ai_functionality_report,
-          ai_security_report: detail.ai_security_report,
-          ai_architecture_diagram: detail.ai_architecture_diagram,
-          ai_attack_surface_map: detail.ai_attack_surface_map,
+          ai_functionality_report: aiFunctionalityReport,
+          ai_security_report: aiSecurityReport,
+          ai_architecture_diagram: aiArchitectureDiagram,
+          ai_attack_surface_map: aiAttackSurfaceMap,
           // Pre-loaded enhanced security data from saved report
           saved_enhanced_security: savedEnhancedSecurity,
           // Saved source code samples for browsing
@@ -13921,21 +15372,30 @@ export default function ReverseEngineeringHub() {
           // CVE Scan Results
           cve_scan_results: (detail as any).cve_scan_results || undefined,
           // Vulnerability-specific Frida Hooks
-          vulnerability_frida_hooks: (detail as any).vulnerability_frida_hooks || undefined,
+          vulnerability_frida_hooks: (detail as any).vulnerability_frida_hooks || (fullData.vulnerability_frida_hooks as any) || undefined,
+          // Unified vulnerability hunt / verification results
+          vuln_hunt_result: (detail as any).vuln_hunt_result || (fullData.vuln_hunt_result as any) || undefined,
+          manifest_visualization: (detail as any).manifest_visualization || (fullData.manifest_visualization as any) || undefined,
+          obfuscation_analysis: (detail as any).obfuscation_analysis || (fullData.obfuscation_analysis as any) || undefined,
+          verification_results: (detail as any).verification_results || (fullData.verification_results as any) || undefined,
           // Sensitive Data Discovery
-          sensitive_data_findings: (detail as any).sensitive_data_findings || undefined,
+          sensitive_data_findings: (detail as any).sensitive_data_findings || (fullData.sensitive_data_findings as any) || undefined,
           // Metadata
           scan_time: (fullData.scan_time as number) || 0,
           file_size: (fullData.file_size as number) || 0,
         };
         
+        setBinaryResult(null);
+        setVulnHuntResult(null);
+        setDockerResult(null);
         setUnifiedApkResult(unifiedResult);
         setApkFile(null); // No file, just viewing
+        setApkScanName(detail.title || "");
         setActiveTab(1); // APK tab (index 1)
         
-      } else if (detail.analysis_type === 'docker') {
+      } else if (normalizedType === 'docker') {
         // Reconstruct Docker result
-        const fullData = detail.full_analysis_data || {};
+        const fullData = coerceRecord(detail.full_analysis_data);
         setDockerResult({
           image_name: detail.image_name || 'Unknown',
           image_id: detail.image_id || '',
@@ -13964,9 +15424,18 @@ export default function ReverseEngineeringHub() {
           adjudication_summary: (fullData.adjudication_summary as string) || undefined,
           adjudication_stats: (fullData.adjudication_stats || undefined) as any,
           rejected_findings: (fullData.rejected_findings || []) as any[],
+          cve_scan: ((detail.cve_scan_results as any) || (fullData.cve_scan as any) || undefined),
+          trivy_scan: (fullData.trivy_scan as any) || undefined,
+          scan_summary: (fullData.scan_summary as any) || undefined,
           ai_analysis: detail.ai_analysis_raw,
         } as DockerAnalysisResult);
+        setBinaryResult(null);
+        setVulnHuntResult(null);
+        setUnifiedApkResult(null);
+        setApkScanName("");
         setActiveTab(2); // Docker tab (index 2)
+      } else {
+        throw new Error(`Unsupported saved report type: ${detail.analysis_type}`);
       }
       
       setSuccessMessage(`Loaded report: ${detail.title}`);
@@ -13979,13 +15448,29 @@ export default function ReverseEngineeringHub() {
     }
   };
 
+  // Support direct deep-link loading from project reports:
+  // /reverse?projectId=...&reportId=...
+  useEffect(() => {
+    if (typeof initialReportId !== "number" || Number.isNaN(initialReportId) || initialReportId <= 0) {
+      autoLoadedReportRef.current = null;
+      return;
+    }
+    if (autoLoadedReportRef.current === initialReportId) {
+      return;
+    }
+    autoLoadedReportRef.current = initialReportId;
+    void viewSavedReport(initialReportId);
+  }, [initialReportId]);
+
   // Clear viewing state and go back to fresh analysis
   const clearViewingReport = () => {
     setViewingReportId(null);
     setBinaryResult(null);
     setBinaryFile(null);
+    setBinaryScanName("");
     setUnifiedApkResult(null);
     setApkFile(null);
+    setApkScanName("");
     setDockerResult(null);
     setSelectedImage("");
   };
@@ -13998,6 +15483,7 @@ export default function ReverseEngineeringHub() {
     setVulnHuntResult(null); // Clear any standalone vuln hunt results
     setBinaryAutoSaved(false); // Reset auto-save flag for new scan
     setError(null);
+    const scanReportTitle = resolveBinaryReportTitle(binaryFile.name);
 
     const controller = reverseEngineeringClient.runUnifiedBinaryScan(
       binaryFile,
@@ -14017,14 +15503,25 @@ export default function ReverseEngineeringHub() {
         setBinaryScanProgress(progress);
       },
       (result) => {
-        setBinaryResult(result);
+        const displayFilename = binaryFile.name || result.filename;
+        setBinaryResult({
+          ...result,
+          filename: displayFilename,
+        });
         // Extract vuln hunt result from the main result
         if (result.vuln_hunt_result) {
           setVulnHuntResult(result.vuln_hunt_result);
         }
         setBinaryLoading(false);
         // Auto-save the result
-        autoSaveBinaryResult(result, binaryFile.name);
+        autoSaveBinaryResult(
+          {
+            ...result,
+            filename: displayFilename,
+          },
+          binaryFile.name,
+          scanReportTitle
+        );
       },
       (err) => {
         setError(err);
@@ -14048,6 +15545,7 @@ export default function ReverseEngineeringHub() {
     includeVulnHunt,
     vulnHuntMaxPasses,
     vulnHuntMaxTargets,
+    resolveBinaryReportTitle,
   ]);
 
   const cancelBinaryScan = useCallback(() => {
@@ -14086,7 +15584,12 @@ export default function ReverseEngineeringHub() {
         dockerScanCves,
         dockerIncludeNvd,
         dockerIncludeKev,
-        dockerIncludeEpss
+        dockerIncludeEpss,
+        projectId,
+        dockerIncludeTrivyVulnScan,
+        dockerIncludeTrivyMisconfigScan,
+        dockerIncludeTrivySecretScan,
+        dockerIncludeTrivyLicenseScan
       );
       setDockerResult(result);
     } catch (e: any) {
@@ -14097,7 +15600,6 @@ export default function ReverseEngineeringHub() {
   };
 
   return (
-    <LearnPageLayout pageTitle="Reverse Engineering Hub" pageContext={pageContext}>
     <>
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Back to Home Button */}
@@ -14123,15 +15625,15 @@ export default function ReverseEngineeringHub() {
         </MuiLink>
         <MuiLink
           component={Link}
-          to="/learn"
+          to="/reverse"
           underline="hover"
           sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
         >
-          Learning Hub
+          Reverse Engineering Hub
         </MuiLink>
         <Typography color="text.primary" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <BinaryIcon fontSize="small" />
-          Reverse Engineering Hub
+          Analyzer
         </Typography>
       </Breadcrumbs>
 
@@ -14310,6 +15812,7 @@ export default function ReverseEngineeringHub() {
                 accept=".exe,.dll,.so,.elf,.bin,.o,.dylib"
                 onFileSelect={(f) => {
                   setBinaryFile(f);
+                  setBinaryScanName("");
                   setBinaryResult(null);
                   setBinaryScanProgress(null);
                 }}
@@ -14323,6 +15826,17 @@ export default function ReverseEngineeringHub() {
                   <Alert severity="info">
                     Selected: <strong>{binaryFile.name}</strong> ({(binaryFile.size / 1024).toFixed(1)} KB)
                   </Alert>
+                  <TextField
+                    fullWidth
+                    sx={{ mt: 2 }}
+                    label="Scan Name (optional)"
+                    placeholder="e.g. Installer v2.4 privilege boundary review"
+                    value={binaryScanName}
+                    onChange={(e) => setBinaryScanName(e.target.value)}
+                    inputProps={{ maxLength: 160 }}
+                    helperText={`Used as the saved report title${projectId ? " for this project" : ""}.`}
+                    disabled={binaryLoading}
+                  />
                   <Button
                     variant="contained"
                     fullWidth
@@ -14778,7 +16292,11 @@ export default function ReverseEngineeringHub() {
                   </Box>
                   
                   {/* NEW: Unified Binary Results with APK-like tabs */}
-                  <UnifiedBinaryResults result={binaryResult} onSaveReport={saveBinaryReport} />
+              <UnifiedBinaryResults
+                result={binaryResult}
+                reportTitle={binaryScanName.trim() || undefined}
+                onSaveReport={saveBinaryReport}
+              />
                   
                   {/* Entropy Visualization - Compact Version */}
                   <Accordion sx={{ mt: 3 }}>
@@ -15048,17 +16566,21 @@ export default function ReverseEngineeringHub() {
           {!unifiedApkResult ? (
             <UnifiedApkScanner
               apkFile={apkFile}
+              scanName={apkScanName}
+              onScanNameChange={setApkScanName}
               onFileSelect={(f) => {
                 setApkFile(f);
+                setApkScanName("");
                 setUnifiedApkResult(null);
                 setUnifiedJadxSessionId(null);
                 setAutoSavedReport(false);
               }}
               onScanComplete={(result) => {
                 setUnifiedApkResult(result);
+                const scanReportTitle = resolveApkReportTitle(result.package_name, apkFile?.name || result.filename);
                 // Auto-save the report
                 if (result && apkFile) {
-                  autoSaveUnifiedResult(result, apkFile.name);
+                  autoSaveUnifiedResult(result, apkFile.name, scanReportTitle);
                 }
                 // Also set legacy state for compatibility with save functions
                 if (result) {
@@ -15094,6 +16616,7 @@ export default function ReverseEngineeringHub() {
               onJadxSessionReady={(sessionId) => {
                 setUnifiedJadxSessionId(sessionId);
               }}
+              projectId={projectId}
             />
           ) : (
             <Box>
@@ -15105,6 +16628,7 @@ export default function ReverseEngineeringHub() {
                     setUnifiedApkResult(null);
                     setUnifiedJadxSessionId(null);
                     setApkFile(null);
+                    setApkScanName("");
                     setApkResult(null);
                     setAutoSavedReport(false);
                   }}
@@ -15112,6 +16636,18 @@ export default function ReverseEngineeringHub() {
                 >
                   Analyze New APK
                 </Button>
+                <Box sx={{ flex: "1 1 320px", minWidth: 260, maxWidth: 520 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Scan Name (optional)"
+                    placeholder="e.g. Q1 mobile auth boundary review"
+                    value={apkScanName}
+                    onChange={(e) => setApkScanName(e.target.value)}
+                    inputProps={{ maxLength: 160 }}
+                    helperText="Used for saved scan titles and exports."
+                  />
+                </Box>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                   {autoSavedReport && (
                     <Chip 
@@ -15210,6 +16746,10 @@ export default function ReverseEngineeringHub() {
                   <Autocomplete
                     options={dockerImages.map((img) => img.name)}
                     value={selectedImage}
+                    onInputChange={(_, v) => {
+                      setSelectedImage(v || "");
+                      setDockerResult(null);
+                    }}
                     onChange={(_, v) => {
                       setSelectedImage(v || "");
                       setDockerResult(null);
@@ -15229,15 +16769,38 @@ export default function ReverseEngineeringHub() {
                     fullWidth
                     sx={{ mt: 2 }}
                     onClick={analyzeDocker}
-                    disabled={dockerLoading || !selectedImage}
+                    disabled={dockerLoading || !selectedDockerImageAllowlisted}
                     startIcon={dockerLoading ? <CircularProgress size={20} /> : <SecurityIcon />}
                   >
                     {dockerLoading ? "Analyzing..." : "Analyze Image"}
                   </Button>
 
-                  {selectedImage && !selectedDockerImage && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      Image not found locally. Run <code>docker pull {selectedImage}</code> before scanning.
+                  {selectedImage && (!selectedDockerImage || !selectedDockerImageAllowlisted) && (
+                    <Alert
+                      severity={selectedDockerImage ? "warning" : "info"}
+                      sx={{ mt: 2 }}
+                      action={isAdmin ? (
+                        <Button
+                          color="inherit"
+                          size="small"
+                          onClick={() => allowSelectedDockerImage()}
+                          disabled={allowingDockerImage}
+                        >
+                          {allowingDockerImage ? "Allowing..." : "Allow Image"}
+                        </Button>
+                      ) : undefined}
+                    >
+                      {selectedDockerImage
+                        ? (
+                          isAdmin
+                            ? <>This image exists locally but is not allowlisted yet. Allow it to enable analysis.</>
+                            : <>This image exists locally but is not allowlisted for your account or project. Ask an administrator to allow it.</>
+                        )
+                        : (
+                          isAdmin
+                            ? <>This image is not present in the local Docker inventory yet. Pull <code>docker pull {selectedImage}</code> first, then allow it.</>
+                            : <>This image is not present locally yet, or it is not visible to you. Ask an administrator to pull and allow <code>{selectedImage}</code>.</>
+                        )}
                     </Alert>
                   )}
                   {selectedDockerImage && (
@@ -15285,7 +16848,7 @@ export default function ReverseEngineeringHub() {
                     </ToggleButton>
                   </ToggleButtonGroup>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                    Fast skips AI and deep scans. Deep includes adjudication, base intel, and layer extraction.
+                    Balanced runs history analysis, AI, base-image intelligence, CVE scanning, and Trivy misconfiguration/secret checks. Deep also extracts saved layers and adds Trivy vulnerability/license scanning.
                   </Typography>
                   <FormGroup>
                     <FormControlLabel
@@ -15382,27 +16945,92 @@ export default function ReverseEngineeringHub() {
                               size="small"
                               checked={dockerIncludeEpss}
                               onChange={(e) => setDockerIncludeEpss(e.target.checked)}
-                              disabled={dockerLoading}
+                              disabled={dockerLoading || Boolean(status?.offline_mode && !status?.epss_available)}
                             />
                           }
                           label={<Typography variant="caption">EPSS scores</Typography>}
                         />
                       </FormGroup>
+                      {status?.offline_mode && (
+                        <Alert severity={status?.epss_available ? "info" : "warning"} sx={{ mt: 1 }}>
+                          {status?.epss_available
+                            ? `Air-gapped mode is active. EPSS enrichment is using the local offline database${status.epss_last_sync ? ` (score date ${status.epss_last_sync}).` : "."}`
+                            : "Air-gapped mode is active. EPSS enrichment is disabled until offline EPSS data is synced to data/offline/epss/epss.db."}
+                        </Alert>
+                      )}
                     </Box>
                   )}
+                  <Box sx={{ pl: 0, mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Native Trivy scanners run alongside the built-in Docker Inspector so you can compare raw Trivy findings with the enriched OSV/NVD/EPSS workflow.
+                    </Typography>
+                    <FormGroup row>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={dockerIncludeTrivyVulnScan}
+                            onChange={(e) => setDockerIncludeTrivyVulnScan(e.target.checked)}
+                            disabled={dockerLoading}
+                          />
+                        }
+                        label={<Typography variant="caption">Trivy vulnerabilities</Typography>}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={dockerIncludeTrivyMisconfigScan}
+                            onChange={(e) => setDockerIncludeTrivyMisconfigScan(e.target.checked)}
+                            disabled={dockerLoading}
+                          />
+                        }
+                        label={<Typography variant="caption">Trivy misconfigurations</Typography>}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={dockerIncludeTrivySecretScan}
+                            onChange={(e) => setDockerIncludeTrivySecretScan(e.target.checked)}
+                            disabled={dockerLoading}
+                          />
+                        }
+                        label={<Typography variant="caption">Trivy secrets</Typography>}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={dockerIncludeTrivyLicenseScan}
+                            onChange={(e) => setDockerIncludeTrivyLicenseScan(e.target.checked)}
+                            disabled={dockerLoading}
+                          />
+                        }
+                        label={<Typography variant="caption">Trivy licenses</Typography>}
+                      />
+                    </FormGroup>
+                  </Box>
                   {dockerDeepScan && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      Deep scans use <code>docker save</code> to inspect up to 20 layers and may take longer.
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      Deep scans export the full image with <code>docker save</code>, then inspect up to 20 layers. Enable only when you need recoverable-secret forensics.
                     </Alert>
                   )}
 
                   <Divider sx={{ my: 3 }} />
 
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                    <Typography variant="subtitle2">
-                      Local Images ({filteredDockerImages.length}{dockerImageFilter ? ` of ${dockerImages.length}` : ""})
-                    </Typography>
-                    <Tooltip title="Refresh local images">
+                    <Box>
+                      <Typography variant="subtitle2">
+                        {dockerImagesHeading} ({filteredDockerImages.length}{dockerImageFilter ? ` of ${dockerImages.length}` : ""})
+                      </Typography>
+                      {isAdmin && (
+                        <Typography variant="caption" color="text.secondary">
+                          {allowlistedDockerImagesCount} allowlisted of {dockerImages.length} local images
+                        </Typography>
+                      )}
+                    </Box>
+                    <Tooltip title={dockerImagesRefreshLabel}>
                       <IconButton
                         size="small"
                         onClick={refreshDockerImages}
@@ -15416,7 +17044,7 @@ export default function ReverseEngineeringHub() {
                   <TextField
                     size="small"
                     fullWidth
-                    placeholder="Search local images..."
+                    placeholder={dockerImagesSearchPlaceholder}
                     value={dockerImageFilter}
                     onChange={(e) => setDockerImageFilter(e.target.value)}
                     InputProps={{
@@ -15434,18 +17062,24 @@ export default function ReverseEngineeringHub() {
                     <Box sx={{ textAlign: "center", py: 3 }}>
                       <CircularProgress size={24} />
                       <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                        Scanning for Docker images...
+                        {isAdmin ? "Refreshing local Docker images..." : "Refreshing allowlisted Docker images..."}
                       </Typography>
                     </Box>
                   ) : filteredDockerImages.length === 0 ? (
                     <Box sx={{ textAlign: "center", py: 3, color: "text.secondary" }}>
                       <DockerIcon sx={{ fontSize: 32, opacity: 0.3 }} />
                       <Typography variant="body2" sx={{ mt: 1 }}>
-                        {dockerImageFilter ? "No images match your search" : "No local Docker images found"}
+                        {dockerImageFilter
+                          ? "No images match your search"
+                          : isAdmin
+                            ? "No local Docker images found"
+                            : "No allowlisted Docker images yet"}
                       </Typography>
                       {!dockerImageFilter && (
                         <Typography variant="caption">
-                          Pull images with: docker pull &lt;image&gt;
+                          {isAdmin
+                            ? "Pull an image locally, then allow it from this list before scanning."
+                            : "Ask an administrator to allow an image here after it is pulled locally."}
                         </Typography>
                       )}
                     </Box>
@@ -15478,23 +17112,62 @@ export default function ReverseEngineeringHub() {
                           </ListItemIcon>
                           <ListItemText
                             primary={
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontFamily: "monospace",
-                                  fontWeight: selectedImage === img.name ? 600 : 400,
-                                }}
-                              >
-                                {img.name}
-                              </Typography>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "monospace",
+                                    fontWeight: selectedImage === img.name ? 600 : 400,
+                                  }}
+                                >
+                                  {img.name}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={img.allowlisted !== false ? "Allowlisted" : "Local only"}
+                                  color={img.allowlisted !== false ? "success" : "default"}
+                                  variant={img.allowlisted !== false ? "filled" : "outlined"}
+                                  sx={{ height: 20 }}
+                                />
+                                {img.allowlisted !== false && getDockerAllowlistScopeLabel(img.allowlist_scope) && (
+                                  <Chip
+                                    size="small"
+                                    label={getDockerAllowlistScopeLabel(img.allowlist_scope)}
+                                    variant="outlined"
+                                    sx={{
+                                      height: 20,
+                                      borderColor: selectedImage === img.name ? "currentColor" : undefined,
+                                      color: selectedImage === img.name ? "inherit" : "text.secondary",
+                                    }}
+                                  />
+                                )}
+                              </Box>
                             }
                             secondary={
-                              <Typography
-                                variant="caption"
-                                sx={{ color: selectedImage === img.name ? "inherit" : "text.secondary" }}
-                              >
-                                {img.size} • ID: {img.id.slice(0, 12)}
-                              </Typography>
+                              <Box sx={{ mt: 0.5 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: selectedImage === img.name ? "inherit" : "text.secondary" }}
+                                >
+                                  {img.size} • ID: {img.id.slice(0, 12)} • Created: {img.created}
+                                </Typography>
+                                {isAdmin && img.allowlisted === false && (
+                                  <Box sx={{ mt: 1 }}>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="success"
+                                      disabled={allowingDockerImage}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void allowSelectedDockerImage(img.name);
+                                      }}
+                                    >
+                                      {allowingDockerImage && selectedImage === img.name ? "Allowing..." : "Allow"}
+                                    </Button>
+                                  </Box>
+                                )}
+                              </Box>
                             }
                           />
                         </ListItem>
@@ -15518,9 +17191,9 @@ export default function ReverseEngineeringHub() {
                       <Button
                         variant="outlined"
                         color="primary"
-                        startIcon={exportingDocker ? <CircularProgress size={20} /> : <DownloadIcon />}
+                        startIcon={(exportingDocker || exportingDockerSbom) ? <CircularProgress size={20} /> : <DownloadIcon />}
                         onClick={(e) => setDockerExportAnchor(e.currentTarget)}
-                        disabled={exportingDocker}
+                        disabled={exportingDocker || exportingDockerSbom}
                       >
                         Export
                       </Button>
@@ -15537,6 +17210,13 @@ export default function ReverseEngineeringHub() {
                         </MenuItem>
                         <MenuItem onClick={() => exportDockerResult("docx")}>
                           Export as Word
+                        </MenuItem>
+                        <Divider />
+                        <MenuItem onClick={() => exportDockerSbom("cyclonedx")}>
+                          Export CycloneDX SBOM
+                        </MenuItem>
+                        <MenuItem onClick={() => exportDockerSbom("spdx-json")}>
+                          Export SPDX SBOM
                         </MenuItem>
                       </Menu>
                       <Button
@@ -15751,9 +17431,19 @@ export default function ReverseEngineeringHub() {
         </TabPanel>
       </Container>
 
-      {/* Floating AI Chat Panel - appears when APK analysis is complete */}
+      {/* Floating AI Chat Panel - switches with analyzer type and saved reports */}
       <ApkChatPanel
+        mode={activeTab === 1 ? "apk" : activeTab === 2 ? "docker" : "binary"}
+        chatContextKey={`${viewingReportId ?? "live"}:${activeTab === 1 ? "apk" : activeTab === 2 ? "docker" : "binary"}:${
+          activeTab === 1
+            ? (unifiedApkResult?.scan_id || unifiedApkResult?.package_name || "none")
+            : activeTab === 2
+              ? (dockerResult?.image_id || dockerResult?.image_name || "none")
+              : (binaryResult?.filename || "none")
+        }`}
         unifiedScanResult={unifiedApkResult}
+        binaryResult={binaryResult}
+        dockerResult={dockerResult}
         selectedFinding={null}
         currentSourceCode={null}
         currentSourceClass={null}
@@ -15791,13 +17481,12 @@ export default function ReverseEngineeringHub() {
         <Button
           variant="outlined"
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/learn")}
+          onClick={() => navigate("/reverse")}
           sx={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
         >
-          Back to Learning Hub
+          Back to Reverse Engineering Hub
         </Button>
       </Box>
     </>
-    </LearnPageLayout>
   );
 }

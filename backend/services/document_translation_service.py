@@ -385,6 +385,32 @@ class DocumentTranslationService:
 
     # ===== Multi-Column Detection =====
 
+    def _get_block_rect(self, block: Tuple[Any, ...]) -> Optional["fitz.Rect"]:
+        """Extract a rectangle from a block tuple.
+
+        Supports both legacy (text, rect, ...) and current (rect, text, ...) layouts.
+        """
+        if not block:
+            return None
+
+        for candidate in block[:2]:
+            if isinstance(candidate, fitz.Rect):
+                return candidate
+            if (
+                hasattr(candidate, "x0")
+                and hasattr(candidate, "y0")
+                and hasattr(candidate, "x1")
+                and hasattr(candidate, "y1")
+            ):
+                return candidate
+            if isinstance(candidate, (tuple, list)) and len(candidate) == 4:
+                try:
+                    return fitz.Rect(candidate)
+                except Exception:
+                    continue
+
+        return None
+
     def _detect_columns(self, blocks: List[Tuple]) -> List[List[Tuple]]:
         """Detect multi-column layout by clustering text blocks by x-position.
         
@@ -393,13 +419,19 @@ class DocumentTranslationService:
         if not blocks:
             return [[]]
 
-        # Extract x-positions (left edge of each block)
+        # Extract x-positions (left edge of each valid block)
         x_positions = []
+        valid_blocks: List[Tuple[Tuple, "fitz.Rect"]] = []
+        invalid_blocks: List[Tuple] = []
         for block in blocks:
-            rect = block[1]  # (text, rect, format_meta) or (text, rect)
+            rect = self._get_block_rect(block)
+            if rect is None:
+                invalid_blocks.append(block)
+                continue
+            valid_blocks.append((block, rect))
             x_positions.append(rect.x0)
 
-        if not x_positions:
+        if not valid_blocks:
             return [blocks]
 
         # Cluster x-positions using simple gap detection
@@ -417,27 +449,36 @@ class DocumentTranslationService:
 
         # If only one column detected, return all blocks
         if len(column_boundaries) <= 2:
-            return [sorted(blocks, key=lambda b: b[1].y0)]
+            sorted_valid = [block for block, rect in sorted(valid_blocks, key=lambda item: item[1].y0)]
+            if invalid_blocks:
+                sorted_valid.extend(invalid_blocks)
+            return [sorted_valid]
 
         # Assign blocks to columns
-        columns: List[List[Tuple]] = [[] for _ in range(len(column_boundaries) - 1)]
-        for block in blocks:
-            rect = block[1]
+        columns: List[List[Tuple[Any, "fitz.Rect"]]] = [[] for _ in range(len(column_boundaries) - 1)]
+        for block, rect in valid_blocks:
             x_center = (rect.x0 + rect.x1) / 2
             # Find which column this block belongs to
             for col_idx in range(len(column_boundaries) - 1):
                 if column_boundaries[col_idx] <= x_center < column_boundaries[col_idx + 1]:
-                    columns[col_idx].append(block)
+                    columns[col_idx].append((block, rect))
                     break
 
         # Sort each column by y-position (top to bottom)
+        ordered_columns: List[List[Tuple]] = []
         for col in columns:
-            col.sort(key=lambda b: b[1].y0)
+            if not col:
+                continue
+            col.sort(key=lambda item: item[1].y0)
+            ordered_columns.append([block for block, _ in col])
 
-        # Filter empty columns
-        columns = [col for col in columns if col]
+        if invalid_blocks:
+            if ordered_columns:
+                ordered_columns[-1].extend(invalid_blocks)
+            else:
+                ordered_columns = [invalid_blocks]
 
-        return columns if columns else [blocks]
+        return ordered_columns if ordered_columns else [blocks]
 
     def _sort_blocks_reading_order(self, blocks: List[Tuple]) -> List[Tuple]:
         """Sort text blocks in natural reading order (left-to-right columns, top-to-bottom)."""
@@ -2406,11 +2447,12 @@ Language:"""
                     # This is the START of a multi-page table - render merged translation
                     merged_info = merged_table_translations[page_index]
                     translated_table = merged_info['table']
-                    original_table = merged_info.get('original_first', page_tables[0] if page_tables else None)
                     
-                    if original_table and 'rect' in original_table:
+                    if translated_table.get("bbox"):
                         self._render_table_to_page(
-                            out_page, translated_table, original_table['rect'], target_language, font_mapping
+                            out_page,
+                            translated_table,
+                            target_language,
                         )
                         logger.info(f"Page {page_index + 1}: Rendered merged multi-page table")
                 else:
@@ -2427,8 +2469,9 @@ Language:"""
                                     table_data, target_language, source_language
                                 )
                                 self._render_table_to_page(
-                                    out_page, translated_table, table_data.get('rect', rect), 
-                                    target_language, font_mapping
+                                    out_page,
+                                    translated_table,
+                                    target_language,
                                 )
                     else:
                         logger.debug(f"Page {page_index + 1}: Skipping continuation part of merged table")
@@ -3105,10 +3148,14 @@ Return ONLY JSON array: [{{"id": <number>, "translation": "<text>"}}]
         # Font flags: bit 0=superscript, bit 1=italic, bit 2=serifed, bit 3=script, bit 4=bold
         is_bold = False
         is_italic = False
-        if format_meta and format_meta.get("font_flags"):
-            flags = format_meta["font_flags"]
-            is_bold = bool(flags & 16)   # bit 4
-            is_italic = bool(flags & 2)  # bit 1
+        if format_meta:
+            flags = format_meta.get("font_flags", format_meta.get("flags"))
+            if isinstance(flags, int):
+                is_bold = bool(flags & 16)   # bit 4
+                is_italic = bool(flags & 2)  # bit 1
+            else:
+                is_bold = bool(format_meta.get("is_bold", False))
+                is_italic = bool(format_meta.get("is_italic", False))
 
         # Try exact font matching first
         font_path = None

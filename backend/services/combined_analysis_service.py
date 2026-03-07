@@ -2522,9 +2522,178 @@ def _fetch_re_report_data(db: Session, report_id: int) -> Dict[str, Any]:
     ).first()
     if not report:
         return {"error": f"RE report {report_id} not found"}
-    
+
+    def _coerce_dict(value: Any) -> Dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                return {}
+        return {}
+
+    def _coerce_list(value: Any) -> List[Any]:
+        return value if isinstance(value, list) else []
+
+    def _collect_dicts(root: Any, max_depth: int = 5) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        seen: set[int] = set()
+
+        def _walk(node: Any, depth: int) -> None:
+            if depth > max_depth or node is None:
+                return
+            if isinstance(node, dict):
+                node_id = id(node)
+                if node_id in seen:
+                    return
+                seen.add(node_id)
+                collected.append(node)
+                for value in node.values():
+                    _walk(value, depth + 1)
+                return
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item, depth + 1)
+
+        _walk(root, 0)
+        return collected
+
+    def _clean_text(value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        if trimmed.lower() in {"not available", "n/a", "none", "null", "undefined"}:
+            return None
+        return trimmed
+
+    def _pick_text(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        for data in dicts:
+            for key in keys:
+                cleaned = _clean_text(data.get(key))
+                if cleaned:
+                    return cleaned
+        return None
+
+    def _is_mermaid(text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        trimmed = text.strip()
+        if not trimmed:
+            return False
+        lowered = trimmed.lower()
+        if "```mermaid" in lowered:
+            return True
+        return lowered.startswith((
+            "flowchart",
+            "graph ",
+            "sequencediagram",
+            "classdiagram",
+            "statediagram",
+            "erdiagram",
+            "journey",
+            "gantt",
+        ))
+
+    def _pick_mermaid(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        direct = _pick_text(dicts, keys)
+        if _is_mermaid(direct):
+            return direct
+        for data in dicts:
+            for value in data.values():
+                if isinstance(value, str) and _is_mermaid(value):
+                    return value.strip()
+        return None
+
+    full_data = _coerce_dict(report.full_analysis_data)
+    structured = _coerce_dict(report.ai_analysis_structured)
+    ai_raw = _clean_text(report.ai_analysis_raw)
+    ai_raw_dict = _coerce_dict(ai_raw) if ai_raw else {}
+    search_space = (
+        _collect_dicts(full_data)
+        + _collect_dicts(structured)
+        + _collect_dicts(ai_raw_dict, 4)
+    )
+
+    functionality_report = _clean_text(report.ai_functionality_report) or _pick_text(search_space, [
+        "ai_functionality_report",
+        "ai_report_functionality",
+        "functionality_report",
+        "functionality",
+        "report_functionality",
+        "binary_functionality_report",
+        "purpose_report",
+        "purpose_summary",
+        "what_does_this_binary_do",
+    ])
+    security_report = _clean_text(report.ai_security_report) or _pick_text(search_space, [
+        "ai_security_report",
+        "ai_report_security",
+        "security_report",
+        "security",
+        "security_assessment",
+        "risk_summary",
+        "threat_summary",
+        "binary_security_report",
+    ])
+    architecture_diagram = _clean_text(report.ai_architecture_diagram) or _pick_mermaid(search_space, [
+        "ai_architecture_diagram",
+        "architecture_diagram",
+        "ai_architecture",
+        "architecture",
+        "architecture_map",
+        "system_architecture_diagram",
+    ])
+    attack_surface_map = _clean_text(report.ai_attack_surface_map) or _pick_mermaid(search_space, [
+        "ai_attack_surface_map",
+        "attack_surface_map",
+        "ai_attack_surface",
+        "attack_surface",
+        "attack_tree",
+        "attack_tree_diagram",
+        "threat_map",
+    ])
+
+    if not functionality_report and ai_raw:
+        functionality_report = ai_raw
+    if not security_report and ai_raw:
+        security_report = ai_raw
+
+    attack_surface_data = _coerce_dict(full_data.get("attack_surface"))
+    dangerous_functions = (
+        _coerce_list(attack_surface_data.get("dangerous_functions"))
+        or _coerce_list(full_data.get("dangerous_functions"))
+    )
+    entry_points = (
+        _coerce_list(attack_surface_data.get("entry_points"))
+        or _coerce_list(full_data.get("entry_points"))
+    )
+    potential_attack_vectors = (
+        _coerce_list(attack_surface_data.get("potential_attack_vectors"))
+        or _coerce_list(full_data.get("potential_attack_vectors"))
+    )
+    secrets_found = (
+        _coerce_list(full_data.get("secrets"))
+        or _coerce_list(full_data.get("secrets_found"))
+    )
+
+    normalized_full_data = dict(full_data) if full_data else {}
+    if functionality_report and not normalized_full_data.get("ai_functionality_report"):
+        normalized_full_data["ai_functionality_report"] = functionality_report
+    if security_report and not normalized_full_data.get("ai_security_report"):
+        normalized_full_data["ai_security_report"] = security_report
+    if architecture_diagram and not normalized_full_data.get("ai_architecture_diagram"):
+        normalized_full_data["ai_architecture_diagram"] = architecture_diagram
+    if attack_surface_map and not normalized_full_data.get("ai_attack_surface_map"):
+        normalized_full_data["ai_attack_surface_map"] = attack_surface_map
+
     return {
         "report_id": report_id,
+        "project_id": report.project_id,
         "title": report.title,
         "analysis_type": report.analysis_type,
         "created_at": str(report.created_at),
@@ -2538,14 +2707,25 @@ def _fetch_re_report_data(db: Session, report_id: int) -> Dict[str, Any]:
         "suspicious_indicators": report.suspicious_indicators,
         "permissions": report.permissions,
         "security_issues": report.security_issues,
-        "ai_analysis_structured": report.ai_analysis_structured,
-        "ai_security_report": report.ai_security_report,
+        "full_analysis_data": normalized_full_data or None,
+        "ai_analysis_raw": ai_raw,
+        "ai_analysis_structured": structured or None,
+        "ai_functionality_report": functionality_report,
+        "ai_security_report": security_report,
+        "ai_architecture_diagram": architecture_diagram,
+        "ai_attack_surface_map": attack_surface_map,
         "ai_threat_model": report.ai_threat_model,
         "decompiled_code_findings": report.decompiled_code_findings,
         "decompiled_code_summary": report.decompiled_code_summary,
         "cve_scan_results": report.cve_scan_results,
         "sensitive_data_findings": report.sensitive_data_findings,
         "verification_results": report.verification_results,
+        # Keep explicit attack-surface fields used by combined map generation.
+        "attack_surface": attack_surface_data or None,
+        "dangerous_functions": dangerous_functions,
+        "entry_points": entry_points,
+        "potential_attack_vectors": potential_attack_vectors,
+        "secrets_found": secrets_found,
     }
 
 

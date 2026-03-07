@@ -125,6 +125,12 @@ const ProjectReverseTab: React.FC<ProjectReverseTabProps> = ({
     }
   };
 
+  const getTabIndexForReport = (analysisType?: string): number => {
+    if (analysisType === "apk") return 1;
+    if (analysisType === "docker") return 2;
+    return 0; // binary/default
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -308,7 +314,9 @@ const ProjectReverseTab: React.FC<ProjectReverseTabProps> = ({
                       <Tooltip title="View report">
                         <IconButton
                           size="small"
-                          onClick={() => navigate(`/reverse?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}&reportId=${report.id}`)}
+                          onClick={() => navigate(
+                            `/reverse?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}&tab=${getTabIndexForReport(report.analysis_type)}&reportId=${report.id}`
+                          )}
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>

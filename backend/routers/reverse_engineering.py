@@ -12,16 +12,17 @@ import time
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set, Union
 from datetime import datetime
 import asyncio
 import json
 import uuid
 from types import SimpleNamespace
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Query, Depends, Form
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile, Query, Depends, Form
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from backend.core.logging import get_logger
@@ -29,12 +30,27 @@ from backend.core.database import get_db
 from backend.core.config import settings
 from backend.core.file_validator import sanitize_filename
 from backend.core.auth import get_current_active_user
-from backend.models.models import User
+from backend.models.models import (
+    Project,
+    ProjectCollaborator,
+    ProjectDockerImage,
+    ReverseEngineeringReport,
+    User,
+    UserDockerImage,
+)
+from backend.services import project_service
 from backend.services import reverse_engineering_service as re_service
 from backend.services import deduplication_service
 
 router = APIRouter(prefix="/reverse", tags=["reverse-engineering"])
 logger = get_logger(__name__)
+
+
+class ExportSafeNamespace(SimpleNamespace):
+    """Namespace that returns None for missing attributes during export rendering."""
+
+    def __getattr__(self, name: str):
+        return None
 
 # Constants
 MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024  # 5GB - supports large APKs, firmware images, binaries (was 500MB)
@@ -414,6 +430,7 @@ class DockerCVEScanResponse(BaseModel):
     packages_scanned: int
     packages_with_vulns: int
     vulnerabilities: List[DockerCVEVulnerabilityResponse]
+    total_vulnerabilities: int = 0
     # Severity counts
     critical_count: int = 0
     high_count: int = 0
@@ -426,6 +443,33 @@ class DockerCVEScanResponse(BaseModel):
     scan_duration_seconds: float = 0.0
     trivy_available: bool = False
     enrichment_applied: bool = False
+    epss_enabled: bool = False
+    epss_available: bool = True
+    epss_source: Optional[str] = None
+    error: Optional[str] = None
+
+
+class DockerTrivyNativeScanResponse(BaseModel):
+    """Native Trivy scanner results for a Docker image."""
+    image_name: str
+    enabled_scanners: List[str] = []
+    trivy_available: bool = False
+    artifact_name: Optional[str] = None
+    artifact_type: Optional[str] = None
+    os_family: Optional[str] = None
+    os_name: Optional[str] = None
+    trivy_version: Optional[str] = None
+    schema_version: Optional[int] = None
+    package_count: int = 0
+    vulnerabilities: List[Dict[str, Any]] = []
+    misconfigurations: List[Dict[str, Any]] = []
+    secrets: List[Dict[str, Any]] = []
+    licenses: List[Dict[str, Any]] = []
+    vulnerability_severity_counts: Dict[str, int] = {}
+    misconfiguration_severity_counts: Dict[str, int] = {}
+    secret_severity_counts: Dict[str, int] = {}
+    license_severity_counts: Dict[str, int] = {}
+    scan_duration_seconds: float = 0.0
     error: Optional[str] = None
 
 
@@ -456,6 +500,10 @@ class DockerAnalysisResponse(BaseModel):
     deleted_secrets_count: int = 0
     # CVE Scanning (NEW)
     cve_scan: Optional[DockerCVEScanResponse] = None
+    # Native Trivy scanners
+    trivy_scan: Optional[DockerTrivyNativeScanResponse] = None
+    # Scan coverage summary
+    scan_summary: Optional[Dict[str, Any]] = None
 
 
 class StatusResponse(BaseModel):
@@ -476,6 +524,13 @@ class StatusResponse(BaseModel):
     # Symbolic execution availability
     symbolic_execution_available: bool = False
     symbolic_execution_mode: Optional[str] = None  # "angr" or "lightweight"
+    # Offline/air-gapped capability status
+    offline_mode: bool = False
+    osv_db_available: bool = False
+    nvd_db_available: bool = False
+    epss_available: bool = False
+    epss_source: Optional[str] = None
+    epss_last_sync: Optional[str] = None
 
 
 # ============================================================================
@@ -502,6 +557,170 @@ def check_docker_available() -> bool:
     except (OSError, subprocess.TimeoutExpired, FileNotFoundError) as e:
         logger.debug(f"Docker check failed: {e}")
         return False
+
+
+def _normalize_docker_image_name(image_name: str) -> str:
+    normalized = image_name.strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Docker image name is required")
+    return normalized
+
+
+def _ensure_project_access(db: Session, project_id: int, user_id: int, require_edit: bool = False) -> None:
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    allowed = (
+        project_service.can_edit_project(db, project_id, user_id)
+        if require_edit
+        else project_service.can_access_project(db, project_id, user_id)[0]
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+def _get_accessible_project_ids(db: Session, user_id: int) -> Set[int]:
+    rows = (
+        db.query(Project.id)
+        .outerjoin(ProjectCollaborator, Project.id == ProjectCollaborator.project_id)
+        .filter(
+            or_(
+                Project.owner_id == user_id,
+                ProjectCollaborator.user_id == user_id,
+            )
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows if row and row[0] is not None}
+
+
+def _get_docker_allowlist_scope_map(
+    db: Session,
+    user_id: int,
+    project_id: Optional[int] = None,
+) -> Dict[str, str]:
+    scope_map: Dict[str, str] = {}
+
+    for row in db.query(UserDockerImage.image_name).filter(UserDockerImage.user_id == user_id).all():
+        if not row or not row[0]:
+            continue
+        scope_map[_normalize_docker_image_name(row[0])] = "user"
+
+    if project_id is not None:
+        _ensure_project_access(db, project_id, user_id)
+        for row in (
+            db.query(ProjectDockerImage.image_name)
+            .filter(ProjectDockerImage.project_id == project_id)
+            .all()
+        ):
+            if not row or not row[0]:
+                continue
+            normalized_name = _normalize_docker_image_name(row[0])
+            if normalized_name in scope_map:
+                scope_map[normalized_name] = "user+project"
+            else:
+                scope_map[normalized_name] = "project"
+
+    return scope_map
+
+
+def _get_allowed_docker_image_names(db: Session, user_id: int, project_id: Optional[int] = None) -> Set[str]:
+    return set(_get_docker_allowlist_scope_map(db, user_id, project_id).keys())
+
+
+def _ensure_docker_image_allowlisted(
+    db: Session,
+    user_id: int,
+    image_name: str,
+    project_id: Optional[int] = None,
+) -> str:
+    normalized_name = _normalize_docker_image_name(image_name)
+    allowed_names = _get_allowed_docker_image_names(db, user_id, project_id)
+    if normalized_name not in allowed_names:
+        raise HTTPException(
+            status_code=403,
+            detail="Docker image is not allowlisted for this user or project. Allow it before analysis.",
+        )
+    return normalized_name
+
+
+def _list_local_docker_images_raw() -> List[Dict[str, str]]:
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}|||{{.ID}}|||{{.Size}}|||{{.CreatedAt}}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Docker command timed out")
+    except OSError as exc:
+        logger.error(f"Failed to invoke Docker CLI: {exc}")
+        raise HTTPException(status_code=503, detail="Docker is not available")
+
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail="Failed to list Docker images")
+
+    images: List[Dict[str, str]] = []
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        parts = line.split("|||")
+        if len(parts) < 4:
+            continue
+        image_name = parts[0].strip()
+        if not image_name:
+            continue
+        images.append(
+            {
+                "name": image_name,
+                "id": parts[1].strip()[:12],
+                "size": parts[2].strip(),
+                "created": parts[3].strip(),
+            }
+        )
+    return images
+
+
+def _docker_image_exists(image_name: str) -> bool:
+    import subprocess
+
+    normalized_name = _normalize_docker_image_name(image_name)
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", normalized_name],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _get_reverse_engineering_report_or_404(db: Session, report_id: int) -> ReverseEngineeringReport:
+    report = db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+
+def _ensure_reverse_engineering_report_access(
+    db: Session,
+    report: ReverseEngineeringReport,
+    user_id: int,
+    require_edit: bool = False,
+) -> ReverseEngineeringReport:
+    if report.project_id is not None:
+        _ensure_project_access(db, report.project_id, user_id, require_edit=require_edit)
+        return report
+    if report.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return report
 
 
 def check_jadx_available() -> bool:
@@ -552,6 +771,11 @@ def get_status(
     angr_available = getattr(re_service, 'ANGR_AVAILABLE', False)
     sym_mode = "angr" if angr_available else "lightweight"
 
+    from backend.services import cve_service, nvd_service, epss_service
+    osv_stats = cve_service.get_local_osv_db_stats()
+    nvd_stats = nvd_service.get_local_db_stats()
+    epss_stats = epss_service.get_local_epss_db_stats()
+
     return StatusResponse(
         binary_analysis=True,  # Always available (pure Python)
         apk_analysis=True,     # Basic analysis always available
@@ -566,6 +790,15 @@ def get_status(
         ai_status=ai_status_msg,
         symbolic_execution_available=True,  # Always available (lightweight fallback)
         symbolic_execution_mode=sym_mode,
+        offline_mode=settings.app_offline_mode,
+        osv_db_available=bool(osv_stats.get("available")),
+        nvd_db_available=bool(nvd_stats.get("available")),
+        epss_available=bool(epss_stats.get("available")),
+        epss_source="local_db" if epss_stats.get("available") else None,
+        epss_last_sync=(
+            epss_stats.get("score_date")
+            or epss_stats.get("last_sync")
+        ),
     )
 
 
@@ -575,6 +808,10 @@ async def analyze_binary(
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
     extended_ghidra: bool = Query(False, description="Extended Ghidra scan (2x functions and decompilation limit)"),
+    ghidra_selection_mode: str = Query(
+        "smart",
+        description="Ghidra function selection mode: smart, security, size, or all",
+    ),
     ghidra_max_functions: int = Query(500, ge=1, le=5000, description="Max functions to export from Ghidra"),
     ghidra_decomp_limit: int = Query(10000, ge=200, le=50000, description="Max decompilation chars per function"),
     include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
@@ -635,6 +872,7 @@ async def analyze_binary(
                 tmp_path,
                 max_functions=effective_max_functions,
                 decomp_limit=effective_decomp_limit,
+                selection_mode=ghidra_selection_mode,
             )
 
             if include_ghidra_ai and result.ghidra_analysis and "error" not in result.ghidra_analysis:
@@ -775,6 +1013,10 @@ async def unified_binary_scan(
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     include_ghidra: bool = Query(True, description="Include Ghidra headless decompilation"),
     extended_ghidra: bool = Query(False, description="Extended Ghidra scan (2x functions and decompilation limit)"),
+    ghidra_selection_mode: str = Query(
+        "smart",
+        description="Ghidra function selection mode: smart, security, size, or all",
+    ),
     ghidra_max_functions: int = Query(500, ge=1, le=5000, description="Max functions to export from Ghidra"),
     ghidra_decomp_limit: int = Query(10000, ge=200, le=50000, description="Max decompilation chars per function"),
     include_ghidra_ai: bool = Query(True, description="Include Gemini summaries for decompiled functions"),
@@ -1035,7 +1277,7 @@ async def unified_binary_scan(
             return len(phases) - 1
 
         async def run_unified_scan():
-            nonlocal current_phase_idx, pattern_scan_result, cve_lookup_result, sensitive_scan_result, verification_result, obfuscation_analysis, attack_surface_result, dynamic_analysis_result, ai_reports_result
+            nonlocal current_phase_idx, pattern_scan_result, cve_lookup_result, sensitive_scan_result, verification_result, obfuscation_analysis, attack_surface_result, dynamic_analysis_result, emulation_result, symbolic_execution_result, ai_reports_result
             result = None
             is_legitimate_software = False  # Will be detected from static analysis
             legitimacy_indicators = []
@@ -1052,163 +1294,17 @@ async def unified_binary_scan(
                 result = re_service.analyze_binary(tmp_path)
                 
                 # ================================================================
-                # LEGITIMACY DETECTION - Reduce false positives for known software
-                # Multi-layer detection using: authenticode, version info, filename, strings
+                # LEGITIMACY DETECTION - centralized helper with PE/ELF/macOS signals
                 # ================================================================
-                filename_lower = filename.lower()
-                
-                # 1. CHECK AUTHENTICODE DIGITAL SIGNATURE (Most reliable)
-                # Signed binaries from known publishers are almost always legitimate
-                if result and result.metadata and result.metadata.authenticode:
-                    auth = result.metadata.authenticode
-                    if auth.get("signed"):
-                        is_legitimate_software = True
-                        legitimacy_indicators.append("Digitally signed (Authenticode present)")
-                        # Check certificate details if available
-                        if auth.get("certificate_type") and "PKCS" in str(auth.get("certificate_type", "")):
-                            legitimacy_indicators.append("Valid PKCS#7 certificate")
-                
-                # 2. CHECK VERSION INFO (Very reliable for legitimate software)
-                # Real software has detailed version info with company names
-                if result and result.metadata and result.metadata.version_info:
-                    version_info = result.metadata.version_info
-                    known_publishers = {
-                        "microsoft": ["microsoft corporation", "microsoft corp", "microsoft"],
-                        "google": ["google llc", "google inc", "google"],
-                        "mozilla": ["mozilla foundation", "mozilla corporation", "mozilla"],
-                        "apple": ["apple inc", "apple computer"],
-                        "adobe": ["adobe systems", "adobe inc", "adobe"],
-                        "oracle": ["oracle corporation", "oracle"],
-                        "intel": ["intel corporation", "intel"],
-                        "nvidia": ["nvidia corporation", "nvidia"],
-                        "amd": ["advanced micro devices", "amd"],
-                        "vmware": ["vmware, inc", "vmware"],
-                        "cisco": ["cisco systems", "cisco"],
-                        "amazon": ["amazon", "aws"],
-                        "facebook": ["meta platforms", "facebook"],
-                        "discord": ["discord inc", "discord"],
-                        "valve": ["valve corporation", "valve"],
-                        "spotify": ["spotify ab", "spotify"],
-                        "zoom": ["zoom video communications", "zoom"],
-                        "slack": ["slack technologies", "salesforce"],
-                        "jetbrains": ["jetbrains s.r.o", "jetbrains"],
-                        "github": ["github, inc", "github"],
-                        "atlassian": ["atlassian", "atlassian pty"],
-                    }
-                    
-                    # Check CompanyName field
-                    company_name = str(version_info.get("CompanyName", "")).lower()
-                    for publisher, variants in known_publishers.items():
-                        if any(v in company_name for v in variants):
-                            is_legitimate_software = True
-                            legitimacy_indicators.append(f"Known publisher in version info: {publisher.title()}")
-                            break
-                    
-                    # Check ProductName for known products
-                    product_name = str(version_info.get("ProductName", "")).lower()
-                    known_products = [
-                        "google chrome", "microsoft edge", "mozilla firefox", "opera", "brave",
-                        "visual studio", "vs code", "intellij", "pycharm", "eclipse",
-                        "microsoft office", "microsoft word", "microsoft excel",
-                        "windows", "windows defender", "windows security",
-                        "nvidia", "geforce", "radeon", "amd software",
-                        "steam", "discord", "spotify", "slack", "zoom", "teams",
-                        "vmware", "virtualbox", "docker desktop",
-                        "git", "node.js", "python", "java", ".net",
-                    ]
-                    for product in known_products:
-                        if product in product_name:
-                            is_legitimate_software = True
-                            legitimacy_indicators.append(f"Known product: {product}")
-                            break
-                    
-                    # Check FileDescription and OriginalFilename
-                    file_desc = str(version_info.get("FileDescription", "")).lower()
-                    orig_name = str(version_info.get("OriginalFilename", "")).lower()
-                    
-                    # Windows system files
-                    windows_patterns = ["microsoft", "windows", "win32", "system32"]
-                    if any(p in file_desc for p in windows_patterns) or any(p in orig_name for p in windows_patterns):
-                        if not is_legitimate_software:
-                            is_legitimate_software = True
-                            legitimacy_indicators.append("Windows system file indicators")
-                    
-                    # Has proper version info structure (legitimate software usually does)
-                    if (version_info.get("FileVersion") and 
-                        version_info.get("ProductVersion") and
-                        version_info.get("CompanyName")):
-                        if not is_legitimate_software:
-                            legitimacy_indicators.append("Complete version info present")
-                
-                # 3. CHECK FILENAME for known legitimate products
-                legitimate_products = [
-                    "chrome", "firefox", "edge", "brave", "opera",  # Browsers
-                    "vscode", "code", "visual studio", "intellij", "pycharm",  # IDEs
-                    "office", "word", "excel", "outlook", "teams",  # Office
-                    "notepad", "calc", "explorer", "mspaint",  # Windows built-in
-                    "python", "node", "java", "dotnet",  # Runtimes
-                    "defender", "security", "antimalware",  # Security software
-                    "nvidia", "amd", "intel", "geforce", "radeon",  # Hardware vendors
-                    "steam", "discord", "spotify", "slack", "zoom",  # Popular apps
-                    "git", "docker", "kubectl", "helm",  # Dev tools
-                    "powershell", "cmd", "bash", "wsl",  # Shells
-                ]
-                for product in legitimate_products:
-                    if product in filename_lower:
-                        if not is_legitimate_software:
-                            is_legitimate_software = True
-                        legitimacy_indicators.append(f"Known product filename: {product}")
-                        break
-                
-                # 4. CHECK SECURITY MITIGATIONS (Legitimate software uses these)
-                # Properly compiled legitimate software has all mitigations enabled
-                if result and result.metadata and result.metadata.mitigations:
-                    mitigations = result.metadata.mitigations
-                    enabled_count = sum(1 for v in mitigations.values() if v)
-                    total_count = len(mitigations)
-                    
-                    # If most mitigations are enabled, more likely legitimate
-                    if total_count > 0 and enabled_count / total_count >= 0.7:
-                        legitimacy_indicators.append(f"Strong security mitigations ({enabled_count}/{total_count})")
-                        # Don't auto-set legitimate just from mitigations, but boost confidence
-                
-                # 5. CHECK STRINGS for publisher/company info (fallback)
-                if result and result.strings and not is_legitimate_software:
-                    publisher_keywords = ["microsoft", "google", "mozilla", "apple", "adobe", 
-                                         "oracle", "intel", "nvidia", "amd", "vmware", "cisco",
-                                         "amazon", "facebook", "meta", "discord", "valve", "spotify"]
-                    for s in result.strings[:500]:  # Check first 500 strings
-                        s_lower = s.value.lower()
-                        if any(kw in s_lower for kw in ["copyright", "company", "publisher", "signed by", "(c)"]):
-                            for pub in publisher_keywords:
-                                if pub in s_lower:
-                                    is_legitimate_software = True
-                                    legitimacy_indicators.append(f"Publisher in strings: {pub}")
-                                    break
-                        # Check for digital signature indicators
-                        if any(sig in s_lower for sig in ["authenticode", "verisign", "digicert", "comodo", "symantec", "globalsign"]):
-                            if not is_legitimate_software:
-                                is_legitimate_software = True
-                            legitimacy_indicators.append("Certificate authority reference")
-                
-                # 6. ADDITIONAL LEGITIMACY SIGNALS
-                # Check for known library imports that indicate legitimate development
-                if result and result.imports:
-                    # Count imports from major runtime libraries
-                    ms_runtime_dlls = ["msvcrt", "vcruntime", "msvcp", "ucrtbase", "kernel32", "ntdll", "user32", "gdi32"]
-                    ms_imports = sum(1 for imp in result.imports if any(dll in (imp.library or "").lower() for dll in ms_runtime_dlls))
-                    
-                    # High number of standard library imports suggests legitimate development
-                    if ms_imports > 50:
-                        legitimacy_indicators.append(f"Uses standard MS runtime ({ms_imports} imports)")
-                
-                # Log legitimacy status with details
+                is_legitimate_software, legitimacy_indicators = re_service.assess_binary_legitimacy(
+                    result,
+                    filename=filename,
+                )
+
                 if is_legitimate_software:
                     logger.info(f"Binary appears legitimate: {legitimacy_indicators[:5]}")
-                else:
-                    # Even if not detected as legitimate, log what we did find
-                    if legitimacy_indicators:
-                        logger.info(f"Some legitimacy indicators found but not conclusive: {legitimacy_indicators}")
+                elif legitimacy_indicators:
+                    logger.info(f"Some legitimacy indicators found but not conclusive: {legitimacy_indicators}")
                 
                 update_phase(
                     "static",
@@ -1237,13 +1333,24 @@ async def unified_binary_scan(
                         tmp_path,
                         max_functions=effective_max_functions,
                         decomp_limit=effective_decomp_limit,
+                        selection_mode=ghidra_selection_mode,
                     )
                     if result.ghidra_analysis and "error" in result.ghidra_analysis:
                         update_phase("ghidra", "error", result.ghidra_analysis.get("error"), 100)
                     else:
                         fn_total = (result.ghidra_analysis or {}).get("functions_total", 0)
                         fn_exported = (result.ghidra_analysis or {}).get("functions_exported", fn_total)
-                        update_phase("ghidra", "completed", f"Exported {fn_exported}/{fn_total} functions", 100)
+                        mode_used = (
+                            (result.ghidra_analysis or {}).get("selection_mode_effective")
+                            or (result.ghidra_analysis or {}).get("selection_mode")
+                            or "unknown"
+                        )
+                        update_phase(
+                            "ghidra",
+                            "completed",
+                            f"Exported {fn_exported}/{fn_total} functions (mode: {mode_used})",
+                            100,
+                        )
                     yield make_progress("Ghidra decompilation complete", 100)
 
                     if _unified_binary_scan_sessions.get(scan_id, {}).get("cancelled"):
@@ -1717,8 +1824,11 @@ async def unified_binary_scan(
                     if attack_surface_result:
                         entry_points_data = attack_surface_result.get("entry_points", [])
                         for ep in entry_points_data[:10]:  # Limit to top 10 entry points
-                            if ep.get("address") and ep.get("address") != entry_point:
-                                additional_entry_points.append(ep["address"])
+                            if not isinstance(ep, dict):
+                                continue
+                            address = ep.get("address")
+                            if address and address != entry_point:
+                                additional_entry_points.append(address)
                     
                     # Run ENHANCED emulation with AI verification
                     emulation_result = await re_service.run_enhanced_emulation_with_verification(
@@ -1732,6 +1842,13 @@ async def unified_binary_scan(
                         additional_entry_points=additional_entry_points,
                         verify_with_ai=include_ai  # Use AI verification if AI is enabled
                     )
+
+                    # Some emulation paths may return None; normalize to a failed result object.
+                    if not isinstance(emulation_result, dict):
+                        emulation_result = {
+                            "success": False,
+                            "errors": ["No emulation result returned"],
+                        }
                     
                     yield make_progress("Detecting evasion techniques and malicious patterns...", 60)
                     
@@ -1741,8 +1858,12 @@ async def unified_binary_scan(
                     yield make_progress("Compiling emulation results...", 95)
                     
                     if emulation_result.get("success"):
-                        summary = emulation_result.get("summary", {})
-                        verdict = emulation_result.get("final_verdict", {})
+                        summary = emulation_result.get("summary") or {}
+                        verdict = emulation_result.get("final_verdict") or {}
+                        if not isinstance(summary, dict):
+                            summary = {}
+                        if not isinstance(verdict, dict):
+                            verdict = {}
                         
                         detail_parts = []
                         if summary.get("strings_recovered"):
@@ -1764,7 +1885,9 @@ async def unified_binary_scan(
                             " | ".join(detail_parts) if detail_parts else "Emulation complete", 100)
                         yield make_progress(f"Emulation complete: {' | '.join(detail_parts)}", 100)
                     else:
-                        errors = emulation_result.get("errors", [])
+                        errors = emulation_result.get("errors") or []
+                        if not isinstance(errors, list):
+                            errors = [str(errors)]
                         error_msg = errors[0] if errors else "Emulation failed"
                         update_phase("emulation", "completed", error_msg, 100)
                         yield make_progress(f"Emulation: {error_msg}", 100)
@@ -1800,6 +1923,7 @@ async def unified_binary_scan(
                                 tmp_path,
                                 result=result.disassembly if result else None,
                                 imports=list(result.imports) if result else None,
+                                is_legitimate_software=is_legitimate_software,
                             )
 
                         yield make_progress("Analyzing symbolic execution results...", 70)
@@ -5058,16 +5182,22 @@ async def analyze_apk(
 @router.get("/analyze-docker/{image_name:path}", response_model=DockerAnalysisResponse)
 async def analyze_docker_image(
     image_name: str,
+    project_id: Optional[int] = Query(None, description="Optional project scope for shared Docker images"),
     include_ai: bool = Query(True, description="Include AI-powered analysis"),
     adjudicate_findings: bool = Query(True, description="Use AI to filter false positives (recommended)"),
     skepticism_level: str = Query("high", description="How aggressively to filter: 'high' (default), 'medium', or 'low'"),
-    deep_layer_scan: bool = Query(True, description="Extract and scan image layers for recoverable secrets"),
+    deep_layer_scan: bool = Query(False, description="Extract and scan image layers for recoverable secrets"),
     check_base_image: bool = Query(True, description="Check base image against intelligence database (EOL, compromised, etc.)"),
     # CVE Scanning parameters (NEW)
     scan_cves: bool = Query(True, description="Scan image packages for CVEs using OSV/NVD"),
     include_nvd_enrichment: bool = Query(True, description="Enrich CVEs with NVD data (CVSS vectors, CWEs)"),
     include_kev: bool = Query(True, description="Check CISA Known Exploited Vulnerabilities catalog"),
     include_epss: bool = Query(True, description="Include EPSS exploit probability scores"),
+    include_trivy_vuln_scan: bool = Query(False, description="Run Trivy's native vulnerability scanner alongside the OSV/NVD pipeline"),
+    include_trivy_misconfig_scan: bool = Query(True, description="Run Trivy's misconfiguration scanner against the image"),
+    include_trivy_secret_scan: bool = Query(True, description="Run Trivy's native secret scanner against the image filesystem"),
+    include_trivy_license_scan: bool = Query(False, description="Run Trivy's license scanner against packages in the image"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -5081,13 +5211,13 @@ async def analyze_docker_image(
     - Suspicious operations (curl | sh, sensitive file access)
 
     Features:
-    - Semantic Dockerfile parsing (handles multi-line instructions)
-    - Multi-stage build awareness (only flags final stage for runtime issues)
-    - Entropy-based secret detection (catches high-entropy strings)
+    - Image history and layer command analysis
+    - Regex-based secret detection for build commands and env vars
     - AI False Positive Adjudicator (filters out noise with high skepticism)
     - **Layer Deep Scan**: Extract layers and find secrets in "deleted" files
-    - **Base Image Intelligence**: Check for EOL, compromised, typosquatting images
-    - **CVE Scanning**: Scan packages for known vulnerabilities with OSV/NVD/EPSS/KEV enrichment
+    - **Base Image Intelligence**: Check curated EOL, compromised, typosquatting, and registry rules
+    - **CVE Scanning**: Scan packages for known vulnerabilities with optional NVD/EPSS/KEV enrichment
+    - **Native Trivy Scanners**: Optional vuln, misconfiguration, secret, and license findings
 
     Note: Requires Docker to be installed and the image must be pulled locally.
     """
@@ -5097,23 +5227,37 @@ async def analyze_docker_image(
             detail="Docker is not available. Please install Docker to use this feature."
         )
 
+    image_name = _ensure_docker_image_allowlisted(db, current_user.id, image_name, project_id)
     logger.info(f"Analyzing Docker image: {image_name}")
 
     try:
+        analysis_started = time.perf_counter()
+
         # Perform analysis
+        history_started = time.perf_counter()
         result = re_service.analyze_docker_image(image_name)
+        history_duration = time.perf_counter() - history_started
 
         if result.error:
             raise HTTPException(status_code=400, detail=result.error)
+
+        history_detail = (
+            f"Parsed {result.total_layers} layers, found {len(result.secrets)} image-history secrets "
+            f"and {len(result.security_issues)} raw security issues."
+        )
 
         # Prepare security issues for potential adjudication
         security_issues = result.security_issues.copy()
         adjudication_summary = None
         rejected_findings = []
         adjudication_stats = None
+        adjudication_status = "skipped"
+        adjudication_detail = "AI adjudication was disabled for this run."
+        adjudication_duration = 0.0
 
         # Run AI False Positive Adjudication if enabled
         if adjudicate_findings and security_issues:
+            adjudication_started = time.perf_counter()
             try:
                 from backend.services.docker_scan_service import ai_false_positive_adjudicator
 
@@ -5166,19 +5310,35 @@ async def analyze_docker_image(
                     "rejected": len(rejected),
                     "total": len(issues_as_dicts),
                 }
+                adjudication_status = "completed"
+                adjudication_detail = (
+                    f"Confirmed {len(confirmed)} of {len(issues_as_dicts)} raw findings and "
+                    f"rejected {len(rejected)} as likely false positives."
+                )
 
                 logger.info(f"Adjudication complete: {len(confirmed)} confirmed, {len(rejected)} rejected")
 
             except Exception as e:
                 logger.warning(f"Adjudication failed, returning all findings: {e}")
                 adjudication_summary = f"Adjudication failed: {e}"
+                adjudication_status = "error"
+                adjudication_detail = f"AI adjudication failed: {e}"
+            finally:
+                adjudication_duration = time.perf_counter() - adjudication_started
+        elif adjudicate_findings:
+            adjudication_status = "completed"
+            adjudication_detail = "AI adjudication was enabled, but there were no initial security issues to review."
 
         # Keep result in sync for AI analysis
         result.security_issues = security_issues
 
         # Base Image Intelligence check
         base_image_intel = []
+        base_image_status = "skipped"
+        base_image_detail = "Base-image intelligence was disabled for this run."
+        base_image_duration = 0.0
         if check_base_image and result.base_image:
+            base_image_started = time.perf_counter()
             try:
                 from backend.services.docker_scan_service import check_base_image_intelligence
                 intel_findings = check_base_image_intelligence(result.base_image)
@@ -5193,17 +5353,32 @@ async def analyze_docker_image(
                     )
                     for f in intel_findings
                 ]
+                base_image_status = "completed"
+                base_image_detail = (
+                    f"Checked inferred base image {result.base_image}; "
+                    f"{len(intel_findings)} intelligence findings returned."
+                )
                 if intel_findings:
                     logger.info(f"Base image intelligence: {len(intel_findings)} findings for {result.base_image}")
             except Exception as e:
                 logger.warning(f"Base image intelligence check failed: {e}")
+                base_image_status = "error"
+                base_image_detail = f"Base-image intelligence failed: {e}"
+            finally:
+                base_image_duration = time.perf_counter() - base_image_started
+        elif check_base_image:
+            base_image_detail = "Base-image intelligence was requested, but the base image could not be inferred."
 
         # Layer Deep Scan for recoverable secrets
         layer_secrets = []
         layer_scan_metadata = None
         deleted_secrets_count = 0
         deleted_files = result.deleted_files or []
+        deep_layer_status = "skipped"
+        deep_layer_detail = "Deep layer extraction was disabled for this run."
+        deep_layer_duration = 0.0
         if deep_layer_scan:
+            deep_layer_started = time.perf_counter()
             try:
                 from backend.services.docker_scan_service import extract_and_scan_layers
                 secrets_found, scan_meta = extract_and_scan_layers(image_name, max_layers=20)
@@ -5226,15 +5401,29 @@ async def analyze_docker_image(
                 deleted_secrets_count = scan_meta.get("deleted_secrets_found", 0)
                 if isinstance(scan_meta, dict) and scan_meta.get("deleted_files") is not None:
                     deleted_files = scan_meta.get("deleted_files", deleted_files)
+                deep_layer_status = "completed"
+                deep_layer_detail = (
+                    f"Scanned {scan_meta.get('layers_scanned', 'N/A')} layers and "
+                    f"{scan_meta.get('files_scanned', 'N/A')} files; found {len(secrets_found)} layer secrets, "
+                    f"including {deleted_secrets_count} recoverable deleted-file secrets."
+                )
                 if secrets_found:
                     logger.info(f"Layer deep scan: {len(secrets_found)} secrets found, {deleted_secrets_count} in 'deleted' files")
             except Exception as e:
                 logger.warning(f"Layer deep scan failed: {e}")
                 layer_scan_metadata = {"error": str(e)}
+                deep_layer_status = "error"
+                deep_layer_detail = f"Layer deep scan failed: {e}"
+            finally:
+                deep_layer_duration = time.perf_counter() - deep_layer_started
 
         # CVE Scanning - scan image packages for known vulnerabilities
         cve_scan_result = None
+        cve_status = "skipped"
+        cve_detail = "Package CVE scanning was disabled for this run."
+        cve_duration = 0.0
         if scan_cves:
+            cve_started = time.perf_counter()
             try:
                 from backend.services.docker_scan_service import scan_image_packages_for_cves
 
@@ -5270,28 +5459,41 @@ async def analyze_docker_image(
                             nvd_enrichment=vuln.get("nvd_enrichment"),
                         ))
 
-                    cve_scan_result = DockerCVEScanResponse(
-                        image_name=cve_result.image_name,
-                        packages_scanned=cve_result.packages_scanned,
-                        packages_with_vulns=cve_result.packages_with_vulns,
-                        vulnerabilities=vuln_responses,
-                        critical_count=cve_result.critical_count,
-                        high_count=cve_result.high_count,
-                        medium_count=cve_result.medium_count,
-                        low_count=cve_result.low_count,
-                        kev_count=cve_result.kev_count,
-                        high_epss_count=cve_result.high_epss_count,
-                        scan_duration_seconds=cve_result.scan_duration_seconds,
-                        trivy_available=cve_result.trivy_available,
-                        enrichment_applied=cve_result.enrichment_applied,
-                        error=cve_result.error,
+                cve_scan_result = DockerCVEScanResponse(
+                    image_name=cve_result.image_name,
+                    packages_scanned=cve_result.packages_scanned,
+                    packages_with_vulns=cve_result.packages_with_vulns,
+                    vulnerabilities=vuln_responses,
+                    total_vulnerabilities=len(vuln_responses),
+                    critical_count=cve_result.critical_count,
+                    high_count=cve_result.high_count,
+                    medium_count=cve_result.medium_count,
+                    low_count=cve_result.low_count,
+                    kev_count=cve_result.kev_count,
+                    high_epss_count=cve_result.high_epss_count,
+                    scan_duration_seconds=cve_result.scan_duration_seconds,
+                    trivy_available=cve_result.trivy_available,
+                    enrichment_applied=cve_result.enrichment_applied,
+                    epss_enabled=cve_result.epss_enabled,
+                    epss_available=cve_result.epss_available,
+                    epss_source=cve_result.epss_source,
+                    error=cve_result.error,
+                )
+                cve_status = "error" if cve_result.error else "completed"
+                if cve_result.error:
+                    cve_detail = f"Package CVE scan failed: {cve_result.error}"
+                else:
+                    cve_detail = (
+                        f"Scanned {cve_result.packages_scanned} packages and found {len(vuln_responses)} vulnerabilities "
+                        f"({cve_result.critical_count} critical, {cve_result.high_count} high, "
+                        f"{cve_result.kev_count} in KEV)."
                     )
 
-                    logger.info(
-                        f"CVE scan: {len(vuln_responses)} CVEs found in {cve_result.packages_scanned} packages "
-                        f"({cve_result.critical_count} critical, {cve_result.high_count} high, "
-                        f"{cve_result.kev_count} in KEV)"
-                    )
+                logger.info(
+                    f"CVE scan: {len(vuln_responses)} CVEs found in {cve_result.packages_scanned} packages "
+                    f"({cve_result.critical_count} critical, {cve_result.high_count} high, "
+                    f"{cve_result.kev_count} in KEV)"
+                )
 
             except Exception as e:
                 logger.warning(f"CVE scanning failed: {e}")
@@ -5300,11 +5502,95 @@ async def analyze_docker_image(
                     packages_scanned=0,
                     packages_with_vulns=0,
                     vulnerabilities=[],
+                    total_vulnerabilities=0,
+                    epss_enabled=False,
                     error=str(e),
                 )
+                cve_status = "error"
+                cve_detail = f"Package CVE scan failed: {e}"
+            finally:
+                cve_duration = time.perf_counter() - cve_started
+
+        trivy_scan_result = None
+        trivy_requested = any([include_trivy_vuln_scan, include_trivy_misconfig_scan, include_trivy_secret_scan, include_trivy_license_scan])
+        trivy_status = "skipped"
+        trivy_detail = "Native Trivy scanners were disabled for this run."
+        trivy_duration = 0.0
+        if trivy_requested:
+            trivy_started = time.perf_counter()
+            try:
+                from backend.services.docker_scan_service import scan_image_with_trivy_native
+
+                native_trivy = await scan_image_with_trivy_native(
+                    image_name,
+                    include_vulnerabilities=include_trivy_vuln_scan,
+                    include_misconfigurations=include_trivy_misconfig_scan,
+                    include_secrets=include_trivy_secret_scan,
+                    include_licenses=include_trivy_license_scan,
+                )
+                trivy_scan_result = DockerTrivyNativeScanResponse(
+                    image_name=native_trivy.image_name,
+                    enabled_scanners=native_trivy.enabled_scanners,
+                    trivy_available=native_trivy.trivy_available,
+                    artifact_name=native_trivy.artifact_name,
+                    artifact_type=native_trivy.artifact_type,
+                    os_family=native_trivy.os_family,
+                    os_name=native_trivy.os_name,
+                    trivy_version=native_trivy.trivy_version,
+                    schema_version=native_trivy.schema_version,
+                    package_count=native_trivy.package_count,
+                    vulnerabilities=native_trivy.vulnerabilities,
+                    misconfigurations=native_trivy.misconfigurations,
+                    secrets=native_trivy.secrets,
+                    licenses=native_trivy.licenses,
+                    vulnerability_severity_counts=native_trivy.vulnerability_severity_counts,
+                    misconfiguration_severity_counts=native_trivy.misconfiguration_severity_counts,
+                    secret_severity_counts=native_trivy.secret_severity_counts,
+                    license_severity_counts=native_trivy.license_severity_counts,
+                    scan_duration_seconds=native_trivy.scan_duration_seconds,
+                    error=native_trivy.error,
+                )
+                total_trivy_findings = (
+                    len(native_trivy.vulnerabilities)
+                    + len(native_trivy.misconfigurations)
+                    + len(native_trivy.secrets)
+                    + len(native_trivy.licenses)
+                )
+                trivy_status = "error" if native_trivy.error else "completed"
+                trivy_detail = (
+                    f"Ran scanners: {', '.join(native_trivy.enabled_scanners) or 'none'}; "
+                    f"observed {native_trivy.package_count} packages and collected {total_trivy_findings} findings."
+                )
+                if native_trivy.error:
+                    trivy_detail = f"Native Trivy scan failed: {native_trivy.error}"
+            except Exception as e:
+                logger.warning(f"Native Trivy scanning failed: {e}")
+                trivy_scan_result = DockerTrivyNativeScanResponse(
+                    image_name=image_name,
+                    enabled_scanners=[
+                        scanner
+                        for scanner, enabled in [
+                            ("vuln", include_trivy_vuln_scan),
+                            ("misconfig", include_trivy_misconfig_scan),
+                            ("secret", include_trivy_secret_scan),
+                            ("license", include_trivy_license_scan),
+                        ]
+                        if enabled
+                    ],
+                    trivy_available=False,
+                    error=str(e),
+                )
+                trivy_status = "error"
+                trivy_detail = f"Native Trivy scan failed: {e}"
+            finally:
+                trivy_duration = time.perf_counter() - trivy_started
 
         # Run AI analysis if requested
+        ai_status = "skipped"
+        ai_detail = "AI security analysis was disabled for this run."
+        ai_duration = 0.0
         if include_ai:
+            ai_started = time.perf_counter()
             base_image_intel_payload = [
                 intel.dict() if hasattr(intel, "dict") else intel
                 for intel in base_image_intel
@@ -5313,12 +5599,79 @@ async def analyze_docker_image(
                 secret.dict() if hasattr(secret, "dict") else secret
                 for secret in layer_secrets
             ]
+            cve_scan_payload = cve_scan_result.dict() if hasattr(cve_scan_result, "dict") and cve_scan_result else cve_scan_result
+            trivy_scan_payload = trivy_scan_result.dict() if hasattr(trivy_scan_result, "dict") and trivy_scan_result else trivy_scan_result
             result.ai_analysis = await re_service.analyze_docker_with_ai(
                 result,
                 base_image_intel=base_image_intel_payload,
                 layer_secrets=layer_secrets_payload,
                 layer_scan_metadata=layer_scan_metadata,
+                cve_scan=cve_scan_payload,
+                trivy_scan=trivy_scan_payload,
             )
+            ai_duration = time.perf_counter() - ai_started
+            if result.ai_analysis and not str(result.ai_analysis).startswith("AI analysis unavailable"):
+                ai_status = "completed"
+                ai_detail = "Generated AI security analysis for the completed scan results."
+            else:
+                ai_status = "error"
+                ai_detail = result.ai_analysis or "AI analysis returned no content."
+
+        total_duration = time.perf_counter() - analysis_started
+        scan_summary = {
+            "total_duration_seconds": round(total_duration, 3),
+            "checks": [
+                {
+                    "id": "history_analysis",
+                    "label": "Image history and layer command analysis",
+                    "status": "completed",
+                    "duration_seconds": round(history_duration, 3),
+                    "detail": history_detail,
+                },
+                {
+                    "id": "ai_adjudication",
+                    "label": "AI false-positive adjudication",
+                    "status": adjudication_status,
+                    "duration_seconds": round(adjudication_duration, 3),
+                    "detail": adjudication_detail,
+                },
+                {
+                    "id": "base_image_intelligence",
+                    "label": "Base-image intelligence",
+                    "status": base_image_status,
+                    "duration_seconds": round(base_image_duration, 3),
+                    "detail": base_image_detail,
+                },
+                {
+                    "id": "deep_layer_scan",
+                    "label": "Deep layer extraction and deleted-file forensics",
+                    "status": deep_layer_status,
+                    "duration_seconds": round(deep_layer_duration, 3),
+                    "detail": deep_layer_detail,
+                },
+                {
+                    "id": "package_cve_scan",
+                    "label": "Package CVE scan",
+                    "status": cve_status,
+                    "duration_seconds": round(cve_duration, 3),
+                    "detail": cve_detail,
+                },
+                {
+                    "id": "native_trivy",
+                    "label": "Native Trivy scanners",
+                    "status": trivy_status,
+                    "duration_seconds": round(trivy_duration, 3),
+                    "detail": trivy_detail,
+                },
+                {
+                    "id": "ai_summary",
+                    "label": "AI security summary",
+                    "status": ai_status,
+                    "duration_seconds": round(ai_duration, 3),
+                    "detail": ai_detail,
+                },
+            ],
+        }
 
         # Convert to response model
         return DockerAnalysisResponse(
@@ -5373,6 +5726,8 @@ async def analyze_docker_image(
             deleted_secrets_count=deleted_secrets_count,
             # CVE scanning
             cve_scan=cve_scan_result,
+            trivy_scan=trivy_scan_result,
+            scan_summary=scan_summary,
         )
 
     except HTTPException:
@@ -5407,6 +5762,11 @@ class DockerExportRequest(BaseModel):
     layer_secrets: List[Dict[str, Any]] = []
     layer_scan_metadata: Optional[Dict[str, Any]] = None
     deleted_secrets_count: int = 0
+    cve_scan: Optional[Dict[str, Any]] = None
+    trivy_scan: Optional[Dict[str, Any]] = None
+    scan_summary: Optional[Dict[str, Any]] = None
+    risk_score: Optional[int] = None
+    risk_level: Optional[str] = None
 
 
 @router.post("/docker/export")
@@ -5466,28 +5826,267 @@ async def export_docker_analysis(
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
+@router.get("/docker/sbom/{image_name:path}")
+async def export_docker_sbom(
+    image_name: str,
+    project_id: Optional[int] = Query(None, description="Optional project scope for shared Docker images"),
+    format: str = Query("cyclonedx", description="SBOM format: cyclonedx or spdx-json"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Export a Docker image SBOM using Trivy."""
+    from fastapi.responses import Response
+    from datetime import datetime
+    from backend.services.docker_scan_service import generate_trivy_sbom
+
+    image_name = _ensure_docker_image_allowlisted(db, current_user.id, image_name, project_id)
+
+    sbom_content, media_type, error = generate_trivy_sbom(image_name, format=format)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    if sbom_content is None:
+        raise HTTPException(status_code=500, detail="Failed to generate SBOM")
+
+    normalized_format = str(format or "cyclonedx").strip().lower()
+    ext = "json" if normalized_format in {"cyclonedx", "spdx-json"} else "txt"
+    safe_name = image_name.replace("/", "_").replace(":", "_")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Response(
+        content=sbom_content,
+        media_type=media_type or "application/json",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{safe_name}_sbom_{normalized_format}_{timestamp}.{ext}"'
+            )
+        },
+    )
+
+
+def _format_docker_export_duration(value: Any) -> str:
+    """Format seconds for export-friendly display."""
+    try:
+        seconds = float(value or 0)
+    except (TypeError, ValueError):
+        seconds = 0.0
+    if seconds >= 60:
+        return f"{seconds / 60:.1f} min"
+    return f"{seconds:.1f} sec"
+
+
+def _normalize_docker_export_text(value: Any) -> str:
+    """Normalize AI/report text for Markdown, PDF, and Word exports."""
+    import re
+
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    text = re.sub(r"^```(?:html|markdown|md)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    if "<" in text and ">" in text:
+        text = _html_to_plain_text(text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"(?m)^---+\s*$", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _collect_docker_export_findings(request: DockerExportRequest) -> Dict[str, Any]:
+    """Build a shared summary model for Docker report exports."""
+    security_issues = request.security_issues or []
+    cve_scan = request.cve_scan if isinstance(request.cve_scan, dict) else {}
+    cve_vulnerabilities = cve_scan.get("vulnerabilities") if isinstance(cve_scan.get("vulnerabilities"), list) else []
+    trivy_scan = request.trivy_scan if isinstance(request.trivy_scan, dict) else {}
+    trivy_vulns = trivy_scan.get("vulnerabilities") if isinstance(trivy_scan.get("vulnerabilities"), list) else []
+    trivy_misconfigs = trivy_scan.get("misconfigurations") if isinstance(trivy_scan.get("misconfigurations"), list) else []
+    trivy_secrets = trivy_scan.get("secrets") if isinstance(trivy_scan.get("secrets"), list) else []
+    trivy_licenses = trivy_scan.get("licenses") if isinstance(trivy_scan.get("licenses"), list) else []
+
+    severity_counts = {
+        "critical": sum(1 for item in security_issues if item.get("severity", "").lower() == "critical"),
+        "high": sum(1 for item in security_issues if item.get("severity", "").lower() == "high"),
+        "medium": sum(1 for item in security_issues if item.get("severity", "").lower() == "medium"),
+        "low": sum(1 for item in security_issues if item.get("severity", "").lower() == "low"),
+    }
+
+    total_cves = int(cve_scan.get("total_vulnerabilities") or len(cve_vulnerabilities) or 0)
+    total_trivy_findings = len(trivy_vulns) + len(trivy_misconfigs) + len(trivy_secrets) + len(trivy_licenses)
+    total_secrets = len(request.secrets or []) + len(request.layer_secrets or [])
+    deleted_recoverable = int(request.deleted_secrets_count or sum(1 for item in (request.layer_secrets or []) if item.get("is_deleted")))
+
+    risk_score = request.risk_score
+    if risk_score is None:
+        risk_score = (
+            severity_counts["critical"] * 40
+            + severity_counts["high"] * 25
+            + severity_counts["medium"] * 10
+            + severity_counts["low"] * 3
+        )
+        if cve_scan.get("kev_count"):
+            risk_score += 25
+        if deleted_recoverable:
+            risk_score += 20
+    risk_score = min(int(risk_score), 100)
+
+    risk_level = request.risk_level or (
+        "Critical" if risk_score >= 75 else
+        "High" if risk_score >= 45 else
+        "Medium" if risk_score >= 20 else
+        "Low"
+    )
+
+    scan_summary = request.scan_summary if isinstance(request.scan_summary, dict) else {}
+    scan_checks = scan_summary.get("checks") if isinstance(scan_summary.get("checks"), list) else []
+    coverage_rows: List[Dict[str, str]] = []
+    if scan_checks:
+        for check in scan_checks:
+            coverage_rows.append({
+                "label": str(check.get("label") or check.get("id") or "Check"),
+                "status": str(check.get("status") or "unknown").replace("_", " ").title(),
+                "duration": _format_docker_export_duration(check.get("duration_seconds")),
+                "detail": str(check.get("detail") or "").strip(),
+            })
+    else:
+        inferred_checks = [
+            ("Image history analysis", "Completed", "Included in every Docker report."),
+            ("Base image intelligence", "Completed" if request.base_image_intel else "Not requested", ""),
+            ("Layer deep scan", "Completed" if (request.layer_secrets or request.layer_scan_metadata) else "Not requested", ""),
+            ("Package CVE scan", "Completed" if request.cve_scan else "Not requested", cve_scan.get("error", "")),
+            ("Native Trivy scan", "Completed" if request.trivy_scan else "Not requested", trivy_scan.get("error", "")),
+            ("AI security analysis", "Completed" if request.ai_analysis else "Not requested", ""),
+        ]
+        for label, status, detail in inferred_checks:
+            coverage_rows.append({
+                "label": label,
+                "status": status,
+                "duration": "N/A",
+                "detail": detail,
+            })
+
+    findings: List[str] = []
+    if deleted_recoverable:
+        findings.append(
+            f"{deleted_recoverable} deleted-but-recoverable secrets remain inside preserved image layers."
+        )
+    if request.secrets:
+        findings.append(
+            f"{len(request.secrets)} secrets were exposed directly in image history or build commands."
+        )
+    if cve_scan.get("kev_count"):
+        findings.append(
+            f"{cve_scan.get('kev_count')} package vulnerabilities are listed in CISA KEV."
+        )
+    if severity_counts["critical"] or severity_counts["high"]:
+        findings.append(
+            f"{severity_counts['critical']} critical and {severity_counts['high']} high heuristic findings were identified."
+        )
+    if request.base_image_intel:
+        findings.append(
+            f"{len(request.base_image_intel)} base image intelligence findings require supply-chain review."
+        )
+    if trivy_misconfigs:
+        findings.append(
+            f"Trivy reported {len(trivy_misconfigs)} image misconfigurations in addition to native history analysis."
+        )
+    if not findings:
+        findings.append("No high-priority findings were highlighted in the exported Docker result.")
+
+    actions: List[str] = []
+    if total_secrets:
+        actions.append("Rotate all exposed credentials, scrub them from build inputs, and rebuild the image from a clean context.")
+    if deleted_recoverable:
+        actions.append("Rebuild the image so sensitive files never enter intermediate layers; deleting them later is not sufficient.")
+    if total_cves:
+        actions.append("Patch vulnerable packages, prioritizing KEV and high-EPSS CVEs, then republish the image with a pinned base tag.")
+    if request.base_image_intel:
+        actions.append("Review the base image lineage and move to a supported, trusted base image where findings indicate risk.")
+    if severity_counts["critical"] or severity_counts["high"]:
+        actions.append("Harden the runtime posture by removing dangerous build steps, dropping privileges, and minimizing image contents.")
+    if not actions:
+        actions.append("Retain this report as the clean baseline and re-run after the next image update.")
+
+    return {
+        "severity_counts": severity_counts,
+        "cve_scan": cve_scan,
+        "cve_vulnerabilities": cve_vulnerabilities,
+        "total_cves": total_cves,
+        "trivy_scan": trivy_scan,
+        "trivy_vulns": trivy_vulns,
+        "trivy_misconfigs": trivy_misconfigs,
+        "trivy_secrets": trivy_secrets,
+        "trivy_licenses": trivy_licenses,
+        "total_trivy_findings": total_trivy_findings,
+        "total_secrets": total_secrets,
+        "deleted_recoverable": deleted_recoverable,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "coverage_rows": coverage_rows,
+        "key_findings": findings[:5],
+        "priority_actions": actions[:5],
+        "ai_text": _normalize_docker_export_text(request.ai_analysis),
+        "scan_summary": scan_summary,
+    }
+
+
 def _generate_docker_export_markdown(request: DockerExportRequest) -> str:
     """Generate comprehensive markdown export for Docker analysis."""
     from datetime import datetime
 
-    # Calculate risk metrics
-    critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
-    high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
-    medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
-    low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
+    def _inline_code(value: Any) -> str:
+        return str(value or "N/A").replace("`", "'")
 
-    # Calculate risk score
-    risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
-    risk_level = "Critical" if risk_score >= 100 else "High" if risk_score >= 50 else "Medium" if risk_score >= 20 else "Low"
+    overview = _collect_docker_export_findings(request)
+    severity_counts = overview["severity_counts"]
+    critical_count = severity_counts["critical"]
+    high_count = severity_counts["high"]
+    medium_count = severity_counts["medium"]
+    low_count = severity_counts["low"]
+    cve_scan = overview["cve_scan"]
+    cve_vulnerabilities = overview["cve_vulnerabilities"]
+    total_cves = overview["total_cves"]
+    trivy_scan = overview["trivy_scan"]
+    trivy_vulns = overview["trivy_vulns"]
+    trivy_misconfigs = overview["trivy_misconfigs"]
+    trivy_secrets = overview["trivy_secrets"]
+    trivy_licenses = overview["trivy_licenses"]
+    total_trivy_findings = overview["total_trivy_findings"]
+    total_secrets = overview["total_secrets"]
+    risk_score = overview["risk_score"]
+    risk_level = overview["risk_level"]
 
     md = f"""# Docker Security Analysis Report
 
-**Image:** `{request.image_name}`
-**Image ID:** `{request.image_id[:12]}`
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Analysis Tool:** VRAgent Docker Inspector
+> Analyst-ready export from **VRAgent Docker Inspector**
+> Generated **{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**
 
 ---
+
+## Report Header
+
+| Field | Value |
+|-------|-------|
+| **Image** | `{request.image_name}` |
+| **Image ID** | `{request.image_id[:12]}` |
+| **Base Image** | `{request.base_image or 'Unknown'}` |
+| **Image Size** | {request.total_size_human} |
+| **Total Layers** | {request.total_layers} |
+| **Risk Rating** | **{risk_level.upper()}** ({risk_score}/100) |
+
+## At A Glance
+
+"""
+    for finding in overview["key_findings"]:
+        md += f"- {finding}\n"
+
+    md += f"""
+
+## Priority Actions
+
+"""
+    for index, action in enumerate(overview["priority_actions"], start=1):
+        md += f"{index}. {action}\n"
+
+    md += f"""
 
 ## Executive Summary
 
@@ -5498,8 +6097,10 @@ def _generate_docker_export_markdown(request: DockerExportRequest) -> str:
 | **Image Size** | {request.total_size_human} |
 | **Base Image** | `{request.base_image or 'Unknown'}` |
 | **Security Issues** | {len(request.security_issues)} |
-| **Secrets Found** | {len(request.secrets) + len(request.layer_secrets)} |
-| **Deleted but Recoverable** | {request.deleted_secrets_count} |
+| **Secrets Found** | {total_secrets} |
+| **CVEs Found** | {total_cves} |
+| **Native Trivy Findings** | {total_trivy_findings} |
+| **Deleted but Recoverable** | {overview["deleted_recoverable"]} |
 
 ### Risk Breakdown
 
@@ -5511,6 +6112,159 @@ def _generate_docker_export_markdown(request: DockerExportRequest) -> str:
 | Low | {low_count} | Opportunistic |
 
 """
+
+    if overview["coverage_rows"]:
+        md += """---
+
+## Scan Coverage
+
+| Check | Status | Duration | Notes |
+|-------|--------|----------|-------|
+"""
+        for row in overview["coverage_rows"]:
+            detail = str(row.get("detail") or "").replace("\n", " ").strip() or " "
+            md += (
+                f"| {row.get('label', 'Check')} | {row.get('status', 'Unknown')} | "
+                f"{row.get('duration', 'N/A')} | {detail} |\n"
+            )
+        md += "\n"
+
+    if cve_scan:
+        md += f"""---
+
+## Package CVE Scan
+
+*Known vulnerabilities detected in packages extracted from the image.*
+
+| Metric | Value |
+|--------|-------|
+| **Packages Scanned** | {cve_scan.get('packages_scanned', 0)} |
+| **Packages With Vulnerabilities** | {cve_scan.get('packages_with_vulns', 0)} |
+| **Total CVEs** | {total_cves} |
+| **Critical** | {cve_scan.get('critical_count', 0)} |
+| **High** | {cve_scan.get('high_count', 0)} |
+| **In CISA KEV** | {cve_scan.get('kev_count', 0)} |
+| **High EPSS** | {cve_scan.get('high_epss_count', 0)} |
+
+"""
+        if cve_scan.get("error"):
+            md += f"**Scan Error:** {cve_scan.get('error')}\n\n"
+        elif cve_vulnerabilities:
+            md += """### Highest Priority CVEs
+
+| CVE | Severity | Package | Version | Signals |
+|-----|----------|---------|---------|---------|
+"""
+            for vuln in cve_vulnerabilities[:20]:
+                signals: List[str] = []
+                if vuln.get("in_kev"):
+                    signals.append("KEV")
+                if vuln.get("priority_label"):
+                    signals.append(str(vuln.get("priority_label")))
+                elif vuln.get("epss_percentile") is not None:
+                    signals.append(f"EPSS {vuln.get('epss_percentile')}")
+                md += (
+                    f"| {vuln.get('external_id', vuln.get('id', 'N/A'))} | "
+                    f"{str(vuln.get('severity', 'unknown')).upper()} | "
+                    f"{vuln.get('package_name', vuln.get('package', 'N/A'))} | "
+                    f"{vuln.get('package_version', vuln.get('installed_version', 'N/A'))} | "
+                    f"{', '.join(signals) or 'N/A'} |\n"
+                )
+            md += "\n"
+
+    if trivy_scan:
+        native_vulns = trivy_scan.get("vulnerabilities") if isinstance(trivy_scan.get("vulnerabilities"), list) else []
+        native_misconfigs = trivy_scan.get("misconfigurations") if isinstance(trivy_scan.get("misconfigurations"), list) else []
+        native_secrets = trivy_scan.get("secrets") if isinstance(trivy_scan.get("secrets"), list) else []
+        native_licenses = trivy_scan.get("licenses") if isinstance(trivy_scan.get("licenses"), list) else []
+        enabled_scanners = ", ".join(trivy_scan.get("enabled_scanners") or []) or "None"
+        trivy_duration = trivy_scan.get("scan_duration_seconds") or 0
+        try:
+            trivy_duration = float(trivy_duration)
+        except (TypeError, ValueError):
+            trivy_duration = 0.0
+        md += f"""---
+
+## Native Trivy Scan
+
+*Raw Trivy scanner output captured alongside the Docker Inspector's own analysis.*
+
+| Metric | Value |
+|--------|-------|
+| **Enabled Scanners** | {enabled_scanners} |
+| **Packages Observed** | {trivy_scan.get('package_count', 0)} |
+| **Native Vulnerabilities** | {len(native_vulns)} |
+| **Misconfigurations** | {len(native_misconfigs)} |
+| **Secret Findings** | {len(native_secrets)} |
+| **License Findings** | {len(native_licenses)} |
+| **Duration** | {trivy_duration:.1f}s |
+
+"""
+        if trivy_scan.get("error"):
+            md += f"**Scan Error:** {trivy_scan.get('error')}\n\n"
+
+        if native_vulns:
+            md += """### Native Trivy Vulnerabilities
+
+| ID | Severity | Package | Installed | Fixed |
+|----|----------|---------|-----------|-------|
+"""
+            for vuln in native_vulns[:20]:
+                md += (
+                    f"| {vuln.get('vulnerability_id', 'N/A')} | "
+                    f"{str(vuln.get('severity', 'unknown')).upper()} | "
+                    f"{vuln.get('package_name', 'N/A')} | "
+                    f"{vuln.get('installed_version', 'N/A')} | "
+                    f"{vuln.get('fixed_version', 'N/A') or '-'} |\n"
+                )
+            md += "\n"
+
+        if native_misconfigs:
+            md += """### Trivy Misconfigurations
+
+| ID | Severity | Target | Message |
+|----|----------|--------|---------|
+"""
+            for finding in native_misconfigs[:20]:
+                md += (
+                    f"| {finding.get('id', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{str(finding.get('target', 'N/A'))[:40]} | "
+                    f"{str(finding.get('message') or finding.get('title') or 'N/A')[:80]} |\n"
+                )
+            md += "\n"
+
+        if native_secrets:
+            md += """### Trivy Native Secret Findings
+
+*Operator note: raw Trivy secret matches are intentionally included for remediation workflows.*
+
+| Rule | Severity | Target | Match |
+|------|----------|--------|-------|
+"""
+            for finding in native_secrets[:20]:
+                md += (
+                    f"| {finding.get('rule_id', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{str(finding.get('target', 'N/A'))[:40]} | "
+                    f"`{_inline_code(finding.get('match'))}` |\n"
+                )
+            md += "\n"
+
+        if native_licenses:
+            md += """### Trivy License Findings
+
+| License | Severity | Package | Category |
+|---------|----------|---------|----------|
+"""
+            for finding in native_licenses[:20]:
+                md += (
+                    f"| {finding.get('name', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{finding.get('package_name', 'N/A')} | "
+                    f"{finding.get('category', 'N/A')} |\n"
+                )
+            md += "\n"
 
     # Base Image Intelligence Section
     if request.base_image_intel:
@@ -5604,23 +6358,27 @@ These files were "deleted" in later layers but **can still be extracted** from t
 
 *Secrets detected in Docker image build commands and environment variables.*
 
+*Operator note: raw secret values are intentionally included in this Docker report for remediation workflows.*
+
 """
         for secret in request.secrets:
             md += f"""### {secret.get('secret_type', 'Unknown')} ({secret.get('severity', 'N/A').upper()})
 
 - **Layer:** `{secret.get('layer_id', 'N/A')[:12]}`
 - **Context:** {secret.get('context', 'N/A')}
-- **Value (masked):** `{secret.get('masked_value', 'N/A')}`
+- **Value (raw):** `{_inline_code(secret.get('value'))}`
+- **Value (masked):** `{_inline_code(secret.get('masked_value'))}`
+- **Layer Command:** `{_inline_code(secret.get('layer_command'))}`
 
 """
 
     # AI Analysis Section
-    if request.ai_analysis:
+    if overview["ai_text"]:
         md += f"""---
 
 ## AI Security Analysis
 
-{request.ai_analysis}
+{overview["ai_text"]}
 
 """
 
@@ -5683,7 +6441,8 @@ These files were "deleted" in later layers but **can still be extracted** from t
 ## Report Information
 
 - **Tool:** VRAgent Docker Inspector
-- **Features Used:** Semantic parsing, entropy detection, multi-stage awareness, AI adjudication, layer deep scan, base image intelligence
+- **Features Used:** Image history analysis, regex secret detection, AI adjudication, layer deep scan, base image intelligence, package CVE scanning, native Trivy scanners, SBOM export
+- **Document Structure:** Report header, at-a-glance findings, priority actions, scan coverage, technical sections, AI narrative
 - **Offensive Focus:** Container escape, privilege escalation, secrets extraction, supply chain risks
 
 *This report was generated with an offensive security perspective, emphasizing exploitable weaknesses and attack vectors.*
@@ -5701,34 +6460,115 @@ def _generate_docker_pdf(md_content: str, request: DockerExportRequest) -> bytes
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable, ListItem, KeepTogether
         from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+        sanitize_pdf_text = globals().get("_sanitize_pdf_text")
+        if callable(sanitize_pdf_text):
+            _sanitize_pdf_text = sanitize_pdf_text
+        else:
+            def _sanitize_pdf_text(value: Any) -> str:
+                text = str(value or "")
+                return "".join(ch for ch in text if ch == "\n" or ch == "\t" or ord(ch) >= 32)
+
+        overview = _collect_docker_export_findings(request)
+        severity_counts = overview["severity_counts"]
+        cve_scan = overview["cve_scan"]
+        trivy_scan = overview["trivy_scan"]
+        trivy_vulns = overview["trivy_vulns"]
+        trivy_misconfigs = overview["trivy_misconfigs"]
+        trivy_secrets = overview["trivy_secrets"]
+        trivy_licenses = overview["trivy_licenses"]
+        total_trivy_findings = overview["total_trivy_findings"]
+        risk_score = overview["risk_score"]
+        risk_level = overview["risk_level"]
+
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.55*inch, bottomMargin=0.55*inch)
         styles = getSampleStyleSheet()
 
         # Custom styles
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, spaceAfter=20, textColor=colors.HexColor('#1a1a2e'))
-        h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, spaceBefore=15, spaceAfter=10, textColor=colors.HexColor('#16213e'))
-        h3_style = ParagraphStyle('H3', parent=styles['Heading3'], fontSize=12, spaceBefore=10, spaceAfter=8, textColor=colors.HexColor('#0f3460'))
-        body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=10, spaceAfter=6)
-        code_style = ParagraphStyle('Code', parent=styles['Code'], fontSize=9, backColor=colors.HexColor('#f0f0f0'))
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=20, spaceAfter=6, textColor=colors.HexColor('#0f172a'), alignment=TA_CENTER)
+        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#475569'), alignment=TA_CENTER, spaceAfter=14)
+        h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, spaceBefore=16, spaceAfter=8, textColor=colors.HexColor('#16213e'))
+        h3_style = ParagraphStyle('H3', parent=styles['Heading3'], fontSize=11.5, spaceBefore=10, spaceAfter=6, textColor=colors.HexColor('#0f3460'))
+        body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=9.5, leading=13, spaceAfter=6, textColor=colors.HexColor('#1f2937'))
+        note_style = ParagraphStyle('Note', parent=body_style, textColor=colors.HexColor('#475569'))
+        small_style = ParagraphStyle('Small', parent=body_style, fontSize=8.5, leading=11, textColor=colors.HexColor('#64748b'))
+
+        def _build_table(data: List[List[str]], widths: List[float], header_color: str) -> Table:
+            table = Table(data, colWidths=widths, hAlign="LEFT")
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(header_color)),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+                ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f8fafc'), colors.white]),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            return table
+
+        def _draw_page_chrome(canvas, pdf_doc):
+            canvas.saveState()
+            canvas.setStrokeColor(colors.HexColor('#cbd5e1'))
+            canvas.setLineWidth(0.5)
+            canvas.line(pdf_doc.leftMargin, 0.45 * inch, letter[0] - pdf_doc.rightMargin, 0.45 * inch)
+            canvas.setFont('Helvetica', 8)
+            canvas.setFillColor(colors.HexColor('#64748b'))
+            canvas.drawString(pdf_doc.leftMargin, 0.28 * inch, f"VRAgent Docker Inspector • {request.image_name}")
+            canvas.drawRightString(letter[0] - pdf_doc.rightMargin, 0.28 * inch, f"Page {canvas.getPageNumber()}")
+            canvas.restoreState()
 
         elements = []
 
-        # Title
-        elements.append(Paragraph("Docker Security Analysis Report", title_style))
-        elements.append(Paragraph(f"<b>Image:</b> {request.image_name}", body_style))
-        elements.append(Paragraph(f"<b>Image ID:</b> {request.image_id[:12]}", body_style))
-        elements.append(Spacer(1, 0.2*inch))
+        title_block = [
+            [Paragraph("<b>Docker Security Analysis Report</b>", title_style)],
+            [Paragraph("Analyst-ready export covering native Docker Inspector findings, CVEs, Trivy, and AI narrative.", subtitle_style)],
+        ]
+        title_table = Table(title_block, colWidths=[6.7 * inch], hAlign="CENTER")
+        title_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e2e8f0')),
+            ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#cbd5e1')),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ]))
+        elements.append(title_table)
+        elements.append(Spacer(1, 0.18 * inch))
 
-        # Risk Summary Table
-        critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
-        high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
-        medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
-        low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
-        risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
+        metadata_data = [
+            ['Field', 'Value'],
+            ['Image', _sanitize_pdf_text(request.image_name)],
+            ['Image ID', _sanitize_pdf_text(request.image_id[:12])],
+            ['Base Image', _sanitize_pdf_text(request.base_image or 'Unknown')],
+            ['Generated', _sanitize_pdf_text(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))],
+            ['Risk Rating', f"{risk_level.upper()} ({risk_score}/100)"],
+        ]
+        elements.append(_build_table(metadata_data, [1.6 * inch, 5.0 * inch], '#0f172a'))
+        elements.append(Spacer(1, 0.16 * inch))
+
+        elements.append(Paragraph("At A Glance", h2_style))
+        elements.append(ListFlowable(
+            [ListItem(Paragraph(_sanitize_pdf_text(item), body_style)) for item in overview["key_findings"]],
+            bulletType='bullet',
+            leftIndent=16,
+        ))
+        elements.append(Spacer(1, 0.08 * inch))
+
+        elements.append(Paragraph("Priority Actions", h2_style))
+        elements.append(ListFlowable(
+            [ListItem(Paragraph(_sanitize_pdf_text(item), body_style), value=index) for index, item in enumerate(overview["priority_actions"], start=1)],
+            bulletType='1',
+            leftIndent=18,
+        ))
+        elements.append(Spacer(1, 0.12 * inch))
 
         elements.append(Paragraph("Executive Summary", h2_style))
 
@@ -5738,22 +6578,36 @@ def _generate_docker_pdf(md_content: str, request: DockerExportRequest) -> bytes
             ['Total Layers', str(request.total_layers)],
             ['Image Size', request.total_size_human],
             ['Security Issues', str(len(request.security_issues))],
-            ['Deleted Secrets', str(request.deleted_secrets_count)],
+            ['Secrets Found', str(overview["total_secrets"])],
+            ['CVEs Found', str(overview["total_cves"])],
+            ['Native Trivy Findings', str(total_trivy_findings)],
+            ['Deleted Secrets', str(overview["deleted_recoverable"])],
         ]
-        summary_table = Table(summary_data, colWidths=[2*inch, 3*inch])
-        summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        elements.append(summary_table)
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(_build_table(summary_data, [2 * inch, 3.2 * inch], '#1a1a2e'))
+        elements.append(Spacer(1, 0.12 * inch))
+
+        risk_breakdown = [
+            ['Severity', 'Count', 'Meaning'],
+            ['Critical', str(severity_counts['critical']), 'Immediate exploitation or direct compromise'],
+            ['High', str(severity_counts['high']), 'Material attacker advantage'],
+            ['Medium', str(severity_counts['medium']), 'Important but not immediately critical'],
+            ['Low', str(severity_counts['low']), 'Hardening and hygiene gaps'],
+        ]
+        elements.append(_build_table(risk_breakdown, [1.1 * inch, 0.7 * inch, 4.2 * inch], '#334155'))
+        elements.append(Spacer(1, 0.16 * inch))
+
+        if overview["coverage_rows"]:
+            coverage_data = [['Check', 'Status', 'Duration', 'Notes']]
+            for row in overview["coverage_rows"]:
+                coverage_data.append([
+                    _sanitize_pdf_text(row.get('label', 'Check')),
+                    _sanitize_pdf_text(row.get('status', 'Unknown')),
+                    _sanitize_pdf_text(row.get('duration', 'N/A')),
+                    _sanitize_pdf_text((row.get('detail') or '').strip() or '-'),
+                ])
+            elements.append(Paragraph("Scan Coverage", h2_style))
+            elements.append(_build_table(coverage_data, [1.8 * inch, 1.0 * inch, 0.8 * inch, 3.1 * inch], '#475569'))
+            elements.append(Spacer(1, 0.15 * inch))
 
         # Base Image Intelligence
         if request.base_image_intel:
@@ -5789,6 +6643,158 @@ def _generate_docker_pdf(md_content: str, request: DockerExportRequest) -> bytes
             elements.append(issues_table)
             elements.append(Spacer(1, 0.2*inch))
 
+        if request.cve_scan:
+            elements.append(Paragraph("Package CVE Scan", h2_style))
+            cve_data = [
+                ['Metric', 'Value'],
+                ['Packages Scanned', str(request.cve_scan.get('packages_scanned', 0))],
+                ['Packages With Vulnerabilities', str(request.cve_scan.get('packages_with_vulns', 0))],
+                ['Total CVEs', str(request.cve_scan.get('total_vulnerabilities') or len(request.cve_scan.get('vulnerabilities', [])))],
+                ['Critical', str(request.cve_scan.get('critical_count', 0))],
+                ['High', str(request.cve_scan.get('high_count', 0))],
+                ['KEV', str(request.cve_scan.get('kev_count', 0))],
+            ]
+            cve_table = Table(cve_data, colWidths=[2.2*inch, 2.8*inch])
+            cve_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d6a4f')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(cve_table)
+            elements.append(Spacer(1, 0.2*inch))
+
+        if trivy_scan:
+            elements.append(Paragraph("Native Trivy Scan", h2_style))
+            enabled_scanners = ", ".join(trivy_scan.get("enabled_scanners") or []) or "None"
+            trivy_duration = trivy_scan.get("scan_duration_seconds") or 0
+            try:
+                trivy_duration = float(trivy_duration)
+            except (TypeError, ValueError):
+                trivy_duration = 0.0
+
+            trivy_data = [
+                ['Metric', 'Value'],
+                ['Enabled Scanners', _sanitize_pdf_text(enabled_scanners)],
+                ['Packages Observed', str(trivy_scan.get('package_count', 0))],
+                ['Native Vulnerabilities', str(len(trivy_vulns))],
+                ['Misconfigurations', str(len(trivy_misconfigs))],
+                ['Secret Findings', str(len(trivy_secrets))],
+                ['License Findings', str(len(trivy_licenses))],
+                ['Duration', f"{trivy_duration:.1f}s"],
+            ]
+            trivy_table = Table(trivy_data, colWidths=[2.2*inch, 3.8*inch])
+            trivy_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1d4ed8')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(trivy_table)
+            if trivy_scan.get("error"):
+                elements.append(Spacer(1, 0.08*inch))
+                elements.append(Paragraph(
+                    f"<b>Scan Error:</b> {_sanitize_pdf_text(trivy_scan.get('error'))}",
+                    body_style,
+                ))
+            elements.append(Spacer(1, 0.15*inch))
+
+            if trivy_vulns:
+                elements.append(Paragraph("Trivy Vulnerabilities", h3_style))
+                vuln_rows = [['ID', 'Severity', 'Package', 'Installed', 'Fixed']]
+                for finding in trivy_vulns[:12]:
+                    vuln_rows.append([
+                        _sanitize_pdf_text(str(finding.get('vulnerability_id', 'N/A'))[:24]),
+                        _sanitize_pdf_text(str(finding.get('severity', 'N/A')).upper()),
+                        _sanitize_pdf_text(str(finding.get('package_name', 'N/A'))[:18]),
+                        _sanitize_pdf_text(str(finding.get('installed_version', 'N/A'))[:18]),
+                        _sanitize_pdf_text(str(finding.get('fixed_version') or '-')[:18]),
+                    ])
+                vuln_table = Table(vuln_rows, colWidths=[1.4*inch, 0.8*inch, 1.4*inch, 1.2*inch, 1.2*inch])
+                vuln_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                elements.append(vuln_table)
+                elements.append(Spacer(1, 0.12*inch))
+
+            if trivy_misconfigs:
+                elements.append(Paragraph("Trivy Misconfigurations", h3_style))
+                misconfig_rows = [['ID', 'Severity', 'Target', 'Message']]
+                for finding in trivy_misconfigs[:12]:
+                    misconfig_rows.append([
+                        _sanitize_pdf_text(str(finding.get('id', 'N/A'))[:24]),
+                        _sanitize_pdf_text(str(finding.get('severity', 'N/A')).upper()),
+                        _sanitize_pdf_text(str(finding.get('target', 'N/A'))[:26]),
+                        _sanitize_pdf_text(str(finding.get('message') or finding.get('title') or 'N/A')[:70]),
+                    ])
+                misconfig_table = Table(misconfig_rows, colWidths=[1.3*inch, 0.8*inch, 1.4*inch, 2.5*inch])
+                misconfig_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                elements.append(misconfig_table)
+                elements.append(Spacer(1, 0.12*inch))
+
+            if trivy_secrets:
+                elements.append(Paragraph("Trivy Secret Findings", h3_style))
+                elements.append(Paragraph(
+                    "Operator note: raw Trivy secret matches are intentionally included for remediation workflows.",
+                    body_style,
+                ))
+                for finding in trivy_secrets[:10]:
+                    elements.append(Paragraph(
+                        f"{_sanitize_pdf_text(finding.get('rule_id', 'Unknown'))} "
+                        f"({_sanitize_pdf_text(str(finding.get('severity', 'N/A')).upper())})",
+                        h3_style,
+                    ))
+                    elements.append(Paragraph(
+                        f"<b>Target:</b> {_sanitize_pdf_text(finding.get('target', 'N/A'))}",
+                        body_style,
+                    ))
+                    elements.append(Paragraph(
+                        f"<b>Match:</b> {_sanitize_pdf_text(finding.get('match', 'N/A'))}",
+                        body_style,
+                    ))
+                    elements.append(Spacer(1, 0.06*inch))
+                elements.append(Spacer(1, 0.08*inch))
+
+            if trivy_licenses:
+                elements.append(Paragraph("Trivy License Findings", h3_style))
+                license_rows = [['License', 'Severity', 'Package', 'Category']]
+                for finding in trivy_licenses[:12]:
+                    license_rows.append([
+                        _sanitize_pdf_text(str(finding.get('name', 'N/A'))[:20]),
+                        _sanitize_pdf_text(str(finding.get('severity', 'N/A')).upper()),
+                        _sanitize_pdf_text(str(finding.get('package_name', 'N/A'))[:18]),
+                        _sanitize_pdf_text(str(finding.get('category', 'N/A'))[:18]),
+                    ])
+                license_table = Table(license_rows, colWidths=[1.4*inch, 0.8*inch, 1.5*inch, 1.3*inch])
+                license_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#7c3aed')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                elements.append(license_table)
+                elements.append(Spacer(1, 0.12*inch))
+
         # Layer Secrets
         if request.layer_secrets:
             elements.append(Paragraph("Layer Deep Scan - Recoverable Secrets", h2_style))
@@ -5811,8 +6817,71 @@ def _generate_docker_pdf(md_content: str, request: DockerExportRequest) -> bytes
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ]))
             elements.append(secrets_table)
+            elements.append(Spacer(1, 0.15*inch))
 
-        doc.build(elements)
+        if request.secrets:
+            elements.append(Paragraph("Secrets in Image History", h2_style))
+            elements.append(Paragraph(
+                "Operator note: raw secret values are intentionally included in this Docker report for remediation workflows.",
+                body_style,
+            ))
+            for secret in request.secrets[:20]:
+                elements.append(Paragraph(
+                    f"{_sanitize_pdf_text(secret.get('secret_type', 'Unknown'))} "
+                    f"({_sanitize_pdf_text(str(secret.get('severity', 'N/A')).upper())})",
+                    h3_style,
+                ))
+                elements.append(Paragraph(
+                    f"<b>Layer:</b> {_sanitize_pdf_text(secret.get('layer_id', 'N/A')[:12])}",
+                    body_style,
+                ))
+                elements.append(Paragraph(
+                    f"<b>Raw Value:</b> {_sanitize_pdf_text(secret.get('value', 'N/A'))}",
+                    body_style,
+                ))
+                elements.append(Paragraph(
+                    f"<b>Context:</b> {_sanitize_pdf_text(secret.get('context', 'N/A'))}",
+                    body_style,
+                ))
+                elements.append(Paragraph(
+                    f"<b>Layer Command:</b> {_sanitize_pdf_text(secret.get('layer_command', 'N/A'))}",
+                    body_style,
+                ))
+                elements.append(Spacer(1, 0.08*inch))
+
+        if overview["ai_text"]:
+            elements.append(Paragraph("AI Security Analysis", h2_style))
+            elements.append(Paragraph(
+                "Narrative summary from the analyst-facing AI layer, normalized for export formatting.",
+                note_style,
+            ))
+            for block in overview["ai_text"].split("\n\n"):
+                clean_block = _sanitize_pdf_text(block.strip())
+                if not clean_block:
+                    continue
+                if clean_block.startswith("• "):
+                    bullets = [line[2:].strip() for line in clean_block.splitlines() if line.strip().startswith("• ")]
+                    elements.append(ListFlowable(
+                        [ListItem(Paragraph(_html_to_reportlab(item), body_style)) for item in bullets],
+                        bulletType='bullet',
+                        leftIndent=16,
+                    ))
+                else:
+                    elements.append(Paragraph(_html_to_reportlab(clean_block.replace("\n", "<br/>")), body_style))
+                elements.append(Spacer(1, 0.04 * inch))
+
+        elements.append(Spacer(1, 0.08 * inch))
+        elements.append(Paragraph("Report Information", h2_style))
+        elements.append(Paragraph(
+            "Prepared by VRAgent Docker Inspector with consistent formatting across Markdown, PDF, and Word exports.",
+            small_style,
+        ))
+        elements.append(Paragraph(
+            f"Document sections included: {', '.join(['overview', 'actions', 'coverage', 'findings', 'AI narrative'])}.",
+            small_style,
+        ))
+
+        doc.build(elements, onFirstPage=_draw_page_chrome, onLaterPages=_draw_page_chrome)
         return buffer.getvalue()
 
     except ImportError as e:
@@ -5831,42 +6900,145 @@ def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> byte
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
 
+        sanitize_word_text = globals().get("_sanitize_word_text")
+        if callable(sanitize_word_text):
+            _sanitize_word_text = sanitize_word_text
+        else:
+            def _sanitize_word_text(value: Any) -> str:
+                text = str(value or "")
+                return "".join(ch for ch in text if ch == "\n" or ch == "\t" or ord(ch) >= 32)
+
+        overview = _collect_docker_export_findings(request)
+        severity_counts = overview["severity_counts"]
+        cve_scan = overview["cve_scan"]
+        trivy_scan = overview["trivy_scan"]
+        trivy_vulns = overview["trivy_vulns"]
+        trivy_misconfigs = overview["trivy_misconfigs"]
+        trivy_secrets = overview["trivy_secrets"]
+        trivy_licenses = overview["trivy_licenses"]
+        total_trivy_findings = overview["total_trivy_findings"]
+        risk_score = overview["risk_score"]
+        risk_level = overview["risk_level"]
+
         doc = Document()
+        section = doc.sections[0]
+        section.top_margin = Inches(0.55)
+        section.bottom_margin = Inches(0.55)
+        section.left_margin = Inches(0.65)
+        section.right_margin = Inches(0.65)
+        footer = section.footer.paragraphs[0]
+        footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        footer_run = footer.add_run('VRAgent Docker Inspector')
+        footer_run.font.size = Pt(8)
+        footer_run.font.color.rgb = RGBColor(100, 116, 139)
+
+        normal_style = doc.styles['Normal']
+        normal_style.font.name = 'Aptos'
+        normal_style.font.size = Pt(10)
+        doc.styles['Heading 1'].font.name = 'Aptos'
+        doc.styles['Heading 1'].font.size = Pt(16)
+        doc.styles['Heading 1'].font.color.rgb = RGBColor(15, 23, 42)
+        doc.styles['Heading 2'].font.name = 'Aptos'
+        doc.styles['Heading 2'].font.size = Pt(12)
+        doc.styles['Heading 2'].font.color.rgb = RGBColor(30, 41, 59)
 
         # Title
         title = doc.add_heading('Docker Security Analysis Report', 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        subtitle = doc.add_paragraph()
+        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        subtitle_run = subtitle.add_run(
+            'Analyst-ready export covering native Docker Inspector findings, CVEs, Trivy, and AI narrative.'
+        )
+        subtitle_run.italic = True
+        subtitle_run.font.size = Pt(9)
+        subtitle_run.font.color.rgb = RGBColor(71, 85, 105)
 
-        # Image info
-        doc.add_paragraph(f"Image: {request.image_name}", style='Intense Quote')
-        doc.add_paragraph(f"Image ID: {request.image_id[:12]}")
-        doc.add_paragraph(f"Base Image: {request.base_image or 'Unknown'}")
+        metadata_table = doc.add_table(rows=6, cols=2)
+        metadata_table.style = 'Table Grid'
+        metadata_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        metadata_rows = [
+            ('Image', request.image_name),
+            ('Image ID', request.image_id[:12]),
+            ('Base Image', request.base_image or 'Unknown'),
+            ('Generated', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+            ('Risk Rating', f'{risk_level.upper()} ({risk_score}/100)'),
+            ('Image Size / Layers', f'{request.total_size_human} / {request.total_layers}'),
+        ]
+        for index, (key, value) in enumerate(metadata_rows):
+            metadata_table.rows[index].cells[0].text = key
+            metadata_table.rows[index].cells[1].text = _sanitize_word_text(value)
+            metadata_table.rows[index].cells[0].paragraphs[0].runs[0].bold = True
+
+        doc.add_heading('At A Glance', level=1)
+        for finding in overview["key_findings"]:
+            doc.add_paragraph(_sanitize_word_text(finding), style='List Bullet')
+
+        doc.add_heading('Priority Actions', level=1)
+        for action in overview["priority_actions"]:
+            doc.add_paragraph(_sanitize_word_text(action), style='List Number')
 
         # Executive Summary
         doc.add_heading('Executive Summary', level=1)
-
-        critical_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'critical')
-        high_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'high')
-        medium_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'medium')
-        low_count = sum(1 for i in request.security_issues if i.get('severity', '').lower() == 'low')
-        risk_score = critical_count * 40 + high_count * 25 + medium_count * 10 + low_count * 3
-
-        summary_table = doc.add_table(rows=6, cols=2)
+        summary_table = doc.add_table(rows=9, cols=2)
         summary_table.style = 'Table Grid'
+        summary_table.alignment = WD_TABLE_ALIGNMENT.CENTER
         summary_data = [
             ('Metric', 'Value'),
             ('Risk Score', f'{risk_score}/100'),
             ('Total Layers', str(request.total_layers)),
             ('Security Issues', str(len(request.security_issues))),
-            ('Secrets Found', str(len(request.secrets) + len(request.layer_secrets))),
-            ('Deleted but Recoverable', str(request.deleted_secrets_count)),
+            ('Secrets Found', str(overview["total_secrets"])),
+            ('CVEs Found', str(overview["total_cves"])),
+            ('Native Trivy Findings', str(total_trivy_findings)),
+            ('Deleted but Recoverable', str(overview["deleted_recoverable"])),
+            ('Risk Rating', risk_level.upper()),
         ]
         for i, (key, value) in enumerate(summary_data):
             summary_table.rows[i].cells[0].text = key
             summary_table.rows[i].cells[1].text = value
+            if summary_table.rows[i].cells[0].paragraphs[0].runs:
+                summary_table.rows[i].cells[0].paragraphs[0].runs[0].bold = True
             if i == 0:
                 for cell in summary_table.rows[i].cells:
+                    if cell.paragraphs[0].runs:
+                        cell.paragraphs[0].runs[0].bold = True
+
+        risk_table = doc.add_table(rows=5, cols=3)
+        risk_table.style = 'Table Grid'
+        risk_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        risk_rows = [
+            ('Severity', 'Count', 'Meaning'),
+            ('Critical', str(severity_counts['critical']), 'Immediate exploitation or direct compromise'),
+            ('High', str(severity_counts['high']), 'Material attacker advantage'),
+            ('Medium', str(severity_counts['medium']), 'Important but not immediately critical'),
+            ('Low', str(severity_counts['low']), 'Hardening and hygiene gaps'),
+        ]
+        for row_index, row_data in enumerate(risk_rows):
+            for col_index, value in enumerate(row_data):
+                risk_table.rows[row_index].cells[col_index].text = value
+                if row_index == 0 and risk_table.rows[row_index].cells[col_index].paragraphs[0].runs:
+                    risk_table.rows[row_index].cells[col_index].paragraphs[0].runs[0].bold = True
+
+        if overview["coverage_rows"]:
+            doc.add_heading('Scan Coverage', level=1)
+            coverage_table = doc.add_table(rows=1, cols=4)
+            coverage_table.style = 'Table Grid'
+            coverage_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            headers = coverage_table.rows[0].cells
+            headers[0].text = 'Check'
+            headers[1].text = 'Status'
+            headers[2].text = 'Duration'
+            headers[3].text = 'Notes'
+            for cell in headers:
+                if cell.paragraphs[0].runs:
                     cell.paragraphs[0].runs[0].bold = True
+            for row in overview["coverage_rows"]:
+                cells = coverage_table.add_row().cells
+                cells[0].text = _sanitize_word_text(row.get('label', 'Check'))
+                cells[1].text = _sanitize_word_text(row.get('status', 'Unknown'))
+                cells[2].text = _sanitize_word_text(row.get('duration', 'N/A'))
+                cells[3].text = _sanitize_word_text((row.get('detail') or '').strip() or '-')
 
         # Base Image Intelligence
         if request.base_image_intel:
@@ -5898,6 +7070,107 @@ def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> byte
                 row_cells[1].text = issue.get('category', 'N/A')
                 row_cells[2].text = issue.get('description', 'N/A')[:80]
 
+        if request.cve_scan:
+            doc.add_heading('Package CVE Scan', level=1)
+            doc.add_paragraph(f"Packages scanned: {request.cve_scan.get('packages_scanned', 0)}")
+            doc.add_paragraph(f"Packages with vulnerabilities: {request.cve_scan.get('packages_with_vulns', 0)}")
+            doc.add_paragraph(
+                f"Total CVEs: {request.cve_scan.get('total_vulnerabilities') or len(request.cve_scan.get('vulnerabilities', []))}"
+            )
+            doc.add_paragraph(
+                f"Critical: {request.cve_scan.get('critical_count', 0)} | High: {request.cve_scan.get('high_count', 0)} | KEV: {request.cve_scan.get('kev_count', 0)}"
+            )
+
+        if trivy_scan:
+            doc.add_heading('Native Trivy Scan', level=1)
+            enabled_scanners = ", ".join(trivy_scan.get("enabled_scanners") or []) or "None"
+            trivy_duration = trivy_scan.get("scan_duration_seconds") or 0
+            try:
+                trivy_duration = float(trivy_duration)
+            except (TypeError, ValueError):
+                trivy_duration = 0.0
+
+            doc.add_paragraph(f"Enabled scanners: {enabled_scanners}")
+            doc.add_paragraph(f"Packages observed: {trivy_scan.get('package_count', 0)}")
+            doc.add_paragraph(
+                f"Native vulnerabilities: {len(trivy_vulns)} | Misconfigurations: {len(trivy_misconfigs)} | "
+                f"Secret findings: {len(trivy_secrets)} | License findings: {len(trivy_licenses)}"
+            )
+            doc.add_paragraph(f"Duration: {trivy_duration:.1f}s")
+            if trivy_scan.get("error"):
+                warn_p = doc.add_paragraph()
+                warn_run = warn_p.add_run(f"Scan Error: {_sanitize_word_text(trivy_scan.get('error'))}")
+                warn_run.bold = True
+                warn_run.font.color.rgb = RGBColor(220, 53, 69)
+
+            if trivy_vulns:
+                doc.add_heading('Trivy Vulnerabilities', level=2)
+                vuln_table = doc.add_table(rows=1, cols=5)
+                vuln_table.style = 'Table Grid'
+                hdr = vuln_table.rows[0].cells
+                hdr[0].text = 'ID'
+                hdr[1].text = 'Severity'
+                hdr[2].text = 'Package'
+                hdr[3].text = 'Installed'
+                hdr[4].text = 'Fixed'
+                for cell in hdr:
+                    cell.paragraphs[0].runs[0].bold = True
+                for finding in trivy_vulns[:15]:
+                    row = vuln_table.add_row().cells
+                    row[0].text = _sanitize_word_text(str(finding.get('vulnerability_id', 'N/A'))[:28])
+                    row[1].text = _sanitize_word_text(str(finding.get('severity', 'N/A')).upper())
+                    row[2].text = _sanitize_word_text(str(finding.get('package_name', 'N/A'))[:24])
+                    row[3].text = _sanitize_word_text(str(finding.get('installed_version', 'N/A'))[:24])
+                    row[4].text = _sanitize_word_text(str(finding.get('fixed_version') or '-')[:24])
+
+            if trivy_misconfigs:
+                doc.add_heading('Trivy Misconfigurations', level=2)
+                misconfig_table = doc.add_table(rows=1, cols=4)
+                misconfig_table.style = 'Table Grid'
+                hdr = misconfig_table.rows[0].cells
+                hdr[0].text = 'ID'
+                hdr[1].text = 'Severity'
+                hdr[2].text = 'Target'
+                hdr[3].text = 'Message'
+                for cell in hdr:
+                    cell.paragraphs[0].runs[0].bold = True
+                for finding in trivy_misconfigs[:15]:
+                    row = misconfig_table.add_row().cells
+                    row[0].text = _sanitize_word_text(str(finding.get('id', 'N/A'))[:28])
+                    row[1].text = _sanitize_word_text(str(finding.get('severity', 'N/A')).upper())
+                    row[2].text = _sanitize_word_text(str(finding.get('target', 'N/A'))[:32])
+                    row[3].text = _sanitize_word_text(str(finding.get('message') or finding.get('title') or 'N/A')[:120])
+
+            if trivy_secrets:
+                doc.add_heading('Trivy Secret Findings', level=2)
+                doc.add_paragraph('Operator note: raw Trivy secret matches are intentionally included for remediation workflows.')
+                for finding in trivy_secrets[:15]:
+                    doc.add_heading(
+                        f"{_sanitize_word_text(finding.get('rule_id', 'Unknown'))} "
+                        f"({_sanitize_word_text(str(finding.get('severity', 'N/A')).upper())})",
+                        level=3,
+                    )
+                    doc.add_paragraph(f"Target: {_sanitize_word_text(finding.get('target', 'N/A'))}")
+                    doc.add_paragraph(f"Match: {_sanitize_word_text(finding.get('match', 'N/A'))}")
+
+            if trivy_licenses:
+                doc.add_heading('Trivy License Findings', level=2)
+                license_table = doc.add_table(rows=1, cols=4)
+                license_table.style = 'Table Grid'
+                hdr = license_table.rows[0].cells
+                hdr[0].text = 'License'
+                hdr[1].text = 'Severity'
+                hdr[2].text = 'Package'
+                hdr[3].text = 'Category'
+                for cell in hdr:
+                    cell.paragraphs[0].runs[0].bold = True
+                for finding in trivy_licenses[:15]:
+                    row = license_table.add_row().cells
+                    row[0].text = _sanitize_word_text(str(finding.get('name', 'N/A'))[:24])
+                    row[1].text = _sanitize_word_text(str(finding.get('severity', 'N/A')).upper())
+                    row[2].text = _sanitize_word_text(str(finding.get('package_name', 'N/A'))[:24])
+                    row[3].text = _sanitize_word_text(str(finding.get('category', 'N/A'))[:24])
+
         # Layer Secrets
         if request.layer_secrets:
             doc.add_heading('Layer Deep Scan - Recoverable Secrets', level=1)
@@ -5925,15 +7198,44 @@ def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> byte
                 row[2].text = secret.get('file_type', 'N/A')
                 row[3].text = 'YES' if secret.get('is_deleted') else 'No'
 
+        if request.secrets:
+            doc.add_heading('Secrets in Image History', level=1)
+            doc.add_paragraph('Operator note: raw secret values are intentionally included in this Docker report for remediation workflows.')
+            for secret in request.secrets[:20]:
+                doc.add_heading(
+                    f"{_sanitize_word_text(secret.get('secret_type', 'Unknown'))} "
+                    f"({_sanitize_word_text(str(secret.get('severity', 'N/A')).upper())})",
+                    level=2,
+                )
+                doc.add_paragraph(f"Layer: {_sanitize_word_text(secret.get('layer_id', 'N/A')[:12])}")
+                doc.add_paragraph(f"Raw Value: {_sanitize_word_text(secret.get('value', 'N/A'))}")
+                doc.add_paragraph(f"Context: {_sanitize_word_text(secret.get('context', 'N/A'))}")
+                doc.add_paragraph(f"Layer Command: {_sanitize_word_text(secret.get('layer_command', 'N/A'))}")
+
         # AI Analysis
-        if request.ai_analysis:
+        if overview["ai_text"]:
             doc.add_heading('AI Security Analysis', level=1)
-            doc.add_paragraph(request.ai_analysis)
+            intro = doc.add_paragraph()
+            intro_run = intro.add_run('Narrative summary from the analyst-facing AI layer, normalized for export formatting.')
+            intro_run.italic = True
+            intro_run.font.color.rgb = RGBColor(71, 85, 105)
+            for block in overview["ai_text"].split("\n\n"):
+                clean_block = _sanitize_word_text(block.strip())
+                if not clean_block:
+                    continue
+                if clean_block.startswith("• "):
+                    for line in clean_block.splitlines():
+                        if line.strip().startswith("• "):
+                            doc.add_paragraph(line.strip()[2:], style='List Bullet')
+                else:
+                    paragraph = doc.add_paragraph()
+                    _add_formatted_text(paragraph, clean_block)
 
         # Footer
         doc.add_heading('Report Information', level=2)
         doc.add_paragraph('Generated by VRAgent Docker Inspector', style='List Bullet')
-        doc.add_paragraph('Features: Semantic parsing, entropy detection, layer deep scan, base image intelligence', style='List Bullet')
+        doc.add_paragraph('Features: Image history analysis, regex secret detection, AI adjudication, layer deep scan, base image intelligence, package CVE scanning, native Trivy scanners, SBOM export', style='List Bullet')
+        doc.add_paragraph('Document structure: report header, at-a-glance findings, priority actions, scan coverage, technical sections, AI narrative', style='List Bullet')
 
         buffer = BytesIO()
         doc.save(buffer)
@@ -5944,52 +7246,147 @@ def _generate_docker_docx(md_content: str, request: DockerExportRequest) -> byte
         return md_content.encode('utf-8')
 
 
+class DockerImageAllowRequest(BaseModel):
+    """Request to allow a local Docker image for analysis."""
+    image_name: str
+    project_id: Optional[int] = None
+
+
 @router.get("/docker-images")
 async def list_local_docker_images(
+    project_id: Optional[int] = Query(None, description="Optional project scope for shared Docker images"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    List locally available Docker images for analysis.
+    List Docker images for the Docker Inspector.
+
+    Non-admin users only see allowlisted images.
+    Administrators see all local images with allowlist status so they can curate the list.
     """
     if not check_docker_available():
         raise HTTPException(
             status_code=503,
             detail="Docker is not available."
         )
-    
-    import subprocess
-    
+
     try:
-        result = subprocess.run(
-            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}|||{{.ID}}|||{{.Size}}|||{{.CreatedAt}}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail="Failed to list Docker images")
-        
-        images = []
-        for line in result.stdout.strip().split('\n'):
-            if not line.strip():
-                continue
-            parts = line.split('|||')
-            if len(parts) >= 4:
-                images.append({
-                    "name": parts[0],
-                    "id": parts[1][:12],
-                    "size": parts[2],
-                    "created": parts[3],
-                })
-        
-        return {"images": images, "total": len(images)}
-        
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Docker command timed out")
+        allowlist_scope_map = _get_docker_allowlist_scope_map(db, current_user.id, project_id)
+        local_images = _list_local_docker_images_raw()
+        if current_user.role == "admin":
+            images = [
+                {
+                    **image,
+                    "allowlisted": image["name"] in allowlist_scope_map,
+                    "allowlist_scope": allowlist_scope_map.get(image["name"]),
+                }
+                for image in local_images
+            ]
+            allowlisted_total = sum(1 for image in images if image["allowlisted"])
+            return {
+                "images": images,
+                "total": len(images),
+                "allowlisted_total": allowlisted_total,
+                "showing_all_local": True,
+            }
+
+        images = [
+            {
+                **image,
+                "allowlisted": True,
+                "allowlist_scope": allowlist_scope_map.get(image["name"]),
+            }
+            for image in local_images
+            if image["name"] in allowlist_scope_map
+        ]
+        return {
+            "images": images,
+            "total": len(images),
+            "allowlisted_total": len(images),
+            "showing_all_local": False,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to list Docker images: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/docker-images/allow")
+async def allow_docker_image(
+    request: DockerImageAllowRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Allow a local Docker image to appear in the Docker Inspector and be analyzed.
+    """
+    if not check_docker_available():
+        raise HTTPException(status_code=503, detail="Docker is not available.")
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can allow Docker images on shared infrastructure.",
+        )
+
+    image_name = _normalize_docker_image_name(request.image_name)
+    if not _docker_image_exists(image_name):
+        raise HTTPException(
+            status_code=404,
+            detail="Docker image was not found locally. Pull the image before allowlisting it.",
+        )
+
+    try:
+        if request.project_id is not None:
+            _ensure_project_access(db, request.project_id, current_user.id, require_edit=True)
+            existing = (
+                db.query(ProjectDockerImage)
+                .filter(
+                    ProjectDockerImage.project_id == request.project_id,
+                    ProjectDockerImage.image_name == image_name,
+                )
+                .first()
+            )
+            if not existing:
+                db.add(
+                    ProjectDockerImage(
+                        project_id=request.project_id,
+                        image_name=image_name,
+                        added_by=current_user.id,
+                    )
+                )
+                db.commit()
+            return {
+                "image_name": image_name,
+                "project_id": request.project_id,
+                "scope": "project",
+                "message": "Docker image allowlisted for the project",
+            }
+
+        existing = (
+            db.query(UserDockerImage)
+            .filter(
+                UserDockerImage.user_id == current_user.id,
+                UserDockerImage.image_name == image_name,
+            )
+            .first()
+        )
+        if not existing:
+            db.add(UserDockerImage(user_id=current_user.id, image_name=image_name))
+            db.commit()
+        return {
+            "image_name": image_name,
+            "project_id": None,
+            "scope": "user",
+            "message": "Docker image allowlisted for the user",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to allow Docker image {image_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to allow Docker image: {str(e)}")
 
 
 # ============================================================================
@@ -6073,7 +7470,10 @@ class SaveReportRequest(BaseModel):
     cve_scan_results: Optional[Dict[str, Any]] = None  # CVE database lookup results
     
     # Vulnerability-specific Frida Hooks
-    vulnerability_frida_hooks: Optional[List[Dict[str, Any]]] = None  # Auto-generated hooks for discovered vulns
+    vulnerability_frida_hooks: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None  # Auto-generated hooks for discovered vulns
+    
+    # Unified APK vulnerability hunt results
+    vuln_hunt_result: Optional[Dict[str, Any]] = None
     
     # Manifest Visualization (component graph, deep links, AI analysis)
     manifest_visualization: Optional[Dict[str, Any]] = None
@@ -6181,7 +7581,10 @@ class ReportDetailResponse(BaseModel):
     cve_scan_results: Optional[Dict[str, Any]] = None  # CVE database lookup results
     
     # Vulnerability-specific Frida Hooks
-    vulnerability_frida_hooks: Optional[List[Dict[str, Any]]] = None  # Auto-generated hooks for discovered vulns
+    vulnerability_frida_hooks: Optional[Dict[str, Any]] = None  # Auto-generated hooks for discovered vulns
+    
+    # Unified APK vulnerability hunt results
+    vuln_hunt_result: Optional[Dict[str, Any]] = None
     
     # Manifest Visualization (component graph, deep links, AI analysis)
     manifest_visualization: Optional[Dict[str, Any]] = None
@@ -6210,9 +7613,17 @@ def save_report(
     
     Stores the full analysis data for later review, comparison, or export.
     """
-    from backend.models.models import ReverseEngineeringReport
-    
     try:
+        def _normalize_vulnerability_hooks_payload(value: Any) -> Optional[Dict[str, Any]]:
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, list):
+                return {"vulnerability_scripts": value}
+            return None
+
+        if request.project_id is not None:
+            _ensure_project_access(db, request.project_id, current_user.id, require_edit=True)
+
         # Parse risk level from AI analysis if not provided
         risk_level = request.risk_level
         risk_score = request.risk_score
@@ -6235,12 +7646,29 @@ def save_report(
             elif 'clean' in ai_text[:500]:
                 risk_level = 'Clean'
                 risk_score = risk_score or 10
+
+        normalized_full_analysis_data = dict(request.full_analysis_data or {})
+        normalized_vulnerability_hooks = _normalize_vulnerability_hooks_payload(request.vulnerability_frida_hooks)
+
+        if normalized_vulnerability_hooks and "vulnerability_frida_hooks" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["vulnerability_frida_hooks"] = normalized_vulnerability_hooks
+        if request.vuln_hunt_result and "vuln_hunt_result" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["vuln_hunt_result"] = request.vuln_hunt_result
+        if request.manifest_visualization and "manifest_visualization" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["manifest_visualization"] = request.manifest_visualization
+        if request.obfuscation_analysis and "obfuscation_analysis" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["obfuscation_analysis"] = request.obfuscation_analysis
+        if request.verification_results and "verification_results" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["verification_results"] = request.verification_results
+        if request.sensitive_data_findings and "sensitive_data_findings" not in normalized_full_analysis_data:
+            normalized_full_analysis_data["sensitive_data_findings"] = request.sensitive_data_findings
         
         report = ReverseEngineeringReport(
             analysis_type=request.analysis_type,
             title=request.title,
             filename=request.filename,
             project_id=request.project_id,
+            user_id=current_user.id,
             
             risk_level=risk_level,
             risk_score=risk_score,
@@ -6269,7 +7697,7 @@ def save_report(
             suspicious_indicators=request.suspicious_indicators,
             permissions=request.permissions,
             security_issues=request.security_issues,
-            full_analysis_data=request.full_analysis_data,
+            full_analysis_data=normalized_full_analysis_data or request.full_analysis_data,
             
             ai_analysis_raw=request.ai_analysis_raw,
             
@@ -6309,7 +7737,7 @@ def save_report(
             cve_scan_results=request.cve_scan_results,
             
             # Vulnerability-specific Frida Hooks
-            vulnerability_frida_hooks=request.vulnerability_frida_hooks,
+            vulnerability_frida_hooks=normalized_vulnerability_hooks,
             
             # Manifest Visualization (component graph, deep links, AI analysis)
             manifest_visualization=request.manifest_visualization,
@@ -6343,7 +7771,9 @@ def save_report(
             created_at=report.created_at,
             tags=report.tags,
         )
-        
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to save report: {e}")
@@ -6354,6 +7784,10 @@ def save_report(
 def list_reports(
     analysis_type: Optional[str] = Query(None, description="Filter by analysis type (binary, apk, docker)"),
     project_id: Optional[int] = Query(None, description="Filter by project ID"),
+    include_project_reports: bool = Query(
+        False,
+        description="When no project_id is provided, include project-scoped reports as well.",
+    ),
     risk_level: Optional[str] = Query(None, description="Filter by risk level"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -6365,14 +7799,30 @@ def list_reports(
     
     Returns summaries of saved reports with optional filtering.
     """
-    from backend.models.models import ReverseEngineeringReport
-    
     query = db.query(ReverseEngineeringReport)
-    
+
     if analysis_type:
         query = query.filter(ReverseEngineeringReport.analysis_type == analysis_type)
-    if project_id:
+    if project_id is not None:
+        _ensure_project_access(db, project_id, current_user.id)
         query = query.filter(ReverseEngineeringReport.project_id == project_id)
+    elif not include_project_reports:
+        # Standalone Hub view: only show reports that are not attached to a project.
+        query = query.filter(
+            ReverseEngineeringReport.project_id.is_(None),
+            ReverseEngineeringReport.user_id == current_user.id,
+        )
+    else:
+        accessible_project_ids = _get_accessible_project_ids(db, current_user.id)
+        query = query.filter(
+            or_(
+                and_(
+                    ReverseEngineeringReport.project_id.is_(None),
+                    ReverseEngineeringReport.user_id == current_user.id,
+                ),
+                ReverseEngineeringReport.project_id.in_(accessible_project_ids or [-1]),
+            )
+        )
     if risk_level:
         query = query.filter(ReverseEngineeringReport.risk_level == risk_level)
     
@@ -6402,13 +7852,196 @@ def get_report(
     """
     Get full details of a saved reverse engineering report.
     """
-    from backend.models.models import ReverseEngineeringReport
+    report = _ensure_reverse_engineering_report_access(
+        db,
+        _get_reverse_engineering_report_or_404(db, report_id),
+        current_user.id,
+    )
     
-    report = db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    
+    def _coerce_dict(value: Any) -> Dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                return {}
+        return {}
+
+    def _collect_dicts(root: Any, max_depth: int = 5) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        seen: set[int] = set()
+
+        def _walk(node: Any, depth: int) -> None:
+            if depth > max_depth or node is None:
+                return
+            if isinstance(node, dict):
+                node_id = id(node)
+                if node_id in seen:
+                    return
+                seen.add(node_id)
+                collected.append(node)
+                for value in node.values():
+                    _walk(value, depth + 1)
+                return
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item, depth + 1)
+
+        _walk(root, 0)
+        return collected
+
+    def _clean_text(value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        if trimmed.lower() in {"not available", "n/a", "none", "null", "undefined"}:
+            return None
+        return trimmed
+
+    def _pick_text(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        for data in dicts:
+            for key in keys:
+                cleaned = _clean_text(data.get(key))
+                if cleaned:
+                    return cleaned
+        return None
+
+    def _pick_text_by_hint(
+        dicts: List[Dict[str, Any]],
+        hints: List[str],
+        minimum_length: int = 120,
+    ) -> Optional[str]:
+        for data in dicts:
+            for key, raw_value in data.items():
+                lowered_key = str(key).lower()
+                if not any(hint in lowered_key for hint in hints):
+                    continue
+                cleaned = _clean_text(raw_value)
+                if cleaned and len(cleaned) >= minimum_length:
+                    return cleaned
+        return None
+
+    def _is_mermaid(text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        trimmed = text.strip()
+        if not trimmed:
+            return False
+        lowered = trimmed.lower()
+        if "```mermaid" in lowered:
+            return True
+        return lowered.startswith((
+            "flowchart",
+            "graph ",
+            "sequencediagram",
+            "classdiagram",
+            "statediagram",
+            "erdiagram",
+            "journey",
+            "gantt",
+        ))
+
+    def _pick_mermaid(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        direct = _pick_text(dicts, keys)
+        if _is_mermaid(direct):
+            return direct
+        for data in dicts:
+            for value in data.values():
+                if isinstance(value, str) and _is_mermaid(value):
+                    return value.strip()
+        return None
+
+    full_data_dict = _coerce_dict(report.full_analysis_data)
+    structured_dict = _coerce_dict(report.ai_analysis_structured)
+    ai_raw = _clean_text(report.ai_analysis_raw)
+    ai_raw_dict = _coerce_dict(ai_raw) if ai_raw else {}
+    search_space = (
+        _collect_dicts(full_data_dict)
+        + _collect_dicts(structured_dict)
+        + _collect_dicts(ai_raw_dict, 4)
+    )
+
+    functionality_report = _clean_text(report.ai_functionality_report) or _pick_text(search_space, [
+        "ai_functionality_report",
+        "ai_report_functionality",
+        "functionality_report",
+        "functionality",
+        "report_functionality",
+        "binary_functionality_report",
+    ]) or _pick_text_by_hint(search_space, ["functionality", "purpose", "behavior", "what_does"])
+    security_report = _clean_text(report.ai_security_report) or _pick_text(search_space, [
+        "ai_security_report",
+        "ai_report_security",
+        "security_report",
+        "security",
+        "report_security",
+        "binary_security_report",
+    ]) or _pick_text_by_hint(search_space, ["security", "risk", "vulnerab", "threat"])
+    architecture_diagram = _clean_text(report.ai_architecture_diagram) or _pick_mermaid(search_space, [
+        "ai_architecture_diagram",
+        "architecture_diagram",
+        "ai_architecture",
+        "architecture",
+        "architecture_map",
+        "system_architecture_diagram",
+    ])
+    attack_surface_map = _clean_text(report.ai_attack_surface_map) or _pick_mermaid(search_space, [
+        "ai_attack_surface_map",
+        "attack_surface_map",
+        "attack_surface",
+        "ai_attack_surface",
+        "attack_tree",
+        "attack_tree_diagram",
+    ])
+
+    if not functionality_report and ai_raw:
+        functionality_report = ai_raw
+    if not security_report and ai_raw:
+        security_report = ai_raw
+
+    def _normalize_vulnerability_hooks_payload(value: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, list):
+            return {"vulnerability_scripts": value}
+        return None
+
+    normalized_vulnerability_hooks = _normalize_vulnerability_hooks_payload(
+        getattr(report, "vulnerability_frida_hooks", None)
+    ) or _normalize_vulnerability_hooks_payload(full_data_dict.get("vulnerability_frida_hooks"))
+    vuln_hunt_result = full_data_dict.get("vuln_hunt_result")
+    if not isinstance(vuln_hunt_result, dict):
+        vuln_hunt_result = None
+
+    normalized_full_data = dict(full_data_dict) if full_data_dict else {}
+    if functionality_report and not normalized_full_data.get("ai_functionality_report"):
+        normalized_full_data["ai_functionality_report"] = functionality_report
+    if security_report and not normalized_full_data.get("ai_security_report"):
+        normalized_full_data["ai_security_report"] = security_report
+    if architecture_diagram and not normalized_full_data.get("ai_architecture_diagram"):
+        normalized_full_data["ai_architecture_diagram"] = architecture_diagram
+    if attack_surface_map and not normalized_full_data.get("ai_attack_surface_map"):
+        normalized_full_data["ai_attack_surface_map"] = attack_surface_map
+    if normalized_vulnerability_hooks and not normalized_full_data.get("vulnerability_frida_hooks"):
+        normalized_full_data["vulnerability_frida_hooks"] = normalized_vulnerability_hooks
+    if report.manifest_visualization and not normalized_full_data.get("manifest_visualization"):
+        normalized_full_data["manifest_visualization"] = report.manifest_visualization
+    if report.obfuscation_analysis and not normalized_full_data.get("obfuscation_analysis"):
+        normalized_full_data["obfuscation_analysis"] = report.obfuscation_analysis
+    if report.verification_results and not normalized_full_data.get("verification_results"):
+        normalized_full_data["verification_results"] = report.verification_results
+    if report.sensitive_data_findings and not normalized_full_data.get("sensitive_data_findings"):
+        normalized_full_data["sensitive_data_findings"] = report.sensitive_data_findings
+    if vuln_hunt_result and not normalized_full_data.get("vuln_hunt_result"):
+        normalized_full_data["vuln_hunt_result"] = vuln_hunt_result
+    if report.cve_scan_results and not normalized_full_data.get("cve_scan"):
+        normalized_full_data["cve_scan"] = report.cve_scan_results
+
     return ReportDetailResponse(
         id=report.id,
         analysis_type=report.analysis_type,
@@ -6445,7 +8078,7 @@ def get_report(
         suspicious_indicators=report.suspicious_indicators,
         permissions=report.permissions,
         security_issues=report.security_issues,
-        full_analysis_data=report.full_analysis_data,
+        full_analysis_data=normalized_full_data or full_data_dict or None,
         
         ai_analysis_raw=report.ai_analysis_raw,
         ai_analysis_structured=report.ai_analysis_structured,
@@ -6456,11 +8089,11 @@ def get_report(
         jadx_data=report.jadx_data,
         
         # AI-Generated Reports
-        ai_functionality_report=report.ai_functionality_report,
-        ai_security_report=report.ai_security_report,
+        ai_functionality_report=functionality_report,
+        ai_security_report=security_report,
         ai_privacy_report=report.ai_privacy_report,
-        ai_architecture_diagram=report.ai_architecture_diagram,
-        ai_attack_surface_map=report.ai_attack_surface_map,
+        ai_architecture_diagram=architecture_diagram,
+        ai_attack_surface_map=attack_surface_map,
         ai_threat_model=report.ai_threat_model,
         ai_vuln_scan_result=report.ai_vuln_scan_result,
         ai_chat_history=report.ai_chat_history,
@@ -6480,7 +8113,10 @@ def get_report(
         cve_scan_results=report.cve_scan_results,
         
         # Vulnerability-specific Frida Hooks
-        vulnerability_frida_hooks=report.vulnerability_frida_hooks,
+        vulnerability_frida_hooks=normalized_vulnerability_hooks,
+        
+        # Unified APK vulnerability hunt results
+        vuln_hunt_result=vuln_hunt_result,
         
         # Manifest Visualization (component graph, deep links, AI analysis)
         manifest_visualization=report.manifest_visualization,
@@ -6511,23 +8147,23 @@ def export_saved_report(
     
     Includes all analysis data, AI reports, and JADX findings if available.
     """
-    from fastapi.responses import Response
-    from backend.models.models import ReverseEngineeringReport
-    
     if format not in ["markdown", "pdf", "docx"]:
         raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
-    
-    report = db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+
+    report = _ensure_reverse_engineering_report_access(
+        db,
+        _get_reverse_engineering_report_or_404(db, report_id),
+        current_user.id,
+    )
     
     try:
         # Generate comprehensive export
         content = _generate_full_report_export(report, format)
         
-        # Set filename
-        base_name = report.package_name or report.image_name or report.filename or f"report_{report_id}"
-        base_name = base_name.replace('/', '_').replace('\\', '_').split('.')[-2] if '.' in str(base_name) else base_name
+        # Prefer report title for exported filename so named scans keep their identity.
+        base_name_source = report.title or report.package_name or report.image_name or report.filename or f"report_{report_id}"
+        base_name = "".join(ch if (ch.isalnum() or ch in {"-", "_"}) else "_" for ch in str(base_name_source))
+        base_name = base_name.strip("_")[:120] or f"report_{report_id}"
         
         if format == "markdown":
             return Response(
@@ -6556,6 +8192,7 @@ def export_saved_report(
 async def export_binary_report_from_result(
     result: BinaryAnalysisResponse,
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
+    report_title: Optional[str] = Query(None, description="Optional custom report title"),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -6564,8 +8201,58 @@ async def export_binary_report_from_result(
     if format not in ["markdown", "pdf", "docx"]:
         raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
 
-    report = SimpleNamespace(
-        title=f"Binary Analysis: {result.filename}",
+    def _to_dict_list(items: Any) -> List[Dict[str, Any]]:
+        output: List[Dict[str, Any]] = []
+        if not isinstance(items, list):
+            return output
+        for item in items:
+            if isinstance(item, dict):
+                output.append(item)
+            elif hasattr(item, "model_dump"):
+                dumped = item.model_dump()
+                if isinstance(dumped, dict):
+                    output.append(dumped)
+            elif hasattr(item, "dict"):
+                dumped = item.dict()
+                if isinstance(dumped, dict):
+                    output.append(dumped)
+        return output
+
+    verification_result = result.verification_result if isinstance(result.verification_result, dict) else {}
+    pattern_scan_result = result.pattern_scan_result if isinstance(result.pattern_scan_result, dict) else {}
+    cve_lookup_result = result.cve_lookup_result if isinstance(result.cve_lookup_result, dict) else {}
+    vuln_hunt_result = result.vuln_hunt_result if isinstance(result.vuln_hunt_result, dict) else {}
+
+    export_security_issues = (
+        _to_dict_list(verification_result.get("verified_vulnerabilities"))
+        + _to_dict_list(verification_result.get("verified_findings"))
+        + _to_dict_list(verification_result.get("findings"))
+        + _to_dict_list(pattern_scan_result.get("findings"))
+        + _to_dict_list(vuln_hunt_result.get("vulnerabilities"))
+    )
+    if not export_security_issues:
+        export_security_issues = _to_dict_list(cve_lookup_result.get("findings"))
+
+    deduped_export_findings: List[Dict[str, Any]] = []
+    seen_export_keys: Set[str] = set()
+    for finding in export_security_issues:
+        title = str(finding.get("title") or finding.get("name") or finding.get("type") or finding.get("category") or "Security Finding")
+        location = str(finding.get("file") or finding.get("location") or finding.get("affected_class") or "")
+        description = str(finding.get("description") or finding.get("summary") or finding.get("details") or "")
+        dedupe_key = f"{title.strip().lower()}::{location.strip().lower()}::{description[:120].strip().lower()}"
+        if dedupe_key in seen_export_keys:
+            continue
+        seen_export_keys.add(dedupe_key)
+        deduped_export_findings.append(finding)
+
+    resolved_title = (report_title or "").strip()
+    if resolved_title:
+        resolved_title = resolved_title[:180]
+    else:
+        resolved_title = f"Binary Analysis: {result.filename}"
+
+    report = ExportSafeNamespace(
+        title=resolved_title,
         created_at=datetime.now(),
         updated_at=datetime.now(),
         analysis_type="binary",
@@ -6583,7 +8270,7 @@ async def export_binary_report_from_result(
         secrets_count=len(result.secrets),
         suspicious_indicators=[s.model_dump() for s in result.suspicious_indicators],
         permissions=None,
-        security_issues=None,
+        security_issues=deduped_export_findings or None,
         full_analysis_data={
             "metadata": result.metadata.model_dump(),
             "strings_sample": [s.model_dump() for s in result.strings_sample],
@@ -6592,6 +8279,18 @@ async def export_binary_report_from_result(
             "secrets": [s.model_dump() for s in result.secrets],
             "ghidra_analysis": result.ghidra_analysis,
             "ghidra_ai_summaries": result.ghidra_ai_summaries,
+            "security_issues": deduped_export_findings or None,
+            "verified_findings": _to_dict_list(verification_result.get("verified_findings")),
+            "verified_vulnerabilities": _to_dict_list(verification_result.get("verified_vulnerabilities")),
+            "verification_results": verification_result or None,
+            "pattern_scan_result": pattern_scan_result or None,
+            "cve_lookup_result": cve_lookup_result or None,
+            "vuln_hunt_result": vuln_hunt_result or None,
+            "attack_surface": result.attack_surface,
+            "ai_functionality_report": result.ai_functionality_report,
+            "ai_security_report": result.ai_security_report,
+            "ai_architecture_diagram": result.ai_architecture_diagram,
+            "ai_attack_surface_map": result.ai_attack_surface_map,
         },
         ai_analysis_raw=result.ai_analysis,
         ai_analysis_structured=None,
@@ -6603,24 +8302,26 @@ async def export_binary_report_from_result(
         ai_architecture_diagram=result.ai_architecture_diagram,
         ai_attack_surface_map=result.ai_attack_surface_map,
         ai_threat_model=None,
-        ai_vuln_scan_result=result.verification_result,
+        ai_vuln_scan_result=verification_result or None,
         ai_chat_history=None,
         detected_libraries=None,
-        library_cves=None,
+        library_cves=_to_dict_list(cve_lookup_result.get("findings")) or None,
         # NEW: Include advanced analysis data
         obfuscation_analysis=result.obfuscation_analysis,
         attack_surface=result.attack_surface,
-        pattern_scan_result=result.pattern_scan_result,
-        cve_lookup_result=result.cve_lookup_result,
-        vuln_hunt_result=result.vuln_hunt_result,
+        pattern_scan_result=pattern_scan_result or None,
+        cve_lookup_result=cve_lookup_result or None,
+        vuln_hunt_result=vuln_hunt_result or None,
         is_legitimate_software=result.is_legitimate_software,
         legitimacy_indicators=result.legitimacy_indicators,
-        verification_results=result.verification_result,  # Also expose as verification_results for export
+        verification_results=verification_result or None,  # Also expose as verification_results for export
     )
 
     try:
         content = _generate_full_report_export(report, format)
-        base_name = f"binary_analysis_{result.filename}".replace(" ", "_")
+        base_name_source = (report_title or "").strip() or f"binary_analysis_{result.filename}"
+        base_name = "".join(ch if (ch.isalnum() or ch in {"-", "_"}) else "_" for ch in base_name_source)
+        base_name = base_name.strip("_")[:120] or "binary_analysis_report"
 
         if format == "markdown":
             return Response(
@@ -6659,6 +8360,357 @@ def _generate_full_report_export(report, format: str):
 ---
 
 """
+    # Normalize report fields from nested/full payloads so saved and live exports behave the same.
+    def _coerce_dict(value: Any) -> Dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                return {}
+        if hasattr(value, "model_dump"):
+            dumped = value.model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        if hasattr(value, "dict"):
+            dumped = value.dict()
+            if isinstance(dumped, dict):
+                return dumped
+        return {}
+
+    def _coerce_list(value: Any) -> List[Any]:
+        if isinstance(value, list):
+            return value
+        if isinstance(value, tuple):
+            return list(value)
+        return []
+
+    def _clean_text(value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        if trimmed.lower() in {"not available", "n/a", "none", "null", "undefined"}:
+            return None
+        return trimmed
+
+    def _collect_dicts(data: Dict[str, Any], depth: int = 3) -> List[Dict[str, Any]]:
+        collected: List[Dict[str, Any]] = []
+        seen_ids: Set[int] = set()
+
+        def _walk(node: Any, level: int):
+            if level > depth:
+                return
+            if isinstance(node, dict):
+                node_id = id(node)
+                if node_id in seen_ids:
+                    return
+                seen_ids.add(node_id)
+                collected.append(node)
+                for child in node.values():
+                    _walk(child, level + 1)
+            elif isinstance(node, list):
+                for child in node:
+                    _walk(child, level + 1)
+
+        _walk(data, 0)
+        return collected
+
+    def _pick_text(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        for data in dicts:
+            for key in keys:
+                cleaned = _clean_text(data.get(key))
+                if cleaned:
+                    return cleaned
+        return None
+
+    def _pick_text_by_hint(dicts: List[Dict[str, Any]], hints: List[str], minimum_length: int = 120) -> Optional[str]:
+        for data in dicts:
+            for key, raw_value in data.items():
+                lowered_key = str(key).lower()
+                if not any(hint in lowered_key for hint in hints):
+                    continue
+                cleaned = _clean_text(raw_value)
+                if cleaned and len(cleaned) >= minimum_length:
+                    return cleaned
+        return None
+
+    def _is_mermaid(text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        trimmed = text.strip()
+        if not trimmed:
+            return False
+        lowered = trimmed.lower()
+        if "```mermaid" in lowered:
+            return True
+        return lowered.startswith((
+            "flowchart",
+            "graph ",
+            "sequencediagram",
+            "classdiagram",
+            "statediagram",
+            "erdiagram",
+            "journey",
+            "gantt",
+        ))
+
+    def _pick_mermaid(dicts: List[Dict[str, Any]], keys: List[str]) -> Optional[str]:
+        direct = _pick_text(dicts, keys)
+        if _is_mermaid(direct):
+            return direct
+        for data in dicts:
+            for value in data.values():
+                if isinstance(value, str) and _is_mermaid(value):
+                    return value.strip()
+        return None
+
+    def _as_dict(value: Any) -> Dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if hasattr(value, "model_dump"):
+            dumped = value.model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        if hasattr(value, "dict"):
+            dumped = value.dict()
+            if isinstance(dumped, dict):
+                return dumped
+        return {}
+
+    def _dict_items(value: Any) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for raw in _coerce_list(value):
+            as_dict = _as_dict(raw)
+            if as_dict:
+                items.append(as_dict)
+        return items
+
+    def _severity_rank(severity: str) -> int:
+        sev = str(severity or "").lower()
+        if sev == "critical":
+            return 0
+        if sev == "high":
+            return 1
+        if sev == "medium":
+            return 2
+        if sev == "low":
+            return 3
+        return 4
+
+    def _to_int(value: Any, default: int = 0) -> int:
+        try:
+            if value is None or value == "":
+                return default
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+    def _to_float(value: Any, default: float = 0.0) -> float:
+        try:
+            if value is None or value == "":
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _markdown_code(value: Any) -> str:
+        return str(value or "N/A").replace("`", "'").replace("\r", " ").replace("\n", " ")
+
+    full_data_dict = _coerce_dict(getattr(report, "full_analysis_data", None))
+    structured_dict = _coerce_dict(getattr(report, "ai_analysis_structured", None))
+    ai_raw = _clean_text(getattr(report, "ai_analysis_raw", None))
+    ai_raw_dict = _coerce_dict(ai_raw) if ai_raw else {}
+    verification_dict = _coerce_dict(getattr(report, "verification_results", None))
+    ai_vuln_dict = _coerce_dict(getattr(report, "ai_vuln_scan_result", None))
+    pattern_scan_dict = _coerce_dict(getattr(report, "pattern_scan_result", None)) or _coerce_dict(full_data_dict.get("pattern_scan_result"))
+    cve_lookup_dict = _coerce_dict(getattr(report, "cve_lookup_result", None)) or _coerce_dict(full_data_dict.get("cve_lookup_result"))
+    vuln_hunt_dict = _coerce_dict(getattr(report, "vuln_hunt_result", None)) or _coerce_dict(full_data_dict.get("vuln_hunt_result"))
+    search_space = (
+        _collect_dicts(full_data_dict)
+        + _collect_dicts(structured_dict)
+        + _collect_dicts(ai_raw_dict, 4)
+        + _collect_dicts(verification_dict)
+        + _collect_dicts(ai_vuln_dict)
+        + _collect_dicts(pattern_scan_dict)
+        + _collect_dicts(cve_lookup_dict)
+        + _collect_dicts(vuln_hunt_dict)
+    )
+
+    functionality_report = _clean_text(getattr(report, "ai_functionality_report", None)) or _pick_text(search_space, [
+        "ai_functionality_report",
+        "ai_report_functionality",
+        "functionality_report",
+        "functionality",
+        "report_functionality",
+        "binary_functionality_report",
+    ]) or _pick_text_by_hint(search_space, ["functionality", "purpose", "behavior", "what_does"])
+    security_report = _clean_text(getattr(report, "ai_security_report", None)) or _pick_text(search_space, [
+        "ai_security_report",
+        "ai_report_security",
+        "security_report",
+        "security",
+        "report_security",
+        "binary_security_report",
+    ]) or _pick_text_by_hint(search_space, ["security", "risk", "vulnerab", "threat"])
+    architecture_diagram = _clean_text(getattr(report, "ai_architecture_diagram", None)) or _pick_mermaid(search_space, [
+        "ai_architecture_diagram",
+        "architecture_diagram",
+        "ai_architecture",
+        "architecture",
+        "architecture_map",
+        "system_architecture_diagram",
+    ])
+    attack_surface_map = _clean_text(getattr(report, "ai_attack_surface_map", None)) or _pick_mermaid(search_space, [
+        "ai_attack_surface_map",
+        "attack_surface_map",
+        "attack_surface",
+        "ai_attack_surface",
+        "attack_tree",
+        "attack_tree_diagram",
+    ])
+
+    if not functionality_report and ai_raw:
+        functionality_report = ai_raw
+    if not security_report and ai_raw:
+        security_report = ai_raw
+
+    docker_cve_scan_dict = _as_dict(getattr(report, "cve_scan_results", None))
+    if not docker_cve_scan_dict:
+        docker_cve_scan_dict = _as_dict(full_data_dict.get("cve_scan")) or _as_dict(full_data_dict.get("cve_scan_results"))
+    docker_cve_findings = _coerce_list(docker_cve_scan_dict.get("vulnerabilities"))
+    docker_trivy_scan_dict = _as_dict(getattr(report, "trivy_scan_results", None)) or _as_dict(getattr(report, "trivy_scan", None))
+    if not docker_trivy_scan_dict:
+        docker_trivy_scan_dict = _as_dict(full_data_dict.get("trivy_scan")) or _as_dict(full_data_dict.get("trivy_scan_results"))
+    docker_trivy_vulns = _dict_items(docker_trivy_scan_dict.get("vulnerabilities"))
+    docker_trivy_misconfigs = _dict_items(docker_trivy_scan_dict.get("misconfigurations"))
+    docker_trivy_secrets = _dict_items(docker_trivy_scan_dict.get("secrets"))
+    docker_trivy_licenses = _dict_items(docker_trivy_scan_dict.get("licenses"))
+    docker_trivy_security_findings: List[Dict[str, Any]] = []
+    for vuln in docker_trivy_vulns:
+        docker_trivy_security_findings.append({
+            "category": "trivy_vulnerability",
+            "title": vuln.get("vulnerability_id") or vuln.get("title") or "Trivy Vulnerability",
+            "description": vuln.get("description") or vuln.get("title") or "Native Trivy vulnerability finding.",
+            "severity": vuln.get("severity") or "unknown",
+            "location": vuln.get("target") or vuln.get("package_name") or "container image",
+            "package_name": vuln.get("package_name"),
+            "cvss_score": vuln.get("cvss_score") or vuln.get("cvss"),
+            "attack_vector": "Known vulnerable package present in the container image.",
+            "remediation": (
+                f"Upgrade {vuln.get('package_name')} to {vuln.get('fixed_version')}"
+                if vuln.get("package_name") and vuln.get("fixed_version")
+                else "Upgrade or remove the affected package."
+            ),
+        })
+    for misconfig in docker_trivy_misconfigs:
+        docker_trivy_security_findings.append({
+            "category": "trivy_misconfiguration",
+            "title": misconfig.get("id") or misconfig.get("title") or "Trivy Misconfiguration",
+            "description": misconfig.get("message") or misconfig.get("description") or misconfig.get("title") or "Native Trivy misconfiguration finding.",
+            "severity": misconfig.get("severity") or "unknown",
+            "location": misconfig.get("target") or "container image",
+            "attack_vector": "Container misconfiguration weakens hardening or broadens attacker options.",
+            "remediation": misconfig.get("resolution") or misconfig.get("recommendation") or "Apply the recommended hardening change and rebuild the image.",
+        })
+    for secret in docker_trivy_secrets:
+        docker_trivy_security_findings.append({
+            "category": "trivy_secret",
+            "title": secret.get("rule_id") or secret.get("title") or "Trivy Secret Finding",
+            "description": "Trivy detected secret material in the container image. See the Native Trivy Findings section for the raw match.",
+            "severity": secret.get("severity") or "high",
+            "location": secret.get("target") or "container image",
+            "attack_vector": "Credential or secret material embedded in the container filesystem can enable unauthorized access.",
+            "remediation": "Remove the secret from the image, rotate the credential, and rebuild from a clean source.",
+        })
+
+    # Gather comprehensive security findings across raw/verified/scanner sources.
+    raw_security_findings: List[Dict[str, Any]] = []
+    for source in [
+        getattr(report, "security_issues", None),
+        getattr(report, "decompiled_code_findings", None),
+        full_data_dict.get("security_issues"),
+        full_data_dict.get("decompiled_code_findings"),
+        verification_dict.get("verified_vulnerabilities"),
+        verification_dict.get("verified_findings"),
+        verification_dict.get("findings"),
+        ai_vuln_dict.get("combined_findings"),
+        ai_vuln_dict.get("vulnerabilities"),
+        ai_vuln_dict.get("findings"),
+        pattern_scan_dict.get("findings"),
+        vuln_hunt_dict.get("vulnerabilities"),
+        full_data_dict.get("verified_findings"),
+        full_data_dict.get("verified_vulnerabilities"),
+        full_data_dict.get("combined_findings"),
+        docker_cve_findings,
+        docker_trivy_security_findings,
+    ]:
+        for item in _coerce_list(source):
+            as_dict = _as_dict(item)
+            if as_dict:
+                raw_security_findings.append(as_dict)
+
+    deduped_findings: List[Dict[str, Any]] = []
+    seen_finding_keys: Set[str] = set()
+    for item in raw_security_findings:
+        severity = str(
+            item.get("severity")
+            or item.get("risk_level")
+            or item.get("risk")
+            or item.get("confidence_level")
+            or "info"
+        ).lower()
+        title = str(
+            item.get("title")
+            or item.get("external_id")
+            or item.get("id")
+            or item.get("name")
+            or item.get("type")
+            or item.get("category")
+            or "Security Finding"
+        )
+        description = str(item.get("description") or item.get("summary") or item.get("details") or item.get("reasoning") or item.get("finding") or "")
+        location = str(
+            item.get("file")
+            or item.get("location")
+            or item.get("affected_class")
+            or item.get("package_name")
+            or item.get("package")
+            or item.get("source")
+            or item.get("path")
+            or ""
+        )
+        key = f"{title.strip().lower()}::{location.strip().lower()}::{description[:120].strip().lower()}"
+        if key in seen_finding_keys:
+            continue
+        seen_finding_keys.add(key)
+        normalized = dict(item)
+        normalized["_normalized_severity"] = severity
+        normalized["_normalized_title"] = title
+        normalized["_normalized_description"] = description
+        normalized["_normalized_location"] = location
+        deduped_findings.append(normalized)
+
+    all_security_findings = sorted(
+        deduped_findings,
+        key=lambda finding: (
+            _severity_rank(finding.get("_normalized_severity", "info")),
+            finding.get("_normalized_title", ""),
+        ),
+    )
+
+    cve_findings = _coerce_list(getattr(report, "library_cves", None))
+    if not cve_findings:
+        cve_findings = _coerce_list(cve_lookup_dict.get("findings")) or _coerce_list(cve_lookup_dict.get("cves"))
+    if not cve_findings:
+        cve_findings = _coerce_list(full_data_dict.get("library_cves")) or _coerce_list(full_data_dict.get("cve_findings"))
+    if not cve_findings and report.analysis_type == "docker":
+        cve_findings = docker_cve_findings
+    cve_findings = [_as_dict(item) for item in cve_findings if _as_dict(item)]
     
     # =====================================================
     # SECTION 1: Executive Summary - What Does This APK Do?
@@ -6674,6 +8726,12 @@ def _generate_full_report_export(report, format: str):
         md_content += f"**Type:** {report.file_type or 'N/A'} | **Architecture:** {report.architecture or 'N/A'}\n\n"
     elif report.analysis_type == 'docker':
         md_content += f"**Image:** `{report.image_name or 'N/A'}` | **Base:** {report.base_image or 'N/A'}\n\n"
+
+    target_label = {
+        "apk": "This APK",
+        "binary": "This Binary",
+        "docker": "This Container Image",
+    }.get(report.analysis_type, "This Analysis Target")
     
     # Legitimate software detection
     if hasattr(report, 'is_legitimate_software') and report.is_legitimate_software:
@@ -6689,10 +8747,10 @@ This binary has been identified as **legitimate software** from a known publishe
             md_content += "\n"
     
     # AI Functionality Report - What the app does
-    if report.ai_functionality_report:
-        md_content += f"""### What This Application Does
+    if functionality_report:
+        md_content += f"""### What Does {target_label} Do?
 
-{report.ai_functionality_report}
+{functionality_report}
 
 """
     elif report.ai_analysis_raw:
@@ -6715,16 +8773,16 @@ This section analyzes the application from an attacker's perspective, identifyin
 """
     
     # AI Security Report (high-level security assessment)
-    if report.ai_security_report:
-        md_content += f"""{report.ai_security_report}
+    if security_report:
+        md_content += f"""{security_report}
 
 """
     
     # Consolidated security issues summary with attacker focus
     critical_count = high_count = medium_count = low_count = 0
-    if report.security_issues:
-        for issue in report.security_issues:
-            sev = issue.get('severity', 'info').lower()
+    if all_security_findings:
+        for issue in all_security_findings:
+            sev = str(issue.get('_normalized_severity', issue.get('severity', 'info'))).lower()
             if sev == 'critical': critical_count += 1
             elif sev == 'high': high_count += 1
             elif sev == 'medium': medium_count += 1
@@ -6741,20 +8799,24 @@ This section analyzes the application from an attacker's perspective, identifyin
 
 """
         # List critical and high issues with attacker-focused descriptions
-        critical_high = [i for i in report.security_issues if i.get('severity', '').lower() in ['critical', 'high']]
+        critical_high = [
+            i for i in all_security_findings
+            if str(i.get('_normalized_severity', i.get('severity', ''))).lower() in ['critical', 'high']
+        ]
         if critical_high:
             md_content += "### Exploitable Vulnerabilities\n\n"
             md_content += "*These issues present immediate exploitation opportunities:*\n\n"
-            for issue in critical_high[:15]:
-                severity = issue.get('severity', 'info')
-                title = issue.get('title', issue.get('category', 'Unknown Issue'))
+            for issue in critical_high:
+                severity = issue.get('_normalized_severity', issue.get('severity', 'info'))
+                title = issue.get('_normalized_title', issue.get('title', issue.get('category', 'Unknown Issue')))
                 md_content += f"#### {title} ({severity.upper()})\n\n"
                 
-                if issue.get('description'):
-                    md_content += f"**Finding:** {issue.get('description')[:300]}\n\n"
+                description = issue.get('_normalized_description', issue.get('description'))
+                if description:
+                    md_content += f"**Finding:** {description}\n\n"
                 
                 # Add exploitation context
-                category = issue.get('category', '').lower()
+                category = str(issue.get('category', '')).lower()
                 if 'sql' in category or 'injection' in category:
                     md_content += "**Attack Vector:** Database manipulation, data exfiltration, authentication bypass\n\n"
                 elif 'crypto' in category or 'encrypt' in category:
@@ -6773,13 +8835,45 @@ This section analyzes the application from an attacker's perspective, identifyin
                     md_content += "**Attack Vector:** Attach debugger, inspect memory, modify runtime behavior\n\n"
                 
                 # Include file/location for manual review
-                file_loc = issue.get('file', issue.get('location', issue.get('affected_class', '')))
+                file_loc = issue.get('_normalized_location') or issue.get('file', issue.get('location', issue.get('affected_class', '')))
                 if file_loc:
                     md_content += f"**Target Location:** `{file_loc}`\n\n"
+
+        # Complete finding list (all severities) for full export fidelity.
+        md_content += f"""### Security Findings (Complete)
+
+The following list includes **all {len(all_security_findings)} findings** captured in this scan.
+
+"""
+        for idx, finding in enumerate(all_security_findings, 1):
+            severity = finding.get('_normalized_severity', finding.get('severity', 'info')).upper()
+            title = finding.get('_normalized_title', finding.get('title', finding.get('category', 'Security Finding')))
+            description = finding.get('_normalized_description', finding.get('description', ''))
+            location = finding.get('_normalized_location', '')
+            cwe = finding.get('cwe') or finding.get('cwe_id')
+            cvss = finding.get('cvss') or finding.get('cvss_score')
+            attack_vector = finding.get('attack_vector') or finding.get('exploitation_path')
+            remediation = finding.get('remediation') or finding.get('recommendation') or finding.get('fix')
+
+            md_content += f"#### {idx}. {title} ({severity})\n\n"
+            if description:
+                md_content += f"{description}\n\n"
+            if location:
+                md_content += f"- **Location:** `{location}`\n"
+            if cwe:
+                md_content += f"- **CWE:** {cwe}\n"
+            if cvss:
+                md_content += f"- **CVSS:** {cvss}\n"
+            if attack_vector:
+                md_content += f"- **Attack Vector:** {attack_vector}\n"
+            if remediation:
+                md_content += f"- **Remediation:** {remediation}\n"
+            md_content += "\n"
     
     # Dangerous permissions with exploitation context
-    if report.permissions:
-        dangerous = [p for p in report.permissions if p.get('is_dangerous')]
+    permissions_list = _dict_items(getattr(report, "permissions", None))
+    if permissions_list:
+        dangerous = [p for p in permissions_list if p.get('is_dangerous')]
         if dangerous:
             md_content += "### Dangerous Permissions - Attack Enablers\n\n"
             md_content += "*These permissions grant capabilities that can be abused:*\n\n"
@@ -6811,16 +8905,26 @@ This section analyzes the application from an attacker's perspective, identifyin
     # =====================================================
     # SECTION 2B: Known CVEs in Third-Party Libraries
     # =====================================================
-    if report.library_cves:
-        cves = report.library_cves
-        critical_cves = [c for c in cves if c.get('severity', '').lower() == 'critical']
-        high_cves = [c for c in cves if c.get('severity', '').lower() == 'high']
+    if cve_findings:
+        cves = cve_findings
+        critical_cves = [c for c in cves if str(c.get('severity', '')).lower() == 'critical']
+        high_cves = [c for c in cves if str(c.get('severity', '')).lower() == 'high']
+        cve_heading = (
+            "Known Vulnerabilities in Container Packages (CVE Scan)"
+            if report.analysis_type == "docker"
+            else "Known Vulnerabilities in Dependencies (CVE Lookup)"
+        )
+        cve_description = (
+            "*These are known, published vulnerabilities in packages extracted from this container image.*"
+            if report.analysis_type == "docker"
+            else "*These are known, published vulnerabilities in the third-party libraries bundled with this application.*"
+        )
         
-        md_content += f"""### Known Vulnerabilities in Dependencies (CVE Lookup)
+        md_content += f"""### {cve_heading}
 
 **Total CVEs Found:** {len(cves)} | **Critical:** {len(critical_cves)} | **High:** {len(high_cves)}
 
-*These are known, published vulnerabilities in the third-party libraries bundled with this application.*
+{cve_description}
 
 """
         
@@ -6828,11 +8932,11 @@ This section analyzes the application from an attacker's perspective, identifyin
         if critical_cves:
             md_content += "#### Critical CVEs - Immediate Exploitation Risk\n\n"
             for cve in critical_cves[:10]:
-                cve_id = cve.get('cve_id', 'Unknown')
-                library = cve.get('library', 'Unknown')
-                summary = cve.get('summary', 'No description')[:200]
-                exploitation = cve.get('exploitation_potential', 'Review required')
-                attack_vector = cve.get('attack_vector', 'Unknown')
+                cve_id = cve.get('cve_id') or cve.get('external_id') or cve.get('id') or 'Unknown'
+                library = cve.get('library') or cve.get('package_name') or cve.get('package') or 'Unknown'
+                summary = (cve.get('summary') or cve.get('title') or cve.get('description') or 'No description')[:200]
+                exploitation = cve.get('exploitation_potential') or cve.get('priority_label') or 'Review required'
+                attack_vector = cve.get('attack_vector') or ('Known exploited vulnerability' if cve.get('in_kev') else 'Unknown')
                 
                 md_content += f"**{cve_id}** in `{library}`\n\n"
                 md_content += f"- **Summary:** {summary}\n"
@@ -6840,7 +8944,9 @@ This section analyzes the application from an attacker's perspective, identifyin
                 md_content += f"- **Exploitation:** {exploitation}\n"
                 md_content += f"- **Attack Vector:** {attack_vector}\n"
                 
-                if cve.get('affected_versions'):
+                if cve.get('fixed_version'):
+                    md_content += f"- **Fix:** Upgrade to {cve.get('fixed_version')}\n"
+                elif cve.get('affected_versions'):
                     md_content += f"- **Fix:** {', '.join(cve.get('affected_versions', []))}\n"
                 
                 if cve.get('references'):
@@ -6852,31 +8958,98 @@ This section analyzes the application from an attacker's perspective, identifyin
         if high_cves:
             md_content += "#### High Severity CVEs\n\n"
             for cve in high_cves[:10]:
-                cve_id = cve.get('cve_id', 'Unknown')
-                library = cve.get('library', 'Unknown')
-                summary = cve.get('summary', 'No description')[:150]
+                cve_id = cve.get('cve_id') or cve.get('external_id') or cve.get('id') or 'Unknown'
+                library = cve.get('library') or cve.get('package_name') or cve.get('package') or 'Unknown'
+                summary = (cve.get('summary') or cve.get('title') or cve.get('description') or 'No description')[:150]
+                signal = cve.get('exploitation_potential') or cve.get('priority_label') or ('KEV' if cve.get('in_kev') else '')
                 
                 md_content += f"- **{cve_id}** in `{library}`: {summary}\n"
-                md_content += f"  - CVSS: {cve.get('cvss_score', 'N/A')} | {cve.get('exploitation_potential', '')}\n"
+                md_content += f"  - CVSS: {cve.get('cvss_score', 'N/A')} | {signal}\n"
             
             md_content += "\n"
         
         # Summary table of all CVEs
         if len(cves) > 0:
             md_content += "#### All Detected CVEs\n\n"
-            md_content += "| CVE ID | Library | Severity | CVSS |\n"
+            md_content += "| CVE ID | Package | Severity | CVSS |\n"
             md_content += "|--------|---------|----------|------|\n"
             for cve in cves[:25]:
-                md_content += f"| {cve.get('cve_id', 'N/A')} | {cve.get('library', 'N/A')[:30]} | {cve.get('severity', 'N/A').upper()} | {cve.get('cvss_score', 'N/A')} |\n"
+                cve_id = cve.get('cve_id') or cve.get('external_id') or cve.get('id') or 'N/A'
+                package_name = cve.get('library') or cve.get('package_name') or cve.get('package') or 'N/A'
+                md_content += f"| {cve_id} | {str(package_name)[:30]} | {cve.get('severity', 'N/A').upper()} | {cve.get('cvss_score', 'N/A')} |\n"
             
             if len(cves) > 25:
                 md_content += f"\n*...and {len(cves) - 25} more CVEs*\n"
             
             md_content += "\n"
-    
+
+    if report.analysis_type == "docker" and docker_trivy_scan_dict:
+        enabled_scanners = ", ".join(str(scanner) for scanner in _coerce_list(docker_trivy_scan_dict.get("enabled_scanners")) if scanner) or "None"
+        trivy_duration = _to_float(docker_trivy_scan_dict.get("scan_duration_seconds"), 0.0)
+        md_content += f"""### Native Trivy Findings
+
+**Enabled Scanners:** {enabled_scanners} | **Packages Observed:** {_to_int(docker_trivy_scan_dict.get('package_count', 0))} | **Vulnerabilities:** {len(docker_trivy_vulns)} | **Misconfigurations:** {len(docker_trivy_misconfigs)} | **Secrets:** {len(docker_trivy_secrets)} | **Licenses:** {len(docker_trivy_licenses)} | **Duration:** {trivy_duration:.1f}s
+
+*This section preserves the native Trivy image-scan output alongside the Docker Inspector's enriched analysis.*
+
+"""
+        if docker_trivy_scan_dict.get("error"):
+            md_content += f"**Scan Error:** {docker_trivy_scan_dict.get('error')}\n\n"
+
+        if docker_trivy_vulns:
+            md_content += "#### Native Trivy Vulnerabilities\n\n"
+            md_content += "| ID | Severity | Package | Installed | Fixed |\n"
+            md_content += "|----|----------|---------|-----------|-------|\n"
+            for finding in docker_trivy_vulns[:25]:
+                md_content += (
+                    f"| {finding.get('vulnerability_id', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{finding.get('package_name', 'N/A')} | "
+                    f"{finding.get('installed_version', 'N/A')} | "
+                    f"{finding.get('fixed_version', 'N/A') or '-'} |\n"
+                )
+            md_content += "\n"
+
+        if docker_trivy_misconfigs:
+            md_content += "#### Trivy Misconfigurations\n\n"
+            md_content += "| ID | Severity | Target | Message |\n"
+            md_content += "|----|----------|--------|---------|\n"
+            for finding in docker_trivy_misconfigs[:25]:
+                md_content += (
+                    f"| {finding.get('id', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{str(finding.get('target', 'N/A'))[:40]} | "
+                    f"{str(finding.get('message') or finding.get('title') or 'N/A')[:100]} |\n"
+                )
+            md_content += "\n"
+
+        if docker_trivy_secrets:
+            md_content += "#### Trivy Secret Findings\n\n"
+            md_content += "_Operator note: raw Trivy secret matches are intentionally included for remediation workflows._\n\n"
+            for finding in docker_trivy_secrets[:20]:
+                md_content += f"- **{finding.get('rule_id', 'Unknown')}** ({str(finding.get('severity', 'unknown')).upper()})\n"
+                md_content += f"  - Target: `{_markdown_code(finding.get('target'))}`\n"
+                md_content += f"  - Match: `{_markdown_code(finding.get('match'))}`\n"
+            if len(docker_trivy_secrets) > 20:
+                md_content += f"\n*...and {len(docker_trivy_secrets) - 20} more Trivy secret findings*\n"
+            md_content += "\n"
+
+        if docker_trivy_licenses:
+            md_content += "#### Trivy License Findings\n\n"
+            md_content += "| License | Severity | Package | Category |\n"
+            md_content += "|---------|----------|---------|----------|\n"
+            for finding in docker_trivy_licenses[:25]:
+                md_content += (
+                    f"| {finding.get('name', 'N/A')} | "
+                    f"{str(finding.get('severity', 'unknown')).upper()} | "
+                    f"{finding.get('package_name', 'N/A')} | "
+                    f"{finding.get('category', 'N/A')} |\n"
+                )
+            md_content += "\n"
+
     # Detected libraries summary (even if no CVEs)
-    if report.detected_libraries and not report.library_cves:
-        libs = report.detected_libraries
+    libs = _dict_items(getattr(report, "detected_libraries", None))
+    if libs and not cve_findings:
         high_risk = [l for l in libs if l.get('is_high_risk')]
         
         md_content += f"""### Detected Third-Party Libraries
@@ -6902,23 +9075,24 @@ This section analyzes the application from an attacker's perspective, identifyin
 
 """
         md_content += f"**File Type:** {report.file_type or 'N/A'} | **Architecture:** {report.architecture or 'N/A'}\n\n"
-        md_content += f"- **File Size:** {format_size(report.file_size or 0)}\n"
+        md_content += f"- **File Size:** {format_size(_to_int(report.file_size, 0))}\n"
         md_content += f"- **Strings:** {report.strings_count or 0}\n"
         md_content += f"- **Imports:** {report.imports_count or 0}\n"
         md_content += f"- **Exports:** {report.exports_count or 0}\n"
         md_content += f"- **Secrets:** {report.secrets_count or 0}\n"
         md_content += f"- **Packed:** {report.is_packed or 'unknown'} {f'({report.packer_name})' if report.packer_name else ''}\n\n"
 
-        if report.suspicious_indicators:
+        suspicious_indicators = _dict_items(getattr(report, "suspicious_indicators", None))
+        if suspicious_indicators:
             md_content += "### Suspicious Indicators\n\n"
-            for indicator in report.suspicious_indicators[:25]:
+            for indicator in suspicious_indicators[:25]:
                 md_content += f"- **{indicator.get('severity', 'info').upper()}** {indicator.get('category', 'Unknown')}: {indicator.get('description', '')}\n"
-            if len(report.suspicious_indicators) > 25:
-                md_content += f"\n*...and {len(report.suspicious_indicators) - 25} more indicators*\n"
+            if len(suspicious_indicators) > 25:
+                md_content += f"\n*...and {len(suspicious_indicators) - 25} more indicators*\n"
             md_content += "\n"
 
         ctx = report.full_analysis_data or {}
-        imports = ctx.get("imports", []) if isinstance(ctx, dict) else []
+        imports = _dict_items(ctx.get("imports", []) if isinstance(ctx, dict) else [])
         suspicious_imports = [i for i in imports if i.get("is_suspicious")]
         if suspicious_imports:
             md_content += "### Suspicious Imports\n\n"
@@ -6928,17 +9102,28 @@ This section analyzes the application from an attacker's perspective, identifyin
                 md_content += f"\n*...and {len(suspicious_imports) - 30} more suspicious imports*\n"
             md_content += "\n"
 
-        secrets = ctx.get("secrets", []) if isinstance(ctx, dict) else []
+        secrets = _dict_items(ctx.get("secrets", []) if isinstance(ctx, dict) else [])
         if secrets:
             md_content += "### Potential Secrets\n\n"
+            include_raw_secret_values = str(getattr(report, "analysis_type", "")).lower() == "docker"
+            if include_raw_secret_values:
+                md_content += "_Operator note: raw secret values are intentionally included in this Docker report for remediation workflows._\n\n"
             for s in secrets[:20]:
-                md_content += f"- **{s.get('severity', 'medium').upper()}** {s.get('type')}: `{s.get('masked_value')}`\n"
+                secret_label = s.get("type") or s.get("secret_type") or "Unknown"
+                secret_value = s.get("value") if include_raw_secret_values else s.get("masked_value")
+                display_value = secret_value or s.get("masked_value") or "N/A"
+                md_content += f"- **{s.get('severity', 'medium').upper()}** {secret_label}: `{display_value}`\n"
+                if include_raw_secret_values:
+                    if s.get("context"):
+                        md_content += f"  Context: {s.get('context')}\n"
+                    if s.get("layer_command"):
+                        md_content += f"  Layer Command: {s.get('layer_command')}\n"
             if len(secrets) > 20:
                 md_content += f"\n*...and {len(secrets) - 20} more secrets*\n"
             md_content += "\n"
 
-        ghidra = ctx.get("ghidra_analysis", {}) if isinstance(ctx, dict) else {}
-        ghidra_ai = ctx.get("ghidra_ai_summaries", []) if isinstance(ctx, dict) else []
+        ghidra = _coerce_dict(ctx.get("ghidra_analysis", {}) if isinstance(ctx, dict) else {})
+        ghidra_ai = _dict_items(ctx.get("ghidra_ai_summaries", []) if isinstance(ctx, dict) else [])
         if ghidra:
             md_content += "### Ghidra Decompilation\n\n"
             if ghidra.get("error"):
@@ -6952,10 +9137,11 @@ This section analyzes the application from an attacker's perspective, identifyin
                 md_content += f"- **Compiler Spec:** `{program.get('compiler_spec', 'N/A')}`\n"
                 md_content += f"- **Image Base:** `{program.get('image_base', 'N/A')}`\n\n"
 
-                functions = ghidra.get("functions", []) or []
+                functions = _dict_items(ghidra.get("functions", []) or [])
                 total_functions = ghidra.get("functions_total", len(functions))
-                max_export = 30
+                max_export = 20
                 md_content += f"**Decompiled Functions (showing {min(len(functions), max_export)} of {total_functions})**\n\n"
+                md_content += "*Raw decompiled source is omitted in exported reports for readability. Use the in-app decompiler view for full code.*\n\n"
 
                 summary_map = {}
                 for summary in ghidra_ai or []:
@@ -6981,10 +9167,9 @@ This section analyzes the application from an attacker's perspective, identifyin
                         md_content += "\n**Gemini Summary**\n\n"
                         md_content += f"{summary.get('summary')}\n\n"
 
-                    if fn.get("decompiled"):
-                        md_content += "```c\n"
-                        md_content += f"{fn.get('decompiled')}\n"
-                        md_content += "```\n\n"
+                    # Intentionally omit raw decompiled code from exports (summary-only report).
+                    if fn.get("decompiled") and not (summary and summary.get("summary")):
+                        md_content += "- Decompiled source available in app view.\n\n"
 
                 if total_functions > max_export:
                     md_content += f"*...and {total_functions - max_export} more functions*\n\n"
@@ -6992,7 +9177,7 @@ This section analyzes the application from an attacker's perspective, identifyin
     # =====================================================
     # SECTION 3: Architecture Diagram
     # =====================================================
-    if report.ai_architecture_diagram:
+    if architecture_diagram:
         md_content += f"""---
 
 ## Application Architecture
@@ -7000,7 +9185,7 @@ This section analyzes the application from an attacker's perspective, identifyin
 The following diagram illustrates the high-level architecture and component relationships within the application.
 
 ```mermaid
-{report.ai_architecture_diagram}
+{architecture_diagram}
 ```
 
 """
@@ -7008,13 +9193,15 @@ The following diagram illustrates the high-level architecture and component rela
     # =====================================================
     # SECTION 4: AI Cross-Class Vulnerability Analysis
     # =====================================================
-    if report.ai_vuln_scan_result:
-        vuln_data = report.ai_vuln_scan_result
+    vuln_data = ai_vuln_dict or verification_dict
+    if vuln_data:
         
         # Check if we have enhanced security data embedded
-        enhanced_security = vuln_data.get('enhanced_security')
+        enhanced_security = _coerce_dict(vuln_data.get('enhanced_security'))
         
         if enhanced_security:
+            risk_summary = _coerce_dict(enhanced_security.get('risk_summary', {}))
+            analysis_metadata = _coerce_dict(enhanced_security.get('analysis_metadata', {}))
             # Use enhanced security data for the main analysis section
             md_content += f"""---
 
@@ -7032,21 +9219,21 @@ The following diagram illustrates the high-level architecture and component rela
 
 | Severity | Count |
 |----------|-------|
-| Critical | {enhanced_security.get('risk_summary', {}).get('critical', 0)} |
-| High | {enhanced_security.get('risk_summary', {}).get('high', 0)} |
-| Medium | {enhanced_security.get('risk_summary', {}).get('medium', 0)} |
-| Low | {enhanced_security.get('risk_summary', {}).get('low', 0)} |
-| Info | {enhanced_security.get('risk_summary', {}).get('info', 0)} |
+| Critical | {risk_summary.get('critical', 0)} |
+| High | {risk_summary.get('high', 0)} |
+| Medium | {risk_summary.get('medium', 0)} |
+| Low | {risk_summary.get('low', 0)} |
+| Info | {risk_summary.get('info', 0)} |
 
 ### Analysis Metadata
 
-- **Classes Scanned:** {enhanced_security.get('analysis_metadata', {}).get('classes_scanned', 0)}
-- **Libraries Detected:** {enhanced_security.get('analysis_metadata', {}).get('libraries_detected', 0)}
-- **CVEs Found:** {enhanced_security.get('analysis_metadata', {}).get('cves_found', 0)}
+- **Classes Scanned:** {analysis_metadata.get('classes_scanned', 0)}
+- **Libraries Detected:** {analysis_metadata.get('libraries_detected', 0)}
+- **CVEs Found:** {analysis_metadata.get('cves_found', 0)}
 
 """
             # Offensive Plan Summary (AI-generated assessment - this is the main export content)
-            offensive_plan = enhanced_security.get('offensive_plan_summary')
+            offensive_plan = _coerce_dict(enhanced_security.get('offensive_plan_summary'))
             if offensive_plan:
                 md_content += """---
 
@@ -7068,7 +9255,7 @@ The following diagram illustrates the high-level architecture and component rela
 """
                 
                 # Primary Attack Vectors
-                attack_vectors = offensive_plan.get('primary_attack_vectors', [])
+                attack_vectors = _dict_items(offensive_plan.get('primary_attack_vectors', []))
                 if attack_vectors:
                     md_content += "### Primary Attack Vectors\n\n"
                     for i, vector in enumerate(attack_vectors, 1):
@@ -7112,7 +9299,7 @@ The following diagram illustrates the high-level architecture and component rela
                 md_content += "\n"
             
             # Brief summary of findings (counts only, not individual details)
-            combined_findings = enhanced_security.get('combined_findings', [])
+            combined_findings = _dict_items(enhanced_security.get('combined_findings', []))
             if combined_findings:
                 md_content += f"""### Findings Summary
 
@@ -7121,7 +9308,7 @@ A total of **{len(combined_findings)}** security findings were identified:
 """
                 # Group by severity for count summary
                 for severity in ['critical', 'high', 'medium', 'low']:
-                    severity_findings = [f for f in combined_findings if f.get('severity', '').lower() == severity]
+                    severity_findings = [f for f in combined_findings if str(f.get('severity', '')).lower() == severity]
                     if severity_findings:
                         # Get unique titles for this severity
                         unique_titles = list(set(f.get('title', 'Unknown') for f in severity_findings))[:5]
@@ -7134,6 +9321,7 @@ A total of **{len(combined_findings)}** security findings were identified:
         
         else:
             # Fall back to original AI vuln scan format
+            fallback_risk_summary = _coerce_dict(vuln_data.get('risk_summary', {}))
             md_content += f"""---
 
 ## AI Deep Vulnerability Analysis
@@ -7141,15 +9329,15 @@ A total of **{len(combined_findings)}** security findings were identified:
 **Classes Analyzed:** {vuln_data.get('classes_scanned', 0)} | **Overall Risk:** {vuln_data.get('overall_risk', 'N/A')}
 
 ### Risk Distribution
-- Critical: {vuln_data.get('risk_summary', {}).get('critical', 0)}
-- High: {vuln_data.get('risk_summary', {}).get('high', 0)}
-- Medium: {vuln_data.get('risk_summary', {}).get('medium', 0)}
-- Low: {vuln_data.get('risk_summary', {}).get('low', 0)}
+- Critical: {fallback_risk_summary.get('critical', 0)}
+- High: {fallback_risk_summary.get('high', 0)}
+- Medium: {fallback_risk_summary.get('medium', 0)}
+- Low: {fallback_risk_summary.get('low', 0)}
 
 """
             if vuln_data.get('vulnerabilities'):
                 md_content += "### Key Vulnerabilities\n\n"
-                for vuln in vuln_data.get('vulnerabilities', [])[:15]:
+                for vuln in _dict_items(vuln_data.get('vulnerabilities', []))[:15]:
                     severity = vuln.get('severity', 'N/A')
                     md_content += f"#### {vuln.get('title', 'Vulnerability')} ({severity.upper()})\n\n"
                     md_content += f"- **Category:** {vuln.get('category', 'N/A')}\n"
@@ -7179,7 +9367,7 @@ A total of **{len(combined_findings)}** security findings were identified:
         # Attack chains if available (fallback for non-enhanced data)
         if not enhanced_security and vuln_data.get('attack_chains'):
             md_content += "### Attack Chains\n\n"
-            for chain in vuln_data.get('attack_chains', [])[:5]:
+            for chain in _dict_items(vuln_data.get('attack_chains', []))[:5]:
                 md_content += f"#### {chain.get('name', 'Attack Chain')}\n\n"
                 md_content += f"**Likelihood:** {chain.get('likelihood', 'Unknown')} | **Impact:** {chain.get('impact', 'Unknown')}\n\n"
                 if chain.get('steps'):
@@ -7198,7 +9386,7 @@ A total of **{len(combined_findings)}** security findings were identified:
     # =====================================================
     # SECTION 5: Attack Surface Map
     # =====================================================
-    if report.ai_attack_surface_map:
+    if attack_surface_map:
         md_content += f"""---
 
 ## Attack Surface Map
@@ -7206,7 +9394,7 @@ A total of **{len(combined_findings)}** security findings were identified:
 This attack tree visualizes entry points, vulnerabilities, and potential attack paths discovered through AI analysis of the decompiled source code.
 
 ```mermaid
-{report.ai_attack_surface_map}
+{attack_surface_map}
 ```
 
 """
@@ -7217,24 +9405,38 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
     secrets_found = []
     
     # Collect secrets from various sources
-    if report.jadx_data and report.jadx_data.get('secrets'):
-        secrets_found.extend(report.jadx_data.get('secrets', []))
-    
-    if report.security_issues:
-        for issue in report.security_issues:
-            if 'secret' in issue.get('category', '').lower() or 'key' in issue.get('category', '').lower() or 'credential' in issue.get('category', '').lower():
+    jadx_data_dict = _coerce_dict(getattr(report, "jadx_data", None))
+    if jadx_data_dict.get('secrets'):
+        for raw_secret in _coerce_list(jadx_data_dict.get('secrets', [])):
+            if isinstance(raw_secret, dict):
+                secrets_found.append(raw_secret)
+            else:
                 secrets_found.append({
-                    'type': issue.get('category', 'Secret'),
-                    'description': issue.get('description', '')[:100],
-                    'location': issue.get('file', issue.get('location', 'Unknown'))
+                    "type": "Secret",
+                    "description": str(raw_secret)[:100],
+                    "location": "Unknown",
                 })
     
-    if secrets_found or (report.secrets_count and report.secrets_count > 0):
+    for issue in all_security_findings:
+        category_text = str(issue.get('category', '')).lower()
+        if 'secret' in category_text or 'key' in category_text or 'credential' in category_text:
+            secrets_found.append({
+                'type': issue.get('category', 'Secret'),
+                'description': issue.get('description', '')[:100],
+                'location': issue.get('file', issue.get('location', 'Unknown'))
+            })
+    
+    try:
+        report_secrets_count = int(report.secrets_count) if report.secrets_count is not None else 0
+    except (TypeError, ValueError):
+        report_secrets_count = 0
+
+    if secrets_found or report_secrets_count > 0:
         md_content += f"""---
 
 ## Exposed Secrets & Credentials
 
-**Total Secrets Found:** {report.secrets_count or len(secrets_found)}
+**Total Secrets Found:** {report_secrets_count or len(secrets_found)}
 
 """
         if secrets_found:
@@ -7266,8 +9468,8 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
     # =====================================================
     # SECTION 8: Threat Model (if available)
     # =====================================================
-    if report.ai_threat_model:
-        tm = report.ai_threat_model
+    tm = _coerce_dict(getattr(report, "ai_threat_model", None))
+    if tm:
         md_content += """---
 
 ## Threat Model
@@ -7275,20 +9477,20 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 """
         if tm.get('threat_actors'):
             md_content += "### Potential Threat Actors\n\n"
-            for actor in tm.get('threat_actors', [])[:5]:
+            for actor in _dict_items(tm.get('threat_actors', []))[:5]:
                 md_content += f"- **{actor.get('name', 'Unknown')}**: {actor.get('description', '')}\n"
             md_content += "\n"
         
         if tm.get('attack_scenarios'):
             md_content += "### Attack Scenarios\n\n"
-            for scenario in tm.get('attack_scenarios', [])[:3]:
+            for scenario in _dict_items(tm.get('attack_scenarios', []))[:3]:
                 md_content += f"**{scenario.get('name', 'Scenario')}:** {scenario.get('description', '')}\n\n"
     
     # =====================================================
     # SECTION 9: Manifest Visualization (Component Analysis)
     # =====================================================
-    if report.manifest_visualization:
-        mv = report.manifest_visualization
+    mv = _coerce_dict(getattr(report, "manifest_visualization", None))
+    if mv:
         md_content += """---
 
 ## Manifest Visualization - Component Analysis
@@ -7323,7 +9525,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
             md_content += "\n"
         
         # Security Risks
-        security_risks = mv.get('security_risks', [])
+        security_risks = _dict_items(mv.get('security_risks', []))
         if security_risks:
             md_content += "### Component Security Risks\n\n"
             for risk in security_risks[:10]:
@@ -7357,8 +9559,8 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
     # =====================================================
     # SECTION 10: Obfuscation Analysis
     # =====================================================
-    if report.obfuscation_analysis:
-        oa = report.obfuscation_analysis
+    oa = _coerce_dict(getattr(report, "obfuscation_analysis", None))
+    if oa:
         md_content += """---
 
 ## Obfuscation Analysis
@@ -7380,16 +9582,21 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 """
         
         # Class Naming Analysis
-        class_naming = oa.get('class_naming', {})
+        class_naming = _coerce_dict(oa.get('class_naming', {}))
         if class_naming:
             md_content += "### Class Naming Analysis\n\n"
-            md_content += f"- **Total Classes:** {class_naming.get('total_classes', 0):,}\n"
-            md_content += f"- **Obfuscated Classes:** {class_naming.get('obfuscated_count', 0):,} ({class_naming.get('obfuscation_ratio', 0):.1%})\n"
-            md_content += f"- **Readable Classes:** {class_naming.get('readable_count', 0):,}\n"
-            md_content += f"- **Short Names (a, b, c...):** {class_naming.get('short_name_count', 0):,}\n\n"
+            total_classes = _to_int(class_naming.get('total_classes', 0))
+            obfuscated_count = _to_int(class_naming.get('obfuscated_count', 0))
+            readable_count = _to_int(class_naming.get('readable_count', 0))
+            short_name_count = _to_int(class_naming.get('short_name_count', 0))
+            obf_ratio = _to_float(class_naming.get('obfuscation_ratio', 0))
+            md_content += f"- **Total Classes:** {total_classes:,}\n"
+            md_content += f"- **Obfuscated Classes:** {obfuscated_count:,} ({obf_ratio:.1%})\n"
+            md_content += f"- **Readable Classes:** {readable_count:,}\n"
+            md_content += f"- **Short Names (a, b, c...):** {short_name_count:,}\n\n"
         
         # Detected Obfuscation Tools
-        detected_tools = oa.get('detected_tools', [])
+        detected_tools = _dict_items(oa.get('detected_tools', []))
         if detected_tools:
             md_content += "### Detected Obfuscation Tools\n\n"
             for tool in detected_tools:
@@ -7403,10 +9610,10 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
             md_content += "\n"
         
         # Obfuscation Indicators
-        indicators = oa.get('indicators', [])
+        indicators = _dict_items(oa.get('indicators', []))
         if indicators:
             md_content += "### Obfuscation Indicators\n\n"
-            high_confidence = [i for i in indicators if i.get('confidence', '').lower() == 'high']
+            high_confidence = [i for i in indicators if str(i.get('confidence', '')).lower() == 'high']
             for ind in high_confidence[:8]:
                 md_content += f"- **{ind.get('indicator_type', 'Unknown')}**: {ind.get('description', '')}\n"
                 if ind.get('evidence'):
@@ -7424,7 +9631,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
             md_content += "\n"
         
         # Recommended Tools
-        recommended_tools = oa.get('recommended_tools', [])
+        recommended_tools = _dict_items(oa.get('recommended_tools', []))
         if recommended_tools:
             md_content += "### Recommended Deobfuscation Tools\n\n"
             for tool in recommended_tools[:5]:
@@ -7441,7 +9648,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 """
         
         # Frida Hooks for Deobfuscation
-        frida_hooks = oa.get('frida_hooks', [])
+        frida_hooks = _dict_items(oa.get('frida_hooks', []))
         if frida_hooks:
             md_content += "### Frida Hooks for Runtime Deobfuscation\n\n"
             md_content += "*Use these hooks to observe decrypted strings and deobfuscated values at runtime:*\n\n"
@@ -7456,9 +9663,9 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
     # =====================================================
     # SECTION 11: AI Finding Verification Results
     # =====================================================
-    if report.verification_results:
-        vr = report.verification_results
-        stats = vr.get('verification_stats', {})
+    if verification_dict:
+        vr = verification_dict
+        stats = _coerce_dict(vr.get('verification_stats', {}))
         
         md_content += """---
 
@@ -7475,13 +9682,13 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 | Total Findings Analyzed | {stats.get('total_input', 0)} |
 | Verified Findings | {stats.get('verified', 0)} |
 | False Positives Filtered | {stats.get('filtered', 0)} |
-| Filter Rate | {stats.get('filter_rate', 0):.1f}% |
-| Average Confidence | {stats.get('avg_confidence', 0):.0f}% |
+| Filter Rate | {_to_float(stats.get('filter_rate', 0)):.1f}% |
+| Average Confidence | {_to_float(stats.get('avg_confidence', 0)):.0f}% |
 | High Confidence (≥70%) | {stats.get('high_confidence_count', 0)} |
 
 """
         # Verdict Breakdown
-        by_verdict = stats.get('by_verdict', {})
+        by_verdict = _coerce_dict(stats.get('by_verdict', {}))
         if by_verdict:
             md_content += """### Verdict Breakdown
 
@@ -7494,7 +9701,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
             md_content += f"| UNVERIFIED | {by_verdict.get('UNVERIFIED', 0)} | AI verification unavailable |\n\n"
         
         # Attack Chains
-        attack_chains = vr.get('attack_chains', [])
+        attack_chains = _dict_items(vr.get('attack_chains', []))
         if attack_chains:
             md_content += f"""### Attack Chains Detected ({len(attack_chains)})
 
@@ -7508,7 +9715,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
                 md_content += f"{chain.get('description', '')}\n\n"
                 
                 # Entry points
-                entry_points = chain.get('entry_points', [])
+                entry_points = _dict_items(chain.get('entry_points', []))
                 if entry_points:
                     md_content += "**Entry Points:**\n"
                     for ep in entry_points[:3]:
@@ -7516,7 +9723,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
                     md_content += "\n"
                 
                 # Sinks
-                sinks = chain.get('sinks', [])
+                sinks = _dict_items(chain.get('sinks', []))
                 if sinks:
                     md_content += "**Vulnerable Sinks:**\n"
                     for sink in sinks[:3]:
@@ -7527,8 +9734,11 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
                 md_content += f"*...and {len(attack_chains) - 5} more attack chains detected*\n\n"
         
         # High confidence findings (top 10)
-        verified_findings = vr.get('verified_findings', [])
-        high_conf = [f for f in verified_findings if f.get('verification', {}).get('confidence', 0) >= 80]
+        verified_findings = _dict_items(vr.get('verified_findings', []))
+        high_conf = [
+            f for f in verified_findings
+            if _coerce_dict(f.get('verification', {})).get('confidence', 0) >= 80
+        ]
         if high_conf:
             md_content += f"""### High Confidence Findings (≥80%)
 
@@ -7536,7 +9746,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 
 """
             for f in high_conf[:10]:
-                ver = f.get('verification', {})
+                ver = _coerce_dict(f.get('verification', {}))
                 title = f.get('title', f.get('type', 'Unknown'))
                 severity = f.get('severity', 'medium').upper()
                 confidence = ver.get('confidence', 0)
@@ -7553,7 +9763,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
     # =====================================================
     # SECTION 12: Sensitive Data Discovery
     # =====================================================
-    sd = report.sensitive_data_findings
+    sd = _coerce_dict(getattr(report, "sensitive_data_findings", None))
     if sd and sd.get('findings'):
         md_content += """---
 
@@ -7562,21 +9772,21 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 *AI-verified scan for hardcoded credentials, API keys, PII, and other sensitive data.*
 
 """
-        findings = sd.get('findings', [])
-        summary = sd.get('summary', {})
-        scan_stats = sd.get('scan_stats', {})
+        findings = _dict_items(sd.get('findings', []))
+        summary = _coerce_dict(sd.get('summary', {}))
+        scan_stats = _coerce_dict(sd.get('scan_stats', {}))
         
         # Summary table
-        by_category = summary.get('by_category', {})
-        by_risk = summary.get('by_risk', {})
+        by_category = _coerce_dict(summary.get('by_category', {}))
+        by_risk = _coerce_dict(summary.get('by_risk', {}))
         
         md_content += f"""### Discovery Summary
 
 | Metric | Value |
 |--------|-------|
 | **Total Findings** | {summary.get('total', 0)} |
-| **Files Scanned** | {scan_stats.get('files_scanned', 0):,} |
-| **Raw Pattern Matches** | {scan_stats.get('raw_matches', 0):,} |
+| **Files Scanned** | {_to_int(scan_stats.get('files_scanned', 0)):,} |
+| **Raw Pattern Matches** | {_to_int(scan_stats.get('raw_matches', 0)):,} |
 | **AI-Verified** | {scan_stats.get('verified', 0)} |
 | **False Positives Filtered** | {scan_stats.get('filtered', 0)} |
 | **High Confidence (≥80%)** | {summary.get('high_confidence_count', 0)} |
@@ -7590,9 +9800,9 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 | Category | Count |
 |----------|-------|
 """
-            for cat, count in sorted(by_category.items(), key=lambda x: -x[1]):
+            for cat, count in sorted(by_category.items(), key=lambda x: -_to_int(x[1], 0)):
                 cat_display = cat.replace('_', ' ').title()
-                md_content += f"| {cat_display} | {count} |\n"
+                md_content += f"| {cat_display} | {_to_int(count, 0)} |\n"
             md_content += "\n"
         
         # By risk level
@@ -7603,8 +9813,9 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 |------|-------|
 """
             for risk in ['critical', 'high', 'medium', 'low']:
-                if by_risk.get(risk, 0) > 0:
-                    md_content += f"| {risk.upper()} | {by_risk[risk]} |\n"
+                risk_count = _to_int(by_risk.get(risk, 0), 0)
+                if risk_count > 0:
+                    md_content += f"| {risk.upper()} | {risk_count} |\n"
             md_content += "\n"
         
         # Detailed findings by category
@@ -7625,7 +9836,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
 
 """
             for f in cat_findings[:10]:  # Limit per category
-                ver = f.get('ai_verification', {})
+                ver = _coerce_dict(f.get('ai_verification', {}))
                 confidence = ver.get('confidence', 0)
                 risk = ver.get('risk_level', 'medium').upper()
                 masked = f.get('masked_value', '****')
@@ -7642,7 +9853,7 @@ This attack tree visualizes entry points, vulnerabilities, and potential attack 
             if len(cat_findings) > 10:
                 md_content += f"*...and {len(cat_findings) - 10} more {cat_display.lower()} findings*\n\n"
     
-    elif sd and sd.get('scan_stats', {}).get('files_scanned', 0) > 0:
+    elif sd and _to_int(_coerce_dict(sd.get('scan_stats', {})).get('files_scanned', 0), 0) > 0:
         # Scanned but found nothing
         md_content += """---
 
@@ -7676,13 +9887,15 @@ All potential matches were filtered as false positives or placeholders.
 """
     
     # JADX stats if available
-    if report.jadx_total_classes:
+    if _to_int(report.jadx_total_classes, 0) > 0:
+        jadx_total_classes = _to_int(report.jadx_total_classes, 0)
+        jadx_total_files = _to_int(report.jadx_total_files, 0)
         md_content += f"""### Code Analysis Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total Classes | {report.jadx_total_classes:,} |
-| Total Files | {report.jadx_total_files:,} |
+| Total Classes | {jadx_total_classes:,} |
+| Total Files | {jadx_total_files:,} |
 
 """
     
@@ -7696,9 +9909,10 @@ All potential matches were filtered as false positives or placeholders.
     
     # Tags
     if report.tags:
+        tags = report.tags if isinstance(report.tags, list) else [str(report.tags)]
         md_content += f"""### Tags
 
-{', '.join(f'`{tag}`' for tag in report.tags)}
+{', '.join(f'`{tag}`' for tag in tags)}
 
 """
 
@@ -7716,29 +9930,111 @@ All potential matches were filtered as false positives or placeholders.
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable, ListItem
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable, ListItem, HRFlowable
             from reportlab.lib import colors
             from reportlab.lib.units import inch
             from reportlab.lib.enums import TA_LEFT, TA_CENTER
             import re
+            import unicodedata
             
             buffer = BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
             styles = getSampleStyleSheet()
+
+            def _sanitize_pdf_text(value: str) -> str:
+                """Strip glyphs Helvetica can't render (emoji/symbols) to avoid square boxes in PDF."""
+                if not value:
+                    return ""
+                text = str(value)
+                # Remove supplementary-plane symbols (most emoji) and misc dingbats.
+                text = re.sub(r'[\U00010000-\U0010FFFF]', '', text)
+                text = re.sub(r'[\u2600-\u27BF]', '', text)
+                # Remove invisible/selector glyphs that often render as empty squares.
+                text = re.sub(r'[\uFE00-\uFE0F\u200B-\u200D\u2060]', '', text)
+                # Normalize punctuation for better PDF font compatibility.
+                text = (
+                    text.replace('’', "'")
+                    .replace('“', '"')
+                    .replace('”', '"')
+                    .replace('–', '-')
+                    .replace('—', '-')
+                    .replace('…', '...')
+                )
+                # Force portable Latin text so exports render consistently across viewers.
+                text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+                text = re.sub(r'[ \t]+', ' ', text)
+                return text
             
             # Custom styles
-            title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=20, spaceAfter=20, alignment=TA_CENTER, textColor=colors.darkblue)
-            h1_style = ParagraphStyle('H1', parent=styles['Heading1'], fontSize=16, spaceBefore=20, spaceAfter=10, textColor=colors.darkblue)
-            h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, spaceBefore=15, spaceAfter=8, textColor=colors.darkblue)
-            h3_style = ParagraphStyle('H3', parent=styles['Heading3'], fontSize=12, spaceBefore=12, spaceAfter=6)
-            body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=10, spaceBefore=4, spaceAfter=4, leading=14)
-            code_style = ParagraphStyle('Code', parent=styles['Code'], fontSize=9, backColor=colors.lightgrey, leftIndent=10, rightIndent=10, spaceBefore=6, spaceAfter=6)
-            bullet_style = ParagraphStyle('Bullet', parent=body_style, leftIndent=20, bulletIndent=10)
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontName='Helvetica-Bold',
+                fontSize=21,
+                leading=25,
+                spaceAfter=12,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor("#0F172A"),
+            )
+            h1_style = ParagraphStyle(
+                'H1',
+                parent=styles['Heading1'],
+                fontName='Helvetica-Bold',
+                fontSize=16,
+                leading=20,
+                spaceBefore=18,
+                spaceAfter=10,
+                textColor=colors.HexColor("#111827"),
+            )
+            h2_style = ParagraphStyle(
+                'H2',
+                parent=styles['Heading2'],
+                fontName='Helvetica-Bold',
+                fontSize=14,
+                leading=18,
+                spaceBefore=14,
+                spaceAfter=8,
+                textColor=colors.HexColor("#1F2937"),
+            )
+            h3_style = ParagraphStyle(
+                'H3',
+                parent=styles['Heading3'],
+                fontName='Helvetica-Bold',
+                fontSize=12,
+                leading=16,
+                spaceBefore=12,
+                spaceAfter=6,
+                textColor=colors.HexColor("#374151"),
+            )
+            body_style = ParagraphStyle(
+                'Body',
+                parent=styles['Normal'],
+                fontName='Helvetica',
+                fontSize=10,
+                spaceBefore=4,
+                spaceAfter=4,
+                leading=14,
+                textColor=colors.HexColor("#111827"),
+            )
+            code_style = ParagraphStyle(
+                'Code',
+                parent=styles['Code'],
+                fontName='Courier',
+                fontSize=9,
+                backColor=colors.HexColor("#F3F4F6"),
+                leftIndent=10,
+                rightIndent=10,
+                spaceBefore=6,
+                spaceAfter=6,
+                textColor=colors.HexColor("#111827"),
+            )
+            bullet_style = ParagraphStyle('Bullet', parent=body_style, leftIndent=16, bulletIndent=8)
             
             story = []
             
             # Title
-            story.append(Paragraph(report.title, title_style))
+            story.append(Paragraph(_sanitize_pdf_text(report.title), title_style))
+            story.append(HRFlowable(width="100%", thickness=0.7, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=10))
             story.append(Spacer(1, 12))
             
             # Parse markdown and convert to PDF elements
@@ -7764,9 +10060,25 @@ All potential matches were filtered as false positives or placeholders.
                                 img_bytes = _render_mermaid_to_image(mermaid_code, 'png')
                                 if img_bytes:
                                     from reportlab.platypus import Image
+                                    from reportlab.lib.utils import ImageReader
                                     img_buffer = BytesIO(img_bytes)
                                     try:
-                                        img = Image(img_buffer, width=450, height=300)
+                                        img_reader = ImageReader(img_buffer)
+                                        orig_w, orig_h = img_reader.getSize()
+                                        if not orig_w or not orig_h:
+                                            raise ValueError("Invalid mermaid image dimensions")
+
+                                        # Fit diagram to page while preserving aspect ratio.
+                                        max_w = float(doc.width)
+                                        max_h = float(doc.height) * 0.70
+                                        scale = min(max_w / float(orig_w), max_h / float(orig_h))
+                                        # Allow moderate upscaling for small diagrams.
+                                        scale = min(scale, 2.0)
+                                        draw_w = max(120.0, float(orig_w) * scale)
+                                        draw_h = max(90.0, float(orig_h) * scale)
+
+                                        img_buffer.seek(0)
+                                        img = Image(img_buffer, width=draw_w, height=draw_h)
                                         img.hAlign = 'CENTER'
                                         story.append(img)
                                         story.append(Spacer(1, 10))
@@ -7828,7 +10140,7 @@ All potential matches were filtered as false positives or placeholders.
                             cleaned_row = []
                             for cell in row:
                                 # Strip markdown and escape for PDF
-                                clean = _strip_markdown_formatting(cell)
+                                clean = _sanitize_pdf_text(_strip_markdown_formatting(cell))
                                 clean = clean.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                                 cleaned_row.append(clean)
                             # Pad row to match column count
@@ -7836,12 +10148,13 @@ All potential matches were filtered as false positives or placeholders.
                             normalized.append(cleaned_row)
                         t = Table(normalized, repeatRows=1)
                         t.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.darkblue),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E5E7EB")),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor("#111827")),
                             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                             ('FONTSIZE', (0, 0), (-1, -1), 9),
                             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
                             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
                             ('TOPPADDING', (0, 0), (-1, -1), 6),
                         ]))
@@ -7852,33 +10165,33 @@ All potential matches were filtered as false positives or placeholders.
                 
                 # Headers
                 if line.startswith('# '):
-                    text = line[2:]
+                    text = _sanitize_pdf_text(line[2:])
                     text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h1_style))
                 elif line.startswith('## '):
-                    text = line[3:]
+                    text = _sanitize_pdf_text(line[3:])
                     text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h1_style))
                 elif line.startswith('### '):
-                    text = line[4:]
+                    text = _sanitize_pdf_text(line[4:])
                     text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h2_style))
                 elif line.startswith('#### '):
-                    text = line[5:]
+                    text = _sanitize_pdf_text(line[5:])
                     text = _html_to_reportlab(text) if '<' in text else _format_inline_markdown(text)
                     story.append(Paragraph(text, h3_style))
                 # Bullet points
                 elif line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('• '):
-                    text = line.strip()[2:]
+                    text = _sanitize_pdf_text(line.strip()[2:])
                     # Check if content has HTML
                     if '<' in text and '>' in text:
                         text = _html_to_reportlab(text)
                     else:
                         text = _format_inline_markdown(text)
-                    story.append(Paragraph(f"• {text}", bullet_style))
+                    story.append(Paragraph(f"- {text}", bullet_style))
                 # Numbered lists
                 elif re.match(r'^\s*\d+\.\s+', line):
-                    text = re.sub(r'^\s*\d+\.\s+', '', line)
+                    text = _sanitize_pdf_text(re.sub(r'^\s*\d+\.\s+', '', line))
                     if '<' in text and '>' in text:
                         text = _html_to_reportlab(text)
                     else:
@@ -7890,7 +10203,7 @@ All potential matches were filtered as false positives or placeholders.
                     story.append(Spacer(1, 10))
                 # Regular paragraph
                 elif line.strip():
-                    text = line.strip()
+                    text = _sanitize_pdf_text(line.strip())
                     # Check if content has HTML tags
                     if '<' in text and '>' in text:
                         text = _html_to_reportlab(text)
@@ -7920,22 +10233,133 @@ All potential matches were filtered as false positives or placeholders.
             from docx import Document
             from docx.shared import Inches, Pt, RGBColor
             from docx.enum.text import WD_ALIGN_PARAGRAPH
-            from docx.enum.style import WD_STYLE_TYPE
             from docx.oxml.ns import qn
             from docx.oxml import OxmlElement
             import re
+            import unicodedata
             
             doc = Document()
-            
+
+            def _sanitize_word_text(value: str) -> str:
+                if not value:
+                    return ""
+                text = str(value)
+                text = re.sub(r'[\uFE00-\uFE0F\u200B-\u200D\u2060]', '', text)
+                text = (
+                    text.replace('’', "'")
+                    .replace('“', '"')
+                    .replace('”', '"')
+                    .replace('–', '-')
+                    .replace('—', '-')
+                    .replace('…', '...')
+                )
+                text = unicodedata.normalize('NFKC', text)
+                return re.sub(r'[ \t]+', ' ', text).strip()
+
+            def _set_paragraph_shading(paragraph, fill: str = "F3F4F6"):
+                p_pr = paragraph._p.get_or_add_pPr()
+                shd = OxmlElement('w:shd')
+                shd.set(qn('w:val'), 'clear')
+                shd.set(qn('w:color'), 'auto')
+                shd.set(qn('w:fill'), fill)
+                p_pr.append(shd)
+
+            def _set_cell_shading(cell, fill: str = "E5E7EB"):
+                tc_pr = cell._tc.get_or_add_tcPr()
+                shd = OxmlElement('w:shd')
+                shd.set(qn('w:val'), 'clear')
+                shd.set(qn('w:color'), 'auto')
+                shd.set(qn('w:fill'), fill)
+                tc_pr.append(shd)
+
+            def _add_horizontal_rule():
+                p = doc.add_paragraph()
+                p_pr = p._p.get_or_add_pPr()
+                p_bdr = OxmlElement('w:pBdr')
+                bottom = OxmlElement('w:bottom')
+                bottom.set(qn('w:val'), 'single')
+                bottom.set(qn('w:sz'), '6')
+                bottom.set(qn('w:space'), '1')
+                bottom.set(qn('w:color'), 'D1D5DB')
+                p_bdr.append(bottom)
+                p_pr.append(p_bdr)
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(10)
+
+            def _add_code_block(content_lines: List[str]):
+                code_text = '\n'.join(content_lines or [])
+                code_text = re.sub(r'[\uFE00-\uFE0F\u200B-\u200D\u2060]', '', code_text)
+                code_text = unicodedata.normalize('NFKC', code_text).strip('\n')
+                if not code_text:
+                    return
+                p = doc.add_paragraph()
+                p.paragraph_format.left_indent = Inches(0.18)
+                p.paragraph_format.right_indent = Inches(0.18)
+                p.paragraph_format.space_before = Pt(6)
+                p.paragraph_format.space_after = Pt(8)
+                run = p.add_run(code_text)
+                run.font.name = 'Consolas'
+                run.font.size = Pt(9)
+                run.font.color.rgb = RGBColor(17, 24, 39)
+                if run._element.rPr is not None and run._element.rPr.rFonts is not None:
+                    run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Consolas')
+                _set_paragraph_shading(p, "F3F4F6")
+             
             # Set document properties
             core_props = doc.core_properties
-            core_props.title = report.title
+            core_props.title = _sanitize_word_text(report.title)
             core_props.author = "VRAgent Security Scanner"
-            
+
+            # Base typography
+            normal_style = doc.styles['Normal']
+            normal_style.font.name = 'Calibri'
+            normal_style.font.size = Pt(10.5)
+            normal_style.font.color.rgb = RGBColor(17, 24, 39)
+            if normal_style._element.rPr is not None and normal_style._element.rPr.rFonts is not None:
+                normal_style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Calibri')
+            normal_style.paragraph_format.space_after = Pt(6)
+            normal_style.paragraph_format.line_spacing = 1.25
+
+            heading_specs = [
+                ('Heading 1', 15, RGBColor(17, 24, 39), 18, 8),
+                ('Heading 2', 13, RGBColor(31, 41, 55), 14, 6),
+                ('Heading 3', 12, RGBColor(55, 65, 81), 12, 4),
+                ('Heading 4', 11, RGBColor(75, 85, 99), 10, 4),
+            ]
+            for style_name, font_size, color, before, after in heading_specs:
+                style = doc.styles[style_name]
+                style.font.name = 'Calibri'
+                style.font.bold = True
+                style.font.size = Pt(font_size)
+                style.font.color.rgb = color
+                if style._element.rPr is not None and style._element.rPr.rFonts is not None:
+                    style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Calibri')
+                style.paragraph_format.space_before = Pt(before)
+                style.paragraph_format.space_after = Pt(after)
+
+            title_style = doc.styles['Title']
+            title_style.font.name = 'Calibri'
+            title_style.font.bold = True
+            title_style.font.size = Pt(24)
+            title_style.font.color.rgb = RGBColor(15, 23, 42)
+            if title_style._element.rPr is not None and title_style._element.rPr.rFonts is not None:
+                title_style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Calibri')
+             
             # Title
-            title_para = doc.add_heading(report.title, 0)
+            title_para = doc.add_paragraph(_sanitize_word_text(report.title), style='Title')
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
+            subtitle = doc.add_paragraph(
+                _sanitize_word_text(
+                    f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by VRAgent"
+                )
+            )
+            subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if subtitle.runs:
+                subtitle.runs[0].font.size = Pt(10)
+                subtitle.runs[0].font.color.rgb = RGBColor(75, 85, 99)
+                subtitle.runs[0].italic = True
+            _add_horizontal_rule()
+             
             # Parse markdown and convert to Word elements
             lines = md_content.split('\n')
             i = 0
@@ -7960,36 +10384,21 @@ All potential matches were filtered as false positives or placeholders.
                                 if img_bytes:
                                     try:
                                         img_buffer = BytesIO(img_bytes)
-                                        doc.add_picture(img_buffer, width=Inches(6))
+                                        doc.add_picture(img_buffer, width=Inches(6.5))
                                         # Center the image
                                         last_para = doc.paragraphs[-1]
                                         last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                        last_para.paragraph_format.space_after = Pt(10)
                                     except Exception as img_err:
                                         logger.warning(f"Failed to add mermaid image to Word: {img_err}")
                                         # Fallback to code
-                                        p = doc.add_paragraph()
-                                        p.paragraph_format.left_indent = Inches(0.25)
-                                        run = p.add_run('\n'.join(code_content))
-                                        run.font.name = 'Consolas'
-                                        run.font.size = Pt(9)
+                                        _add_code_block(code_content)
                                 else:
                                     # Fallback: show as code block
-                                    p = doc.add_paragraph()
-                                    p.paragraph_format.left_indent = Inches(0.25)
-                                    run = p.add_run('\n'.join(code_content))
-                                    run.font.name = 'Consolas'
-                                    run.font.size = Pt(9)
+                                    _add_code_block(code_content)
                             else:
                                 # Regular code block
-                                p = doc.add_paragraph()
-                                p.paragraph_format.left_indent = Inches(0.25)
-                                run = p.add_run('\n'.join(code_content))
-                                run.font.name = 'Consolas'
-                                run.font.size = Pt(9)
-                                # Add shading
-                                shading = OxmlElement('w:shd')
-                                shading.set(qn('w:fill'), 'E8E8E8')
-                                p._p.get_or_add_pPr().append(shading)
+                                _add_code_block(code_content)
                         code_content = []
                         code_language = None
                         in_code_block = False
@@ -8028,6 +10437,7 @@ All potential matches were filtered as false positives or placeholders.
                         col_count = max(len(row) for row in table_rows)
                         table = doc.add_table(rows=len(table_rows), cols=col_count)
                         table.style = 'Table Grid'
+                        table.autofit = True
                         
                         for row_idx, row_data in enumerate(table_rows):
                             row = table.rows[row_idx]
@@ -8035,52 +10445,60 @@ All potential matches were filtered as false positives or placeholders.
                                 if col_idx < col_count:
                                     cell = row.cells[col_idx]
                                     # Clean markdown from cell text
-                                    clean_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', cell_text)
-                                    clean_text = re.sub(r'`([^`]+)`', r'\1', clean_text)
+                                    clean_text = _sanitize_word_text(_strip_markdown_formatting(cell_text))
                                     cell.text = clean_text
-                                    # Bold header row
-                                    if row_idx == 0:
-                                        for para in cell.paragraphs:
-                                            for run in para.runs:
+                                    for para in cell.paragraphs:
+                                        para.paragraph_format.space_before = Pt(1)
+                                        para.paragraph_format.space_after = Pt(1)
+                                        for run in para.runs:
+                                            run.font.name = 'Calibri'
+                                            run.font.size = Pt(10)
+                                            run.font.color.rgb = RGBColor(17, 24, 39)
+                                            if row_idx == 0:
                                                 run.bold = True
-                        
+                                        if row_idx == 0:
+                                            _set_cell_shading(cell, "E5E7EB")
+                                        elif row_idx % 2 == 0:
+                                            _set_cell_shading(cell, "F9FAFB")
+                         
                         doc.add_paragraph()  # Space after table
                     table_rows = []
                     in_table = False
-                
+                 
                 # Headers
                 if line.startswith('# '):
-                    text = _html_to_plain_text(line[2:]) if '<' in line else _strip_markdown_formatting(line[2:])
+                    text = _sanitize_word_text(_html_to_plain_text(line[2:]) if '<' in line else _strip_markdown_formatting(line[2:]))
                     doc.add_heading(text, 1)
                 elif line.startswith('## '):
-                    text = _html_to_plain_text(line[3:]) if '<' in line else _strip_markdown_formatting(line[3:])
-                    doc.add_heading(text, 1)
-                elif line.startswith('### '):
-                    text = _html_to_plain_text(line[4:]) if '<' in line else _strip_markdown_formatting(line[4:])
+                    text = _sanitize_word_text(_html_to_plain_text(line[3:]) if '<' in line else _strip_markdown_formatting(line[3:]))
                     doc.add_heading(text, 2)
-                elif line.startswith('#### '):
-                    text = _html_to_plain_text(line[5:]) if '<' in line else _strip_markdown_formatting(line[5:])
+                elif line.startswith('### '):
+                    text = _sanitize_word_text(_html_to_plain_text(line[4:]) if '<' in line else _strip_markdown_formatting(line[4:]))
                     doc.add_heading(text, 3)
+                elif line.startswith('#### '):
+                    text = _sanitize_word_text(_html_to_plain_text(line[5:]) if '<' in line else _strip_markdown_formatting(line[5:]))
+                    doc.add_heading(text, 4)
                 # Bullet points
                 elif line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('• '):
-                    text = line.strip()[2:]
+                    text = _sanitize_word_text(line.strip()[2:])
                     p = doc.add_paragraph(style='List Bullet')
                     _add_formatted_text(p, text)
+                    p.paragraph_format.space_after = Pt(3)
                 # Numbered lists
                 elif re.match(r'^\s*\d+\.\s+', line):
-                    text = re.sub(r'^\s*\d+\.\s+', '', line)
+                    text = _sanitize_word_text(re.sub(r'^\s*\d+\.\s+', '', line))
                     p = doc.add_paragraph(style='List Number')
                     _add_formatted_text(p, text)
+                    p.paragraph_format.space_after = Pt(3)
                 # Horizontal rule
                 elif line.strip() == '---':
-                    p = doc.add_paragraph()
-                    p.paragraph_format.space_before = Pt(12)
-                    p.paragraph_format.space_after = Pt(12)
+                    _add_horizontal_rule()
                 # Regular paragraph
                 elif line.strip():
                     p = doc.add_paragraph()
-                    _add_formatted_text(p, line)
-                
+                    _add_formatted_text(p, _sanitize_word_text(line))
+                    p.paragraph_format.space_after = Pt(6)
+                 
                 i += 1
             
             buffer = BytesIO()
@@ -8250,17 +10668,18 @@ def _render_mermaid_to_image(mermaid_code: str, output_format: str = 'png') -> O
         if not mermaid_code:
             return None
         
-        # Kroki API endpoint
-        kroki_url = f"https://kroki.io/mermaid/{output_format}"
-        
         # Encode the mermaid code for Kroki
         # Kroki accepts plain text POST or base64 encoded in URL
         encoded = base64.urlsafe_b64encode(
             zlib.compress(mermaid_code.encode('utf-8'), 9)
         ).decode('ascii')
         
-        # Use GET with encoded diagram (more reliable)
-        url = f"https://kroki.io/mermaid/{output_format}/{encoded}"
+        # Use GET with encoded diagram (more reliable).
+        # Request 2x scale PNG for readability in exported documents.
+        if output_format == "png":
+            url = f"https://kroki.io/mermaid/{output_format}/{encoded}?scale=2"
+        else:
+            url = f"https://kroki.io/mermaid/{output_format}/{encoded}"
         
         with httpx.Client(timeout=30.0) as client:
             response = client.get(url)
@@ -8313,6 +10732,13 @@ def _add_formatted_text(paragraph, text: str):
             paragraph.add_run(part)
 
 
+class UpdateReportRequest(BaseModel):
+    """Update notes, tags, or title for a saved report."""
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+    title: Optional[str] = None
+
+
 @router.delete("/reports/{report_id}")
 def delete_report(
     report_id: int,
@@ -8322,24 +10748,25 @@ def delete_report(
     """
     Delete a saved reverse engineering report.
     """
-    from backend.models.models import ReverseEngineeringReport
-    
-    report = db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    
+    report = _ensure_reverse_engineering_report_access(
+        db,
+        _get_reverse_engineering_report_or_404(db, report_id),
+        current_user.id,
+        require_edit=True,
+    )
+
     db.delete(report)
     db.commit()
-    
+
     logger.info(f"Deleted RE report {report_id}")
-    
+
     return {"message": "Report deleted successfully", "id": report_id}
 
 
 @router.patch("/reports/{report_id}")
 def update_report(
     report_id: int,
+    update: Optional[UpdateReportRequest] = Body(None),
     notes: Optional[str] = None,
     tags: Optional[List[str]] = None,
     title: Optional[str] = None,
@@ -8349,23 +10776,29 @@ def update_report(
     """
     Update notes, tags, or title of a saved report.
     """
-    from backend.models.models import ReverseEngineeringReport
-    
-    report = db.query(ReverseEngineeringReport).filter(ReverseEngineeringReport.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    if notes is not None:
-        report.notes = notes
-    if tags is not None:
-        report.tags = tags
-    if title is not None:
-        report.title = title
-    
+    report = _ensure_reverse_engineering_report_access(
+        db,
+        _get_reverse_engineering_report_or_404(db, report_id),
+        current_user.id,
+        require_edit=True,
+    )
+
+    payload = update or UpdateReportRequest()
+
+    notes_value = payload.notes if payload.notes is not None else notes
+    tags_value = payload.tags if payload.tags is not None else tags
+    title_value = payload.title if payload.title is not None else title
+
+    if notes_value is not None:
+        report.notes = notes_value
+    if tags_value is not None:
+        report.tags = tags_value
+    if title_value is not None:
+        report.title = title_value
+
     db.commit()
     db.refresh(report)
-    
+
     return {"message": "Report updated successfully", "id": report_id}
 
 
@@ -10933,7 +13366,7 @@ async def analyze_data_flow(
     - Potential data leakage paths
     """
     try:
-        result = re_service.analyze_data_flow(
+        result = re_service.analyze_decompiled_code_data_flow(
             source_code=request.source_code,
             class_name=request.class_name
         )
@@ -13214,6 +15647,7 @@ async def export_apk_report_from_result(
     result_data: Dict[str, Any],
     format: str = Query(..., description="Export format: markdown, pdf, docx"),
     report_type: str = Query("both", description="Report type: functionality, security, both"),
+    report_title: Optional[str] = Query(None, description="Optional custom report title"),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -13230,18 +15664,51 @@ async def export_apk_report_from_result(
         raise HTTPException(status_code=400, detail="Invalid report_type. Use: functionality, security, both")
     
     try:
-        # Reconstruct ApkAnalysisResult from dict
-        from dataclasses import fields
-        
+        def _normalize_dict_list(value: Any, nested_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+            if isinstance(value, dict):
+                for key in nested_keys or []:
+                    nested = value.get(key)
+                    if isinstance(nested, list):
+                        return [item for item in nested if isinstance(item, dict)]
+            return []
+
+        resolved_title = (report_title or result_data.get("title") or "").strip()
+        if resolved_title:
+            resolved_title = resolved_title[:180]
+
         # Create permission objects
         permissions = []
         for p in result_data.get('permissions', []):
             permissions.append(re_service.ApkPermission(
                 name=p.get('name', ''),
                 description=p.get('description'),
-                is_dangerous=p.get('is_dangerous', False),
-                protection_level=p.get('protection_level')
+                is_dangerous=p.get('is_dangerous', False)
             ))
+
+        components = []
+        activities: List[str] = []
+        services: List[str] = []
+        receivers: List[str] = []
+        providers: List[str] = []
+        for c in result_data.get('components', []):
+            component = re_service.ApkComponent(
+                name=c.get('name', ''),
+                component_type=c.get('component_type', ''),
+                is_exported=c.get('is_exported', False),
+                intent_filters=c.get('intent_filters') or [],
+            )
+            components.append(component)
+            component_type = component.component_type.lower()
+            if component_type == 'activity':
+                activities.append(component.name)
+            elif component_type == 'service':
+                services.append(component.name)
+            elif component_type == 'receiver':
+                receivers.append(component.name)
+            elif component_type == 'provider':
+                providers.append(component.name)
         
         # Create certificate object if present
         certificate = None
@@ -13273,16 +15740,16 @@ async def export_apk_report_from_result(
             min_sdk=result_data.get('min_sdk'),
             target_sdk=result_data.get('target_sdk'),
             permissions=permissions,
-            components=[],  # Simplified for export
+            components=components,
             strings=[],  # Simplified for export
             secrets=result_data.get('secrets', []),
             urls=result_data.get('urls', []),
             native_libraries=result_data.get('native_libraries', []),
             certificate=certificate,
-            activities=result_data.get('activities', []),
-            services=result_data.get('services', []),
-            receivers=result_data.get('receivers', []),
-            providers=result_data.get('providers', []),
+            activities=result_data.get('activities', []) or activities,
+            services=result_data.get('services', []) or services,
+            receivers=result_data.get('receivers', []) or receivers,
+            providers=result_data.get('providers', []) or providers,
             uses_features=result_data.get('uses_features', []),
             app_name=result_data.get('app_name'),
             debuggable=result_data.get('debuggable', False),
@@ -13295,10 +15762,16 @@ async def export_apk_report_from_result(
         )
         
         # Get decompiled code findings if present
-        decompiled_findings = result_data.get('decompiled_code_findings', [])
+        decompiled_findings = _normalize_dict_list(
+            result_data.get('decompiled_code_findings', []),
+            nested_keys=['findings', 'issues', 'results'],
+        )
         
         # Get CVE scan results if present
-        cve_scan_results = result_data.get('cve_scan_results', [])
+        cve_scan_results = _normalize_dict_list(
+            result_data.get('cve_scan_results', []),
+            nested_keys=['cves', 'findings', 'results', 'items'],
+        )
         
         # Get AI diagrams if present
         ai_architecture_diagram = result_data.get('ai_architecture_diagram')
@@ -13308,7 +15781,11 @@ async def export_apk_report_from_result(
         dynamic_analysis = result_data.get('dynamic_analysis')
         
         # Generate export based on format
-        package_name = result.package_name.split('.')[-1] if result.package_name else 'apk'
+        if not resolved_title:
+            default_name = result.package_name or result.filename or "APK"
+            resolved_title = f"APK Analysis: {default_name}"
+        base_name = "".join(ch if (ch.isalnum() or ch in {"-", "_"}) else "_" for ch in resolved_title)
+        base_name = base_name.strip("_")[:120] or "apk_analysis_report"
         
         if format == "markdown":
             markdown_content = re_service.generate_apk_markdown_report(
@@ -13316,12 +15793,13 @@ async def export_apk_report_from_result(
                 cve_scan_results=cve_scan_results,
                 ai_architecture_diagram=ai_architecture_diagram,
                 ai_attack_surface_map=ai_attack_surface_map,
-                dynamic_analysis=dynamic_analysis
+                dynamic_analysis=dynamic_analysis,
+                report_title=resolved_title,
             )
             return Response(
                 content=markdown_content.encode('utf-8'),
                 media_type="text/markdown",
-                headers={"Content-Disposition": f'attachment; filename="{package_name}_report.md"'}
+                headers={"Content-Disposition": f'attachment; filename="{base_name}.md"'}
             )
         
         elif format == "pdf":
@@ -13330,12 +15808,13 @@ async def export_apk_report_from_result(
                 cve_scan_results=cve_scan_results,
                 ai_architecture_diagram=ai_architecture_diagram,
                 ai_attack_surface_map=ai_attack_surface_map,
-                dynamic_analysis=dynamic_analysis
+                dynamic_analysis=dynamic_analysis,
+                report_title=resolved_title,
             )
             return Response(
                 content=pdf_bytes,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="{package_name}_report.pdf"'}
+                headers={"Content-Disposition": f'attachment; filename="{base_name}.pdf"'}
             )
         
         elif format == "docx":
@@ -13344,16 +15823,17 @@ async def export_apk_report_from_result(
                 cve_scan_results=cve_scan_results,
                 ai_architecture_diagram=ai_architecture_diagram,
                 ai_attack_surface_map=ai_attack_surface_map,
-                dynamic_analysis=dynamic_analysis
+                dynamic_analysis=dynamic_analysis,
+                report_title=resolved_title,
             )
             return Response(
                 content=docx_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f'attachment; filename="{package_name}_report.docx"'}
+                headers={"Content-Disposition": f'attachment; filename="{base_name}.docx"'}
             )
     
     except Exception as e:
-        logger.error(f"APK export from result failed: {e}")
+        logger.exception("APK export from result failed")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 

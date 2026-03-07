@@ -58,6 +58,9 @@ services:
       OPENVAS_PASSWORD: ${OPENVAS_PASSWORD:?Set OPENVAS_PASSWORD in .env}
       # Juice Shop URL for practice scanning
       JUICESHOP_URL: http://juiceshop:3000
+      APP_OFFLINE_MODE: ${APP_OFFLINE_MODE:-false}
+      TRIVY_CACHE_DIR: ${TRIVY_CACHE_DIR:-/var/lib/trivy}
+      TRIVY_OFFLINE_MODE: ${TRIVY_OFFLINE_MODE:-false}
     ports:
       - "8000:8000"
       # MITM Proxy ports - range for multiple proxy instances
@@ -65,9 +68,11 @@ services:
     volumes:
       - upload_data:/app/uploads
       - exploit_data:/app/data
+      - trivy_cache:/var/lib/trivy
       - /var/run/docker.sock:/var/run/docker.sock
       # Offline security databases
       - ./data/offline:/app/data/offline:ro
+      - ./data/offline/trivy-cache:/app/data/offline/trivy-cache:rw
       # Optional: Mount external wordlists directory (e.g., rockyou.txt, SecLists)
       # Uncomment and modify path to use external wordlists:
       # - /path/to/wordlists:/wordlists:ro
@@ -117,8 +122,14 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       GHIDRA_HOME: /opt/ghidra
+      APP_OFFLINE_MODE: ${APP_OFFLINE_MODE:-false}
+      TRIVY_CACHE_DIR: ${TRIVY_CACHE_DIR:-/var/lib/trivy}
+      TRIVY_OFFLINE_MODE: ${TRIVY_OFFLINE_MODE:-false}
     volumes:
       - upload_data:/app/uploads
+      - trivy_cache:/var/lib/trivy
+      - ./data/offline:/app/data/offline:ro
+      - ./data/offline/trivy-cache:/app/data/offline/trivy-cache:rw
     depends_on:
       db:
         condition: service_healthy
@@ -297,7 +308,13 @@ services:
     environment:
       - NODE_ENV=unsafe
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test:
+        [
+          "CMD",
+          "/nodejs/bin/node",
+          "-e",
+          "require('http').get('http://localhost:3000/',(res)=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1));",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -309,6 +326,7 @@ volumes:
   redis_data:
   upload_data:
   exploit_data:
+  trivy_cache:
   scan_data:
   zap_data:
   zap_reports:

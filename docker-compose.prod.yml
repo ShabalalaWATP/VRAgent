@@ -79,10 +79,17 @@ services:
       # Multi-user optimizations
       MAX_PARALLEL_SCANNERS: 2  # Reduce per-scan parallelism when many users
       SCANNER_TIMEOUT: 300  # 5 min timeout per scanner
+      APP_OFFLINE_MODE: ${APP_OFFLINE_MODE:-false}
+      TRIVY_CACHE_DIR: ${TRIVY_CACHE_DIR:-/var/lib/trivy}
+      TRIVY_OFFLINE_MODE: ${TRIVY_OFFLINE_MODE:-false}
     ports:
       - "8000:8000"
     volumes:
       - upload_data:/app/uploads
+      - trivy_cache:/var/lib/trivy
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/offline:/app/data/offline:ro
+      - ./data/offline/trivy-cache:/app/data/offline/trivy-cache:rw
     cap_add:
       - NET_RAW
       - NET_ADMIN
@@ -122,8 +129,14 @@ services:
       GEMINI_MODEL_ID: ${GEMINI_MODEL_ID:-gemini-2.5-flash}
       NVD_API_KEY: ${NVD_API_KEY:-}
       ENVIRONMENT: production
+      APP_OFFLINE_MODE: ${APP_OFFLINE_MODE:-false}
+      TRIVY_CACHE_DIR: ${TRIVY_CACHE_DIR:-/var/lib/trivy}
+      TRIVY_OFFLINE_MODE: ${TRIVY_OFFLINE_MODE:-false}
     volumes:
       - upload_data:/app/uploads
+      - trivy_cache:/var/lib/trivy
+      - ./data/offline:/app/data/offline:ro
+      - ./data/offline/trivy-cache:/app/data/offline/trivy-cache:rw
     depends_on:
       db:
         condition: service_healthy
@@ -167,6 +180,7 @@ volumes:
   postgres_data:
   redis_data:
   upload_data:
+  trivy_cache:
 
 networks:
   default:

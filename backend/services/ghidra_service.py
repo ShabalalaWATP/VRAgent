@@ -282,6 +282,12 @@ def run_ghidra_decompilation(
             error_hint = ""
             if "java" in stderr_text.lower() and ("not found" in stderr_text.lower() or "no such file" in stderr_text.lower()):
                 error_hint = " Hint: Java (JDK 17+) may not be installed or JAVA_HOME is not set."
+            elif "unable to prompt user for jdk path" in (stdout_text + stderr_text).lower():
+                error_hint = (
+                    " Hint: Ghidra could not resolve a supported JDK non-interactively. "
+                    "Ghidra 11.2+ requires JDK 21; ensure JAVA_HOME points to JDK 21 and "
+                    "support/launch.properties has JAVA_HOME_OVERRIDE set."
+                )
             elif "out of memory" in stderr_text.lower() or "heap space" in stderr_text.lower():
                 error_hint = " Hint: Ghidra ran out of memory. Try reducing max_functions or analyzing a smaller binary."
             elif "unsupported" in stderr_text.lower():

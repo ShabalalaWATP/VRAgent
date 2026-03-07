@@ -22,6 +22,7 @@ import tarfile
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -135,6 +136,35 @@ BASE_IMAGE_INTELLIGENCE = {
 }
 
 
+@lru_cache(maxsize=1)
+def get_base_image_intelligence() -> Dict[str, Any]:
+    """Load base-image intelligence, allowing an optional JSON override file."""
+    intelligence = json.loads(json.dumps(BASE_IMAGE_INTELLIGENCE))
+    override_path = os.getenv("VRA_DOCKER_BASE_IMAGE_INTELLIGENCE_PATH")
+    if not override_path:
+        return intelligence
+
+    try:
+        with open(override_path, "r", encoding="utf-8") as handle:
+            override_data = json.load(handle)
+        if not isinstance(override_data, dict):
+            raise ValueError("override must be a JSON object")
+
+        for section in ("eol", "compromised", "vulnerable", "discouraged", "typosquatting"):
+            override_section = override_data.get(section)
+            if isinstance(override_section, dict):
+                intelligence.setdefault(section, {})
+                intelligence[section].update(override_section)
+
+        override_registries = override_data.get("trusted_registries")
+        if isinstance(override_registries, list):
+            intelligence["trusted_registries"] = override_registries
+    except Exception as exc:
+        logger.warning(f"Failed to load Docker base-image intelligence override {override_path}: {exc}")
+
+    return intelligence
+
+
 @dataclass
 class BaseImageFinding:
     """Finding from base image intelligence check."""
@@ -152,13 +182,14 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
     Returns findings for EOL, compromised, vulnerable, discouraged, or typosquatting images.
     """
     findings: List[BaseImageFinding] = []
+    intelligence = get_base_image_intelligence()
 
     # Normalize image name
     image_lower = image_name.lower().strip()
 
     # Remove registry prefix for matching
     image_without_registry = image_lower
-    for registry in BASE_IMAGE_INTELLIGENCE["trusted_registries"]:
+    for registry in intelligence["trusted_registries"]:
         if image_lower.startswith(f"{registry}/"):
             image_without_registry = image_lower[len(registry) + 1:]
             break
@@ -172,8 +203,8 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
 
     # Check for typosquatting first (most critical)
     base_name = image_base.split("/")[-1]  # Get just the image name without org
-    if base_name in BASE_IMAGE_INTELLIGENCE["typosquatting"]:
-        info = BASE_IMAGE_INTELLIGENCE["typosquatting"][base_name]
+    if base_name in intelligence["typosquatting"]:
+        info = intelligence["typosquatting"][base_name]
         findings.append(BaseImageFinding(
             image=image_name,
             category="typosquatting",
@@ -184,7 +215,7 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
         ))
 
     # Check for EOL images
-    for eol_pattern, info in BASE_IMAGE_INTELLIGENCE["eol"].items():
+    for eol_pattern, info in intelligence["eol"].items():
         # Match patterns like "python:2" against "python:2.7.18"
         if image_without_registry.startswith(eol_pattern) or image_without_registry == eol_pattern:
             findings.append(BaseImageFinding(
@@ -198,7 +229,7 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
             break
 
     # Check for compromised images
-    for comp_pattern, info in BASE_IMAGE_INTELLIGENCE["compromised"].items():
+    for comp_pattern, info in intelligence["compromised"].items():
         if comp_pattern in image_without_registry:
             findings.append(BaseImageFinding(
                 image=image_name,
@@ -220,7 +251,7 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
             recommendation="Pin to a specific version tag or SHA256 digest",
         ))
 
-    for disc_pattern, info in BASE_IMAGE_INTELLIGENCE["discouraged"].items():
+    for disc_pattern, info in intelligence["discouraged"].items():
         if image_without_registry == disc_pattern:
             findings.append(BaseImageFinding(
                 image=image_name,
@@ -236,7 +267,7 @@ def check_base_image_intelligence(image_name: str) -> List[BaseImageFinding]:
     has_registry = "/" in image_name and ("." in image_name.split("/")[0] or ":" in image_name.split("/")[0])
     if has_registry:
         registry = image_name.split("/")[0]
-        if registry not in BASE_IMAGE_INTELLIGENCE["trusted_registries"]:
+        if registry not in intelligence["trusted_registries"]:
             findings.append(BaseImageFinding(
                 image=image_name,
                 category="untrusted",
@@ -902,7 +933,92 @@ class DockerScanResult:
 
 def is_trivy_available() -> bool:
     """Check if Trivy is installed and available."""
-    return shutil.which("trivy") is not None
+    return _get_trivy_executable() is not None
+
+
+def _get_trivy_executable() -> Optional[str]:
+    """Resolve the Trivy executable path, including common Windows install locations."""
+    env_path = os.getenv("TRIVY_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+
+    resolved = shutil.which("trivy")
+    if resolved:
+        return resolved
+
+    if os.name == "nt":
+        local_app_data = os.getenv("LOCALAPPDATA", "")
+        program_files = os.getenv("ProgramFiles", "")
+        candidate_paths = [
+            os.path.join(local_app_data, "Programs", "Trivy", "trivy.exe"),
+            os.path.join(local_app_data, "Microsoft", "WinGet", "Packages", "AquaSecurity.Trivy_Microsoft.Winget.Source_8wekyb3d8bbwe", "trivy.exe"),
+            os.path.join(program_files, "Trivy", "trivy.exe"),
+            r"C:\ProgramData\chocolatey\bin\trivy.exe",
+        ]
+        for candidate in candidate_paths:
+            if candidate and os.path.exists(candidate):
+                return candidate
+
+    return None
+
+
+def _trivy_offline_mode_enabled() -> bool:
+    """Whether Trivy should avoid network lookups and DB refreshes."""
+    return os.getenv("TRIVY_OFFLINE_MODE", os.getenv("TRIVY_OFFLINE", "")).strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
+def _build_trivy_image_command(
+    image_name: str,
+    *,
+    output_format: str = "json",
+    scanners: Optional[List[str]] = None,
+    list_all_packages: bool = False,
+) -> Optional[List[str]]:
+    """Build a Trivy image command with the repo's shared cache/offline settings."""
+    trivy_executable = _get_trivy_executable()
+    if not trivy_executable:
+        return None
+
+    cmd = [
+        trivy_executable,
+        "image",
+        "--format",
+        output_format,
+        "--quiet",
+    ]
+    if scanners:
+        cmd.extend(["--scanners", ",".join(scanners)])
+    if list_all_packages:
+        cmd.append("--list-all-pkgs")
+
+    cache_dir = os.getenv("TRIVY_CACHE_DIR", "").strip()
+    if cache_dir:
+        cmd.extend(["--cache-dir", cache_dir])
+    if _trivy_offline_mode_enabled():
+        cmd.extend(["--offline-scan", "--skip-db-update", "--skip-java-db-update"])
+
+    cmd.append(image_name)
+    return cmd
+
+
+def _normalize_trivy_severity(value: Any) -> str:
+    return str(value or "unknown").strip().lower() or "unknown"
+
+
+def _extract_trivy_layer_metadata(value: Any) -> Dict[str, Optional[str]]:
+    if isinstance(value, dict):
+        return {
+            "digest": value.get("Digest"),
+            "diff_id": value.get("DiffID"),
+        }
+    return {"digest": None, "diff_id": None}
+
+
+def _increment_severity(counter: Dict[str, int], severity: Any) -> None:
+    key = _normalize_trivy_severity(severity)
+    counter[key] = counter.get(key, 0) + 1
 
 
 def is_docker_available() -> bool:
@@ -1570,21 +1686,20 @@ def scan_image_with_trivy(image_name: str, timeout: int = 300) -> List[DockerVul
     """
     Scan a Docker image using Trivy.
     """
-    if not is_trivy_available():
+    cmd = _build_trivy_image_command(
+        image_name,
+        output_format="json",
+        scanners=["vuln"],
+    )
+    if cmd is None:
         logger.warning("Trivy not available, skipping image scan")
         return []
     
     vulnerabilities: List[DockerVulnerability] = []
     
     try:
-        # Run Trivy with JSON output
-        cmd = [
-            "trivy", "image",
-            "--format", "json",
-            "--severity", "CRITICAL,HIGH,MEDIUM,LOW",
-            "--quiet",
-            image_name
-        ]
+        image_ref = cmd[-1]
+        cmd = cmd[:-1] + ["--severity", "CRITICAL,HIGH,MEDIUM,LOW", image_ref]
         
         result = subprocess.run(
             cmd,
@@ -2678,6 +2793,34 @@ class DockerCVEResult:
     scan_duration_seconds: float = 0.0
     trivy_available: bool = False
     enrichment_applied: bool = False
+    epss_enabled: bool = False
+    epss_available: bool = True
+    epss_source: Optional[str] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class DockerTrivyScanResult:
+    """Parsed native Trivy scan results for a Docker image."""
+    image_name: str
+    enabled_scanners: List[str]
+    trivy_available: bool = False
+    artifact_name: Optional[str] = None
+    artifact_type: Optional[str] = None
+    os_family: Optional[str] = None
+    os_name: Optional[str] = None
+    trivy_version: Optional[str] = None
+    schema_version: Optional[int] = None
+    package_count: int = 0
+    vulnerabilities: List[Dict[str, Any]] = field(default_factory=list)
+    misconfigurations: List[Dict[str, Any]] = field(default_factory=list)
+    secrets: List[Dict[str, Any]] = field(default_factory=list)
+    licenses: List[Dict[str, Any]] = field(default_factory=list)
+    vulnerability_severity_counts: Dict[str, int] = field(default_factory=dict)
+    misconfiguration_severity_counts: Dict[str, int] = field(default_factory=dict)
+    secret_severity_counts: Dict[str, int] = field(default_factory=dict)
+    license_severity_counts: Dict[str, int] = field(default_factory=dict)
+    scan_duration_seconds: float = 0.0
     error: Optional[str] = None
 
 
@@ -2746,7 +2889,7 @@ async def extract_packages_from_image(
     Extract installed packages from a Docker image using Trivy.
 
     Uses Trivy with --list-all-pkgs to get a complete package inventory.
-    Falls back to basic layer extraction if Trivy is not available.
+    Returns a clear error when Trivy is not available.
 
     Args:
         image_name: Docker image name (e.g., "python:3.9-slim")
@@ -2755,29 +2898,28 @@ async def extract_packages_from_image(
     Returns:
         Tuple of (list of DockerPackage, metadata dict)
     """
+    cmd = _build_trivy_image_command(
+        image_name,
+        output_format="json",
+        list_all_packages=True,
+    )
+    trivy_available = cmd is not None
     metadata = {
-        "trivy_available": is_trivy_available(),
-        "extraction_method": "trivy" if is_trivy_available() else "none",
+        "trivy_available": trivy_available,
+        "extraction_method": "trivy" if trivy_available else "none",
         "os_detected": None,
         "packages_by_type": {},
+        "error": None,
     }
 
-    if not is_trivy_available():
-        logger.warning("Trivy not available for package extraction")
+    if not trivy_available:
+        metadata["error"] = "Trivy is required for Docker package extraction and CVE scanning"
+        logger.warning(metadata["error"])
         return [], metadata
 
     packages: List[DockerPackage] = []
 
     try:
-        # Run Trivy with --list-all-pkgs to get ALL packages (not just vulnerable ones)
-        cmd = [
-            "trivy", "image",
-            "--format", "json",
-            "--list-all-pkgs",  # This is key - shows all packages
-            "--quiet",
-            image_name
-        ]
-
         logger.info(f"Extracting packages from {image_name} using Trivy")
 
         result = subprocess.run(
@@ -2799,6 +2941,7 @@ async def extract_packages_from_image(
 
         if not result.stdout:
             logger.warning("Trivy returned empty output")
+            metadata["error"] = "Trivy returned empty output during package extraction"
             return [], metadata
 
         data = json.loads(result.stdout)
@@ -2869,6 +3012,240 @@ async def extract_packages_from_image(
     return packages, metadata
 
 
+async def scan_image_with_trivy_native(
+    image_name: str,
+    *,
+    include_vulnerabilities: bool = False,
+    include_misconfigurations: bool = True,
+    include_secrets: bool = True,
+    include_licenses: bool = False,
+    timeout: int = 300,
+) -> DockerTrivyScanResult:
+    """
+    Run Trivy's native image scanners and normalize the results for the Docker Inspector.
+
+    This intentionally complements the repo's own CVE/layer intelligence instead of replacing it.
+    """
+    import time
+
+    scanners: List[str] = []
+    if include_vulnerabilities:
+        scanners.append("vuln")
+    if include_misconfigurations:
+        scanners.append("misconfig")
+    if include_secrets:
+        scanners.append("secret")
+    if include_licenses:
+        scanners.append("license")
+
+    result = DockerTrivyScanResult(
+        image_name=image_name,
+        enabled_scanners=scanners,
+        trivy_available=is_trivy_available(),
+    )
+
+    if not scanners:
+        return result
+
+    cmd = _build_trivy_image_command(
+        image_name,
+        output_format="json",
+        scanners=scanners,
+    )
+    if cmd is None:
+        result.error = "Trivy is required for native Docker scanner features"
+        return result
+
+    start_time = time.time()
+    try:
+        logger.info(f"Running native Trivy scanners {scanners} against {image_name}")
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        result.scan_duration_seconds = time.time() - start_time
+
+        if proc.returncode != 0:
+            stderr = (proc.stderr or "").strip()
+            if "No such image" in stderr:
+                result.error = f"Image not found: {image_name}"
+            else:
+                result.error = stderr[:500] or "Trivy native scan failed"
+            return result
+
+        if not proc.stdout:
+            result.error = "Trivy native scan returned empty output"
+            return result
+
+        data = json.loads(proc.stdout)
+        metadata = data.get("Metadata") if isinstance(data.get("Metadata"), dict) else {}
+        os_info = metadata.get("OS") if isinstance(metadata.get("OS"), dict) else {}
+        trivy_meta = data.get("Trivy")
+        result.artifact_name = data.get("ArtifactName") or image_name
+        result.artifact_type = data.get("ArtifactType")
+        result.os_family = os_info.get("Family")
+        result.os_name = os_info.get("Name")
+        result.trivy_version = trivy_meta.get("Version") if isinstance(trivy_meta, dict) else trivy_meta
+        result.schema_version = data.get("SchemaVersion")
+
+        package_ids: Set[str] = set()
+        for result_item in data.get("Results", []):
+            target = result_item.get("Target")
+            result_type = result_item.get("Type")
+            result_class = result_item.get("Class")
+
+            for package in result_item.get("Packages") or []:
+                pkg_identifier = package.get("ID") or f"{package.get('Name')}@{package.get('Version')}"
+                if pkg_identifier:
+                    package_ids.add(str(pkg_identifier))
+
+            for vuln in result_item.get("Vulnerabilities") or []:
+                _increment_severity(result.vulnerability_severity_counts, vuln.get("Severity"))
+                data_source = vuln.get("DataSource") if isinstance(vuln.get("DataSource"), dict) else {}
+                layer_meta = _extract_trivy_layer_metadata(vuln.get("Layer"))
+                result.vulnerabilities.append({
+                    "vulnerability_id": vuln.get("VulnerabilityID"),
+                    "package_name": vuln.get("PkgName"),
+                    "installed_version": vuln.get("InstalledVersion"),
+                    "fixed_version": vuln.get("FixedVersion"),
+                    "status": vuln.get("Status"),
+                    "severity": _normalize_trivy_severity(vuln.get("Severity")),
+                    "severity_source": vuln.get("SeveritySource"),
+                    "title": vuln.get("Title"),
+                    "description": vuln.get("Description"),
+                    "primary_url": vuln.get("PrimaryURL"),
+                    "references": (vuln.get("References") or [])[:5],
+                    "target": target,
+                    "class": result_class,
+                    "type": result_type,
+                    "cwe_ids": vuln.get("CweIDs") or [],
+                    "cvss": vuln.get("CVSS") or {},
+                    "vendor_severity": vuln.get("VendorSeverity") or {},
+                    "data_source": data_source,
+                    "published_date": vuln.get("PublishedDate"),
+                    "last_modified_date": vuln.get("LastModifiedDate"),
+                    "fingerprint": vuln.get("Fingerprint"),
+                    "layer": layer_meta,
+                })
+
+            for finding in result_item.get("Misconfigurations") or []:
+                _increment_severity(result.misconfiguration_severity_counts, finding.get("Severity"))
+                layer_meta = _extract_trivy_layer_metadata(finding.get("Layer"))
+                result.misconfigurations.append({
+                    "id": finding.get("ID") or finding.get("AVDID"),
+                    "avd_id": finding.get("AVDID"),
+                    "title": finding.get("Title"),
+                    "description": finding.get("Description"),
+                    "message": finding.get("Message"),
+                    "resolution": finding.get("Resolution"),
+                    "severity": _normalize_trivy_severity(finding.get("Severity")),
+                    "primary_url": finding.get("PrimaryURL"),
+                    "references": (finding.get("References") or [])[:5],
+                    "query": finding.get("Query"),
+                    "namespace": finding.get("Namespace"),
+                    "status": finding.get("Status"),
+                    "target": target,
+                    "type": result_type,
+                    "class": result_class,
+                    "cause_metadata": finding.get("CauseMetadata"),
+                    "layer": layer_meta,
+                })
+
+            for finding in result_item.get("Secrets") or []:
+                _increment_severity(result.secret_severity_counts, finding.get("Severity"))
+                layer_meta = _extract_trivy_layer_metadata(finding.get("Layer"))
+                result.secrets.append({
+                    "rule_id": finding.get("RuleID"),
+                    "category": finding.get("Category"),
+                    "title": finding.get("Title"),
+                    "severity": _normalize_trivy_severity(finding.get("Severity")),
+                    "match": finding.get("Match"),
+                    "start_line": finding.get("StartLine"),
+                    "end_line": finding.get("EndLine"),
+                    "target": target,
+                    "type": result_type,
+                    "class": result_class,
+                    "code": finding.get("Code"),
+                    "layer": layer_meta,
+                })
+
+            for finding in result_item.get("Licenses") or []:
+                _increment_severity(result.license_severity_counts, finding.get("Severity"))
+                result.licenses.append({
+                    "name": finding.get("Name"),
+                    "severity": _normalize_trivy_severity(finding.get("Severity")),
+                    "category": finding.get("Category"),
+                    "package_name": finding.get("PkgName"),
+                    "file_path": finding.get("FilePath"),
+                    "confidence": finding.get("Confidence"),
+                    "link": finding.get("Link"),
+                    "target": target,
+                    "type": result_type,
+                    "class": result_class,
+                })
+
+        result.package_count = len(package_ids)
+        return result
+    except subprocess.TimeoutExpired:
+        result.scan_duration_seconds = time.time() - start_time
+        result.error = f"Trivy native scan timed out after {timeout}s"
+        return result
+    except json.JSONDecodeError as exc:
+        result.scan_duration_seconds = time.time() - start_time
+        result.error = f"Failed to parse Trivy output: {exc}"
+        return result
+    except Exception as exc:
+        result.scan_duration_seconds = time.time() - start_time
+        logger.error(f"Native Trivy scan failed for {image_name}: {exc}")
+        result.error = str(exc)
+        return result
+
+
+def generate_trivy_sbom(
+    image_name: str,
+    *,
+    format: str = "cyclonedx",
+    timeout: int = 300,
+) -> Tuple[Optional[bytes], Optional[str], Optional[str]]:
+    """Generate a Trivy SBOM for a Docker image."""
+    normalized_format = str(format or "cyclonedx").strip().lower()
+    if normalized_format not in {"cyclonedx", "spdx-json"}:
+        return None, None, "Invalid SBOM format. Use 'cyclonedx' or 'spdx-json'."
+
+    cmd = _build_trivy_image_command(
+        image_name,
+        output_format=normalized_format,
+    )
+    if cmd is None:
+        return None, None, "Trivy is required for SBOM export"
+
+    try:
+        logger.info(f"Generating Trivy SBOM ({normalized_format}) for {image_name}")
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=False,
+            timeout=timeout,
+        )
+        if proc.returncode != 0:
+            stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            if "No such image" in stderr:
+                return None, None, f"Image not found: {image_name}"
+            return None, None, stderr[:500] or "Trivy SBOM generation failed"
+        if not proc.stdout:
+            return None, None, "Trivy SBOM generation returned empty output"
+
+        media_type = "application/json"
+        return proc.stdout, media_type, None
+    except subprocess.TimeoutExpired:
+        return None, None, f"Trivy SBOM generation timed out after {timeout}s"
+    except Exception as exc:
+        logger.error(f"Failed to generate Trivy SBOM for {image_name}: {exc}")
+        return None, None, str(exc)
+
+
 async def scan_image_packages_for_cves(
     image_name: str,
     include_nvd_enrichment: bool = True,
@@ -2914,6 +3291,7 @@ async def scan_image_packages_for_cves(
 
         if pkg_metadata.get("error"):
             result.error = pkg_metadata["error"]
+            result.scan_duration_seconds = time.time() - start_time
             return result
 
         if not packages:
@@ -2973,17 +3351,80 @@ async def scan_image_packages_for_cves(
         # 5. Enrich with NVD/EPSS/KEV if requested
         if include_nvd_enrichment or include_kev or include_epss:
             from backend.services import nvd_service
+            from backend.services import epss_service
 
-            # Use the full enrichment function
-            if include_nvd_enrichment and include_kev and include_epss:
+            epss_stats = epss_service.get_local_epss_db_stats()
+            epss_local_available = bool(epss_stats.get("available"))
+            effective_include_epss = include_epss
+
+            if settings.app_offline_mode:
+                result.epss_available = epss_local_available
+                result.epss_source = "local_db" if epss_local_available else "disabled"
+                if include_epss and not epss_local_available:
+                    effective_include_epss = False
+                    logger.info(
+                        "APP_OFFLINE_MODE enabled - disabling EPSS enrichment because no local EPSS database is available"
+                    )
+            else:
+                result.epss_available = True
+                result.epss_source = "api_or_cache"
+
+            enrichment_applied = False
+            if include_nvd_enrichment and include_kev and effective_include_epss:
                 vuln_dicts = await nvd_service.enrich_all_parallel(vuln_dicts)
+                enrichment_applied = True
+                result.epss_enabled = True
+            else:
+                if include_nvd_enrichment:
+                    vuln_dicts = await nvd_service.enrich_vulnerabilities_with_nvd(
+                        vuln_dicts,
+                        include_kev=include_kev
+                    )
+                    enrichment_applied = True
+                elif include_kev:
+                    cve_ids = [
+                        str(vuln.get("external_id", "")).upper()
+                        for vuln in vuln_dicts
+                        if str(vuln.get("external_id", "")).upper().startswith("CVE-")
+                    ]
+                    kev_status = await nvd_service.check_kev_status(cve_ids) if cve_ids else {}
+                    for vuln in vuln_dicts:
+                        cve_id = str(vuln.get("external_id", "")).upper()
+                        if cve_id.startswith("CVE-"):
+                            vuln["in_kev"] = kev_status.get(cve_id, False)
+                    enrichment_applied = bool(cve_ids)
+
+                if effective_include_epss:
+                    vuln_dicts = await epss_service.enrich_vulnerabilities_with_epss(vuln_dicts)
+                    enrichment_applied = True
+                    result.epss_enabled = True
+
+            if enrichment_applied:
                 result.enrichment_applied = True
-            elif include_nvd_enrichment:
-                vuln_dicts = await nvd_service.enrich_vulnerabilities_with_nvd(
-                    vuln_dicts,
-                    include_kev=include_kev
-                )
-                result.enrichment_applied = True
+
+        for vuln in vuln_dicts:
+            if vuln.get("severity"):
+                continue
+
+            nvd_enrichment = vuln.get("nvd_enrichment") or {}
+            cvss_v4 = nvd_enrichment.get("cvss_v4") or {}
+            cvss_v3 = nvd_enrichment.get("cvss_v3") or {}
+            derived_severity = cvss_v4.get("base_severity") or cvss_v3.get("base_severity")
+
+            if not derived_severity:
+                score = vuln.get("cvss_score")
+                if isinstance(score, (int, float)):
+                    if score >= 9.0:
+                        derived_severity = "critical"
+                    elif score >= 7.0:
+                        derived_severity = "high"
+                    elif score >= 4.0:
+                        derived_severity = "medium"
+                    else:
+                        derived_severity = "low"
+
+            if derived_severity:
+                vuln["severity"] = str(derived_severity).lower()
 
         # 6. Calculate statistics
         packages_with_vulns = set()

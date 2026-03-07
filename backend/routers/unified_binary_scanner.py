@@ -273,6 +273,9 @@ async def unified_binary_scan(
             file_size=file_size,
             started_at=start_time
         )
+        binary_result = None
+        is_legitimate_software = False
+        legitimacy_indicators: List[str] = []
 
         def make_progress(message: str, progress: int) -> str:
             """Helper to format SSE progress event."""
@@ -321,6 +324,13 @@ async def unified_binary_scan(
                 result.file_type = binary_result.metadata.file_type if binary_result.metadata else None
                 result.entropy = getattr(binary_result.metadata, 'entropy', None) if binary_result.metadata else None
 
+                # Use shared legitimacy assessment so later scanning can reduce false positives.
+                is_legitimate_software, legitimacy_indicators = re_service.assess_binary_legitimacy(
+                    binary_result,
+                    filename=filename,
+                )
+                result.is_legitimate_software = is_legitimate_software
+
                 yield make_progress(f"Found {len(result.imports)} imports, {len(result.secrets)} secrets", 100)
                 update_phase("static", "completed", progress=100)
             except Exception as e:
@@ -329,6 +339,13 @@ async def unified_binary_scan(
                 yield make_progress(f"Static analysis error: {e}", 100)
 
             await asyncio.sleep(0.1)
+
+            if binary_result is None:
+                error_msg = "Static analysis did not produce a usable result"
+                logger.error(error_msg)
+                yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                return
 
             # =================================================================
             # PHASE 2: Ghidra Decompilation (Optional)
@@ -344,12 +361,18 @@ async def unified_binary_scan(
                     ghidra_result = re_service.analyze_binary_with_ghidra(
                         tmp_path,
                         max_functions=200,
-                        decomp_limit=4000
+                        decomp_limit=4000,
+                        selection_mode="smart",
                     )
 
                     if ghidra_result and "error" not in ghidra_result:
                         functions = ghidra_result.get("functions", [])
                         result.total_functions = len(functions)
+                        mode_used = (
+                            ghidra_result.get("selection_mode_effective")
+                            or ghidra_result.get("selection_mode")
+                            or "unknown"
+                        )
 
                         yield make_progress(f"Decompiled {len(functions)} functions...", 50)
 
@@ -363,8 +386,11 @@ async def unified_binary_scan(
                         if ai_summaries:
                             result.decompiled_functions = ai_summaries
 
-                        yield make_progress(f"Decompilation complete: {len(functions)} functions", 100)
-                        update_phase("ghidra", "completed", progress=100)
+                        yield make_progress(
+                            f"Decompilation complete: {len(functions)} functions (mode: {mode_used})",
+                            100,
+                        )
+                        update_phase("ghidra", "completed", f"Mode: {mode_used}", progress=100)
                     else:
                         error_msg = ghidra_result.get("error", "Unknown error") if ghidra_result else "No result"
                         update_phase("ghidra", "error", error_msg)
@@ -389,14 +415,15 @@ async def unified_binary_scan(
 
                     vuln_scan_result = re_service.scan_decompiled_binary_comprehensive(
                         ghidra_result,
-                        is_legitimate_software=False
+                        is_legitimate_software=is_legitimate_software
                     )
 
                     result.vulnerability_findings = vuln_scan_result.get("findings", [])
                     result.vulnerability_summary = vuln_scan_result.get("summary", {})
 
                     total_vulns = len(result.vulnerability_findings)
-                    yield make_progress(f"Found {total_vulns} potential vulnerabilities", 100)
+                    severity_label = " (legitimacy-filtered)" if is_legitimate_software else ""
+                    yield make_progress(f"Found {total_vulns} potential vulnerabilities{severity_label}", 100)
                     update_phase("vuln_scan", "completed", progress=100)
                 else:
                     update_phase("vuln_scan", "skipped", "No Ghidra result available")
@@ -1132,29 +1159,32 @@ async def verify_all_findings(
 
     try:
         # Import the verification function from reverse engineering service
-        from backend.services.reverse_engineering_service import verify_binary_findings_unified
+        from backend.services.reverse_engineering_service import (
+            verify_binary_findings_unified,
+            assess_binary_legitimacy,
+        )
 
-        # Check if this appears to be legitimate software (reduce false positives)
-        is_legitimate = False
-        legitimacy_indicators = []
-
-        # Check filename for known publishers
-        LEGITIMATE_PUBLISHERS = {
-            "microsoft", "google", "mozilla", "apple", "adobe", "oracle",
-            "chrome", "firefox", "edge", "vscode", "office", "windows",
-        }
-        filename_lower = filename.lower()
-        for publisher in LEGITIMATE_PUBLISHERS:
-            if publisher in filename_lower:
-                is_legitimate = True
-                legitimacy_indicators.append(f"Filename suggests {publisher} product")
-                break
+        # Use shared legitimacy logic for consistent filtering across endpoints.
+        is_legitimate, legitimacy_indicators = assess_binary_legitimacy(
+            binary_result,
+            filename=filename,
+        )
 
         # Build binary metadata
         binary_metadata = {
             "file_type": binary_result.metadata.file_type if binary_result.metadata else "Unknown",
             "architecture": binary_result.metadata.architecture if binary_result.metadata else "Unknown",
             "entropy": getattr(binary_result.metadata, 'entropy', None) if binary_result.metadata else None,
+            "is_packed": bool(getattr(binary_result.metadata, "is_packed", False)) if binary_result.metadata else False,
+            "mitigations": getattr(binary_result.metadata, "mitigations", {}) if binary_result.metadata else {},
+            "linked_libraries": getattr(binary_result.metadata, "linked_libraries", []) if binary_result.metadata else [],
+            "imports": [
+                {
+                    "name": getattr(imp, "name", ""),
+                    "library": getattr(imp, "library", ""),
+                }
+                for imp in (getattr(binary_result, "imports", []) or [])
+            ][:300],
         }
 
         # Call unified verification
@@ -1172,37 +1202,25 @@ async def verify_all_findings(
         if not verification_result:
             return None
 
-        # Extract verified findings
-        verified_vulns = []
-        for i, verdict in enumerate(verification_result.get("verified_pattern_vulns", [])):
-            if verdict.get("verdict") == "REAL" and i < len(pattern_findings):
-                finding = pattern_findings[i].copy()
-                finding["ai_confidence"] = verdict.get("confidence", 0)
-                finding["ai_priority"] = verdict.get("priority", 5)
-                finding["ai_reason"] = verdict.get("reason", "")
-                verified_vulns.append(finding)
+        # verify_binary_findings_unified returns already-filtered finding lists.
+        verified_vulns = verification_result.get("verified_vulnerabilities", pattern_findings) or []
+        verified_ai_vulns = verification_result.get("verified_vuln_hunt", ai_vuln_findings) or []
+        verified_secrets = verification_result.get("verified_secrets", secrets) or []
 
-        verified_ai_vulns = []
-        for i, verdict in enumerate(verification_result.get("verified_vuln_hunt", [])):
-            if verdict.get("verdict") == "REAL" and i < len(ai_vuln_findings):
-                finding = ai_vuln_findings[i].copy()
-                finding["ai_confidence"] = verdict.get("confidence", 0)
-                finding["exploitability"] = verdict.get("exploitability", "MEDIUM")
-                finding["ai_reason"] = verdict.get("reason", "")
-                verified_ai_vulns.append(finding)
+        filtered_vulns = verification_result.get("filtered_vulnerabilities", []) or []
+        filtered_ai_vulns = verification_result.get("filtered_vuln_hunt", []) or []
+        filtered_secrets = verification_result.get("filtered_secrets", []) or []
 
-        verified_secrets = []
-        for i, verdict in enumerate(verification_result.get("verified_secrets", [])):
-            if verdict.get("verdict") == "REAL" and i < len(secrets):
-                secret = secrets[i].copy()
-                secret["ai_confidence"] = verdict.get("confidence", 0)
-                secret["risk_level"] = verdict.get("risk", "MEDIUM")
-                secret["ai_reason"] = verdict.get("reason", "")
-                verified_secrets.append(secret)
+        summary_obj = verification_result.get("summary", {}) or {}
+        if not isinstance(summary_obj, dict):
+            summary_obj = {}
 
         total_before = len(pattern_findings) + len(ai_vuln_findings) + len(secrets)
         total_after = len(verified_vulns) + len(verified_ai_vulns) + len(verified_secrets)
-        fp_removed = total_before - total_after
+        filtered_total = summary_obj.get("filtered_total")
+        if not isinstance(filtered_total, int):
+            filtered_total = len(filtered_vulns) + len(filtered_ai_vulns) + len(filtered_secrets)
+        fp_removed = max(0, filtered_total if filtered_total else (total_before - total_after))
 
         logger.info(f"AI Verification: {total_after} real findings, {fp_removed} false positives removed")
 
@@ -1212,8 +1230,8 @@ async def verify_all_findings(
             "verified_secrets": verified_secrets,
             "attack_chains": verification_result.get("attack_chains", []),
             "prioritized_actions": verification_result.get("prioritized_actions", []),
-            "overall_risk": verification_result.get("overall_risk", "MEDIUM"),
-            "summary": verification_result.get("summary", ""),
+            "overall_risk": summary_obj.get("overall_risk", "MEDIUM"),
+            "summary": summary_obj.get("ai_summary", ""),
             "false_positives_removed": fp_removed,
             "real_findings": total_after,
             "is_legitimate_software": is_legitimate,
@@ -1241,15 +1259,54 @@ async def generate_ai_reports(
         from google.genai import types
 
         client = genai.Client(api_key=settings.gemini_api_key)
+        from backend.services.reverse_engineering_service import gemini_request_with_retry
 
         # Prepare context
         imports = [imp.name for imp in binary_result.imports[:50]] if hasattr(binary_result, 'imports') else []
         exports = [exp.name for exp in binary_result.exports[:20]] if hasattr(binary_result, 'exports') else []
         secrets = [s.to_dict() if hasattr(s, 'to_dict') else str(s) for s in binary_result.secrets[:10]] if hasattr(binary_result, 'secrets') else []
+        all_vulns = (vulnerability_findings or []) + (ai_vuln_findings or [])
 
-        # Function details from Ghidra
-        functions = ghidra_result.get("functions", [])[:30] if ghidra_result else []
-        function_names = [f.get("name", "unknown") for f in functions]
+        # Build budget-aware Ghidra evidence block.
+        context_budget = 16000 + min(len(all_vulns) * 300, 8000)
+        context_functions = 10 if len(all_vulns) < 12 else 14
+        ghidra_context = re_service.build_budgeted_ghidra_context(
+            ghidra_result=ghidra_result,
+            findings=all_vulns,
+            attack_surface={"attack_chains": attack_chains},
+            max_functions=context_functions,
+            total_char_budget=context_budget,
+            min_chars_per_function=600,
+            max_chars_per_function=2200,
+        ) if ghidra_result else {}
+
+        top_vuln_lines = []
+        for vuln in all_vulns[:12]:
+            if not isinstance(vuln, dict):
+                continue
+            severity = str(vuln.get("severity", "?")).upper()
+            title = vuln.get("title") or vuln.get("category") or "Unknown finding"
+            func_name = vuln.get("function_name") or vuln.get("function") or ""
+            evidence = (
+                vuln.get("evidence")
+                or vuln.get("description")
+                or vuln.get("code_snippet")
+                or vuln.get("impact")
+                or ""
+            )
+            ev_short = str(evidence).strip().replace("\n", " ")[:180]
+            line = f"  - [{severity}] {title}"
+            if func_name:
+                line += f" @ {func_name}"
+            if ev_short:
+                line += f" | evidence: {ev_short}"
+            top_vuln_lines.append(line)
+
+        attack_chain_lines = [
+            f"  - {c.get('title', 'Unknown')}: {c.get('severity', '?')}"
+            for c in (attack_chains or [])[:6]
+            if isinstance(c, dict)
+        ]
 
         # Build comprehensive context
         context = f"""
@@ -1257,6 +1314,7 @@ async def generate_ai_reports(
 Architecture: {binary_result.metadata.architecture if binary_result.metadata else 'Unknown'}
 File Type: {binary_result.metadata.file_type if binary_result.metadata else 'Unknown'}
 Entropy: {getattr(binary_result.metadata, 'entropy', 'N/A') if binary_result.metadata else 'N/A'}
+Ghidra Coverage: {ghidra_context.get("overview", "Not available")}
 
 === IMPORTS ({len(imports)}) ===
 {', '.join(imports[:30])}
@@ -1264,8 +1322,8 @@ Entropy: {getattr(binary_result.metadata, 'entropy', 'N/A') if binary_result.met
 === EXPORTS ({len(exports)}) ===
 {', '.join(exports[:20])}
 
-=== FUNCTIONS ({len(functions)}) ===
-{', '.join(function_names[:25])}
+=== SELECTED GHIDRA FUNCTIONS ===
+{ghidra_context.get("selected_names", "Not available")}
 
 === SECURITY FINDINGS ===
 Secrets Found: {len(secrets)}
@@ -1274,10 +1332,15 @@ AI-Discovered Vulnerabilities: {len(ai_vuln_findings)}
 Attack Chains: {len(attack_chains)}
 
 Top Vulnerabilities:
-{chr(10).join(f'  - [{v.get("severity", "?").upper()}] {v.get("title", "Unknown")}' for v in (vulnerability_findings + ai_vuln_findings)[:10])}
-"""
+{chr(10).join(top_vuln_lines) if top_vuln_lines else "  - None"}
 
-        from backend.services.reverse_engineering_service import gemini_request_with_retry
+Attack Chains:
+{chr(10).join(attack_chain_lines) if attack_chain_lines else "  - None"}
+"""
+        if ghidra_context.get("code_block"):
+            context += f"\n{ghidra_context['code_block']}\n"
+
+        context = re_service.truncate_text_for_llm_budget(context, max_chars=42000)
 
         # ===================================================================
         # 1. Functionality Report
@@ -1291,7 +1354,9 @@ Write a comprehensive functionality report in markdown format covering:
 2. **Key Components** - Main functions and modules
 3. **Dependencies** - External libraries and APIs used
 4. **Data Processing** - How it handles input/output
-5. **Network Activity** - Any network-related functionality"""
+5. **Network Activity** - Any network-related functionality
+
+Use the provided decompiled evidence and explicitly reference function names when possible."""
 
         func_response = await gemini_request_with_retry(
             lambda: client.aio.models.generate_content(
@@ -1312,14 +1377,16 @@ Write a comprehensive functionality report in markdown format covering:
 {context}
 
 Attack Chains Detected:
-{chr(10).join(f'  - {c.get("title", "Unknown")}: {c.get("severity", "?")}' for c in attack_chains[:5])}
+{chr(10).join(attack_chain_lines) if attack_chain_lines else "  - None"}
 
 Write a security report in markdown format with:
 1. **Executive Summary** - Overall security posture
 2. **Critical Findings** - High-severity vulnerabilities
 3. **Attack Surface** - Entry points and exposure
 4. **Recommendations** - Prioritized remediation steps
-5. **Risk Assessment** - Overall risk level"""
+5. **Risk Assessment** - Overall risk level
+
+Ground claims in the supplied evidence and cite specific functions/behaviors."""
 
         sec_response = await gemini_request_with_retry(
             lambda: client.aio.models.generate_content(
@@ -1346,26 +1413,10 @@ Generate a flowchart showing:
 4. **External Dependencies** - Libraries, APIs, network services
 5. **Security Components** - Crypto, auth, validation
 
-Use Mermaid icon syntax: NodeId@{{{{ icon: "prefix:icon-name", form: "square", label: "Label" }}}}
+Use standard Mermaid flowchart syntax only.
+Do NOT use icon syntax (no '@{{ icon: ... }}').
 
-AVAILABLE ICONS (use EXACTLY these names):
-- fa:rocket - Entry point/Main
-- fa:gear - Service/Module
-- fa:database - Data storage
-- fa:shield-halved - Security
-- fa:lock - Crypto/Auth
-- fa:key - API Keys
-- fa:network-wired - Network
-- fa:server - Server/Backend
-- fa:cloud - Cloud service
-- fa:code - Functions
-- fa:file-code - Code module
-- fa:globe - Internet
-- mdi:api - REST API
-- fab:windows - Windows specific
-- fab:linux - Linux specific
-
-Use subgraphs with emojis:
+Use subgraphs:
 - "🚀 Entry Points"
 - "⚙️ Core Modules"
 - "💾 Data Layer"
@@ -1377,10 +1428,10 @@ Return ONLY the Mermaid code starting with "flowchart TD" - no markdown blocks.
 Example:
 flowchart TD
     subgraph Entry["🚀 Entry Points"]
-        A@{{{{ icon: "fa:rocket", form: "square", label: "main()" }}}}
+        A["main()"]
     end
     subgraph Core["⚙️ Core Modules"]
-        B@{{{{ icon: "fa:gear", form: "square", label: "ProcessData" }}}}
+        B["ProcessData"]
     end
     A -->|"Initialize"| B"""
 
@@ -1412,7 +1463,10 @@ Generate a flowchart showing the attack surface from an attacker's perspective:
 4. **Potential Impact** - What an attacker could achieve
 5. **Mitigations** - Security protections present
 
-Use the same icon syntax and subgraphs:
+Use standard Mermaid flowchart syntax only.
+Do NOT use icon syntax (no '@{{ icon: ... }}').
+
+Use subgraphs:
 - "🌐 EXTERNAL INPUTS"
 - "⚠️ ATTACK VECTORS"
 - "🐛 VULNERABILITIES"
@@ -1420,26 +1474,28 @@ Use the same icon syntax and subgraphs:
 - "🛡️ MITIGATIONS"
 
 Use color styling:
-- Red (:::danger) for critical vulnerabilities
-- Yellow (:::warning) for medium severity
-- Green (:::safe) for mitigations
+- Red (:::critical) for critical vulnerabilities
+- Orange (:::high) for high severity
+- Amber (:::medium) for medium severity
+- Green (:::low) for mitigations
 
 Return ONLY the Mermaid code starting with "flowchart TD" - no markdown blocks.
 
 Example:
 flowchart TD
     subgraph External["🌐 EXTERNAL INPUTS"]
-        E1@{{{{ icon: "fa:network-wired", form: "square", label: "Network Traffic" }}}}
-        E2@{{{{ icon: "fa:file-code", form: "square", label: "File Input" }}}}
+        E1["Network Traffic"]
+        E2["File Input"]
     end
     subgraph Vulns["🐛 VULNERABILITIES"]
-        V1@{{{{ icon: "fa:bug", form: "square", label: "Buffer Overflow" }}}}:::danger
+        V1["Buffer Overflow"]:::critical
     end
     E1 -->|"Untrusted Data"| V1
 
-    classDef danger fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    classDef warning fill:#ffd43b,stroke:#f08c00
-    classDef safe fill:#51cf66,stroke:#2f9e44,color:#fff"""
+    classDef critical fill:#b91c1c,stroke:#ef4444,color:#fff
+    classDef high fill:#c2410c,stroke:#f97316,color:#fff
+    classDef medium fill:#d97706,stroke:#f59e0b,color:#111827
+    classDef low fill:#15803d,stroke:#22c55e,color:#fff"""
 
         attack_surface_response = await gemini_request_with_retry(
             lambda: client.aio.models.generate_content(
@@ -1468,9 +1524,11 @@ flowchart TD
         architecture_diagram = clean_mermaid(arch_response.text if arch_response else "")
         attack_surface_diagram = clean_mermaid(attack_surface_response.text if attack_surface_response else "")
 
-        # Sanitize icons
+        # Strong sanitization for parser safety + style readability.
         architecture_diagram = _sanitize_binary_mermaid_icons(architecture_diagram)
         attack_surface_diagram = _sanitize_binary_mermaid_icons(attack_surface_diagram)
+        architecture_diagram = re_service.sanitize_mermaid_diagram(architecture_diagram)
+        attack_surface_diagram = re_service.sanitize_mermaid_diagram(attack_surface_diagram)
 
         return {
             "functionality": func_response.text if func_response else "Not available",

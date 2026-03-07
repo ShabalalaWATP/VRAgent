@@ -1,6 +1,6 @@
 """Social/messaging schemas for request/response validation."""
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -207,7 +207,7 @@ class MessageResponse(BaseModel):
     message_type: MessageType
     attachment_data: Optional[dict] = None
     reply_to: Optional[dict] = None  # ReplyInfo
-    reactions: List[dict] = []  # List of ReactionSummary
+    reactions: Dict[str, Any] = Field(default_factory=dict)  # emoji -> reaction summary
     reply_count: int = 0  # Number of replies in thread
     created_at: datetime
     updated_at: datetime
