@@ -22,7 +22,7 @@ The Dynamic Analysis Hub provides AI-orchestrated runtime security testing, netw
 
 | Tool | Description |
 |------|-------------|
-| **PCAP Analyzer** | Deep packet inspection and traffic analysis |
+| **PCAP Analyzer** | Deep packet inspection, stream reconstruction, and AI-assisted traffic analysis |
 | **Dynamic Scanner** | AI-orchestrated multi-tool security scanning |
 | **SSL/TLS Scanner** | Certificate and encryption analysis |
 | **DNS Reconnaissance** | DNS enumeration and security analysis |
@@ -36,7 +36,7 @@ The Dynamic Analysis Hub provides AI-orchestrated runtime security testing, netw
 
 ## PCAP Analyzer
 
-Deep packet inspection for network traffic analysis with offensive security features.
+Deep packet inspection for network traffic analysis with offensive security features, deep-inspection drill-downs, and AI-assisted investigation.
 
 ### Analysis Capabilities
 
@@ -49,6 +49,8 @@ Deep packet inspection for network traffic analysis with offensive security feat
 | **DNS Queries** | Hostname resolution, tunneling detection, query patterns |
 | **Traffic Statistics** | Protocol distribution, conversation analysis, bandwidth |
 | **Suspicious Patterns** | Beaconing, port scans, data exfiltration, C2 detection |
+| **Session Reconstruction** | HTTP sessions, TCP stream previews, WebSocket messages, database queries |
+| **AI Chat Context** | Follow-up Q&A over summaries plus reconstructed capture artifacts |
 
 ### Offensive Security Features
 
@@ -119,6 +121,42 @@ Automatically extracts from HTTP traffic:
 | **Timeline View** | Packet timing for beaconing detection |
 | **Geolocation** | IP geolocation for traffic mapping |
 
+### Deep Inspection Workspace
+
+Each PCAP report includes clickable sub-summaries so you can pivot directly into the most useful reconstructed evidence:
+
+| Panel | What You Can Inspect |
+|-------|----------------------|
+| **Attack Surface** | API endpoints, auth tokens, sensitive data leaks, protocol weaknesses |
+| **HTTP Sessions** | Request/response pairs, headers, plaintext body previews when recoverable |
+| **WebSocket Payloads** | Message samples, directions, and frame summaries |
+| **TCP Streams** | Follow-stream style client/server previews for suspicious conversations |
+| **Database Traffic** | Parsed queries and commands where protocol decoding succeeds |
+| **Extracted Files** | Transferred artifacts with hashes, filenames, and metadata |
+| **Timeline** | Ordered sequence of notable events across the capture |
+
+### AI Chat With Capture Context
+
+The PCAP Analyzer includes a report-scoped AI chat assistant. It can answer follow-up questions using:
+
+- Executive summary, findings, and conversation-level traffic summaries
+- Reconstructed HTTP sessions and plaintext body previews
+- WebSocket payload samples and TCP stream previews
+- Database queries, extracted files, and timeline events
+- Combined context across all uploaded PCAPs in the current analysis
+
+Example questions:
+
+- `Show me any plaintext HTTP request or response bodies`
+- `What do the WebSocket payloads contain?`
+- `Follow the most suspicious TCP stream`
+
+### Plaintext and Decryption Limits
+
+- Plaintext is surfaced only when traffic is already cleartext or can be reconstructed from the capture
+- TLS, HTTPS, and WSS payloads are not automatically decrypted
+- TLS metadata such as SNI, certificates, versions, and ciphers can still be analyzed
+
 ### Supported Formats
 
 | Format | Description |
@@ -148,6 +186,11 @@ tshark -i eth0 -b filesize:10000 -b files:5 -w capture.pcap
 | **Tokens JSON** | Extracted authentication tokens |
 | **Findings Report** | Security findings in Markdown/PDF |
 | **Wireshark Filter** | Generate filter for specific traffic |
+
+### Saved Reports
+
+- New saved PCAP reports persist deep-inspection artifacts so the same drill-downs and AI chat context are available later
+- Older saved reports created before this enhancement need to be re-run to populate HTTP bodies, WebSocket payloads, TCP stream previews, and other deep-inspection data
 
 ---
 

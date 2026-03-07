@@ -149,7 +149,7 @@ const appCards: LearnCard[] = [
   },
   {
     title: "Dynamic Analysis Hub Guide",
-    description: "Learn what the Dynamic Analysis Hub does: 10 tools including Dynamic Scanner, Nmap, PCAP, SSL, DNS, Traceroute, API Tester, Security Fuzzer, Agentic Fuzzer, Binary Fuzzer, and MITM.",
+    description: "Learn what the Dynamic Analysis Hub does: 10 tools including PCAP deep inspection with AI chat, Dynamic Scanner, Nmap, SSL, DNS, Traceroute, API Tester, fuzzers, and MITM.",
     icon: <HubIcon sx={{ fontSize: 40 }} />,
     path: "/learn/network-hub",
     color: "#0ea5e9",
@@ -157,11 +157,11 @@ const appCards: LearnCard[] = [
   },
   {
     title: "PCAP Analyzer Guide",
-    description: "VRAgent's PCAP Analyzer: packet capture analysis, display filters, protocol dissection, and security findings.",
+    description: "VRAgent's PCAP Analyzer: Deep Inspection panels for HTTP sessions, WebSocket payloads, TCP streams, plaintext recovery, and AI chat over reconstructed traffic.",
     icon: <WifiIcon sx={{ fontSize: 40 }} />,
     path: "/learn/wireshark",
     color: "#06b6d4",
-    tags: ["Filters", "BPF", "Packets"],
+    tags: ["Filters", "Deep Inspection", "AI Chat"],
   },
   {
     title: "Dynamic Scanner Guide",

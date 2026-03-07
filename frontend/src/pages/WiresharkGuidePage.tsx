@@ -583,8 +583,11 @@ export default function WiresharkGuidePage() {
         >
           <Typography variant="body2">
             <strong>💡 VRAgent Integration:</strong> VRAgent's PCAP Analyzer uses <strong>tshark</strong> (Wireshark's 
-            command-line version) to process your captures and adds AI-powered security analysis on top. 
-            You can capture in Wireshark, save the .pcap file, and upload it to VRAgent for automated analysis!
+            command-line version) to process your captures and layers Deep Inspection panels on top for attack surface, 
+            HTTP sessions, WebSocket payloads, TCP stream previews, database queries, extracted files, and timeline evidence. 
+            The built-in AI chat can answer follow-up questions against those reconstructed artifacts when they exist. 
+            Plaintext appears only when it is already cleartext or reconstructable from the capture. TLS, HTTPS, and WSS 
+            payloads are not decrypted automatically.
           </Typography>
         </Paper>
       </Paper>
@@ -915,7 +918,7 @@ export default function WiresharkGuidePage() {
               VRAgent Advanced PCAP Analysis
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Offensive security features powered by VRAgent's PCAP Analyzer
+              Offensive security features and deep-inspection drill-downs powered by VRAgent's PCAP Analyzer
             </Typography>
           </Box>
         </Box>
@@ -939,11 +942,28 @@ export default function WiresharkGuidePage() {
           <Tab icon={<InsertDriveFileIcon />} iconPosition="start" label="File Extraction" />
         </Tabs>
 
+        <Paper
+          sx={{
+            p: 2,
+            mt: 3,
+            borderRadius: 2,
+            bgcolor: alpha("#06b6d4", 0.05),
+            border: `1px solid ${alpha("#06b6d4", 0.2)}`,
+          }}
+        >
+          <Typography variant="body2">
+            <strong>Deep Inspection Workflow:</strong> New PCAP analyses expose clickable panels for Attack Surface, HTTP Sessions,
+            WebSocket Payloads, TCP Streams, Database Traffic, Extracted Files, and Timeline evidence. The AI chat uses those same
+            reconstructed artifacts for follow-up questions. Older saved reports may need to be re-run to populate these sections.
+          </Typography>
+        </Paper>
+
         {/* Attack Surface Tab */}
         <TabPanel value={advancedTab} index={0}>
           <Typography variant="body1" sx={{ mb: 3 }}>
             VRAgent automatically analyzes PCAP files from an <strong>offensive security perspective</strong> to identify 
-            API endpoints, authentication tokens, sensitive data leaks, and protocol weaknesses.
+            API endpoints, authentication tokens, sensitive data leaks, and protocol weaknesses. New Deep Inspection panels let you
+            open HTTP sessions, WebSocket messages, TCP stream previews, extracted files, and timeline evidence without leaving the report.
           </Typography>
           
           <Grid container spacing={3}>
@@ -1208,7 +1228,8 @@ export default function WiresharkGuidePage() {
         <TabPanel value={advancedTab} index={3}>
           <Typography variant="body1" sx={{ mb: 3 }}>
             VRAgent can <strong>extract database queries</strong> from network traffic, revealing what data 
-            applications are accessing and potential injection points.
+            applications are accessing and potential injection points. These parsed queries are also available to the saved-report view
+            and AI chat when the capture contains decodable database traffic.
           </Typography>
 
           <TableContainer>
@@ -1265,7 +1286,8 @@ export default function WiresharkGuidePage() {
         <TabPanel value={advancedTab} index={4}>
           <Typography variant="body1" sx={{ mb: 3 }}>
             VRAgent can <strong>extract files</strong> transferred over HTTP, FTP, SMB, and other protocols, 
-            calculating hashes for threat intelligence correlation.
+            calculating hashes for threat intelligence correlation. Extracted artifacts, HTTP body previews, and other recovered
+            plaintext evidence are available only when the capture is cleartext or reconstructable from the observed traffic.
           </Typography>
 
           <Grid container spacing={3}>
@@ -1587,8 +1609,8 @@ export default function WiresharkGuidePage() {
           Ready to Analyze Some Traffic?
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: "auto" }}>
-          Capture some packets in Wireshark, save the .pcap file, and upload it to VRAgent's PCAP Analyzer 
-          for AI-powered security analysis!
+          Capture some packets in Wireshark, save the .pcap file, and upload it to VRAgent's PCAP Analyzer to review Deep Inspection
+          panels and ask the AI chat about HTTP bodies, WebSocket messages, TCP streams, and other recovered evidence.
         </Typography>
         <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
           <Button

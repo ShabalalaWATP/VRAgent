@@ -59,6 +59,69 @@ def can_edit_project(db: Session, project_id: int, user_id: int) -> bool:
     return can_access and role in ("owner", "admin", "editor")
 
 
+def _accessible_project_ids(db: Session, user_id: int) -> List[int]:
+    """Return project IDs the user owns or collaborates on."""
+    rows = db.query(models.Project.id).outerjoin(
+        models.ProjectCollaborator,
+        models.Project.id == models.ProjectCollaborator.project_id,
+    ).filter(
+        or_(
+            models.Project.owner_id == user_id,
+            models.ProjectCollaborator.user_id == user_id,
+        )
+    ).distinct().all()
+    return [project_id for project_id, in rows]
+
+
+def apply_network_report_access_filter(query, db: Session, user: models.User):
+    """Restrict a NetworkAnalysisReport query to reports the user can access."""
+    if getattr(user, "role", None) == "admin":
+        return query
+
+    accessible_project_ids = _accessible_project_ids(db, user.id)
+    filters = [models.NetworkAnalysisReport.user_id == user.id]
+    if accessible_project_ids:
+        filters.append(models.NetworkAnalysisReport.project_id.in_(accessible_project_ids))
+
+    return query.filter(or_(*filters))
+
+
+def can_access_network_report(
+    db: Session,
+    report: models.NetworkAnalysisReport,
+    user: models.User,
+) -> bool:
+    """Check whether the user can view/export a network report."""
+    if getattr(user, "role", None) == "admin":
+        return True
+
+    if report.user_id == user.id:
+        return True
+
+    if report.project_id is not None:
+        return can_access_project(db, report.project_id, user.id)[0]
+
+    return False
+
+
+def can_delete_network_report(
+    db: Session,
+    report: models.NetworkAnalysisReport,
+    user: models.User,
+) -> bool:
+    """Check whether the user can delete a network report."""
+    if getattr(user, "role", None) == "admin":
+        return True
+
+    if report.user_id == user.id:
+        return True
+
+    if report.project_id is not None:
+        return can_edit_project(db, report.project_id, user.id)
+
+    return False
+
+
 def create_project(db: Session, project_in: ProjectCreate, owner_id: Optional[int] = None) -> models.Project:
     """Create a new project with optional owner."""
     project = models.Project(

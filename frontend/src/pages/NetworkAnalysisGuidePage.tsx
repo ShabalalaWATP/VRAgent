@@ -76,7 +76,7 @@ export default function NetworkAnalysisGuidePage() {
 
   const pageContext = `This page is the Dynamic Analysis Hub learning guide covering:
 - Dynamic Scanner: AI-orchestrated pentesting with Nmap, ZAP, Nuclei, OpenVAS, SQLMap integration
-- PCAP Analyzer: 7 capture profiles, live capture, deep packet inspection
+- PCAP Analyzer: 7 capture profiles, deep inspection, live capture, and AI chat over reconstructed traffic
 - SSL/TLS Scanner: 12 CVE vulnerability checks, cipher suite analysis
 - DNS Reconnaissance: 9 record types, 150+ subdomain enumeration, email security
 - Traceroute & Nmap: Network path analysis and port scanning combined
@@ -107,13 +107,14 @@ export default function NetworkAnalysisGuidePage() {
       icon: <NetworkCheckIcon sx={{ fontSize: 32 }} />,
       color: "#06b6d4",
       gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
-      description: "Deep packet inspection with 7 capture profiles and live traffic capture support.",
+      description: "Deep packet inspection with live capture, Deep Inspection drill-downs, and AI chat over reconstructed traffic evidence.",
       capabilities: [
         "7 Capture profiles: All Traffic, HTTP, DNS, Auth, Email, Database, Suspicious",
-        "Live capture support with tshark integration",
-        "Protocol distribution analysis (TCP, UDP, HTTP, DNS, TLS, etc.)",
-        "Automatic cleartext credential detection and suspicious pattern ID",
-        "Connection mapping and traffic flow visualization",
+        "Deep Inspection cards for attack surface, HTTP sessions, WebSocket payloads, TCP stream previews, extracted files, and timeline evidence",
+        "Live capture support with tshark integration and persisted deep-inspection data in new saved reports",
+        "Plaintext HTTP body previews, database queries, and extracted artifacts when traffic is reconstructable",
+        "AI chat can answer follow-up questions against summaries plus reconstructed capture evidence",
+        "TLS metadata analysis without automatic decryption of encrypted payloads",
       ],
       link: "/network/pcap",
     },
@@ -242,12 +243,12 @@ export default function NetworkAnalysisGuidePage() {
       icon: <ChatIcon sx={{ fontSize: 32 }} />,
       color: "#14b8a6",
       gradient: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
-      description: "Conversational AI assistant for deep-dive analysis of your network findings.",
+      description: "Conversational AI assistant for deep-dive analysis of network findings and reconstructed capture evidence.",
       capabilities: [
-        "Context-aware follow-up questions about specific findings",
+        "Context-aware follow-up questions about specific findings and saved reports",
+        "For PCAPs: ask about HTTP bodies, WebSocket messages, TCP streams, database queries, and extracted files",
         "Environment-specific remediation guidance",
         "Attack scenario exploration and impact assessment",
-        "Deeper analysis on specific hosts, ports, or services",
         "Full conversation history maintained per report",
       ],
       link: null,
@@ -257,12 +258,13 @@ export default function NetworkAnalysisGuidePage() {
       icon: <StorageIcon sx={{ fontSize: 32 }} />,
       color: "#6366f1",
       gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-      description: "Centralized storage for all network analysis reports with filtering and search.",
+      description: "Centralized storage for all network analysis reports with filtering, search, and persisted deep-inspection data for newer PCAP reports.",
       capabilities: [
         "Automatic save of all scan results to PostgreSQL database",
         "Filter by type: Nmap, PCAP, SSL, DNS, Traceroute, Fuzzer, MITM",
         "Track security posture changes over time",
-        "Quick view, delete, and re-analyze capabilities",
+        "Quick view, delete, export, and re-analyze capabilities",
+        "New PCAP reports keep Deep Inspection artifacts; older reports may need re-analysis to backfill them",
         "Project-based organization and tagging",
       ],
       link: "/network",

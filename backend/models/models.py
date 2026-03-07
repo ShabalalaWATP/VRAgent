@@ -138,6 +138,35 @@ class ProjectCollaborator(Base):
     )
 
 
+class ProjectDockerImage(Base):
+    """Docker images explicitly allowlisted for a project."""
+    __tablename__ = "project_docker_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    image_name = Column(String, nullable=False, index=True)
+    added_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "image_name", name="uq_project_docker_image"),
+    )
+
+
+class UserDockerImage(Base):
+    """Docker images explicitly allowlisted for an individual user."""
+    __tablename__ = "user_docker_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    image_name = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "image_name", name="uq_user_docker_image"),
+    )
+
+
 class CodeChunk(Base):
     __tablename__ = "code_chunks"
 
@@ -311,6 +340,7 @@ class NetworkAnalysisReport(Base):
     __tablename__ = "network_analysis_reports"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)  # Optional project association
     analysis_type = Column(String, nullable=False)  # 'pcap', 'nmap', 'dns'
     report_type = Column(String, nullable=True)  # Alternative categorization (dns, pcap, nmap)
@@ -339,6 +369,7 @@ class NetworkAnalysisReport(Base):
     export_formats = Column(JSON, nullable=True)  # List of formats exported
     
     # Relationship
+    user = relationship("User", backref="network_analysis_reports")
     project = relationship("Project", back_populates="network_analysis_reports")
 
 
@@ -420,6 +451,7 @@ class ReverseEngineeringReport(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Report metadata
     analysis_type = Column(String, nullable=False, index=True)  # 'binary', 'apk', 'docker'

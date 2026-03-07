@@ -71,16 +71,45 @@ async function refreshTokenIfNeeded(): Promise<boolean> {
   return refreshPromise;
 }
 
-async function request<T>(path: string, options?: RequestInit, retryOnAuth = true): Promise<T> {
-  const headers = new Headers(getAuthHeaders());
-  
-  // Merge any additional headers from options
+function buildAuthHeaders(
+  options?: RequestInit,
+  includeJsonContentType = true,
+  forceFreshAuthorization = false
+): Headers {
+  const headers = new Headers(includeJsonContentType ? getAuthHeaders() : {});
+
   if (options?.headers) {
-    const optHeaders = new Headers(options.headers);
-    optHeaders.forEach((value, key) => {
+    const optionHeaders = new Headers(options.headers);
+    optionHeaders.forEach((value, key) => {
+      if (forceFreshAuthorization && key.toLowerCase() === "authorization") {
+        return;
+      }
       headers.set(key, value);
     });
   }
+
+  if (forceFreshAuthorization || !headers.has("Authorization")) {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    } else {
+      headers.delete("Authorization");
+    }
+  }
+
+  return headers;
+}
+
+function shouldIncludeJsonContentType(options?: RequestInit): boolean {
+  if (!options?.body) {
+    return true;
+  }
+
+  return !(options.body instanceof FormData);
+}
+
+async function request<T>(path: string, options?: RequestInit, retryOnAuth = true): Promise<T> {
+  const headers = buildAuthHeaders(options, shouldIncludeJsonContentType(options), !retryOnAuth);
 
   const resp = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -118,6 +147,33 @@ async function request<T>(path: string, options?: RequestInit, retryOnAuth = tru
     console.error("Failed to parse JSON response:", parseError);
     throw new Error("Invalid response format from server");
   }
+}
+
+export async function fetchWithAuthRetry(path: string, options?: RequestInit, retryOnAuth = true): Promise<Response> {
+  const headers = buildAuthHeaders(options, false, !retryOnAuth);
+
+  const resp = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (resp.status === 401 && retryOnAuth) {
+    logger.debug(`[API] Got 401 for ${path}, attempting token refresh...`);
+    const refreshed = await refreshTokenIfNeeded();
+
+    if (refreshed) {
+      return fetchWithAuthRetry(path, options, false);
+    }
+
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    if (!window.location.pathname.includes("/login")) {
+      window.location.href = "/login";
+    }
+    throw new Error("Unauthorized");
+  }
+
+  return resp;
 }
 
 export async function uploadZip(projectId: number, file: File, retryOnAuth = true): Promise<any> {
@@ -890,6 +946,216 @@ export type PcapSummary = {
   }>;
 };
 
+export type PcapAttackSurface = {
+  total_endpoints?: number;
+  unique_hosts?: string[];
+  endpoints?: Array<{
+    method?: string;
+    url?: string;
+    host?: string;
+    path?: string;
+    query_params?: Record<string, string[]>;
+    body_params?: Record<string, unknown>;
+    headers?: Record<string, string>;
+    content_type?: string;
+    auth_type?: string;
+    auth_value?: string;
+    response_status?: number;
+    response_content_type?: string;
+    request_count?: number;
+    source_ip?: string;
+    dest_ip?: string;
+  }>;
+  auth_tokens?: Array<{
+    token_type?: string;
+    token_value?: string;
+    token_value_masked?: string;
+    token_hash?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    dest_host?: string;
+    endpoint?: string;
+    header_name?: string;
+    issued_at?: string;
+    expires_at?: string;
+    jwt_algorithm?: string;
+    jwt_claims?: Record<string, unknown>;
+    jwt_weaknesses?: string[];
+    packet_number?: number;
+  }>;
+  auth_mechanisms?: string[];
+  auth_weaknesses?: string[];
+  sensitive_data_leaks?: Array<{
+    data_type?: string;
+    data_value?: string;
+    context?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    endpoint?: string;
+    severity?: string;
+    packet_number?: number;
+    evidence?: string;
+  }>;
+  protocol_weaknesses?: Array<{
+    weakness_type?: string;
+    protocol?: string;
+    description?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    port?: number;
+    severity?: string;
+    evidence?: string;
+    exploitation_notes?: string;
+  }>;
+  high_value_endpoints?: Array<{
+    endpoint?: {
+      method?: string;
+      path?: string;
+      url?: string;
+      host?: string;
+    };
+    classification?: {
+      categories?: string[];
+      risk?: string;
+    };
+  }>;
+  curl_commands?: string[];
+  burp_requests?: string[];
+};
+
+export type PcapEnhancedProtocols = {
+  websocket_sessions?: Array<{
+    session_id: string;
+    client_ip: string;
+    server_ip: string;
+    server_port: number;
+    url: string;
+    upgrade_request?: Record<string, unknown>;
+    upgrade_response?: Record<string, unknown>;
+    messages: Array<{
+      opcode: number;
+      opcode_name: string;
+      payload: string;
+      payload_length: number;
+      is_masked: boolean;
+      direction: string;
+      timestamp: number;
+      packet_number: number;
+    }>;
+    start_time?: number;
+    end_time?: number;
+    message_count?: number;
+    total_bytes?: number;
+  }>;
+  websocket_message_count?: number;
+  grpc_calls?: Array<{
+    service: string;
+    method: string;
+    path: string;
+    content_type: string;
+    source_ip?: string;
+    dest_ip?: string;
+    packet_number?: number;
+  }>;
+  grpc_services?: string[];
+  mqtt_messages?: Array<{
+    message_type: string;
+    topic?: string;
+    payload?: string;
+    qos?: number;
+    retain?: boolean;
+    client_id?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    packet_number?: number;
+  }>;
+  mqtt_topics?: string[];
+  mqtt_clients?: string[];
+  coap_messages?: Array<{
+    message_type: string;
+    method: string;
+    uri_path: string;
+    payload?: string;
+    message_id?: number;
+    source_ip?: string;
+    dest_ip?: string;
+    packet_number?: number;
+  }>;
+  database_queries?: Array<{
+    protocol: string;
+    query_type: string;
+    query: string;
+    database?: string;
+    username?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    packet_number?: number;
+  }>;
+  databases_accessed?: string[];
+  http_sessions?: Array<{
+    session_id: string;
+    method: string;
+    url: string;
+    host: string;
+    path: string;
+    request_headers?: Record<string, string>;
+    request_body?: string;
+    response_status?: number;
+    response_headers?: Record<string, string>;
+    response_body?: string;
+    response_size?: number;
+    source_ip?: string;
+    dest_ip?: string;
+    request_time?: number;
+    response_time?: number;
+    duration_ms?: number;
+    request_packet?: number;
+    response_packet?: number;
+  }>;
+  tcp_streams?: Array<{
+    stream_id: string;
+    client_ip: string;
+    server_ip: string;
+    client_port: number;
+    server_port: number;
+    client_data_preview?: string;
+    server_data_preview?: string;
+    client_data_size?: number;
+    server_data_size?: number;
+    protocol?: string;
+    start_time?: number;
+    end_time?: number;
+    packets_count?: number;
+  }>;
+  extracted_files?: Array<{
+    filename: string;
+    mime_type: string;
+    size: number;
+    md5_hash: string;
+    sha256_hash: string;
+    source_protocol: string;
+    source_url?: string;
+    source_ip?: string;
+    dest_ip?: string;
+    content_preview?: string;
+    is_executable?: boolean;
+    packet_number?: number;
+  }>;
+  timeline_events?: Array<{
+    timestamp: number;
+    event_type: string;
+    description: string;
+    source_ip?: string;
+    dest_ip?: string;
+    protocol?: string;
+    severity?: string;
+    details?: Record<string, unknown>;
+    packet_number?: number;
+  }>;
+  quic_connections?: any[];
+  http2_streams?: any[];
+};
+
 export type PcapAnalysisResponse = {
   filename: string;
   summary: PcapSummary;
@@ -905,6 +1171,8 @@ export type PcapAnalysisResponse = {
     bytes: number;
   }>;
   ai_analysis?: string | AIAnalysisResult;
+  attack_surface?: PcapAttackSurface | null;
+  enhanced_protocols?: PcapEnhancedProtocols | null;
 };
 
 // AI Analysis result can be structured or raw
@@ -1144,24 +1412,10 @@ export async function analyzePcaps(
   if (projectId !== undefined) params.append("project_id", String(projectId));
   if (userContext.trim()) params.append("user_context", userContext.trim());
 
-  // Get auth token for authenticated request
-  const token = localStorage.getItem("vragent_access_token");
-  const headers: HeadersInit = {};
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const resp = await fetch(`${API_URL}/pcap/analyze?${params}`, {
+  return request<MultiPcapAnalysisResponse>(`/pcap/analyze?${params}`, {
     method: "POST",
-    headers,
     body: form,
   });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(text || resp.statusText);
-  }
-  return resp.json();
 }
 
 // PCAP Chat Types and Functions
@@ -1177,6 +1431,15 @@ export type PcapChatRequest = {
     summary?: any;
     findings?: any[];
     ai_analysis?: any;
+    captures?: Array<{
+      label?: string;
+      summary?: any;
+      findings?: any[];
+      ai_analysis?: any;
+      conversations?: PcapAnalysisResponse["conversations"];
+      attack_surface?: PcapAttackSurface | null;
+      enhanced_protocols?: PcapEnhancedProtocols | null;
+    }>;
   };
 };
 
@@ -1185,27 +1448,14 @@ export type PcapChatResponse = {
   error?: string;
 };
 
-export async function chatAboutPcap(request: PcapChatRequest): Promise<PcapChatResponse> {
-  // Get auth token for authenticated request
-  const token = localStorage.getItem("vragent_access_token");
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const resp = await fetch(`${API_URL}/pcap/chat`, {
+export async function chatAboutPcap(payload: PcapChatRequest): Promise<PcapChatResponse> {
+  return request<PcapChatResponse>("/pcap/chat", {
     method: "POST",
-    headers,
-    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(text || resp.statusText);
-  }
-  return resp.json();
 }
 
 // ============================================================================
@@ -1258,41 +1508,40 @@ export type SavedReportDetail = {
   ai_report?: {
     analyses: any[];
   };
+  report_data?: {
+    analyses?: Array<{
+      filename: string;
+      conversations?: PcapAnalysisResponse["conversations"];
+      attack_surface?: PcapAttackSurface | null;
+      enhanced_protocols?: PcapEnhancedProtocols | null;
+    }>;
+  };
 };
 
-export async function getPcapReports(skip: number = 0, limit: number = 20): Promise<SavedReportList> {
+export async function getPcapReports(
+  skip: number = 0,
+  limit: number = 20,
+  projectId?: number
+): Promise<SavedReportList> {
   const params = new URLSearchParams({
     skip: String(skip),
     limit: String(limit),
   });
-  const resp = await fetch(`${API_URL}/pcap/reports?${params}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!resp.ok) {
-    throw new Error(await resp.text());
+  if (projectId !== undefined) {
+    params.append("project_id", String(projectId));
   }
-  return resp.json();
+
+  return request<SavedReportList>(`/pcap/reports?${params}`);
 }
 
 export async function getPcapReport(reportId: number): Promise<SavedReportDetail> {
-  const resp = await fetch(`${API_URL}/pcap/reports/${reportId}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!resp.ok) {
-    throw new Error(await resp.text());
-  }
-  return resp.json();
+  return request<SavedReportDetail>(`/pcap/reports/${reportId}`);
 }
 
 export async function deletePcapReport(reportId: number): Promise<{ message: string }> {
-  const resp = await fetch(`${API_URL}/pcap/reports/${reportId}`, {
+  return request<{ message: string }>(`/pcap/reports/${reportId}`, {
     method: "DELETE",
-    headers: getAuthHeaders(),
   });
-  if (!resp.ok) {
-    throw new Error(await resp.text());
-  }
-  return resp.json();
 }
 
 // ============================================================================
@@ -1782,7 +2031,7 @@ export const apiClient = {
   },
 
   exportNetworkReport: async (reportId: number, format: "markdown" | "pdf" | "docx"): Promise<Blob> => {
-    const resp = await fetch(`${API_URL}/network/reports/${reportId}/export/${format}`);
+    const resp = await fetchWithAuthRetry(`/network/reports/${reportId}/export/${format}`);
     if (!resp.ok) throw new Error(await resp.text());
     return resp.blob();
   },
@@ -9492,6 +9741,44 @@ export type LayerSecret = {
   attack_vector?: string;
 };
 
+export type DockerTrivyFinding = Record<string, any>;
+
+export type DockerTrivyScanResult = {
+  image_name: string;
+  enabled_scanners?: string[];
+  trivy_available?: boolean;
+  artifact_name?: string;
+  artifact_type?: string;
+  os_family?: string;
+  os_name?: string;
+  trivy_version?: string;
+  schema_version?: number;
+  package_count?: number;
+  vulnerabilities?: DockerTrivyFinding[];
+  misconfigurations?: DockerTrivyFinding[];
+  secrets?: DockerTrivyFinding[];
+  licenses?: DockerTrivyFinding[];
+  vulnerability_severity_counts?: Record<string, number>;
+  misconfiguration_severity_counts?: Record<string, number>;
+  secret_severity_counts?: Record<string, number>;
+  license_severity_counts?: Record<string, number>;
+  scan_duration_seconds?: number;
+  error?: string;
+};
+
+export type DockerScanCheckResult = {
+  id: string;
+  label: string;
+  status: "completed" | "skipped" | "error" | string;
+  duration_seconds?: number;
+  detail?: string;
+};
+
+export type DockerScanSummaryResult = {
+  total_duration_seconds?: number;
+  checks?: DockerScanCheckResult[];
+};
+
 export type DockerAnalysisResult = {
   image_name: string;
   image_id: string;
@@ -9552,8 +9839,13 @@ export type DockerAnalysisResult = {
     enrichment_applied?: boolean;
     scan_duration_seconds?: number;
     trivy_available?: boolean;
+    epss_enabled?: boolean;
+    epss_available?: boolean;
+    epss_source?: string;
     error?: string;
   };
+  trivy_scan?: DockerTrivyScanResult;
+  scan_summary?: DockerScanSummaryResult;
 };
 
 export type ReverseEngineeringStatus = {
@@ -9570,6 +9862,12 @@ export type ReverseEngineeringStatus = {
   // AI availability
   ai_available?: boolean;
   ai_status?: string | null;
+  offline_mode?: boolean;
+  osv_db_available?: boolean;
+  nvd_db_available?: boolean;
+  epss_available?: boolean;
+  epss_source?: string | null;
+  epss_last_sync?: string | null;
 };
 
 export type DockerImageInfo = {
@@ -9577,11 +9875,22 @@ export type DockerImageInfo = {
   id: string;
   size: string;
   created: string;
+  allowlisted?: boolean;
+  allowlist_scope?: "user" | "project" | "user+project" | null;
 };
 
 export type DockerImagesList = {
   images: DockerImageInfo[];
   total: number;
+  allowlisted_total?: number;
+  showing_all_local?: boolean;
+};
+
+export type DockerImageAllowResult = {
+  image_name: string;
+  project_id?: number | null;
+  scope: "user" | "project";
+  message: string;
 };
 
 // ============================================================================
@@ -10059,6 +10368,74 @@ export type NotesStore = {
   notes: AnalysisNote[];
   created_at: string;
 };
+
+function normalizeApkExportTitle(reportTitle?: string): string | undefined {
+  const normalized = reportTitle?.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return undefined;
+  }
+  return normalized.slice(0, 160);
+}
+
+function buildApkExportPayload(
+  resultData: ApkAnalysisResult | UnifiedApkScanResult,
+  reportTitle?: string,
+): Record<string, unknown> {
+  const source = resultData as Record<string, any>;
+  const normalizedReportTitle = normalizeApkExportTitle(reportTitle);
+
+  return {
+    title: normalizedReportTitle || (typeof source.title === "string" ? source.title.trim() || undefined : undefined),
+    scan_id: source.scan_id,
+    filename: source.filename,
+    package_name: source.package_name,
+    app_name: source.app_name,
+    version_name: source.version_name,
+    version_code: source.version_code,
+    min_sdk: source.min_sdk,
+    target_sdk: source.target_sdk,
+    permissions: Array.isArray(source.permissions) ? source.permissions : [],
+    dangerous_permissions_count: source.dangerous_permissions_count,
+    components: Array.isArray(source.components) ? source.components : [],
+    activities: Array.isArray(source.activities) ? source.activities : undefined,
+    services: Array.isArray(source.services) ? source.services : undefined,
+    receivers: Array.isArray(source.receivers) ? source.receivers : undefined,
+    providers: Array.isArray(source.providers) ? source.providers : undefined,
+    uses_features: Array.isArray(source.uses_features) ? source.uses_features : undefined,
+    debuggable: source.debuggable,
+    allow_backup: source.allow_backup,
+    certificate: source.certificate,
+    network_security_config: source.network_security_config,
+    secrets: Array.isArray(source.secrets) ? source.secrets : [],
+    urls: Array.isArray(source.urls) ? source.urls : [],
+    native_libraries: Array.isArray(source.native_libraries) ? source.native_libraries : [],
+    security_issues: Array.isArray(source.security_issues) ? source.security_issues : [],
+    ai_analysis: source.ai_analysis,
+    ai_report_functionality: source.ai_functionality_report ?? source.ai_report_functionality,
+    ai_report_security: source.ai_security_report ?? source.ai_report_security,
+    ai_architecture_diagram: source.ai_architecture_diagram,
+    ai_attack_surface_map: source.ai_attack_surface_map,
+    hardening_score: source.hardening_score,
+    jadx_total_classes: source.total_classes ?? source.jadx_total_classes,
+    jadx_total_files: source.total_files ?? source.jadx_total_files,
+    jadx_security_issues: source.jadx_security_issues,
+    classes_summary: source.classes_summary,
+    source_tree: source.source_tree,
+    saved_source_code_samples: source.saved_source_code_samples,
+    decompiled_code_findings: source.decompiled_code_findings,
+    decompiled_code_summary: source.decompiled_code_summary,
+    cve_scan_results: source.cve_scan_results,
+    dynamic_analysis: source.dynamic_analysis,
+    vulnerability_frida_hooks: source.vulnerability_frida_hooks,
+    vuln_hunt_result: source.vuln_hunt_result,
+    manifest_visualization: source.manifest_visualization,
+    obfuscation_analysis: source.obfuscation_analysis,
+    verification_results: source.verification_results,
+    sensitive_data_findings: source.sensitive_data_findings,
+    scan_time: source.scan_time,
+    file_size: source.file_size,
+  };
+}
 
 // Reverse Engineering API Client
 export const reverseEngineeringClient = {
@@ -10719,12 +11096,17 @@ export const reverseEngineeringClient = {
     includeAi: boolean = true,
     adjudicateFindings: boolean = true,
     skepticismLevel: "high" | "medium" | "low" = "high",
-    deepLayerScan: boolean = true,
+    deepLayerScan: boolean = false,
     checkBaseImage: boolean = true,
-    scanCves: boolean = false,
+    scanCves: boolean = true,
     includeNvd: boolean = true,
     includeKev: boolean = true,
-    includeEpss: boolean = true
+    includeEpss: boolean = true,
+    projectId?: number,
+    includeTrivyVulnScan: boolean = false,
+    includeTrivyMisconfigScan: boolean = true,
+    includeTrivySecretScan: boolean = true,
+    includeTrivyLicenseScan: boolean = false
   ): Promise<DockerAnalysisResult> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {};
@@ -10738,10 +11120,17 @@ export const reverseEngineeringClient = {
       deep_layer_scan: String(deepLayerScan),
       check_base_image: String(checkBaseImage),
       scan_cves: String(scanCves),
-      include_nvd: String(includeNvd),
+      include_nvd_enrichment: String(includeNvd),
       include_kev: String(includeKev),
       include_epss: String(includeEpss),
+      include_trivy_vuln_scan: String(includeTrivyVulnScan),
+      include_trivy_misconfig_scan: String(includeTrivyMisconfigScan),
+      include_trivy_secret_scan: String(includeTrivySecretScan),
+      include_trivy_license_scan: String(includeTrivyLicenseScan),
     });
+    if (projectId !== undefined) {
+      params.set("project_id", String(projectId));
+    }
     const resp = await fetch(`${API_URL}/reverse/analyze-docker/${encodeURIComponent(imageName)}?${params}`, {
       headers,
     });
@@ -10765,7 +11154,7 @@ export const reverseEngineeringClient = {
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const resp = await fetch(`${API_URL}/reverse/export-docker/${format}`, {
+    const resp = await fetch(`${API_URL}/reverse/docker/export?format=${format}`, {
       method: "POST",
       headers,
       body: JSON.stringify(result),
@@ -10774,16 +11163,66 @@ export const reverseEngineeringClient = {
     return resp.blob();
   },
 
-  /**
-   * List locally available Docker images
-   */
-  listDockerImages: async (): Promise<DockerImagesList> => {
+  exportDockerSbom: async (
+    imageName: string,
+    format: "cyclonedx" | "spdx-json" = "cyclonedx",
+    projectId?: number
+  ): Promise<Blob> => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {};
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const resp = await fetch(`${API_URL}/reverse/docker-images`, { headers });
+    const params = new URLSearchParams({ format });
+    if (projectId !== undefined) {
+      params.set("project_id", String(projectId));
+    }
+    const resp = await fetch(`${API_URL}/reverse/docker/sbom/${encodeURIComponent(imageName)}?${params}`, {
+      headers,
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.blob();
+  },
+
+  /**
+   * List Docker images for the Docker Inspector.
+   * Admins receive all local images with allowlist state; other users receive allowlisted images only.
+   */
+  listDockerImages: async (projectId?: number): Promise<DockerImagesList> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const params = new URLSearchParams();
+    if (projectId !== undefined) {
+      params.set("project_id", String(projectId));
+    }
+    const suffix = params.toString() ? `?${params}` : "";
+    const resp = await fetch(`${API_URL}/reverse/docker-images${suffix}`, { headers });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+
+  /**
+   * Allow a local Docker image for analysis
+   */
+  allowDockerImage: async (imageName: string, projectId?: number): Promise<DockerImageAllowResult> => {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const resp = await fetch(`${API_URL}/reverse/docker-images/allow`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        image_name: imageName,
+        project_id: projectId,
+      }),
+    });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   },
@@ -10819,18 +11258,12 @@ export const reverseEngineeringClient = {
     format: "markdown" | "pdf" | "docx",
     reportType: "functionality" | "security" | "both" = "both"
   ): Promise<Blob> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
     const form = new FormData();
     form.append("file", file);
 
     const params = new URLSearchParams({ format, report_type: reportType });
-    const resp = await fetch(`${API_URL}/reverse/apk/export?${params}`, {
+    const resp = await fetchWithAuthRetry(`/reverse/apk/export?${params}`, {
       method: "POST",
-      headers,
       body: form,
     });
 
@@ -10845,23 +11278,21 @@ export const reverseEngineeringClient = {
    * Export APK analysis report from existing result data
    */
   exportApkReportFromResult: async (
-    resultData: ApkAnalysisResult,
+    resultData: ApkAnalysisResult | UnifiedApkScanResult,
     format: "markdown" | "pdf" | "docx",
-    reportType: "functionality" | "security" | "both" = "both"
+    reportType: "functionality" | "security" | "both" = "both",
+    reportTitle?: string,
   ): Promise<Blob> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
+    const normalizedReportTitle = normalizeApkExportTitle(reportTitle);
+    const exportData = buildApkExportPayload(resultData, normalizedReportTitle);
     const params = new URLSearchParams({ format, report_type: reportType });
-    const resp = await fetch(`${API_URL}/reverse/apk/export-from-result?${params}`, {
+    if (normalizedReportTitle) {
+      params.set("report_title", normalizedReportTitle);
+    }
+    const resp = await fetchWithAuthRetry(`/reverse/apk/export-from-result?${params}`, {
       method: "POST",
-      headers,
-      body: JSON.stringify(resultData),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(exportData),
     });
 
     if (!resp.ok) {
@@ -10876,59 +11307,15 @@ export const reverseEngineeringClient = {
    */
   exportUnifiedApkScan: async (
     result: UnifiedApkScanResult,
-    format: "markdown" | "pdf" | "docx"
+    format: "markdown" | "pdf" | "docx",
+    reportTitle?: string
   ): Promise<Blob> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    // Convert unified result to the format expected by the export endpoint
-    const exportData = {
-      package_name: result.package_name,
-      version_name: result.version_name,
-      version_code: result.version_code,
-      min_sdk: result.min_sdk,
-      target_sdk: result.target_sdk,
-      permissions: result.permissions,
-      components: result.components,
-      secrets: result.secrets,
-      urls: result.urls,
-      native_libraries: result.native_libraries,
-      security_issues: result.security_issues,
-      ai_report_functionality: result.ai_functionality_report,
-      ai_report_security: result.ai_security_report,
-      ai_architecture_diagram: result.ai_architecture_diagram,
-      ai_attack_surface_map: result.ai_attack_surface_map,
-      // JADX deep scan data
-      jadx_total_classes: result.total_classes,
-      jadx_total_files: result.total_files,
-      jadx_security_issues: result.jadx_security_issues,
-      classes_summary: result.classes_summary,
-      // Decompiled code findings (pattern-based scanners)
-      decompiled_code_findings: result.decompiled_code_findings,
-      decompiled_code_summary: result.decompiled_code_summary,
-      // CVE scan results
-      cve_scan_results: result.cve_scan_results,
-      // Dynamic analysis (Frida scripts)
-      dynamic_analysis: result.dynamic_analysis,
-    };
-
-    const params = new URLSearchParams({ format, report_type: "both" });
-    const resp = await fetch(`${API_URL}/reverse/apk/export-from-result?${params}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(exportData),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(text || resp.statusText);
-    }
-    return resp.blob();
+    return reverseEngineeringClient.exportApkReportFromResult(
+      result,
+      format,
+      "both",
+      reportTitle,
+    );
   },
 
   /**
@@ -10936,16 +11323,9 @@ export const reverseEngineeringClient = {
    */
   exportBinaryResult: async (
     result: BinaryAnalysisResult,
-    format: "markdown" | "pdf" | "docx"
+    format: "markdown" | "pdf" | "docx",
+    reportTitle?: string
   ): Promise<Blob> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
     const exportData = {
       filename: result.filename,
       metadata: result.metadata,
@@ -10976,9 +11356,12 @@ export const reverseEngineeringClient = {
     };
 
     const params = new URLSearchParams({ format });
-    const resp = await fetch(`${API_URL}/reverse/binary/export-from-result?${params}`, {
+    if (reportTitle && reportTitle.trim().length > 0) {
+      params.set("report_title", reportTitle.trim());
+    }
+    const resp = await fetchWithAuthRetry(`/reverse/binary/export-from-result?${params}`, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(exportData),
     });
 
@@ -11145,6 +11528,7 @@ export const reverseEngineeringClient = {
   listReports: async (params?: {
     analysis_type?: string;
     project_id?: number;
+    include_project_reports?: boolean;
     risk_level?: string;
     limit?: number;
     offset?: number;
@@ -11156,7 +11540,10 @@ export const reverseEngineeringClient = {
     }
     const searchParams = new URLSearchParams();
     if (params?.analysis_type) searchParams.set("analysis_type", params.analysis_type);
-    if (params?.project_id) searchParams.set("project_id", String(params.project_id));
+    if (params?.project_id !== undefined) searchParams.set("project_id", String(params.project_id));
+    if (params?.include_project_reports !== undefined) {
+      searchParams.set("include_project_reports", String(params.include_project_reports));
+    }
     if (params?.risk_level) searchParams.set("risk_level", params.risk_level);
     if (params?.limit) searchParams.set("limit", String(params.limit));
     if (params?.offset) searchParams.set("offset", String(params.offset));
@@ -11204,16 +11591,8 @@ export const reverseEngineeringClient = {
     reportId: number,
     format: "markdown" | "pdf" | "docx"
   ): Promise<Blob> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    
     const params = new URLSearchParams({ format });
-    const resp = await fetch(`${API_URL}/reverse/reports/${reportId}/export?${params}`, {
-      headers,
-    });
+    const resp = await fetchWithAuthRetry(`/reverse/reports/${reportId}/export?${params}`);
 
     if (!resp.ok) {
       const text = await resp.text();
@@ -11256,16 +11635,11 @@ export const reverseEngineeringClient = {
    * Chat about APK analysis results with AI
    */
   chatAboutApk: async (request: ApkChatRequest): Promise<ApkChatResponse> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const resp = await fetch(`${API_URL}/reverse/apk/chat`, {
+    const resp = await fetchWithAuthRetry("/reverse/apk/chat", {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(request),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -12120,21 +12494,15 @@ export const reverseEngineeringClient = {
     windowSize: number = 256, 
     stepSize: number = 128
   ): Promise<EntropyAnalysisResult> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
     const formData = new FormData();
     formData.append("file", file);
 
-    const resp = await fetch(
-      `${API_URL}/reverse/binary/entropy?window_size=${windowSize}&step_size=${stepSize}`, 
+    const resp = await fetchWithAuthRetry(
+      `/reverse/binary/entropy?window_size=${windowSize}&step_size=${stepSize}`,
       {
         method: "POST",
-        headers,
         body: formData,
-      }
+      },
     );
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
@@ -12352,16 +12720,11 @@ export const reverseEngineeringClient = {
    * Chat with AI about vulnerability analysis results
    */
   chatAboutAnalysis: async (request: AnalysisChatRequest): Promise<AnalysisChatResponse> => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    const resp = await fetch(`${API_URL}/reverse/chat`, {
+    const resp = await fetchWithAuthRetry("/reverse/chat", {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(request),
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -13121,13 +13484,22 @@ export interface SaveREReportRequest {
   cve_scan_results?: Record<string, unknown>;
   
   // Vulnerability-specific Frida Hooks
-  vulnerability_frida_hooks?: Array<Record<string, unknown>>;
+  vulnerability_frida_hooks?: Record<string, unknown>;
+  
+  // Unified APK vulnerability hunt results
+  vuln_hunt_result?: Record<string, unknown>;
   
   // Manifest Visualization (component graph, deep links, AI analysis)
   manifest_visualization?: Record<string, unknown>;
   
   // Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
   obfuscation_analysis?: Record<string, unknown>;
+  
+  // AI Finding Verification Results
+  verification_results?: Record<string, unknown>;
+  
+  // Sensitive Data Discovery
+  sensitive_data_findings?: Record<string, unknown>;
   
   // Metadata
   tags?: string[];
@@ -13207,11 +13579,23 @@ export interface REReportDetail extends REReportSummary {
   ai_vuln_scan_result?: Record<string, unknown>;
   ai_chat_history?: Array<Record<string, unknown>>;
   
+  // Dynamic / code / APK deep analysis results
+  dynamic_analysis?: Record<string, unknown>;
+  decompiled_code_findings?: Array<Record<string, unknown>>;
+  decompiled_code_summary?: Record<string, unknown>;
+  cve_scan_results?: Record<string, unknown>;
+  vulnerability_frida_hooks?: Record<string, unknown>;
+  vuln_hunt_result?: Record<string, unknown>;
+  
   // Manifest Visualization (component graph, deep links, AI analysis)
   manifest_visualization?: Record<string, unknown>;
   
   // Obfuscation Analysis (detection, deobfuscation strategies, Frida hooks)
   obfuscation_analysis?: Record<string, unknown>;
+  
+  // Verification / sensitive-data outputs
+  verification_results?: Record<string, unknown>;
+  sensitive_data_findings?: Record<string, unknown>;
   
   notes?: string;
 }
@@ -14991,11 +15375,7 @@ export const socialApi = {
       skip: String(skip),
       limit: String(limit),
     });
-    const resp = await fetch(`${API_URL}/social/users/suggested?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UserSearchResponse>(`/social/users/suggested?${params}`);
   },
 
   searchUsers: async (query: string, skip = 0, limit = 20, excludeFriends = false): Promise<UserSearchResponse> => {
@@ -15005,125 +15385,80 @@ export const socialApi = {
       limit: String(limit),
       exclude_friends: String(excludeFriends),
     });
-    const resp = await fetch(`${API_URL}/social/users/search?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UserSearchResponse>(`/social/users/search?${params}`);
   },
 
   getUserProfile: async (userId: number): Promise<UserPublicProfile> => {
-    const resp = await fetch(`${API_URL}/social/users/${userId}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UserPublicProfile>(`/social/users/${userId}`);
   },
 
   // Friend Requests
   sendFriendRequest: async (receiverId: number, message?: string): Promise<FriendRequest> => {
-    const resp = await fetch(`${API_URL}/social/friend-requests`, {
+    return request<FriendRequest>("/social/friend-requests", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ receiver_id: receiverId, message }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getFriendRequests: async (): Promise<FriendRequestListResponse> => {
-    const resp = await fetch(`${API_URL}/social/friend-requests`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<FriendRequestListResponse>("/social/friend-requests");
   },
 
   respondToFriendRequest: async (requestId: number, accept: boolean): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/friend-requests/${requestId}/respond`, {
+    return request<{ message: string }>(`/social/friend-requests/${requestId}/respond`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ action: accept ? "accept" : "reject" }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   cancelFriendRequest: async (requestId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/friend-requests/${requestId}`, {
+    return request<{ message: string }>(`/social/friend-requests/${requestId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Friends
   getFriends: async (): Promise<FriendsListResponse> => {
-    const resp = await fetch(`${API_URL}/social/friends`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<FriendsListResponse>("/social/friends");
   },
 
   removeFriend: async (friendId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/friends/${friendId}`, {
+    return request<{ message: string }>(`/social/friends/${friendId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Conversations
   createConversation: async (participantId: number, initialMessage?: string): Promise<ConversationSummary> => {
-    const resp = await fetch(`${API_URL}/social/conversations`, {
+    return request<ConversationSummary>("/social/conversations", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({
         participant_ids: [participantId],
         initial_message: initialMessage,
       }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getConversations: async (skip = 0, limit = 50): Promise<ConversationsListResponse> => {
     const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
-    const resp = await fetch(`${API_URL}/social/conversations?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<ConversationsListResponse>(`/social/conversations?${params}`);
   },
 
   getConversation: async (conversationId: number, skip = 0, limit = 50): Promise<ConversationDetail> => {
     const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<ConversationDetail>(`/social/conversations/${conversationId}?${params}`);
   },
 
   markConversationRead: async (conversationId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/read`, {
+    return request<{ message: string }>(`/social/conversations/${conversationId}/read`, {
       method: "POST",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   deleteConversation: async (conversationId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}`, {
+    return request<{ message: string }>(`/social/conversations/${conversationId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Messages
@@ -15133,17 +15468,14 @@ export const socialApi = {
     messageType: MessageType = "text",
     attachmentData?: Record<string, any>
   ): Promise<SocialMessage> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/messages`, {
+    return request<SocialMessage>(`/social/conversations/${conversationId}/messages`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({
         content,
         message_type: messageType,
         attachment_data: attachmentData,
       }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getMessages: async (
@@ -15154,39 +15486,25 @@ export const socialApi = {
   ): Promise<MessagesListResponse> => {
     const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
     if (beforeId) params.append("before_id", String(beforeId));
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/messages?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<MessagesListResponse>(`/social/conversations/${conversationId}/messages?${params}`);
   },
 
   editMessage: async (messageId: number, content: string): Promise<SocialMessage> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}`, {
+    return request<SocialMessage>(`/social/messages/${messageId}`, {
       method: "PUT",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ content }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   deleteMessage: async (messageId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}`, {
+    return request<{ message: string }>(`/social/messages/${messageId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Unread Counts
   getUnreadCounts: async (): Promise<UnreadCountResponse> => {
-    const resp = await fetch(`${API_URL}/social/unread`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UnreadCountResponse>("/social/unread");
   },
 
   // Profile Update
@@ -15196,71 +15514,49 @@ export const socialApi = {
     bio?: string;
     avatar_url?: string;
   }): Promise<any> => {
-    const resp = await fetch(`${API_URL}/auth/profile`, {
+    return request<any>("/auth/profile", {
       method: "PUT",
-      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Group Chats
   createGroup: async (data: GroupCreate): Promise<ConversationSummary> => {
-    const resp = await fetch(`${API_URL}/social/groups`, {
+    return request<ConversationSummary>("/social/groups", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   updateGroup: async (groupId: number, data: GroupUpdate): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/groups/${groupId}`, {
+    return request<{ message: string }>(`/social/groups/${groupId}`, {
       method: "PUT",
-      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getGroupMembers: async (groupId: number): Promise<GroupMemberInfo[]> => {
-    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<GroupMemberInfo[]>(`/social/groups/${groupId}/members`);
   },
 
   addGroupMembers: async (groupId: number, userIds: number[]): Promise<{ message: string; detail?: string }> => {
-    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members`, {
+    return request<{ message: string; detail?: string }>(`/social/groups/${groupId}/members`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ user_ids: userIds }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   removeGroupMember: async (groupId: number, userId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members/${userId}`, {
+    return request<{ message: string }>(`/social/groups/${groupId}/members/${userId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   updateMemberRole: async (groupId: number, userId: number, role: ParticipantRole): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/groups/${groupId}/members/${userId}/role`, {
+    return request<{ message: string }>(`/social/groups/${groupId}/members/${userId}/role`, {
       method: "PUT",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ role }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   leaveGroup: async (groupId: number, userId: number): Promise<{ message: string }> => {
@@ -15270,82 +15566,51 @@ export const socialApi = {
 
   // User Notes
   getAllNotes: async (): Promise<UserNotesListResponse> => {
-    const resp = await fetch(`${API_URL}/social/notes`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UserNotesListResponse>("/social/notes");
   },
 
   getNoteForUser: async (userId: number): Promise<UserNote> => {
-    const resp = await fetch(`${API_URL}/social/notes/${userId}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<UserNote>(`/social/notes/${userId}`);
   },
 
   createOrUpdateNote: async (subjectId: number, content: string): Promise<UserNote> => {
-    const resp = await fetch(`${API_URL}/social/notes`, {
+    return request<UserNote>("/social/notes", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ subject_id: subjectId, content }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   deleteNote: async (userId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/notes/${userId}`, {
+    return request<{ message: string }>(`/social/notes/${userId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Message Reactions
   addReaction: async (messageId: number, emoji: string): Promise<{ message: string; reactions: ReactionSummary }> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions`, {
+    return request<{ message: string; reactions: ReactionSummary }>(`/social/messages/${messageId}/reactions`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ emoji }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   removeReaction: async (messageId: number, emoji: string): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+    return request<{ message: string }>(`/social/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getMessageReactions: async (messageId: number): Promise<MessageReactionsResponse> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/reactions`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<MessageReactionsResponse>(`/social/messages/${messageId}/reactions`);
   },
 
   // File Upload
   uploadFile: async (file: File): Promise<FileUploadResponse> => {
     const formData = new FormData();
     formData.append("file", file);
-    
-    const headers: Record<string, string> = {};
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    
-    const resp = await fetch(`${API_URL}/social/upload`, {
+
+    const resp = await fetchWithAuthRetry("/social/upload", {
       method: "POST",
-      headers,
       body: formData,
     });
     if (!resp.ok) throw new Error(await resp.text());
@@ -15360,11 +15625,10 @@ export const socialApi = {
     messageType: MessageType = "text",
     attachmentData?: AttachmentData
   ): Promise<SocialMessage> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/messages/${replyToMessageId}/reply`,
+    return request<SocialMessage>(
+      `/social/conversations/${conversationId}/messages/${replyToMessageId}/reply`,
       {
         method: "POST",
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           content,
           message_type: messageType,
@@ -15372,8 +15636,6 @@ export const socialApi = {
         }),
       }
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // Get Thread Replies
@@ -15383,14 +15645,9 @@ export const socialApi = {
     skip: number = 0,
     limit: number = 50
   ): Promise<ThreadRepliesResponse> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/thread?skip=${skip}&limit=${limit}`,
-      {
-        headers: getAuthHeaders(),
-      }
+    return request<ThreadRepliesResponse>(
+      `/social/conversations/${conversationId}/messages/${messageId}/thread?skip=${skip}&limit=${limit}`
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // ============================================================================
@@ -15398,38 +15655,25 @@ export const socialApi = {
   // ============================================================================
 
   pinMessage: async (conversationId: number, messageId: number): Promise<PinnedMessageInfo> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/pin`,
+    return request<PinnedMessageInfo>(
+      `/social/conversations/${conversationId}/messages/${messageId}/pin`,
       {
         method: "POST",
-        headers: getAuthHeaders(),
       }
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   unpinMessage: async (conversationId: number, messageId: number): Promise<{ message: string }> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/messages/${messageId}/pin`,
+    return request<{ message: string }>(
+      `/social/conversations/${conversationId}/messages/${messageId}/pin`,
       {
         method: "DELETE",
-        headers: getAuthHeaders(),
       }
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getPinnedMessages: async (conversationId: number): Promise<PinnedMessagesResponse> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/pinned`,
-      {
-        headers: getAuthHeaders(),
-      }
-    );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<PinnedMessagesResponse>(`/social/conversations/${conversationId}/pinned`);
   },
 
   // ============================================================================
@@ -15440,13 +15684,10 @@ export const socialApi = {
     messageId: number, 
     targetConversationIds: number[]
   ): Promise<ForwardMessageResponse> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/forward`, {
+    return request<ForwardMessageResponse>(`/social/messages/${messageId}/forward`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ target_conversation_ids: targetConversationIds }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // ============================================================================
@@ -15457,36 +15698,22 @@ export const socialApi = {
     conversationId: number, 
     messageId: number
   ): Promise<ReadReceiptInfo> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/read/${messageId}`,
+    return request<ReadReceiptInfo>(
+      `/social/conversations/${conversationId}/read/${messageId}`,
       {
         method: "POST",
-        headers: getAuthHeaders(),
       }
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getConversationReadReceipts: async (
     conversationId: number
   ): Promise<ConversationReadReceipts> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/read-receipts`,
-      {
-        headers: getAuthHeaders(),
-      }
-    );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<ConversationReadReceipts>(`/social/conversations/${conversationId}/read-receipts`);
   },
 
   getMessageReadBy: async (messageId: number): Promise<MessageReadBy> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/read-by`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<MessageReadBy>(`/social/messages/${messageId}/read-by`);
   },
 
   // ============================================================================
@@ -15494,14 +15721,9 @@ export const socialApi = {
   // ============================================================================
 
   checkMentions: async (conversationId: number, content: string): Promise<MentionInfo[]> => {
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/mentions/check?content=${encodeURIComponent(content)}`,
-      {
-        headers: getAuthHeaders(),
-      }
+    return request<MentionInfo[]>(
+      `/social/conversations/${conversationId}/mentions/check?content=${encodeURIComponent(content)}`
     );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // ============================================================================
@@ -15520,12 +15742,8 @@ export const socialApi = {
       limit: String(limit),
     });
     if (conversationId) params.append("conversation_id", String(conversationId));
-    
-    const resp = await fetch(`${API_URL}/social/messages/search?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+
+    return request<MessageSearchResponse>(`/social/messages/search?${params}`);
   },
 
   // ============================================================================
@@ -15533,13 +15751,10 @@ export const socialApi = {
   // ============================================================================
 
   createPoll: async (conversationId: number, poll: PollCreate): Promise<PollResponse> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/polls`, {
+    return request<PollResponse>(`/social/conversations/${conversationId}/polls`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify(poll),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getConversationPolls: async (
@@ -15547,57 +15762,37 @@ export const socialApi = {
     includeClosed = true
   ): Promise<PollResponse[]> => {
     const params = new URLSearchParams({ include_closed: String(includeClosed) });
-    const resp = await fetch(
-      `${API_URL}/social/conversations/${conversationId}/polls?${params}`,
-      {
-        headers: getAuthHeaders(),
-      }
-    );
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<PollResponse[]>(`/social/conversations/${conversationId}/polls?${params}`);
   },
 
   getPoll: async (pollId: number): Promise<PollResponse> => {
-    const resp = await fetch(`${API_URL}/social/polls/${pollId}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<PollResponse>(`/social/polls/${pollId}`);
   },
 
   voteOnPoll: async (
     pollId: number,
     optionIds: number[]
   ): Promise<{ message: string; poll: PollResponse }> => {
-    const resp = await fetch(`${API_URL}/social/polls/${pollId}/vote`, {
+    return request<{ message: string; poll: PollResponse }>(`/social/polls/${pollId}/vote`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ option_ids: optionIds }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   addPollOption: async (
     pollId: number,
     text: string
   ): Promise<{ message: string; poll: PollResponse }> => {
-    const resp = await fetch(`${API_URL}/social/polls/${pollId}/options`, {
+    return request<{ message: string; poll: PollResponse }>(`/social/polls/${pollId}/options`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ text }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   closePoll: async (pollId: number): Promise<{ message: string; poll: PollResponse }> => {
-    const resp = await fetch(`${API_URL}/social/polls/${pollId}/close`, {
+    return request<{ message: string; poll: PollResponse }>(`/social/polls/${pollId}/close`, {
       method: "POST",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // ============================================================================
@@ -15614,11 +15809,7 @@ export const socialApi = {
       limit: String(limit),
       offset,
     });
-    const resp = await fetch(`${API_URL}/social/gifs/search?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<GifSearchResponse>(`/social/gifs/search?${params}`);
   },
 
   getTrendingGifs: async (limit = 25, offset = "0"): Promise<GifTrendingResponse> => {
@@ -15626,11 +15817,7 @@ export const socialApi = {
       limit: String(limit),
       offset,
     });
-    const resp = await fetch(`${API_URL}/social/gifs/trending?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<GifTrendingResponse>(`/social/gifs/trending?${params}`);
   },
 
   // ============================================================================
@@ -15642,21 +15829,14 @@ export const socialApi = {
     mute: boolean,
     durationHours?: number
   ): Promise<MuteStatusResponse> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/mute`, {
+    return request<MuteStatusResponse>(`/social/conversations/${conversationId}/mute`, {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ mute, duration_hours: durationHours }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getMuteStatus: async (conversationId: number): Promise<MuteStatusResponse> => {
-    const resp = await fetch(`${API_URL}/social/conversations/${conversationId}/mute`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<MuteStatusResponse>(`/social/conversations/${conversationId}/mute`);
   },
 
   // ============================================================================
@@ -15664,13 +15844,10 @@ export const socialApi = {
   // ============================================================================
 
   addBookmark: async (messageId: number, note?: string): Promise<BookmarkResponse> => {
-    const resp = await fetch(`${API_URL}/social/bookmarks`, {
+    return request<BookmarkResponse>("/social/bookmarks", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ message_id: messageId, note }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   getBookmarks: async (skip = 0, limit = 50): Promise<BookmarksListResponse> => {
@@ -15678,38 +15855,24 @@ export const socialApi = {
       skip: String(skip),
       limit: String(limit),
     });
-    const resp = await fetch(`${API_URL}/social/bookmarks?${params}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<BookmarksListResponse>(`/social/bookmarks?${params}`);
   },
 
   updateBookmark: async (bookmarkId: number, note?: string): Promise<BookmarkResponse> => {
-    const resp = await fetch(`${API_URL}/social/bookmarks/${bookmarkId}`, {
+    return request<BookmarkResponse>(`/social/bookmarks/${bookmarkId}`, {
       method: "PUT",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ note }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   removeBookmark: async (messageId: number): Promise<{ message: string }> => {
-    const resp = await fetch(`${API_URL}/social/bookmarks/message/${messageId}`, {
+    return request<{ message: string }>(`/social/bookmarks/message/${messageId}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   isMessageBookmarked: async (messageId: number): Promise<{ is_bookmarked: boolean }> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/bookmarked`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<{ is_bookmarked: boolean }>(`/social/messages/${messageId}/bookmarked`);
   },
 
   // ============================================================================
@@ -15717,35 +15880,25 @@ export const socialApi = {
   // ============================================================================
 
   getMessageEditHistory: async (messageId: number): Promise<MessageEditHistoryResponse> => {
-    const resp = await fetch(`${API_URL}/social/messages/${messageId}/history`, {
-      headers: getAuthHeaders(),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return request<MessageEditHistoryResponse>(`/social/messages/${messageId}/history`);
   },
 
   // ============================================================================
   // Share Findings & Reports
   // ============================================================================
 
-  shareFinding: async (request: ShareFindingRequest): Promise<ShareResponse> => {
-    const resp = await fetch(`${API_URL}/social/share/finding`, {
+  shareFinding: async (payload: ShareFindingRequest): Promise<ShareResponse> => {
+    return request<ShareResponse>("/social/share/finding", {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(request),
+      body: JSON.stringify(payload),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
-  shareReport: async (request: ShareReportRequest): Promise<ShareResponse> => {
-    const resp = await fetch(`${API_URL}/social/share/report`, {
+  shareReport: async (payload: ShareReportRequest): Promise<ShareResponse> => {
+    return request<ShareResponse>("/social/share/report", {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(request),
+      body: JSON.stringify(payload),
     });
-    if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
   },
 
   // WebSocket URL helper

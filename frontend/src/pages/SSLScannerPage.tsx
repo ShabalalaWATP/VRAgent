@@ -965,10 +965,7 @@ const SSLScannerPage: React.FC = () => {
 
     setExporting(format);
     try {
-      const response = await fetch(`/api/network/reports/${results.report_id}/export/${format}`);
-      if (!response.ok) throw new Error("Export failed");
-      
-      const blob = await response.blob();
+      const blob = await apiClient.exportNetworkReport(results.report_id, format);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

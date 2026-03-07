@@ -87,12 +87,16 @@ import { useDropzone } from "react-dropzone";
 import ReactMarkdown from "react-markdown";
 import { ChatCodeBlock } from "../components/ChatCodeBlock";
 import NetworkTopologyGraph, { TopologyNode, TopologyLink } from "../components/NetworkTopologyGraph";
+import PcapDeepInspectionSection from "../components/PcapDeepInspectionSection";
 import { 
   analyzePcaps, 
   getPcapStatus, 
   MultiPcapAnalysisResponse, 
+  PcapAnalysisResponse,
   AIAnalysisResult, 
   AISecurityReport,
+  PcapAttackSurface,
+  PcapEnhancedProtocols,
   chatAboutPcap,
   ChatMessage,
   getPcapReports,
@@ -131,6 +135,151 @@ const riskLevelConfig: Record<string, { color: string; icon: React.ReactNode; bg
 
 // Helper to safely get lowercase string
 const safeLower = (str: string | undefined | null): string => (str || '').toLowerCase();
+
+type PcapChatCaptureContext = {
+  label: string;
+  summary?: any;
+  findings?: any[];
+  ai_analysis?: any;
+  conversations?: PcapAnalysisResponse["conversations"];
+  attack_surface?: PcapAttackSurface | null;
+  enhanced_protocols?: PcapEnhancedProtocols | null;
+};
+
+function buildCaptureContextsFromResults(results: MultiPcapAnalysisResponse): PcapChatCaptureContext[] {
+  return results.analyses.map((analysis, index) => ({
+    label: analysis.filename || `Capture ${index + 1}`,
+    summary: analysis.summary,
+    findings: analysis.findings,
+    ai_analysis: analysis.ai_analysis,
+    conversations: analysis.conversations,
+    attack_surface: analysis.attack_surface,
+    enhanced_protocols: analysis.enhanced_protocols,
+  }));
+}
+
+function buildCaptureContextsFromSavedReport(report: SavedReportDetail): PcapChatCaptureContext[] {
+  const savedSummaries = report.summary_data?.summaries || [];
+  const filenames = (report.filename || "").split(", ").filter(Boolean);
+  const reportAnalyses = report.report_data?.analyses || [];
+  const findingsByFilename = new Map<string, SavedReportDetail["findings_data"]>();
+
+  report.findings_data.forEach((finding) => {
+    const filename = finding.filename;
+    if (!filename) return;
+
+    const existing = findingsByFilename.get(filename) || ([] as SavedReportDetail["findings_data"]);
+    existing.push(finding);
+    findingsByFilename.set(filename, existing);
+  });
+
+  const captureCount = Math.max(savedSummaries.length, reportAnalyses.length, filenames.length);
+  return Array.from({ length: captureCount }, (_, index) => {
+    const reportAnalysis = reportAnalyses[index];
+    const label = reportAnalysis?.filename || filenames[index] || `Capture ${index + 1}`;
+
+    return {
+      label,
+      summary: savedSummaries[index],
+      findings: findingsByFilename.get(label) || [],
+      ai_analysis: report.ai_report?.analyses?.[index],
+      conversations: reportAnalysis?.conversations,
+      attack_surface: reportAnalysis?.attack_surface,
+      enhanced_protocols: reportAnalysis?.enhanced_protocols,
+    };
+  });
+}
+
+function mergePcapSummaries(captures: PcapChatCaptureContext[]) {
+  const protocols: Record<string, number> = {};
+  const topTalkers = new Map<string, { ip: string; packets: number; bytes: number }>();
+  const dnsQueries = new Set<string>();
+  const httpHosts = new Set<string>();
+  let totalPackets = 0;
+  let durationSeconds = 0;
+  let potentialIssues = 0;
+
+  captures.forEach(({ summary }) => {
+    if (!summary) return;
+
+    totalPackets += summary.total_packets || 0;
+    durationSeconds += summary.duration_seconds || 0;
+    potentialIssues += summary.potential_issues || 0;
+
+    Object.entries(summary.protocols || {}).forEach(([protocol, count]) => {
+      protocols[protocol] = (protocols[protocol] || 0) + Number(count || 0);
+    });
+
+    (summary.top_talkers || []).forEach((talker: any) => {
+      const ip = talker?.ip;
+      if (!ip) return;
+
+      const existing = topTalkers.get(ip) || { ip, packets: 0, bytes: 0 };
+      existing.packets += Number(talker?.packets || 0);
+      existing.bytes += Number(talker?.bytes || 0);
+      topTalkers.set(ip, existing);
+    });
+
+    (summary.dns_queries || []).forEach((query: string) => {
+      if (query) dnsQueries.add(query);
+    });
+
+    (summary.http_hosts || []).forEach((host: string) => {
+      if (host) httpHosts.add(host);
+    });
+  });
+
+  return {
+    total_files: captures.length,
+    total_packets: totalPackets,
+    duration_seconds: Number(durationSeconds.toFixed(2)),
+    protocols,
+    top_talkers: Array.from(topTalkers.values())
+      .sort((a, b) => b.packets - a.packets || b.bytes - a.bytes)
+      .slice(0, 10),
+    dns_queries: Array.from(dnsQueries).slice(0, 100),
+    http_hosts: Array.from(httpHosts).slice(0, 100),
+    potential_issues: potentialIssues,
+  };
+}
+
+function buildChatContextFromResults(results: MultiPcapAnalysisResponse) {
+  const captures = buildCaptureContextsFromResults(results);
+
+  return {
+    summary: mergePcapSummaries(captures),
+    findings: captures.flatMap((capture) => capture.findings || []),
+    ai_analysis: {
+      analyses: captures.map((capture) => capture.ai_analysis).filter(Boolean),
+    },
+    captures,
+  };
+}
+
+function buildChatContextFromSavedReport(report: SavedReportDetail) {
+  const captures = buildCaptureContextsFromSavedReport(report);
+
+  if (captures.length === 0) {
+    return {
+      summary: {
+        total_packets: report.summary_data?.total_packets,
+        total_findings: report.summary_data?.total_findings,
+      },
+      findings: report.findings_data,
+      ai_analysis: report.ai_report,
+    };
+  }
+
+  return {
+    summary: {
+      ...mergePcapSummaries(captures),
+      total_findings: report.summary_data?.total_findings ?? report.findings_data.length,
+    },
+    findings: report.findings_data,
+    ai_analysis: report.ai_report,
+    captures,
+  };
+}
 
 function StructuredReportSection({ report, theme }: { report: AISecurityReport; theme: any }) {
   const riskConfig = riskLevelConfig[safeLower(report.risk_level)] || riskLevelConfig.medium;
@@ -929,24 +1078,9 @@ export default function PcapAnalyzerPage() {
       let pcapContext;
       
       if (results) {
-        // Fresh analysis results
-        const firstAnalysis = results.analyses[0];
-        pcapContext = {
-          summary: firstAnalysis?.summary,
-          findings: firstAnalysis?.findings,
-          ai_analysis: firstAnalysis?.ai_analysis,
-        };
+        pcapContext = buildChatContextFromResults(results);
       } else if (viewingReport) {
-        // Saved report - reconstruct context from saved data
-        pcapContext = {
-          summary: {
-            total_packets: viewingReport.summary_data?.total_packets,
-            total_findings: viewingReport.summary_data?.total_findings,
-            ...viewingReport.summary_data?.summaries?.[0],
-          },
-          findings: viewingReport.findings_data,
-          ai_analysis: viewingReport.ai_report,
-        };
+        pcapContext = buildChatContextFromSavedReport(viewingReport);
       }
 
       const response = await chatAboutPcap({
@@ -989,16 +1123,15 @@ export default function PcapAnalyzerPage() {
     }
   }, [statusChecked]);
 
-  // Check status on first render
-  useState(() => {
+  useEffect(() => {
     checkStatus();
-  });
+  }, [checkStatus]);
 
   // Load saved reports
   const loadSavedReports = useCallback(async () => {
     setLoadingReports(true);
     try {
-      const result = await getPcapReports(0, 50);
+      const result = await getPcapReports(0, 50, projectId);
       setSavedReports(result.reports);
       setSavedReportsTotal(result.total);
     } catch (err: any) {
@@ -1006,7 +1139,7 @@ export default function PcapAnalyzerPage() {
     } finally {
       setLoadingReports(false);
     }
-  }, []);
+  }, [projectId]);
 
   // Load reports when switching to saved reports tab
   useEffect(() => {
@@ -1132,6 +1265,11 @@ export default function PcapAnalyzerPage() {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.floor(seconds % 60)}s`;
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   };
+
+  const viewingReportCaptures = viewingReport ? buildCaptureContextsFromSavedReport(viewingReport) : [];
+  const viewingReportHasDeepInspection = viewingReportCaptures.some(
+    (capture) => !!capture.attack_surface || !!capture.enhanced_protocols,
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1842,6 +1980,19 @@ export default function PcapAnalyzerPage() {
                     </Grid>
                   )}
 
+                  {(analysis.attack_surface || analysis.enhanced_protocols) && (
+                    <Grid item xs={12}>
+                      <PcapDeepInspectionSection
+                        capture={{
+                          label: analysis.filename,
+                          conversations: analysis.conversations,
+                          attack_surface: analysis.attack_surface,
+                          enhanced_protocols: analysis.enhanced_protocols,
+                        }}
+                      />
+                    </Grid>
+                  )}
+
                   {/* AI Analysis */}
                   {analysis.ai_analysis && (
                     <Grid item xs={12}>
@@ -2084,6 +2235,39 @@ export default function PcapAnalyzerPage() {
                 </Accordion>
               )}
 
+              <Accordion sx={{ mt: 2 }} defaultExpanded={viewingReportHasDeepInspection}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography sx={{ fontWeight: 600 }}>Deep Inspection</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {viewingReportHasDeepInspection ? (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {viewingReportCaptures
+                        .filter((capture) => capture.attack_surface || capture.enhanced_protocols)
+                        .map((capture, index) => (
+                          <Accordion
+                            key={`${capture.label}-${index}`}
+                            defaultExpanded={viewingReportCaptures.length === 1}
+                            disableGutters
+                          >
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography sx={{ fontWeight: 600 }}>{capture.label}</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <PcapDeepInspectionSection capture={capture} />
+                            </AccordionDetails>
+                          </Accordion>
+                        ))}
+                    </Box>
+                  ) : (
+                    <Alert severity="info">
+                      This saved report does not include persisted deep-inspection data. Re-run the PCAP analysis to
+                      populate HTTP bodies, WebSocket payloads, TCP stream previews, and extracted artifacts.
+                    </Alert>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
               {/* AI Report */}
               {viewingReport.ai_report?.analyses && viewingReport.ai_report.analyses.length > 0 && (
                 <Accordion sx={{ mt: 2 }}>
@@ -2298,14 +2482,14 @@ export default function PcapAnalyzerPage() {
                 <Box sx={{ textAlign: "center", py: chatMaximized ? 6 : 2 }}>
                   <SmartToyIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Ask me anything about this PCAP analysis!
+                    Ask about the traffic summary, or drill into HTTP bodies, WebSocket payloads, TCP streams, and other extracted evidence.
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {[
                       "What's the most suspicious activity?",
-                      "Explain the DNS traffic",
-                      "Are there any data exfiltration signs?",
-                      "Summarize the key findings",
+                      "Show me any plaintext HTTP request or response bodies",
+                      "What do the WebSocket payloads contain?",
+                      "Follow the most suspicious TCP stream",
                     ].map((suggestion, i) => (
                       <Chip
                         key={i}

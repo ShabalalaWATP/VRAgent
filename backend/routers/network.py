@@ -20,7 +20,7 @@ from backend.core.logging import get_logger
 from backend.core.auth import get_current_active_user
 from backend.models.models import NetworkAnalysisReport, User, NmapScanTemplate
 from backend.services import pcap_service, nmap_service, network_export_service
-from backend.services import ssl_scanner_service, protocol_decoder_service
+from backend.services import ssl_scanner_service, protocol_decoder_service, project_service
 
 router = APIRouter(prefix="/network", tags=["network-analysis"])
 logger = get_logger(__name__)
@@ -29,6 +29,30 @@ logger = get_logger(__name__)
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB per file - supports large network captures (was 100MB)
 PCAP_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
 NMAP_EXTENSIONS = {".xml", ".nmap", ".gnmap", ".txt"}
+
+
+def _require_project_access(db: Session, project_id: int, current_user: User) -> None:
+    """Ensure the current user can access the requested project."""
+    if current_user.role == "admin":
+        return
+
+    project = project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    can_access, _ = project_service.can_access_project(db, project_id, current_user.id)
+    if not can_access:
+        raise HTTPException(status_code=403, detail="Not authorized to access this project")
+
+
+def _get_accessible_network_report(db: Session, report_id: int, current_user: User) -> NetworkAnalysisReport:
+    """Load a network report if it exists and the current user can access it."""
+    report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
+
+    if not report or not project_service.can_access_network_report(db, report, current_user):
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return report
 
 
 # ============================================================================
@@ -534,6 +558,7 @@ async def analyze_pcap_files(
                 risk_score = combined_ai["structured_report"].get("risk_score")
             
             db_report = NetworkAnalysisReport(
+                user_id=current_user.id,
                 analysis_type="pcap",
                 title=report_title,
                 filename=filenames[:500],
@@ -706,6 +731,7 @@ async def run_packet_capture(
         # Save to database
         report_title = request.title or f"Live Capture: {request.interface} ({request.profile})"
         db_report = NetworkAnalysisReport(
+            user_id=current_user.id,
             analysis_type="pcap",
             title=report_title,
             filename=f"Live capture - {request.duration}s on {request.interface}",
@@ -818,6 +844,7 @@ async def analyze_nmap_files(
                 risk_score = combined_ai["structured_report"].get("risk_score")
             
             db_report = NetworkAnalysisReport(
+                user_id=current_user.id,
                 analysis_type="nmap",
                 title=report_title,
                 filename=filenames[:500],
@@ -1029,6 +1056,7 @@ async def run_nmap_scan(
         # Save to database
         report_title = request.title or f"Nmap Scan: {request.target}"
         db_report = NetworkAnalysisReport(
+            user_id=current_user.id,
             analysis_type="nmap",
             title=report_title,
             filename=f"{request.target} ({request.scan_type} scan)",
@@ -1077,7 +1105,14 @@ def list_reports(
     current_user: User = Depends(get_current_active_user),
 ):
     """List saved network analysis reports."""
-    query = db.query(NetworkAnalysisReport)
+    if project_id is not None:
+        _require_project_access(db, project_id, current_user)
+
+    query = project_service.apply_network_report_access_filter(
+        db.query(NetworkAnalysisReport),
+        db,
+        current_user,
+    )
     
     if analysis_type:
         query = query.filter(NetworkAnalysisReport.analysis_type == analysis_type)
@@ -1106,9 +1141,7 @@ def list_reports(
 @router.get("/reports/{report_id}")
 def get_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get a specific saved report."""
-    report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = _get_accessible_network_report(db, report_id, current_user)
     
     return {
         "id": report.id,
@@ -1127,9 +1160,9 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
 @router.delete("/reports/{report_id}")
 def delete_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Delete a saved report."""
-    report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = _get_accessible_network_report(db, report_id, current_user)
+    if not project_service.can_delete_network_report(db, report, current_user):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this report")
     
     db.delete(report)
     db.commit()
@@ -1141,6 +1174,7 @@ def export_report(
     report_id: int,
     format: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Export a report to Markdown, PDF, or Word format.
@@ -1152,9 +1186,7 @@ def export_report(
     - Nmap scan reports  
     - SSL/TLS scan reports (with exploitation analysis)
     """
-    report = db.query(NetworkAnalysisReport).filter(NetworkAnalysisReport.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    report = _get_accessible_network_report(db, report_id, current_user)
     
     if format not in ["markdown", "pdf", "docx"]:
         raise HTTPException(status_code=400, detail="Invalid format. Use: markdown, pdf, docx")
@@ -1372,6 +1404,9 @@ async def scan_ssl_hosts(
     # Save report
     report_id = None
     if save_report:
+        if request.project_id is not None:
+            _require_project_access(db, request.project_id, current_user)
+
         report_title = request.title or f"SSL Scan - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         targets_str = ", ".join(f"{t.host}:{t.port}" for t in request.targets[:10])
         if len(request.targets) > 10:
@@ -1397,6 +1432,7 @@ async def scan_ssl_hosts(
             risk_score = 50
         
         db_report = NetworkAnalysisReport(
+            user_id=current_user.id,
             project_id=request.project_id,  # Associate with project if provided
             analysis_type="ssl",
             title=report_title,
@@ -1957,7 +1993,10 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_about_analysis(request: ChatRequest):
+async def chat_about_analysis(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Chat with Gemini about a network analysis (Nmap or PCAP).
     

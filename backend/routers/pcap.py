@@ -4,6 +4,7 @@ PCAP Analysis Router for VRAgent.
 Endpoints for uploading and analyzing Wireshark packet captures.
 """
 
+import json
 import shutil
 import tempfile
 from datetime import datetime
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session
 from backend.core.logging import get_logger
 from backend.core.database import get_db
 from backend.core.auth import get_current_active_user
-from backend.services import pcap_service
+from backend.services import pcap_service, project_service
 from backend.models.models import NetworkAnalysisReport, User, DocumentAnalysisReport, ProjectDocument, ProjectNote
 
 router = APIRouter(prefix="/pcap", tags=["pcap"])
@@ -27,6 +28,33 @@ logger = get_logger(__name__)
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB per file
 MAX_TOTAL_SIZE = 500 * 1024 * 1024  # 500MB total
 ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
+
+
+def _require_project_access(db: Session, project_id: int, current_user: User) -> None:
+    """Ensure the current user can access the requested project."""
+    if current_user.role == "admin":
+        return
+
+    project = project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    can_access, _ = project_service.can_access_project(db, project_id, current_user.id)
+    if not can_access:
+        raise HTTPException(status_code=403, detail="Not authorized to access this project")
+
+
+def _get_accessible_pcap_report(db: Session, report_id: int, current_user: User) -> NetworkAnalysisReport:
+    """Load a PCAP report if it exists and the current user can access it."""
+    report = db.query(NetworkAnalysisReport).filter(
+        NetworkAnalysisReport.id == report_id,
+        NetworkAnalysisReport.analysis_type == "pcap",
+    ).first()
+
+    if not report or not project_service.can_access_network_report(db, report, current_user):
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return report
 
 
 # ============================================================================
@@ -356,6 +384,9 @@ async def analyze_pcaps(
     
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
+
+    if project_id is not None:
+        _require_project_access(db, project_id, current_user)
     
     # Validate files
     total_size = 0
@@ -718,11 +749,23 @@ async def analyze_pcaps(
                         findings_data.append(finding_dict)
                 
                 ai_report_data = {
-                    "analyses": [a.ai_analysis for a in analyses if a.ai_analysis]
+                    "analyses": [a.ai_analysis for a in analyses]
+                }
+                report_data = {
+                    "analyses": [
+                        {
+                            "filename": a.filename,
+                            "conversations": a.conversations,
+                            "attack_surface": a.attack_surface,
+                            "enhanced_protocols": a.enhanced_protocols.model_dump() if a.enhanced_protocols else None,
+                        }
+                        for a in analyses
+                    ]
                 }
                 
                 # Create the database record
                 db_report = NetworkAnalysisReport(
+                    user_id=current_user.id,
                     analysis_type="pcap",
                     title=title,
                     filename=", ".join(filenames),
@@ -731,6 +774,7 @@ async def analyze_pcaps(
                     summary_data=summary_data,
                     findings_data=findings_data,
                     ai_report=ai_report_data,
+                    report_data=report_data,
                     created_at=datetime.utcnow(),
                     project_id=project_id,
                 )
@@ -785,7 +829,10 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_about_pcap(request: ChatRequest):
+async def chat_about_pcap(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Chat with Gemini about a PCAP analysis.
     
@@ -802,7 +849,6 @@ async def chat_about_pcap(request: ChatRequest):
     try:
         from google import genai
         from google.genai import types
-        import json
         
         client = genai.Client(api_key=settings.gemini_api_key)
         
@@ -810,11 +856,335 @@ async def chat_about_pcap(request: ChatRequest):
         pcap_summary = request.pcap_context.get("summary", {})
         findings = request.pcap_context.get("findings", [])
         ai_report = request.pcap_context.get("ai_analysis", {})
+        captures = request.pcap_context.get("captures", [])
         
         # Extract structured report if present
         structured_report = None
         if isinstance(ai_report, dict) and "structured_report" in ai_report:
             structured_report = ai_report["structured_report"]
+        elif isinstance(ai_report, dict) and isinstance(ai_report.get("analyses"), list):
+            for analysis in ai_report["analyses"]:
+                if isinstance(analysis, dict) and analysis.get("structured_report"):
+                    structured_report = analysis["structured_report"]
+                    break
+
+        def _clip_text(value: Any, limit: int = 220) -> str:
+            if value is None:
+                return ""
+            text = value if isinstance(value, str) else str(value)
+            text = " ".join(text.split())
+            if len(text) <= limit:
+                return text
+            return text[: limit - 3] + "..."
+
+        def _dump_json(value: Any, limit: int = 2000) -> str:
+            text = json.dumps(value, indent=2, default=str)
+            if len(text) <= limit:
+                return text
+            return text[: limit - 15] + "\n... [truncated]"
+
+        capture_sections = []
+        if isinstance(captures, list):
+            for index, capture in enumerate(captures[:6]):
+                if not isinstance(capture, dict):
+                    continue
+
+                capture_summary = capture.get("summary") or {}
+                capture_findings = capture.get("findings") or []
+                capture_label = capture.get("label") or f"Capture {index + 1}"
+                conversations = capture.get("conversations") or []
+                attack_surface = capture.get("attack_surface") or {}
+                enhanced_protocols = capture.get("enhanced_protocols") or {}
+                capture_ai = capture.get("ai_analysis")
+                capture_structured_report = capture_ai.get("structured_report") if isinstance(capture_ai, dict) else None
+
+                section_lines = [
+                    f"""#### {capture_label}
+- Packets: {capture_summary.get('total_packets', 'N/A')}
+- Duration: {capture_summary.get('duration_seconds', 'N/A')} seconds
+- Protocols: {_dump_json(capture_summary.get('protocols', {}), limit=800)}
+- DNS Queries: {_dump_json((capture_summary.get('dns_queries') or [])[:20], limit=800)}
+- HTTP Hosts: {_dump_json((capture_summary.get('http_hosts') or [])[:15], limit=800)}
+- Findings: {len(capture_findings)}"""
+                ]
+
+                if conversations:
+                    section_lines.append(
+                        "##### Conversations\n"
+                        + _dump_json(
+                            [
+                                {
+                                    "src": f"{conv.get('src')}:{conv.get('sport')}",
+                                    "dst": f"{conv.get('dst')}:{conv.get('dport')}",
+                                    "service": conv.get("service"),
+                                    "packets": conv.get("packets"),
+                                    "bytes": conv.get("bytes"),
+                                }
+                                for conv in conversations[:8]
+                            ],
+                            limit=1200,
+                        )
+                    )
+
+                if attack_surface:
+                    endpoints = attack_surface.get("endpoints") or []
+                    auth_tokens = attack_surface.get("auth_tokens") or []
+                    sensitive_leaks = attack_surface.get("sensitive_data_leaks") or []
+                    protocol_weaknesses = attack_surface.get("protocol_weaknesses") or []
+                    attack_lines = [
+                        "##### Attack Surface",
+                        f"- Unique Hosts: {_dump_json((attack_surface.get('unique_hosts') or [])[:12], limit=500)}",
+                        f"- Auth Mechanisms: {_dump_json(attack_surface.get('auth_mechanisms') or [], limit=500)}",
+                        f"- Auth Weaknesses: {_dump_json(attack_surface.get('auth_weaknesses') or [], limit=500)}",
+                    ]
+                    if endpoints:
+                        attack_lines.append(
+                            "- API Endpoints:\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "method": endpoint.get("method"),
+                                        "url": endpoint.get("url"),
+                                        "auth": endpoint.get("auth_type"),
+                                        "status": endpoint.get("response_status"),
+                                        "source_ip": endpoint.get("source_ip"),
+                                        "dest_ip": endpoint.get("dest_ip"),
+                                    }
+                                    for endpoint in endpoints[:10]
+                                ],
+                                limit=1800,
+                            )
+                        )
+                    if auth_tokens:
+                        attack_lines.append(
+                            "- Auth Tokens:\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "token_type": token.get("token_type"),
+                                        "token": token.get("token_value_masked") or _clip_text(token.get("token_value"), 24),
+                                        "dest_host": token.get("dest_host"),
+                                        "endpoint": token.get("endpoint"),
+                                        "weaknesses": token.get("jwt_weaknesses") or [],
+                                    }
+                                    for token in auth_tokens[:8]
+                                ],
+                                limit=1400,
+                            )
+                        )
+                    if sensitive_leaks:
+                        attack_lines.append(
+                            "- Sensitive Data Leaks:\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "type": leak.get("data_type"),
+                                        "value": _clip_text(leak.get("data_value"), 40),
+                                        "context": leak.get("context"),
+                                        "endpoint": leak.get("endpoint"),
+                                        "severity": leak.get("severity"),
+                                    }
+                                    for leak in sensitive_leaks[:10]
+                                ],
+                                limit=1400,
+                            )
+                        )
+                    if protocol_weaknesses:
+                        attack_lines.append(
+                            "- Protocol Weaknesses:\n"
+                            + _dump_json(protocol_weaknesses[:10], limit=1600)
+                        )
+                    section_lines.append("\n".join(attack_lines))
+
+                if enhanced_protocols:
+                    protocol_sections = []
+                    http_sessions = enhanced_protocols.get("http_sessions") or []
+                    websocket_sessions = enhanced_protocols.get("websocket_sessions") or []
+                    tcp_streams = enhanced_protocols.get("tcp_streams") or []
+                    database_queries = enhanced_protocols.get("database_queries") or []
+                    extracted_files = enhanced_protocols.get("extracted_files") or []
+                    timeline_events = enhanced_protocols.get("timeline_events") or []
+                    grpc_calls = enhanced_protocols.get("grpc_calls") or []
+                    mqtt_messages = enhanced_protocols.get("mqtt_messages") or []
+                    coap_messages = enhanced_protocols.get("coap_messages") or []
+                    quic_connections = enhanced_protocols.get("quic_connections") or []
+                    http2_streams = enhanced_protocols.get("http2_streams") or []
+
+                    if http_sessions:
+                        protocol_sections.append(
+                            "###### HTTP Sessions\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "request": f"{session.get('method')} {session.get('url') or session.get('host')}{session.get('path') or ''}",
+                                        "status": session.get("response_status"),
+                                        "request_body": _clip_text(session.get("request_body"), 180),
+                                        "response_body": _clip_text(session.get("response_body"), 180),
+                                        "duration_ms": session.get("duration_ms"),
+                                    }
+                                    for session in http_sessions[:12]
+                                ],
+                                limit=2500,
+                            )
+                        )
+
+                    if websocket_sessions:
+                        protocol_sections.append(
+                            "###### WebSocket Payloads\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "url": session.get("url"),
+                                        "messages": session.get("message_count"),
+                                        "sample_payloads": [
+                                            {
+                                                "direction": message.get("direction"),
+                                                "payload": _clip_text(message.get("payload"), 140),
+                                            }
+                                            for message in (session.get("messages") or [])[:6]
+                                        ],
+                                    }
+                                    for session in websocket_sessions[:6]
+                                ],
+                                limit=2200,
+                            )
+                        )
+
+                    if tcp_streams:
+                        protocol_sections.append(
+                            "###### TCP Stream Previews\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "stream": f"{stream.get('client_ip')}:{stream.get('client_port')} <-> {stream.get('server_ip')}:{stream.get('server_port')}",
+                                        "protocol": stream.get("protocol"),
+                                        "client_preview": _clip_text(stream.get("client_data_preview"), 180),
+                                        "server_preview": _clip_text(stream.get("server_data_preview"), 180),
+                                        "client_bytes": stream.get("client_data_size"),
+                                        "server_bytes": stream.get("server_data_size"),
+                                    }
+                                    for stream in tcp_streams[:10]
+                                ],
+                                limit=2200,
+                            )
+                        )
+
+                    if database_queries:
+                        protocol_sections.append(
+                            "###### Database Queries\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "protocol": query.get("protocol"),
+                                        "type": query.get("query_type"),
+                                        "database": query.get("database"),
+                                        "query": _clip_text(query.get("query"), 220),
+                                    }
+                                    for query in database_queries[:10]
+                                ],
+                                limit=1800,
+                            )
+                        )
+
+                    if extracted_files:
+                        protocol_sections.append(
+                            "###### Extracted Files\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "filename": file_data.get("filename"),
+                                        "mime_type": file_data.get("mime_type"),
+                                        "size": file_data.get("size"),
+                                        "source_url": file_data.get("source_url"),
+                                        "preview": _clip_text(file_data.get("content_preview"), 120),
+                                    }
+                                    for file_data in extracted_files[:8]
+                                ],
+                                limit=1600,
+                            )
+                        )
+
+                    if timeline_events:
+                        protocol_sections.append(
+                            "###### Timeline\n"
+                            + _dump_json(
+                                [
+                                    {
+                                        "severity": event.get("severity"),
+                                        "event_type": event.get("event_type"),
+                                        "description": event.get("description"),
+                                        "source_ip": event.get("source_ip"),
+                                        "dest_ip": event.get("dest_ip"),
+                                    }
+                                    for event in timeline_events[:12]
+                                ],
+                                limit=1800,
+                            )
+                        )
+
+                    if grpc_calls:
+                        protocol_sections.append(
+                            "###### gRPC Calls\n"
+                            + _dump_json(grpc_calls[:10], limit=1200)
+                        )
+
+                    if mqtt_messages or coap_messages:
+                        protocol_sections.append(
+                            "###### IoT Protocols\n"
+                            + _dump_json(
+                                {
+                                    "mqtt_messages": [
+                                        {
+                                            "topic": message.get("topic"),
+                                            "payload": _clip_text(message.get("payload"), 140),
+                                            "type": message.get("message_type"),
+                                        }
+                                        for message in mqtt_messages[:8]
+                                    ],
+                                    "coap_messages": [
+                                        {
+                                            "method": message.get("method"),
+                                            "uri_path": message.get("uri_path"),
+                                            "payload": _clip_text(message.get("payload"), 140),
+                                        }
+                                        for message in coap_messages[:8]
+                                    ],
+                                },
+                                limit=1600,
+                            )
+                        )
+
+                    if quic_connections or http2_streams:
+                        protocol_sections.append(
+                            "###### Modern Encrypted/Web Traffic\n"
+                            + _dump_json(
+                                {
+                                    "quic_connections": quic_connections[:8],
+                                    "http2_streams": http2_streams[:8],
+                                },
+                                limit=1200,
+                            )
+                        )
+
+                    if protocol_sections:
+                        section_lines.append("##### Deep Protocol Inspection\n" + "\n\n".join(protocol_sections))
+
+                if capture_structured_report:
+                    section_lines.append(
+                        "##### Existing AI Narrative\n"
+                        + _dump_json(
+                            {
+                                "executive_summary": capture_structured_report.get("executive_summary"),
+                                "what_happened": capture_structured_report.get("what_happened"),
+                                "traffic_analysis": capture_structured_report.get("traffic_analysis"),
+                            },
+                            limit=2200,
+                        )
+                    )
+
+                capture_sections.append("\n\n".join(section_lines))
+
+        capture_breakdown = "\n\n### Capture Breakdown\n" + "\n\n".join(capture_sections) if capture_sections else ""
         
         # Build the system context
         context = f"""You are a helpful network security analyst assistant. You have access to a PCAP (packet capture) analysis and should answer questions about it.
@@ -822,22 +1192,24 @@ async def chat_about_pcap(request: ChatRequest):
 ## PCAP ANALYSIS CONTEXT
 
 ### Summary
+- Total Files: {pcap_summary.get('total_files', len(captures) or 1)}
 - Total Packets: {pcap_summary.get('total_packets', 'N/A')}
 - Duration: {pcap_summary.get('duration_seconds', 'N/A')} seconds
 - Protocols: {json.dumps(pcap_summary.get('protocols', {}), indent=2)}
 - Top Talkers: {json.dumps(pcap_summary.get('top_talkers', [])[:10], indent=2)}
 - DNS Queries: {json.dumps(pcap_summary.get('dns_queries', [])[:50], indent=2)}
 - HTTP Hosts: {json.dumps(pcap_summary.get('http_hosts', [])[:30], indent=2)}
+{capture_breakdown}
 
 ### Security Findings ({len(findings)} total)
 {json.dumps(findings[:20], indent=2) if findings else "No automated security findings."}
 
 ### AI Security Report
-{json.dumps(structured_report, indent=2) if structured_report else "No structured report available."}
+{_dump_json(structured_report, limit=3000) if structured_report else "No structured report available."}
 
 ---
 
-Answer the user's question based on this PCAP analysis. Be helpful, specific, and reference the data when relevant. If the user asks about something not in the data, let them know what information is available.
+Answer the user's question based on this PCAP analysis. Be helpful, specific, and reference the data when relevant. If the user asks about follow-stream behavior, plaintext, request/response content, WebSocket payloads, extracted files, database traffic, or timeline sequences, use the deep protocol inspection sections when available. If the user asks about something not in the data, let them know what information is available.
 
 Keep responses concise but informative. Use technical terms appropriately but explain them if the user seems to need clarification."""
 
@@ -910,12 +1282,14 @@ class SavedReportDetail(BaseModel):
     summary_data: dict
     findings_data: List[dict]
     ai_report: Optional[dict] = None
+    report_data: Optional[dict] = None
 
 
 @router.get("/reports", response_model=SavedReportList)
 async def list_pcap_reports(
     skip: int = Query(0, ge=0, description="Number of reports to skip"),
     limit: int = Query(20, ge=1, le=100, description="Maximum reports to return"),
+    project_id: Optional[int] = Query(None, description="Filter by project ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -925,15 +1299,20 @@ async def list_pcap_reports(
     Returns a summary of each report, ordered by most recent first.
     """
     try:
-        # Get total count
-        total = db.query(NetworkAnalysisReport).filter(
+        if project_id is not None:
+            _require_project_access(db, project_id, current_user)
+
+        query = db.query(NetworkAnalysisReport).filter(
             NetworkAnalysisReport.analysis_type == "pcap"
-        ).count()
-        
-        # Get reports
-        reports = db.query(NetworkAnalysisReport).filter(
-            NetworkAnalysisReport.analysis_type == "pcap"
-        ).order_by(
+        )
+        query = project_service.apply_network_report_access_filter(query, db, current_user)
+
+        if project_id is not None:
+            query = query.filter(NetworkAnalysisReport.project_id == project_id)
+
+        total = query.count()
+
+        reports = query.order_by(
             NetworkAnalysisReport.created_at.desc()
         ).offset(skip).limit(limit).all()
         
@@ -955,6 +1334,8 @@ async def list_pcap_reports(
         
         return SavedReportList(reports=summaries, total=total)
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to list reports: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list reports: {str(e)}")
@@ -970,13 +1351,7 @@ async def get_pcap_report(
     Get full details of a saved PCAP analysis report.
     """
     try:
-        report = db.query(NetworkAnalysisReport).filter(
-            NetworkAnalysisReport.id == report_id,
-            NetworkAnalysisReport.analysis_type == "pcap"
-        ).first()
-        
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+        report = _get_accessible_pcap_report(db, report_id, current_user)
         
         return SavedReportDetail(
             id=report.id,
@@ -989,6 +1364,7 @@ async def get_pcap_report(
             summary_data=report.summary_data or {},
             findings_data=report.findings_data or [],
             ai_report=report.ai_report,
+            report_data=report.report_data,
         )
         
     except HTTPException:
@@ -1008,13 +1384,9 @@ async def delete_pcap_report(
     Delete a saved PCAP analysis report.
     """
     try:
-        report = db.query(NetworkAnalysisReport).filter(
-            NetworkAnalysisReport.id == report_id,
-            NetworkAnalysisReport.analysis_type == "pcap"
-        ).first()
-        
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not found")
+        report = _get_accessible_pcap_report(db, report_id, current_user)
+        if not project_service.can_delete_network_report(db, report, current_user):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this report")
         
         db.delete(report)
         db.commit()

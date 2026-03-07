@@ -2535,8 +2535,10 @@ end`}
           <Typography variant="body2" sx={{ mb: 3, color: pageTheme.text, maxWidth: 800, mx: "auto" }}>
             Wireshark mastery is just one component of effective network security analysis. The related pages below will 
             help you expand your skills in complementary areas including protocol exploitation, network attacks, and the 
-            VRAgent platform's built-in PCAP analysis capabilities. For the best learning experience, combine this theoretical 
-            knowledge with hands-on practice in lab environments where you can safely generate and analyze traffic patterns.
+            VRAgent platform's built-in PCAP analysis capabilities, including Deep Inspection panels for HTTP sessions,
+            WebSocket payloads, TCP stream previews, extracted files, and AI chat over reconstructed artifacts. For the best learning
+            experience, combine this theoretical knowledge with hands-on practice in lab environments where you can safely generate
+            and analyze traffic patterns.
           </Typography>
           
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
